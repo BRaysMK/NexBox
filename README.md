@@ -141,7 +141,7 @@ NexBox 是一款专为游戏玩家打造的桌面工具箱，集成了硬件监�
 
 #### 下载安装
 
-1. 访问 [Releases 页面](https://github.com/your-repo/nexbox/releases) 下载最新版本
+1. 访问 [Releases 页面](https://github.com/MuLiuSaMa/NexBox/releases) 下载最新版本
 2. 运行安装程序，按照提示完成安装
 3. 启动 NexBox 即可使用
 
@@ -221,7 +221,7 @@ nexbox/
 
 1. 克隆仓库
    ```bash
-   git clone https://github.com/MuLiuSaMa/NexBox/nexbox.git
+   git clone https://github.com/MuLiuSaMa/NexBox.git
    cd nexbox
    ```
 2. 安装 Node.js 依赖
@@ -298,4 +298,4 @@ npm run tauri:build
 
 ***
 
-**NexBox，你的游戏好帮手！**
+**NexBox，为现代游戏玩家打造的游戏工具箱！**
