@@ -36,6 +36,7 @@ Thumbs.db
 dist/
 Output/
 *.exe
+!nvidiaProfileInspector.exe
 *.zip
 
 # Tauri
@@ -50,13 +51,5 @@ backup/
 # Trae AI documents
 .trae/
 
-# Third-party executables
-nvidiaProfileInspector.exe
-Reference.xml
-nvidiaProfileInspector.exe.config
-
 # Video directory
 video/
-
-# ChineseSimplified.isl (Inno Setup translation, already in nexbox.iss)
-ChineseSimplified.isl
