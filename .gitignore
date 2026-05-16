@@ -33,6 +33,7 @@ Thumbs.db
 *~
 
 # Build outputs
+dist/
 Output/
 *.exe
 *.zip
@@ -41,6 +42,7 @@ Output/
 src-tauri/src-tauri.zip
 
 # Temporary directories
+backup/
 
 # Atom code
 .atomcode/
