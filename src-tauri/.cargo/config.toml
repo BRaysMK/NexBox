@@ -1,0 +1,5 @@
+[http]
+proxy = ""
+
+[net]
+git-fetch-with-cli = false
