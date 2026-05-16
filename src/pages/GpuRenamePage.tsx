@@ -1,0 +1,305 @@
+import {
+  Box,
+  Button,
+  Heading,
+  Text,
+  VStack,
+  useColorModeValue,
+  useToast,
+  HStack,
+  IconButton,
+  Card,
+  CardBody,
+} from "@chakra-ui/react";
+import { CustomSelect } from "@/components/special/custom-select";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
+import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useBackground } from "@/contexts/background-context";
+import { AnimatedPage } from "@/components/ui/animated-page";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Monitor } from "lucide-react";
+
+interface GpuInfo {
+  original_name: string;
+  current_name: string;
+  is_backed_up: boolean;
+}
+
+interface GpuOption {
+  id: string;
+  name: string;
+}
+
+interface GpuRenameResult {
+  success: boolean;
+  message: string;
+}
+
+export default function GpuRenamePage() {
+  const { t } = useTranslation();
+  const { liquidGlassEnabled } = useBackground();
+  const toast = useToast();
+  const navigate = useNavigate();
+
+  const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const textColor = useColorModeValue("gray.600", "#a0a0a0");
+  const cardBg = useColorModeValue("white", "#111111");
+  const cardBorder = useColorModeValue("gray.200", "#333333");
+
+  const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
+  const [gpuOptions, setGpuOptions] = useState<GpuOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [info, options] = await Promise.all([
+        invoke<GpuInfo>("get_gpu_info"),
+        invoke<GpuOption[]>("get_gpu_options"),
+      ]);
+      setGpuInfo(info);
+      setGpuOptions(options);
+    } catch (error) {
+      toast({
+        title: t("gpuRename.loadError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!selectedOption) {
+      toast({
+        title: t("gpuRename.selectGpu"),
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const selectedGpu = gpuOptions.find((opt) => opt.id === selectedOption);
+    if (!selectedGpu) return;
+
+    try {
+      setApplying(true);
+      const result = await invoke<GpuRenameResult>("apply_gpu_rename", {
+        newName: selectedGpu.name,
+      });
+
+      if (result.success) {
+        toast({
+          title: t("gpuRename.success"),
+          description: result.message,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+        await loadData();
+      } else {
+        toast({
+          title: t("gpuRename.error"),
+          description: result.message,
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: t("gpuRename.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      setRestoring(true);
+      const result = await invoke<GpuRenameResult>("restore_gpu_name");
+
+      if (result.success) {
+        toast({
+          title: t("gpuRename.restored"),
+          description: result.message,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+        await loadData();
+      } else {
+        toast({
+          title: t("gpuRename.error"),
+          description: result.message,
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: t("gpuRename.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const content = (
+    <VStack align="start" spacing={6}>
+      <HStack>
+        <IconButton
+          aria-label={t("builtinTools.back")}
+          icon={<ArrowLeft size={20} />}
+          variant="ghost"
+          onClick={() => navigate("/builtin-tools")}
+          color={headingColor}
+        />
+        <Monitor size={28} color={headingColor} />
+        <Heading size="lg" color={headingColor} fontWeight="700">
+          {t("gpuRename.title")}
+        </Heading>
+      </HStack>
+
+      {loading ? (
+        <Text color={textColor}>{t("gpuRename.loading")}</Text>
+      ) : (
+        <>
+          <VStack align="start" spacing={3} w="full">
+            <Box w="full">
+              <Text color={textColor} fontSize="sm" mb={1}>
+                {t("gpuRename.currentGpu")}
+              </Text>
+              <Text color={headingColor} fontWeight="medium">
+                {gpuInfo?.current_name || "-"}
+              </Text>
+            </Box>
+
+            {gpuInfo?.is_backed_up && (
+              <Box w="full">
+                <Text color={textColor} fontSize="sm" mb={1}>
+                  {t("gpuRename.originalGpu")}
+                </Text>
+                <Text color={headingColor} fontWeight="medium">
+                  {gpuInfo.original_name}
+                </Text>
+              </Box>
+            )}
+
+            <Box w="full">
+              <Text color={textColor} fontSize="sm" mb={1}>
+                {t("gpuRename.backupStatus")}
+              </Text>
+              <Text
+                color={gpuInfo?.is_backed_up ? "green.500" : "orange.500"}
+                fontWeight="medium"
+              >
+                {gpuInfo?.is_backed_up
+                  ? t("gpuRename.backedUp")
+                  : t("gpuRename.notBackedUp")}
+              </Text>
+            </Box>
+          </VStack>
+
+          <Box w="full" mt={4}>
+            <Text color={textColor} fontSize="sm" mb={2}>
+              {t("gpuRename.selectTarget")}
+            </Text>
+            <CustomSelect
+              value={selectedOption}
+              onChange={setSelectedOption}
+              options={gpuOptions.map(option => ({ value: option.id, label: option.name }))}
+              placeholder={t("gpuRename.selectPlaceholder")}
+              width="100%"
+            />
+          </Box>
+
+          <VStack align="start" spacing={3} w="full" mt={4}>
+            <Button
+              colorScheme="teal"
+              onClick={handleApply}
+              isLoading={applying}
+              loadingText={t("gpuRename.applying")}
+              w="full"
+            >
+              {t("gpuRename.apply")}
+            </Button>
+
+            {gpuInfo?.is_backed_up && (
+              <Button
+                colorScheme="orange"
+                onClick={handleRestore}
+                isLoading={restoring}
+                loadingText={t("gpuRename.restoring")}
+                w="full"
+              >
+                {t("gpuRename.restore")}
+              </Button>
+            )}
+          </VStack>
+
+          <Box w="full" mt={4} p={4} bg="blue.50" borderRadius="md" borderWidth="1px" borderColor="blue.200">
+            <Text color="blue.700" fontSize="sm" whiteSpace="pre-line">
+              {t("gpuRename.note")}
+            </Text>
+          </Box>
+        </>
+      )}
+    </VStack>
+  );
+
+  return (
+    <AnimatedPage>
+      <Box pt={8}>
+        {liquidGlassEnabled ? (
+          <LiquidGlassCard
+            w="full"
+            boxShadow="2xl"
+            overflow="hidden"
+            position="relative"
+            p={6}
+          >
+            {content}
+          </LiquidGlassCard>
+        ) : (
+          <Card
+            bg={cardBg}
+            borderColor={cardBorder}
+            borderWidth="1px"
+            w="full"
+            boxShadow="2xl"
+            overflow="hidden"
+            position="relative"
+          >
+            <CardBody p={6}>
+              {content}
+            </CardBody>
+          </Card>
+        )}
+      </Box>
+    </AnimatedPage>
+  );
+}

@@ -1,0 +1,79 @@
+"use client";
+
+import { Box, useColorModeValue } from "@chakra-ui/react";
+import { useBackground } from "@/contexts/background-context";
+import { useGlowEffect, getBorderGlowStyle } from "@/hooks/use-glow-effect";
+import { useMemo } from "react";
+
+interface LiquidGlassCardProps {
+  children: React.ReactNode;
+  className?: string;
+  [key: string]: any;
+}
+
+export function LiquidGlassCard({ children, className, ...props }: LiquidGlassCardProps) {
+  const { liquidGlassEnabled } = useBackground();
+  const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
+  
+  const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
+  const glowColor = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.5)");
+  const defaultBg = useColorModeValue("white", "#111111");
+  const defaultBorder = useColorModeValue("gray.200", "#333333");
+
+  const cardStyles = useMemo(() => {
+    if (!liquidGlassEnabled) {
+      return {
+        bg: defaultBg,
+        borderRadius: "xl",
+        border: "1px solid",
+        borderColor: defaultBorder,
+        boxShadow: "sm",
+      };
+    }
+
+    return {
+      bg: glassBgColor,
+      borderRadius: "xl",
+      border: "1px solid",
+      borderColor: glassBorderColor,
+      backdropFilter: "blur(20px)",
+      boxShadow: "sm",
+      sx: {
+        transform: "translateZ(0)",
+        WebkitTransform: "translateZ(0)",
+        WebkitBackfaceVisibility: "hidden",
+        backfaceVisibility: "hidden",
+      },
+    };
+  }, [liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder]);
+
+  if (!liquidGlassEnabled) {
+    return (
+      <Box
+        className={className}
+        {...cardStyles}
+        {...props}
+      >
+        {children}
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      className={className}
+      {...cardStyles}
+      position="relative"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      onMouseEnter={handleMouseEnter}
+      {...props}
+    >
+      <Box
+        style={getBorderGlowStyle(mouseX, mouseY, isHovering, glowColor)}
+      />
+      {children}
+    </Box>
+  );
+}
