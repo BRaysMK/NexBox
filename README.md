@@ -290,7 +290,7 @@ npm run tauri:build
 
 ## 许可证
 
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
+本项目采用 GPL-3.0 许可证 - 详见 [LICENSE](LICENSE) 文件
 
 ## 致谢
 
@@ -298,4 +298,4 @@ npm run tauri:build
 
 ***
 
-**NexBox，为现代游戏玩家打造的游戏工具箱！**
+**NexBox，为现代玩家打造的游戏工具箱！**
