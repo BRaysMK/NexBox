@@ -221,7 +221,7 @@ nexbox/
 
 1. 克隆仓库
    ```bash
-   git clone https://git.com/muliuawa/nexbox/nexbox.git
+   git clone https://github.com/MuLiuSaMa/NexBox/nexbox.git
    cd nexbox
    ```
 2. 安装 Node.js 依赖

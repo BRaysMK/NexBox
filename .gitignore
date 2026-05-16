@@ -58,4 +58,5 @@ nvidiaProfileInspector.exe.config
 # Video directory
 video/
 
-# ChineseSimplified.isl (Inno Setup translation, already in nexbox.iss
+# ChineseSimplified.isl (Inno Setup translation, already in nexbox.iss)
+ChineseSimplified.isl
