@@ -61,3 +61,11 @@ ChineseSimplified.isl
 
 # README
 README.md
+
+# 排除的文件
+1.icc
+软件介绍.md
+社区滤镜A.icc
+原亮 冷色调.icc
+Delta Force.nip
+MCTier技术介绍.md
