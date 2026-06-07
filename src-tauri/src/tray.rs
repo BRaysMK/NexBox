@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIcon, TrayIconBuilder},
-    AppHandle, Manager, Runtime, Window,
+    AppHandle, Emitter, Manager, Runtime, Window,
 };
 
 static TRAY_INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -35,7 +35,8 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                     }
                 }
                 "exit" => {
-                    app.exit(0);
+                    // 通知前端，由前端决定是否需要先退出联机服务再关闭
+                    let _ = app.emit("lobby-exit-requested", ());
                 }
                 _ => {}
             }

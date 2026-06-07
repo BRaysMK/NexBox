@@ -6,7 +6,14 @@ import {
   useColorModeValue,
   SimpleGrid,
 } from "@chakra-ui/react";
-import { Monitor, Cpu, Trash2, MemoryStick, Gauge } from "lucide-react";
+import {
+  Cpu,
+  Trash2,
+  MemoryStick,
+  Gauge,
+  Zap,
+  HardDrive,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -27,6 +34,7 @@ function ToolCard({ tool }: { tool: ToolItem }) {
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const subTextColor = useColorModeValue("gray.500", "#888888");
+  const borderColor = useColorModeValue("gray.200", "#333333");
   const IconComponent = tool.icon;
 
   const cardContent = (
@@ -80,7 +88,7 @@ function ToolCard({ tool }: { tool: ToolItem }) {
         minH="200px"
         cursor="pointer"
         border="2px solid"
-        borderColor="transparent"
+        borderColor={borderColor}
         transition="all 0.2s"
         _hover={{
           borderColor: tool.color,
@@ -105,12 +113,12 @@ export default function OptimizePage() {
 
   const tools: ToolItem[] = [
     {
-      id: "windows",
-      path: "/optimize/windows",
-      icon: Monitor,
-      titleKey: "optimization.windowsTitle",
-      descriptionKey: "optimization.windowsDesc",
-      color: "#98DDD0",
+      id: "storage-clean",
+      path: "/optimize/storage-clean",
+      icon: HardDrive,
+      titleKey: "storageClean.title",
+      descriptionKey: "storageClean.description",
+      color: "#3182CE",
     },
     {
       id: "memory-cleanup",
@@ -143,6 +151,14 @@ export default function OptimizePage() {
       titleKey: "shaderCache.title",
       descriptionKey: "builtinTools.shaderCacheDesc",
       color: "#EF4444",
+    },
+    {
+      id: "power-management",
+      path: "/optimize/power-management",
+      icon: Zap,
+      titleKey: "optimization.powerManagement.title",
+      descriptionKey: "optimization.powerManagement.description",
+      color: "#F6AD55",
     },
   ];
 

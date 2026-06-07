@@ -42,8 +42,9 @@
         "settings": "設定",
         "gpuRename": "GPU名前変更",
         "resolutionConverter": "解像度変換",
-        "dlssPreset": "デルタフォースDLSSプリセット",
-        "epicFree": "Epic 無料ゲーム"
+        "dlssPreset": "デルタフォースDLSS設定",
+        "epicFree": "Epic 料ゲーム",
+        "lobby": "マルチプレイ"
     },
   "optimization": {
     "pageTitle": "最適化",
@@ -99,8 +100,44 @@
       "adminRequired": "管理者権限が必要",
       "options": {
             "11.9gb": "11.9 GB",
+            "13.9gb": "13.9 GB",
             "15.9gb": "15.9 GB"
         }
+    },
+    "powerManagement": {
+      "title": "電源管理",
+      "description": "最適化された電源プランをインポートして有効化し、ゲームパフォーマンスを向上",
+      "currentPlan": "現在の電源プラン",
+      "builtinPlans": "内蔵電源プラン",
+      "systemPlans": "システム電源プラン",
+      "import": "インポート",
+      "importAndActivate": "インポートして有効化",
+      "activate": "有効化",
+      "importing": "インポート中...",
+      "activating": "有効化中...",
+      "importSuccess": "電源プランのインポートに成功しました",
+      "importFailed": "電源プランのインポートに失敗しました",
+      "activateSuccess": "電源プランが有効化されました",
+      "activateFailed": "電源プランの有効化に失敗しました",
+      "alreadyImported": "インポート済み",
+      "notImported": "未インポート",
+      "active": "有効",
+      "loadFailed": "電源プランの読み込みに失敗しました",
+      "refresh": "更新",
+      "tipTitle": "ヒント",
+      "tip": "電源プランはシステムの消費電力とパフォーマンスに影響します。ゲームには高性能プランをお勧めします。電源プランの有効化には管理者権限が必要です。",
+      "importAll": "一括インポート",
+      "importingAll": "一括インポート中...",
+      "importAllSuccess": "{{count}}個の電源プランのインポートに成功しました",
+      "importAllFailed": "{{count}}個の電源プランのインポートに失敗しました",
+      "allImported": "すべての電源プランがインポート済みです",
+      "delete": "削除",
+      "deleting": "削除中...",
+      "deleteSuccess": "電源プランを削除しました",
+      "deleteFailed": "電源プランの削除に失敗しました",
+      "deleteConfirmTitle": "削除の確認",
+      "deleteConfirmText": "電源プラン「{{name}}」をシステムから削除してもよろしいですか？",
+      "cancel": "キャンセル"
     },
     "memoryCleanup": {
         "title": "メモリクリーンアップ",
@@ -156,9 +193,7 @@
   "home": {
     "title": "NexBoxへようこそ",
     "welcome": "ようこそ",
-    "quickTools": "クイックツール",
     "customHtml": "カスタムウィジェット",
-    "addQuickTools": "クリックしてクイックツールを追加",
     "selectTools": "クイックツールを選択",
     "edit": "編集",
     "reset": "リセット",
@@ -168,7 +203,9 @@
     "htmlPlaceholder": "ここにHTMLコードを入力...",
     "resetToDefault": "デフォルトにリセット",
     "save": "保存",
+    "pickImage": "画像を選択",
     "todayPopularity": "今日の人気",
+    "randomQuote": "ランダム名言",
     "announcement": "お知らせ",
     "announcementList": "お知らせ一覧",
     "loading": "読み込み中...",
@@ -255,7 +292,8 @@
       "openTool": "ツールを開く",
       "comingSoon": "近日公開",
       "download": "クリックしてダウンロード",
-      "run": "クリックして実行"
+      "run": "クリックして実行",
+      "website": "公式サイトへ"
     },
     "messages": {
       "installerStarted": "インストーラーが開始されました",
@@ -271,6 +309,13 @@
     },
     "ariaLabels": {
       "refreshToolList": "ツールリストを更新"
+    },
+    "customAdded": {
+      "add": "ツールを手動で追加",
+      "remove": "手動追加を削除",
+      "addSuccess": "ツールを追加しました",
+      "addFailed": "追加に失敗しました",
+      "removed": "手動追加を削除しました"
     }
   },
   "displayFilter": {
@@ -294,7 +339,18 @@
     "tip": "フィルターはディスプレイのガンマ曲線を調整してカラー効果を実現します。アプリケーションを終了すると設定は自動的に復元されます。",
     "customFilter": "カスタムフィルター",
     "saveSuccess": "設定が保存され適用されました",
-    "saveAndApply": "保存して適用"
+    "saveAndApply": "保存して適用",
+    "iccProfiles": "ICC カラープロファイル",
+    "importIcc": "ICC ファイルをインポート",
+    "importIccSuccess": "ICC ファイルがインポートされました",
+    "importIccFailed": "ICC インポートに失敗しました",
+    "iccApplied": "ICC プロファイルが適用されました",
+    "deleteIcc": "削除",
+    "deleteIccConfirm": "この ICC プリセットを削除しますか？",
+    "deleteIccSuccess": "ICC プリセットが削除されました",
+    "noIccProfiles": "インポートされた ICC プロファイルはありません",
+    "cancel": "キャンセル",
+    "delete": "削除"
   },
   "floatingNav": {
     "title": "フローティングナビゲーションボックス",
@@ -350,6 +406,7 @@
     "statusEnabled": "有効化",
     "statusDisabled": "無効化",
     "displayItems": "表示する項目",
+    "hardwareMonitor": "ハードウェア監視",
     "cpuUsage": "CPU使用率",
     "gpuTemp": "GPU温度",
     "gpuUsage": "GPU使用率",
@@ -358,10 +415,17 @@
     "custom": "カスタム",
     "customText": "カスタムテキスト",
     "color": "色",
+    "addCustomItem": "カスタム項目を追加",
     "appearance": "外観設定",
+    "styles": "オーバーレイスタイル",
+    "styles.default": "デフォルト",
+    "styles.dynamicIsland": "ダイナミックアイランド",
     "opacity": "不透明度",
     "startFailed": "起動に失敗しました",
-    "stopFailed": "停止に失敗しました"
+    "stopFailed": "停止に失敗しました",
+    "hotkey": "ホットキー",
+    "toggleHotkey": "オーバーレイ切替",
+    "hotkeySaved": "ホットキーを保存しました"
   },
   "deltaForce": {
     "title": "デルタフォース",
@@ -373,7 +437,7 @@
     "officialMaps": "公式マップ",
     "openOfficialMap": "デルタフォース公式マップツール",
     "mapToolDesc": "戦利品ポイント、スポーンポイント、抽出ポイント、ボス座標",
-    "dlssPreset": "DLSSモデルプリセット",
+    "dlssPreset": "DLSSプリセット",
     "dlssPresetDesc": "DLSSニューラルネットワークモデルプリセットを選択してください。異なるシナリオに異なるプリセットを使用できます",
     "loading": "読み込み中...",
     "noPassword": "パスワードデータがありません",
@@ -412,8 +476,44 @@
     "wallpaperDesc": "公式HD壁紙ダウンロード"
   },
   "dlssPreset": {
-    "title": "デルタフォースDLSSモデルプリセット",
-    "description": "DLSSニューラルネットワークモデルプリセットを切り替えてゲーム画質を最適化"
+    "title": "デルタフォースDLSS設定",
+    "description": "DLSSニューラルネットワークモデルプリセットを切り替えてゲーム画質を最適化",
+    "presetLabel": "DLSS プリセット",
+    "driverVersion": "ドライバーバージョン",
+    "noGpuFound": "GPUが検出されませんでした"
+  },
+  "dlssIndicator": {
+    "title": "DLSS インジケーター",
+    "description": "ゲーム画面の左下にDLSSバッジを表示",
+    "enabled": "DLSS インジケーターが有効になりました",
+    "disabled": "DLSS インジケーターを無効にしました",
+    "note": "管理者権限が必要です。変更を有効にするにはゲームを再起動してください"
+  },
+  "dlssLock": {
+    "title": "DLSS ロック",
+    "description": "nvidiaProfileInspector ドライバー設定をロック",
+    "enabled": "DLSS 設定がロックされました",
+    "disabled": "DLSS 設定のロックが解除されました",
+    "note": "ドライバー更新による設定上書きを防ぎます"
+  },
+  "dlssPresetTable": {
+    "title": "プリセット参照表",
+    "description": "GPUシリーズ別のおすすめDLSSプリセット",
+    "gpuSeries": "GPU",
+    "recommendedPreset": "プリセット",
+    "driverVersion": "ドライバー",
+    "scenario": "タイプ",
+    "rtx20Series": "RTX 20 シリーズ",
+    "rtx30Series": "RTX 30 シリーズ",
+    "rtx4060Ti": "RTX 4060 Ti",
+    "rtx50HighFps": "RTX 50 高FPS",
+    "rtx50HighQuality": "RTX 50 高画質",
+    "presetK": "K",
+    "presetM": "M",
+    "typeGeneralEnhance": "汎用強化",
+    "typePerformanceFirst": "性能優先",
+    "typeQualityEnhance": "画質強化",
+    "typeFpsPriority": "FPS優先"
   },
   "musicPlayer": {
     "title": "シュシュミュージック",
@@ -456,6 +556,8 @@
     "backedUp": "バックアップ済み",
     "notBackedUp": "バックアップなし",
     "selectTarget": "ターゲットGPUを選択",
+    "lowEnd": "ローエンドGPU",
+    "highEnd": "ハイエンドGPU",
     "selectPlaceholder": "GPUを選択してください",
     "selectGpu": "先にGPUを選択してください",
     "apply": "適用",
@@ -471,7 +573,10 @@
     "title": "解像度変換",
     "selectResolution": "解像度を選択",
     "resolution1K": "1K (1080p)",
+    "resolution1_5K": "1.5K",
     "resolution2K": "2K (1440p)",
+    "resolution2_5K": "2.5K",
+    "resolution3K": "3K",
     "resolution4K": "4K (2160p)",
     "aspectRatios": "アスペクト比",
     "ratio169": "16:9",
@@ -590,13 +695,28 @@
     "schulteCurrent": "現在の目標",
     "schulteComplete": "完了！",
     "schulteAverage": "1数字あたりの平均",
-    "schultePlayAgain": "もう一度プレイ"
+    "schultePlayAgain": "もう一度プレイ",
+    "cpsTitle": "CPSテスト",
+    "cpsDesc": "制限時間内にできるだけ速くクリック！",
+    "cpsSelectTime": "時間を選択",
+    "cpsSeconds": "秒",
+    "cpsStart": "テスト開始",
+    "cpsClicks": "クリック",
+    "cpsResult": "CPS",
+    "cpsInstruction": "制限時間内にできるだけ速くクリック",
+    "cpsInstruction2": "クリック速度をテスト！",
+    "cpsClickHere": "ここをクリック！",
+    "cpsClickCount": "クリック: {{clicks}} 回",
+    "cpsTotal": "合計 {{clicks}} クリック / {{time}}秒",
+    "cpsAgain": "もう一度"
   },
   "settings": {
     "general": "一般",
     "appearance": "外観",
+    "hotkeys": "ホットキー",
     "network": "ネットワーク",
     "sponsor": "スポンサー",
+    "navigation": "ナビゲーション",
     "about": "について",
     "generalSettings": {
       "title": "一般設定",
@@ -611,15 +731,18 @@
         "de": "ドイツ語"
       },
       "homepage": "ホームページ",
-      "quickToolsLabel": "クイックツール",
-      "quickToolsDesc": "ホームページにクイックツールパネルを表示",
+      
       "customHtmlLabel": "カスタムエリア",
       "customHtmlDesc": "ホームページにカスタマイズ可能なHTMLエリアを表示",
       "todayPopularityLabel": "今日の人気",
       "todayPopularityDesc": "ホームページに今日の人気ランダム番号を表示",
       "announcementLabel": "お知らせ",
       "announcementDesc": "ホームページにお知らせカードを表示",
-      "splash": "スプラッシュ画面",
+      "randomQuoteLabel": "ランダム名言",
+      "randomQuoteDesc": "ホームページにランダム名言カードを表示",
+      "gameLauncherLabel": "クイック起動",
+      "gameLauncherDesc": "ホームページにクイック起動カードを表示",
+      "splash": "アニメーション",
       "splashLogoLabel": "スプラッシュロゴ",
       "splashLogoDesc": "起動時に表示されるロゴ画像をカスタマイズ",
       "splashLogoReset": "デフォルトに戻す",
@@ -643,7 +766,13 @@
       "closeBehaviorLabel": "閉じるボタンを押した時",
       "closeBehaviorDesc": "閉じるボタンを押した時の動作を選択",
       "closeDirectly": "直接閉じる",
-      "minimizeToTray": "トレイに最小化"
+      "minimizeToTray": "トレイに最小化",
+      "sidebarShowLabel": "サイドバーラベル",
+      "sidebarShowLabelDesc": "サイドバーの表示モードを選択",
+      "sidebarShowLabelNoText": "アイコンのみ",
+      "sidebarShowLabelWithText": "アイコン＆テキスト",
+      "pageTransitionLabel": "ページ遷移アニメーション",
+      "pageTransitionDesc": "無効にするとページ遷移アニメーションがオフになります"
     },
     "appearanceSettings": {
       "title": "外観設定",
@@ -761,6 +890,7 @@
   "search": {
     "placeholder": "機能を検索...",
     "noResults": "結果が見つかりません",
+    "typeToSearch": "キーワードを入力して検索...",
     "categories": {
       "pages": "ページ",
       "builtinTools": "内蔵ツール",
@@ -779,5 +909,18 @@
   "tray": {
     "show": "メインウィンドウを表示",
     "exit": "終了"
+  },
+  "hotkeySettings": {
+    "title": "ホットキー設定",
+    "overlay": "オーバーレイ",
+    "overlayToggle": "オーバーレイパネル切替",
+    "overlayToggleDesc": "ショートカットでオーバーレイパネルを表示/非表示",
+    "crosshair": "クロスヘア",
+    "crosshairToggle": "クロスヘア切替",
+    "crosshairToggleDesc": "ショートカットでクロスヘアを表示/非表示",
+    "filter": "フィルター",
+    "filterToggle": "フィルター切替",
+    "filterToggleDesc": "ショートカットでフィルターを有効/無効",
+    "saved": "ホットキーを保存しました"
   }
 }

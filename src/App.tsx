@@ -6,7 +6,6 @@ import HomePage from "./pages/HomePage";
 import HardwarePage from "./pages/HardwarePage";
 import ToolsPage from "./pages/ToolsPage";
 import OptimizePage from "./pages/OptimizePage";
-import WindowsOptimizePage from "./pages/WindowsOptimizePage";
 import MemoryLimitPage from "./pages/MemoryLimitPage";
 import MemoryCleanupPage from "./pages/MemoryCleanupPage";
 import AceOptimizePage from "./pages/AceOptimizePage";
@@ -20,6 +19,8 @@ import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
 import ResolutionConverterPage from "./pages/ResolutionConverterPage";
 import ShaderCachePage from "./pages/ShaderCachePage";
+import PowerManagementPage from "./pages/PowerManagementPage";
+import StorageCleanPage from "./pages/StorageCleanPage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
 import TestsPage from "./pages/TestsPage";
 import EpicFreePage from "./pages/EpicFreePage";
@@ -29,8 +30,13 @@ import FocusTestPage from "./pages/FocusTestPage";
 import ChoiceTestPage from "./pages/ChoiceTestPage";
 import InhibitTestPage from "./pages/InhibitTestPage";
 import SchulteTestPage from "./pages/SchulteTestPage";
+import CpsTestPage from "./pages/CpsTestPage";
 import { useState, useEffect } from "react";
+import MCTierApp from "./mctier/App";
+import { initializeStore } from "./mctier/stores";
+import "@/mctier/App.css";
 import {
+  Box,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -44,7 +50,6 @@ import {
   Text,
   VStack,
   HStack,
-  Box,
   useToast,
 } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
@@ -59,7 +64,7 @@ import { MusicProvider } from "./contexts/music-context";
 import { MiniMusicPlayer } from "./components/MiniMusicPlayer";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "2.5.7";
+const CURRENT_VERSION = "3.1.6";
 
 function App() {
   const { t } = useTranslation();
@@ -72,6 +77,7 @@ function App() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
   const [downloadedFilePath, setDownloadedFilePath] = useState<string>("");
+  const [pageTransitionEnabled, setPageTransitionEnabled] = useState(true);
 
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#888888");
@@ -85,6 +91,28 @@ function App() {
     return () => {
       unlisten.then((fn) => fn());
     };
+  }, []);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("nexbox_page_transition_enabled");
+    if (stored !== null) {
+      setPageTransitionEnabled(stored === "true");
+    }
+
+    const handler = () => {
+      const updated = localStorage.getItem("nexbox_page_transition_enabled");
+      if (updated !== null) {
+        setPageTransitionEnabled(updated === "true");
+      }
+    };
+
+    window.addEventListener("page-transition-setting-changed", handler);
+    return () => window.removeEventListener("page-transition-setting-changed", handler);
+  }, []);
+
+  // 初始化 MCTier 状态管理（始终运行，不随页面卸载）
+  useEffect(() => {
+    initializeStore();
   }, []);
 
   useEffect(() => {
@@ -192,15 +220,49 @@ function App() {
         {!isStartupComplete && <SplashScreen />}
         {/* <MiniMusicPlayer /> */}
         <MainLayout>
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
+        {pageTransitionEnabled ? (
+          <AnimatePresence mode="wait">
+            <Routes location={location} key={location.pathname}>
+              <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
+              <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
+              <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />
+              <Route path="/builtin-tools" element={<AnimatedPage><BuiltinToolsPage /></AnimatedPage>} />
+              <Route path="/optimization" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
+              <Route path="/optimize" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
+              <Route path="/optimize/memory-cleanup" element={<AnimatedPage><MemoryCleanupPage /></AnimatedPage>} />
+              <Route path="/optimize/ace-optimize" element={<AnimatedPage><AceOptimizePage /></AnimatedPage>} />
+              <Route path="/optimize/memory-limit" element={<AnimatedPage><MemoryLimitPage /></AnimatedPage>} />
+              <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
+              <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
+              <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
+              <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
+              <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
+              <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
+              <Route path="/tests" element={<AnimatedPage><TestsPage /></AnimatedPage>} />
+              <Route path="/tests/reaction" element={<AnimatedPage><ReactionTestPage /></AnimatedPage>} />
+              <Route path="/tests/aim" element={<AnimatedPage><AimTestPage /></AnimatedPage>} />
+              <Route path="/tests/focus" element={<AnimatedPage><FocusTestPage /></AnimatedPage>} />
+              <Route path="/tests/choice" element={<AnimatedPage><ChoiceTestPage /></AnimatedPage>} />
+              <Route path="/tests/inhibit" element={<AnimatedPage><InhibitTestPage /></AnimatedPage>} />
+              <Route path="/tests/schulte" element={<AnimatedPage><SchulteTestPage /></AnimatedPage>} />
+              <Route path="/tests/cps" element={<AnimatedPage><CpsTestPage /></AnimatedPage>} />
+              <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
+              <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
+              <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
+              <Route path="/optimize/power-management" element={<AnimatedPage><PowerManagementPage /></AnimatedPage>} />
+              <Route path="/optimize/storage-clean" element={<AnimatedPage><StorageCleanPage /></AnimatedPage>} />
+              <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+              <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
+        </Routes>
+      </AnimatePresence>
+    ) : (
+      <Routes location={location} key={location.pathname}>
             <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
             <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
             <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />
             <Route path="/builtin-tools" element={<AnimatedPage><BuiltinToolsPage /></AnimatedPage>} />
             <Route path="/optimization" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
             <Route path="/optimize" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
-            <Route path="/optimize/windows" element={<AnimatedPage><WindowsOptimizePage /></AnimatedPage>} />
             <Route path="/optimize/memory-cleanup" element={<AnimatedPage><MemoryCleanupPage /></AnimatedPage>} />
             <Route path="/optimize/ace-optimize" element={<AnimatedPage><AceOptimizePage /></AnimatedPage>} />
             <Route path="/optimize/memory-limit" element={<AnimatedPage><MemoryLimitPage /></AnimatedPage>} />
@@ -209,21 +271,43 @@ function App() {
             <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
             <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
             <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
-          <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
-          <Route path="/tests" element={<AnimatedPage><TestsPage /></AnimatedPage>} />
-          <Route path="/tests/reaction" element={<AnimatedPage><ReactionTestPage /></AnimatedPage>} />
-          <Route path="/tests/aim" element={<AnimatedPage><AimTestPage /></AnimatedPage>} />
-          <Route path="/tests/focus" element={<AnimatedPage><FocusTestPage /></AnimatedPage>} />
-          <Route path="/tests/choice" element={<AnimatedPage><ChoiceTestPage /></AnimatedPage>} />
-          <Route path="/tests/inhibit" element={<AnimatedPage><InhibitTestPage /></AnimatedPage>} />
-          <Route path="/tests/schulte" element={<AnimatedPage><SchulteTestPage /></AnimatedPage>} />
-          <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
-          <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
+            <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
+            <Route path="/tests" element={<AnimatedPage><TestsPage /></AnimatedPage>} />
+            <Route path="/tests/reaction" element={<AnimatedPage><ReactionTestPage /></AnimatedPage>} />
+            <Route path="/tests/aim" element={<AnimatedPage><AimTestPage /></AnimatedPage>} />
+            <Route path="/tests/focus" element={<AnimatedPage><FocusTestPage /></AnimatedPage>} />
+            <Route path="/tests/choice" element={<AnimatedPage><ChoiceTestPage /></AnimatedPage>} />
+            <Route path="/tests/inhibit" element={<AnimatedPage><InhibitTestPage /></AnimatedPage>} />
+            <Route path="/tests/schulte" element={<AnimatedPage><SchulteTestPage /></AnimatedPage>} />
+            <Route path="/tests/cps" element={<AnimatedPage><CpsTestPage /></AnimatedPage>} />
+            <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
+            <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
             <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
-          <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+            <Route path="/optimize/power-management" element={<AnimatedPage><PowerManagementPage /></AnimatedPage>} />
+            <Route path="/optimize/storage-clean" element={<AnimatedPage><StorageCleanPage /></AnimatedPage>} />
+            <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
-          </Routes>
-        </AnimatePresence>
+      </Routes>
+    )}
+
+      {/* MCTier App - 始终挂载，离开联机页面时不卸载 */}
+      <Box
+        className="mctier-page"
+        position="absolute"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        padding="16px"
+        zIndex={location.pathname === '/lobby' ? 10 : -1}
+        opacity={location.pathname === '/lobby' ? 1 : 0}
+        pointerEvents={location.pathname === '/lobby' ? 'auto' : 'none'}
+        transition="opacity 0.2s"
+      >
+        <Box height="100%" borderRadius="12px" overflow="hidden">
+          <MCTierApp />
+        </Box>
+      </Box>
       </MainLayout>
 
       <Modal

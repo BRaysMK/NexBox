@@ -1,11 +1,12 @@
-import { Box as ChakraBox, Flex, IconButton, useColorModeValue, Badge, Image } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Crosshair } from "lucide-react";
+import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image } from "@chakra-ui/react";
+import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Crosshair, Users } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import deltaForceIcon from "@/assets/deltaforce.png";
 import epicGamesIcon from "@/assets/epic-games.png";
+import { useState, useEffect } from "react";
 
 interface NavItem {
   path: string;
@@ -15,53 +16,77 @@ interface NavItem {
   beta?: boolean;
 }
 
-function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconColor }: {
+function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconColor, showLabel }: {
   item: NavItem;
   isActive: boolean;
   activeBg: string;
   hoverBg: string;
   iconColor: string;
   activeIconColor: string;
+  showLabel: boolean;
 }) {
   const isCustom = !!item.customIcon;
+
+  const iconElement = isCustom ? (
+    <Image
+      src={item.customIcon}
+      alt={item.ariaLabel}
+      w="22px"
+      h="22px"
+      objectFit="contain"
+      filter={isActive ? "none" : "grayscale(30%) opacity(0.7)"}
+      transition="filter 0.2s"
+    />
+  ) : (
+    <item.icon size={20} strokeWidth={2.2} />
+  );
 
   return (
     <Link key={item.path} to={item.path}>
       <ChakraBox position="relative">
-        <IconButton
-          aria-label={item.ariaLabel}
-          icon={
-            isCustom ? (
-              <Image
-                src={item.customIcon}
-                alt={item.ariaLabel}
-                w="22px"
-                h="22px"
-                objectFit="contain"
-                filter={isActive ? "none" : "grayscale(30%) opacity(0.7)"}
-                transition="filter 0.2s"
-              />
-            ) : (
-              <item.icon size={20} strokeWidth={2.2} />
-            )
-          }
-          variant="ghost"
-          borderRadius="xl"
-          bg={isActive ? activeBg : "transparent"}
-          color={isActive ? activeIconColor : iconColor}
-          _hover={{
-            bg: isActive ? activeBg : hoverBg,
-            transform: "scale(1.1)",
-          }}
-          _active={{
-            transform: "scale(0.95)",
-          }}
-          transition="all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
-          size="lg"
-          w="48px"
-          h="48px"
-        />
-        {item.beta && (
+        {showLabel ? (
+          <Flex
+            direction="column"
+            align="center"
+            justify="center"
+            gap={0.5}
+            aria-label={item.ariaLabel}
+            w="48px"
+            h="48px"
+            borderRadius="xl"
+            cursor="pointer"
+            bg={isActive ? activeBg : "transparent"}
+            color={isActive ? activeIconColor : iconColor}
+            _hover={{ bg: isActive ? activeBg : hoverBg }}
+            transition="all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+            as="span"
+            role="button"
+            tabIndex={0}
+          >
+            <ChakraBox display="flex" alignItems="center" justifyContent="center" lineHeight={0}>
+              {iconElement}
+            </ChakraBox>
+            <Text fontSize="2xs" fontWeight="medium" noOfLines={1} textAlign="center" lineHeight="1.1">
+              {item.ariaLabel}
+            </Text>
+          </Flex>
+        ) : (
+          <IconButton
+            aria-label={item.ariaLabel}
+            icon={iconElement}
+            variant="ghost"
+            borderRadius="xl"
+            bg={isActive ? activeBg : "transparent"}
+            color={isActive ? activeIconColor : iconColor}
+            _hover={{ bg: isActive ? activeBg : hoverBg }}
+            _active={{ transform: "scale(0.95)" }}
+            transition="all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+            size="lg"
+            w="48px"
+            h="48px"
+          />
+        )}
+        {!showLabel && item.beta && (
           <Badge
             position="absolute"
             top="-2px"
@@ -87,6 +112,19 @@ export function Sidebar() {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
+  const [showLabel, setShowLabel] = useState(() => {
+    return localStorage.getItem("nexbox_sidebar_show_label") === "true";
+  });
+  
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      setShowLabel(e.detail === true);
+    };
+    window.addEventListener("sidebar-show-label-changed", handler as EventListener);
+    return () => {
+      window.removeEventListener("sidebar-show-label-changed", handler as EventListener);
+    };
+  }, []);
   
   const defaultBgColor = useColorModeValue("rgba(255,255,255,0.9)", "rgba(17,17,17,0.95)");
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
@@ -106,6 +144,7 @@ export function Sidebar() {
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },
     { path: "/tests", icon: Crosshair, ariaLabel: t("sidebar.tests") },
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
+    { path: "/lobby", icon: Users, ariaLabel: t("sidebar.lobby") },
     { path: "/delta-force", icon: null, customIcon: deltaForceIcon, ariaLabel: t("sidebar.deltaForce") },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
@@ -123,28 +162,33 @@ export function Sidebar() {
           hoverBg={hoverBg}
           iconColor={iconColor}
           activeIconColor={activeIconColor}
+          showLabel={showLabel}
         />
       ))}
     </Flex>
   );
 
+  const containerStyles = {
+    position: "fixed" as const,
+    left: 6,
+    top: "50%",
+    transform: "translateY(-50%) translateZ(0)",
+    zIndex: 40,
+    borderRadius: "2xl",
+    boxShadow: "2xl",
+    py: 6,
+    px: 2,
+    sx: { WebkitBackfaceVisibility: "hidden" as const, backfaceVisibility: "hidden" as const },
+  };
+
   if (liquidGlassEnabled) {
     return (
       <ChakraBox
-        position="fixed"
-        left={6}
-        top="50%"
-        transform="translateY(-50%) translateZ(0)"
-        zIndex={40}
+        {...containerStyles}
         bg={glassBgColor}
-        borderRadius="2xl"
-        boxShadow="2xl"
         border="1px solid"
         borderColor={glassBorderColor}
-        py={6}
-        px={2}
         backdropFilter="blur(20px)"
-        sx={{ WebkitBackfaceVisibility: "hidden", backfaceVisibility: "hidden" }}
       >
         {sidebarContent}
       </ChakraBox>
@@ -153,20 +197,11 @@ export function Sidebar() {
 
   return (
     <ChakraBox
-      position="fixed"
-      left={6}
-      top="50%"
-      transform="translateY(-50%) translateZ(0)"
-      zIndex={40}
+      {...containerStyles}
       bg={defaultBgColor}
-      borderRadius="2xl"
-      boxShadow="2xl"
       border="1px solid"
       borderColor={defaultBorderColor}
-      py={6}
-      px={2}
       backdropFilter="blur(12px)"
-      sx={{ WebkitBackfaceVisibility: "hidden", backfaceVisibility: "hidden" }}
     >
       {sidebarContent}
     </ChakraBox>

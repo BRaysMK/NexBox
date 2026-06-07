@@ -33,7 +33,6 @@ Thumbs.db
 *~
 
 # Build outputs
-dist/
 Output/
 *.exe
 *.zip
@@ -42,7 +41,6 @@ Output/
 src-tauri/src-tauri.zip
 
 # Temporary directories
-backup/
 
 # Atom code
 .atomcode/
@@ -60,3 +58,6 @@ video/
 
 # ChineseSimplified.isl (Inno Setup translation, already in nexbox.iss)
 ChineseSimplified.isl
+
+# README
+README.md

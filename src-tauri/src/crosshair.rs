@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+use tauri::Emitter;
 
 static CROSSHAIR_ACTIVE: AtomicBool = AtomicBool::new(false);
 static CROSSHAIR_HANDLE: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
@@ -549,7 +550,7 @@ pub fn start(_settings: CrosshairSettings) -> Result<CrosshairResult, String> {
 
 #[cfg(target_os = "windows")]
 pub fn stop() -> Result<CrosshairResult, String> {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, PostQuitMessage, WM_CLOSE};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
 
     if !CROSSHAIR_ACTIVE.load(Ordering::SeqCst) {
         return Ok(CrosshairResult {
@@ -564,7 +565,6 @@ pub fn stop() -> Result<CrosshairResult, String> {
         let hwnd = CROSSHAIR_HANDLE.load(Ordering::SeqCst);
         if !hwnd.is_null() {
             PostMessageW(hwnd, WM_CLOSE, 0, 0);
-            PostQuitMessage(0);
         }
     }
 
@@ -579,6 +579,22 @@ pub fn stop() -> Result<CrosshairResult, String> {
     Err("此功能仅支持 Windows 系统".to_string())
 }
 
+/// Toggle crosshair on/off. Used by global hotkey.
+pub fn toggle_crosshair_sync(app_handle: &tauri::AppHandle) -> Result<CrosshairResult, String> {
+    let result = if CROSSHAIR_ACTIVE.load(Ordering::SeqCst) {
+        stop()
+    } else {
+        let settings = get_settings();
+        start(settings)
+    };
+
+    if result.is_ok() {
+        let _ = app_handle.emit("crosshair-status-changed", ());
+    }
+
+    result
+}
+
 #[tauri::command]
 pub async fn get_crosshair_status() -> Result<CrosshairSettings, String> {
     let mut settings = get_settings();
@@ -587,13 +603,8 @@ pub async fn get_crosshair_status() -> Result<CrosshairSettings, String> {
 }
 
 #[tauri::command]
-pub async fn toggle_crosshair() -> Result<CrosshairResult, String> {
-    if CROSSHAIR_ACTIVE.load(Ordering::SeqCst) {
-        stop()
-    } else {
-        let settings = get_settings();
-        start(settings)
-    }
+pub async fn toggle_crosshair(app_handle: tauri::AppHandle) -> Result<CrosshairResult, String> {
+    toggle_crosshair_sync(&app_handle)
 }
 
 #[tauri::command]

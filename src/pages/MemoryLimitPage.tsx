@@ -4,10 +4,9 @@ import {
   VStack,
   Text,
   HStack,
+  SimpleGrid,
   useColorModeValue,
   Button,
-  Radio,
-  RadioGroup,
   Card,
   CardBody,
   Badge,
@@ -18,6 +17,8 @@ import {
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { hexToRgba } from "@/lib/color-utils";
 import { ArrowLeft, AlertTriangle, Cpu } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -60,7 +61,12 @@ export default function MemoryLimitPage() {
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const textColor = useColorModeValue("gray.700", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
-  const optionBg = useColorModeValue("rgba(152,221,208,0.1)", "rgba(152,221,208,0.15)");
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const contrastText = getContrastTextColor();
+  const themeColorHex = primaryColor || "#98DDD0";
+  const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
+  const optionBg = useColorModeValue(themeColorRgba(0.1), themeColorRgba(0.15));
 
   useEffect(() => {
     loadMemoryStatus();
@@ -225,7 +231,7 @@ export default function MemoryLimitPage() {
                         {t("optimization.memoryLimit.currentLimit")}:
                       </Text>
                       <Badge
-                        bg={memoryStatus?.current_limit_mb ? "#FF6B9D" : "#98DDD0"}
+                          bg={memoryStatus?.current_limit_mb ? "#FF6B9D" : themeColorHex}
                         color="#1a1a1a"
                         fontSize="sm"
                         px={3}
@@ -243,41 +249,60 @@ export default function MemoryLimitPage() {
                   <Text fontWeight="600" color={textColor} fontSize="md" mb={3}>
                     {t("optimization.memoryLimit.selectLimit")}
                   </Text>
-                  <RadioGroup
-                    onChange={setSelectedLimit}
-                    value={selectedLimit}
-                    colorScheme="teal"
-                  >
-                    <VStack align="start" spacing={3} w="full">
-                      {memoryStatus?.available_options.map((option) => (
-                        <HStack
+                  <SimpleGrid columns={3} spacing={2} w="full">
+                    {memoryStatus?.available_options.map((option) => {
+                      const isSelected = selectedLimit === option.id;
+                      return (
+                        <Box
                           key={option.id}
                           w="full"
-                          justify="space-between"
-                          p={3}
+                          py={8}
+                          px={2}
                           borderRadius="xl"
                           bg={optionBg}
-                          border="1px solid"
-                          borderColor="transparent"
+                          border="2px solid"
+                          borderColor={isSelected ? themeColorHex : cardBorder}
+                          cursor="pointer"
                           transition="all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
                           _hover={{
-                            borderColor: "#98DDD0",
+                            borderColor: themeColorHex,
                             bg: useColorModeValue(
-                              "rgba(152,221,208,0.2)",
-                              "rgba(152,221,208,0.25)"
+                              themeColorRgba(0.2),
+                              themeColorRgba(0.25)
                             ),
-                            transform: "translateX(4px)",
                           }}
+                          onClick={() => setSelectedLimit(option.id)}
                         >
-                          <Radio value={option.id}>
-                            <Text color={textColor} fontSize="sm" fontWeight="500">
+                          <VStack justify="center" align="center" spacing={1}>
+                            <Box
+                              w="16px"
+                              h="16px"
+                              borderRadius="full"
+                              border="2px solid"
+                              borderColor={isSelected ? themeColorHex : subTextColor}
+                              bg={isSelected ? themeColorHex : "transparent"}
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                              transition="all 0.2s"
+                            >
+                              {isSelected && (
+                                <Box w="5px" h="5px" borderRadius="full" bg="#1a1a1a" />
+                              )}
+                            </Box>
+                            <Text
+                              color={textColor}
+                              fontSize="sm"
+                              fontWeight="700"
+                              textAlign="center"
+                            >
                               {t(`optimization.memoryLimit.options.${option.id}`)}
                             </Text>
-                          </Radio>
-                        </HStack>
-                      ))}
-                    </VStack>
-                  </RadioGroup>
+                          </VStack>
+                        </Box>
+                      );
+                    })}
+                  </SimpleGrid>
                 </Box>
 
                 <Alert
@@ -296,7 +321,7 @@ export default function MemoryLimitPage() {
 
                 <HStack spacing={4} w="full" pt={2}>
                   <Button
-                    bg="#98DDD0"
+                    bg={themeColorHex}
                     color="#1a1a1a"
                     size="lg"
                     flex={1}
@@ -308,14 +333,14 @@ export default function MemoryLimitPage() {
                     fontWeight="700"
                     fontSize="md"
                     height="56px"
-                    boxShadow="0 4px 20px -5px rgba(152, 221, 208, 0.5)"
+                    boxShadow={`0 4px 20px -5px ${themeColorRgba(0.5)}`}
                     _hover={{
-                      bg: "#7ED0C2",
+                      bg: themeColorRgba(0.85),
                       transform: "translateY(-2px)",
-                      boxShadow: "0 6px 25px -5px rgba(152, 221, 208, 0.6)",
+                      boxShadow: `0 6px 25px -5px ${themeColorRgba(0.6)}`,
                     }}
                     _active={{
-                      bg: "#6BC4B5",
+                      bg: themeColorRgba(0.75),
                       transform: "translateY(0)",
                     }}
                     transition="all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
@@ -395,7 +420,7 @@ export default function MemoryLimitPage() {
                           {t("optimization.memoryLimit.currentLimit")}:
                         </Text>
                         <Badge
-                          bg={memoryStatus?.current_limit_mb ? "#FF6B9D" : "#98DDD0"}
+                          bg={memoryStatus?.current_limit_mb ? "#FF6B9D" : themeColorHex}
                           color="#1a1a1a"
                           fontSize="sm"
                           px={3}
@@ -413,33 +438,60 @@ export default function MemoryLimitPage() {
                     <Text fontWeight="600" color={textColor} fontSize="md" mb={3}>
                       {t("optimization.memoryLimit.selectLimit")}
                     </Text>
-                    <RadioGroup
-                      onChange={setSelectedLimit}
-                      value={selectedLimit}
-                      colorScheme="teal"
-                    >
-                      <VStack align="start" spacing={3} w="full">
-                        {memoryStatus?.available_options.map((option) => (
-                          <HStack
+                    <SimpleGrid columns={3} spacing={2} w="full">
+                      {memoryStatus?.available_options.map((option) => {
+                        const isSelected = selectedLimit === option.id;
+                        return (
+                          <Box
                             key={option.id}
                             w="full"
-                            justify="space-between"
-                            p={3}
+                            py={8}
+                            px={2}
                             borderRadius="xl"
                             bg={optionBg}
-                            border="1px solid"
-                            borderColor="transparent"
+                            border="2px solid"
+                            borderColor={isSelected ? themeColorHex : "transparent"}
+                            cursor="pointer"
                             transition="all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+                            _hover={{
+                              borderColor: themeColorHex,
+                              bg: useColorModeValue(
+                                themeColorRgba(0.2),
+                                themeColorRgba(0.25)
+                              ),
+                            }}
+                            onClick={() => setSelectedLimit(option.id)}
                           >
-                            <Radio value={option.id}>
-                              <Text color={textColor} fontSize="sm" fontWeight="500">
+                            <VStack justify="center" align="center" spacing={1}>
+                              <Box
+                                w="16px"
+                                h="16px"
+                                borderRadius="full"
+                                border="2px solid"
+                                borderColor={isSelected ? themeColorHex : subTextColor}
+                                bg={isSelected ? themeColorHex : "transparent"}
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                                transition="all 0.2s"
+                              >
+                                {isSelected && (
+                                  <Box w="5px" h="5px" borderRadius="full" bg="#1a1a1a" />
+                                )}
+                              </Box>
+                              <Text
+                                color={textColor}
+                                fontSize="sm"
+                                fontWeight="700"
+                                textAlign="center"
+                              >
                                 {t(`optimization.memoryLimit.options.${option.id}`)}
                               </Text>
-                            </Radio>
-                          </HStack>
-                        ))}
-                      </VStack>
-                    </RadioGroup>
+                            </VStack>
+                          </Box>
+                        );
+                      })}
+                    </SimpleGrid>
                   </Box>
 
                   <Alert
@@ -458,7 +510,7 @@ export default function MemoryLimitPage() {
 
                   <HStack spacing={4} w="full" pt={2}>
                     <Button
-                      bg="#98DDD0"
+                      bg={themeColorHex}
                       color="#1a1a1a"
                       size="lg"
                       flex={1}

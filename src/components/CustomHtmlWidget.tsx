@@ -23,8 +23,87 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { Code, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
 
 const STORAGE_KEY = "nexbox_custom_html";
+
+/** 根据扩展名推断 MIME 类型 */
+function getMimeFromPath(path: string): string {
+  const ext = path.split(".").pop()?.toLowerCase() || "png";
+  const mimeMap: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    bmp: "image/bmp",
+    ico: "image/x-icon",
+  };
+  return mimeMap[ext] || "image/png";
+}
+
+/** 字节数组转 base64 data URL */
+function bytesToDataUrl(bytes: number[], mimeType: string): string {
+  const uint8 = new Uint8Array(bytes);
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < uint8.length; i += chunkSize) {
+    const chunk = uint8.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  const base64 = btoa(binary);
+  return `data:${mimeType};base64,${base64}`;
+}
+
+/**
+ * 读取本地文件并转为 base64 data URL
+ */
+async function pathToDataUrl(path: string): Promise<string> {
+  try {
+    const bytes = await invoke<number[]>("read_file_bytes", { path });
+    return bytesToDataUrl(bytes, getMimeFromPath(path));
+  } catch (e) {
+    console.error("读取文件失败:", path, e);
+    return path; // 读取失败时保留原路径
+  }
+}
+
+/**
+ * 将 HTML 中的本地文件路径转换为 base64 data URL
+ * 支持 Windows 绝对路径 (C:\...、D:\...) 和 Unix 绝对路径 (/Users/...)
+ */
+async function convertLocalPathsToDataUrls(html: string): Promise<string> {
+  const imgRegex =
+    /(<img\s+[^>]*src\s*=\s*["'])([A-Za-z]:\\[^"']+|(?:\/[^\/\s"']+)+\.(?:png|jpe?g|gif|webp|svg|bmp|ico))(["'])/gi;
+
+  const matches: { index: number; prefix: string; path: string; suffix: string }[] = [];
+  let match;
+  while ((match = imgRegex.exec(html)) !== null) {
+    matches.push({ index: match.index, prefix: match[1], path: match[2], suffix: match[3] });
+  }
+
+  if (matches.length === 0) return html;
+
+  // 并行读取所有文件并转换
+  const dataUrls = await Promise.all(
+    matches.map((m) => pathToDataUrl(m.path))
+  );
+
+  // 从后往前替换，避免索引偏移
+  let result = html;
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const { prefix, suffix } = matches[i];
+    const dataUrl = dataUrls[i];
+    const original = prefix + matches[i].path + suffix;
+    // 只有成功转换（dataUrl 以 data: 开头）才替换
+    if (dataUrl.startsWith("data:")) {
+      result = result.slice(0, matches[i].index) + prefix + dataUrl + suffix + result.slice(matches[i].index + original.length);
+    }
+  }
+
+  return result;
+}
 
 const DEFAULT_HTML = `<!DOCTYPE html>
 <html>
@@ -225,7 +304,7 @@ const DEFAULT_HTML = `<!DOCTYPE html>
   <div class="content">
     <div class="logo-container">
       <div class="logo-icon">
-        <img src="data:image/png;base64,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" alt="新境盒" />
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAYAAAAehFoBAAAJcElEQVR42s1ZaYwUxxV+1TN7hhtlNwiBEAYSIGB7F3HE4pI45QX+xBjEKYER5jA3ASQk4AdeICAgRhBj8QMQYJM/Nr8WELcQBmGMWa7FIFAWgjeAOHdhdmcq73vd1fT0dM/OrqwkLdWop7q76quv3vveq6oo2VeES5zL77ks4zJcKVXIxaL/xaV1IqH1L3xXxqWUy02DUXnAzuTyNy5R+j+5lAJ2quPbuVx2ACvAaoDlZ9u5gNE6510UUuZjU5SneOuCnqmQ4v/O24/pmHEpm0gQWMIFjF9QjhmU802UkSfIBi0N6KBRm1kL+O9/5v9ON45ogwlE/hEM/5VLkbIrIuRjtDHTyLbvlFSwKmQwafpSDlgw3QR/HvBPG51MUqNYAchIxKK6urjtyWxxiUSC7VCnnbEM+oB5KA2slmXFuVHLMfC0w9Rp/kejUQZaJ/dZWVkCPhaLpTxLZ1719c1tJqKOoyV9lcmozXPLAqtRqq2tlf/r1q2j+/fvU011Nb33/vs0e/ZsAZuVFaV4PCGMm/Z1GhPRARWQWUunAVNfXZRBsGAK2F69etHZs2dp6dKl1KRJE8rJzaVZs2bR5cuXadCgQfxOnYAF+5QhGUGXlTI/aZzD/ciy7GlmEDk5ObRx40a6cOEC9evXT57H43EBh6tnz550/Phx2rlzJzVv3lwGZ7FtRyIRtyPVgBFYYcPSIU4FhgAG0zyqpIRu3LhBCxcuFJA1NTVOoNKuQ6AO706fPp0qblbQ+PHj5V0Um22V0pdKQ5qVjlKv3IARAAZDhYWFtH//fvru0CHq0KEDxd7EHJD2u7nMenZ2dtLI4YAFhQW0b98+OuR8Z+wes5WOLB0IOMTwHe90p3nGJ5/QTWZq3Lhx0qF4v7I7zcvPo1OnTtHuPXvom4MH6ciRI1JnAOHd2lgtlWBmrtszg4GiXnQ7TD1UPYCVLwjAZouLi+no0aP09y+/ZFtsJozhGToEm8+ePZPBDBw4kO7evUsPHjygYcOG0ZQpU+jx48c247any7c5ubbtw1E/+OBP0gc5wUarcIpVhIUiDqkJ0GE0AlZz2eMrKiqoXbt29LrmNTuNPU4z7QcOHKB58+ZRVVWV1Bn9hUO+efOGWrVqRZs2bRLwxjzEOTnAYAYwoE7vvENPedCMh+KOwwY5+1tZ06kOBrBNmzalkg8/pO7du0mnuXm5AgoFTI4aNUocCWDz8vIETLNmzahly5YCFoN98uQJTZ06VRjHwM33ALtjxw5q3749DWTpwzc2eeGShUinRYJ8am2mGyCqfqmiyz9dprFjx1JBQQHt3r2bTpw4QYsWLRR9BajXr1/Ld8OHDxcQYPfTT2fSt99+J/VoB4qBdjds2ECjR4+myZMn05UrP9E3Xx+kIUOGsFP+lk3rOSHsJnRqJAPDLmC/SbwFnEvl5VepY8eOUr982TLaunUrVTsSZsJu69atafPmzTRx4sQkcv7Bzjf3s8/o4cOH8i7n5hLxcE2YMIG+2vmVzBqiY7du3ej58+du38aPyBEgMQmvYQdnTay90SzX9j4vLaVSDr/GhgF2/vz5dPv2bQGL/6ZARf780Ud069YtWrFihYAA2K5du9KxY8do7969AlaSI6WCnV/Xo8PBYdmuNdErPz/f/Y+O2rZtK1HMWycsOe8jVLdo0UKkccmSJWwGV2jw4MFCAOwc7+K5KIWPNJ2JrIVrs3JDr9dsAALTefLkSWEdQSZiRSib7fjcue/FqbZs2cL352j9+vXyTJRC20qCaw9r99OnT4MTLx0CWDd4rajdcH39+nVJcmbMmEEvXrwQk5g2bRrnF31FRSorK6lPnz4SFWO1MRlUdk423bt3T5Rm5syZSSSEBY5oYN7ZQNCwVQDAPZIc2GfMkbTy8nKWxO5u/uHV723btrHSLBKz6Ny5swSbV69eJYFOG5p1A1YW3lEqx0zQCUDCAfv07UsV7GwAC0AmtQSr165dk9mYM2eOPFuzZo0M0gxENTRb0xmw6gLXntkRFbBZ7N27t5utQc5MPlH6eakMAvaOdPTixYu0cuVKBpvDM1AbuMBVYSZBDWQYAKNsCnXMrp+V6lfVdpbHDgbvxwyMGDFC8hGYD1YmMAfTTgJt+PZtgqKwpXxTGyhqDqMm6YYTLViwwNZbk9eq5FxLOS1DEjFABASARXKEHBpgE6zJcEKxWRt5cET2ypr2jUilsGm5yxqTZkJXkVcg03rv3XfF6YRtiWQ6UArx7decJCGkd+rUSWxXSIhG3IipLKvhKw6//SJHePTokR0UdMKZvoToKGzw0o8/0tq1a90QnbJmU3YwQWAZ+/HHMvVYWmVnZUt7RtOfPXvKfdXUa45WOsfCihidISrt2rVLwABYLTtH1Fkp4/ny5cvF84cOHeoukyxfqDXyhxEgPcU92oIyID3t378/sx4Te/fPUkYrDjvMamkA6SGCADIqpIcmOpnWYIfQ0cOHD0smJ0upgH0I+EA8wfLH7ULeKv9ZSWPGjBGfQHJk8m8K2Q6znVipVWZnJpxprJIj9PPPt2n79u0CGIwAgASNKJb7cVn+FBUXUTXvSbx8+ZJGjhwpU25Yg8mAUfzf9sUXDHY0lV+96kqe2bMIW2bK6keHvKCSmE5I3ouGAWAZp5jFRUV0/vx5YQrbU9KZpZJCtrmwsrDYeTFQRD4Mds7cuZKiYoMFA0mErDKUT4dDI11Q8DCLRdjyD5cuSW6wePFicUCTaqZ8wwPNys6SnletWkU9evSgM2fOSBtgGkSEbVtpT2lUtuZ1HpgIwGMhify2rKwsKe003p//m3w6ffq0AF29erUrYcZhM4muSme4L5F2/9PZoQRTd+7ckSg2adIkqWvKOg2txoXsbcCAAXSVbdVsEgbNRMZ9e5dIpJM9M92mtZcZEwHBapcuXahNmzbyH6th2KysxZygU98uaJqjA7OmU7xQ1VZKQyHbryogMmrn/SgvpcxujrnAKhh1Eybfd2GpbchWWUI2tLm0cfCpRk2TpxPLG14R5eKJX+VcyenmX5ZztETOSVLohpzKYHtfOWFYO8ULNmyDT6WRU88Vd6StTA5l+KecnEMZ5SREGdlaI05agtr1RzXfc/dQRjuHMo+5/FvZR0vmACSUSJVBCd6je5vCqszNIO45KJoNhiNOxQXnHGwEmFaNtOVf9VDRicQOgbPNwaLyHd3+gctfuAzjt39nH91q+m/jZ0XhnSr9kG8P+49u/wOkMr2toDNV6QAAAABJRU5ErkJggg==" alt="新境盒" />
       </div>
       <span class="logo-text">新境盒</span>
     </div>
@@ -264,15 +343,30 @@ function loadSavedHtml(): string {
 
 export default function CustomHtmlWidget() {
   const [html, setHtml] = useState<string>(() => loadSavedHtml());
+  const [processedHtml, setProcessedHtml] = useState<string>("");
   const [tempHtml, setTempHtml] = useState("");
   const [iframeKey, setIframeKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { t } = useTranslation();
 
+  // 异步将本地路径转为 base64
+  useEffect(() => {
+    let cancelled = false;
+    convertLocalPathsToDataUrls(html).then((result) => {
+      if (!cancelled) {
+        setProcessedHtml(result);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [html]);
+
   useEffect(() => {
     setIframeKey((k) => k + 1);
-  }, [html]);
+  }, [processedHtml]);
 
   const cardBg = useColorModeValue("gray.50", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
@@ -341,14 +435,13 @@ export default function CustomHtmlWidget() {
         <iframe
           key={iframeKey}
           ref={iframeRef}
-          srcDoc={html}
+          srcDoc={processedHtml}
           style={{
             width: "100%",
             height: "100%",
             border: "none",
             display: "block",
           }}
-          sandbox="allow-scripts"
           title="Custom HTML Preview"
         />
       </Box>
@@ -368,6 +461,7 @@ export default function CustomHtmlWidget() {
               <TabPanels flex={1} overflow="hidden">
                 <TabPanel p={4} h="100%" overflow="hidden">
                   <Textarea
+                    ref={textareaRef}
                     value={tempHtml}
                     onChange={(e) => setTempHtml(e.target.value)}
                     placeholder={t("home.htmlPlaceholder")}
@@ -397,7 +491,6 @@ export default function CustomHtmlWidget() {
                       border: "none",
                       borderRadius: "8px",
                     }}
-                    sandbox="allow-scripts"
                     title="Preview"
                   />
                 </TabPanel>

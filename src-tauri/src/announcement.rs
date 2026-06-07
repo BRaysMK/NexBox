@@ -1,11 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 
 const ANNOUNCEMENT_URL: &str = "https://gitee.com/muliuawa/nexbox/raw/master/notice.json";
 const CACHE_FILE_NAME: &str = "announcement_cache.json";
+const CONNECT_TIMEOUT_SECS: u64 = 3;
 const REQUEST_TIMEOUT_SECS: u64 = 5;
+const MEMORY_CACHE_TTL_SECS: u64 = 30;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Announcement {
@@ -19,6 +23,42 @@ pub struct Announcement {
 pub struct AnnouncementResponse {
     pub version: u32,
     pub announce_list: Vec<Announcement>,
+}
+
+struct MemoryCache {
+    data: Option<AnnouncementResponse>,
+    fetched_at: Option<Instant>,
+}
+
+impl MemoryCache {
+    fn new() -> Self {
+        Self {
+            data: None,
+            fetched_at: None,
+        }
+    }
+
+    fn get(&self) -> Option<AnnouncementResponse> {
+        if let (Some(data), Some(fetched_at)) = (&self.data, self.fetched_at) {
+            if fetched_at.elapsed() < Duration::from_secs(MEMORY_CACHE_TTL_SECS) {
+                return Some(data.clone());
+            }
+        }
+        None
+    }
+
+    fn set(&mut self, data: AnnouncementResponse) {
+        self.data = Some(data);
+        self.fetched_at = Some(Instant::now());
+    }
+}
+
+static MEMORY_CACHE: OnceLock<Arc<RwLock<MemoryCache>>> = OnceLock::new();
+
+fn get_memory_cache() -> Arc<RwLock<MemoryCache>> {
+    MEMORY_CACHE
+        .get_or_init(|| Arc::new(RwLock::new(MemoryCache::new())))
+        .clone()
 }
 
 fn get_cache_path() -> Option<PathBuf> {
@@ -51,6 +91,7 @@ fn load_from_cache() -> Option<AnnouncementResponse> {
 
 pub async fn fetch_announcements() -> Result<AnnouncementResponse, String> {
     let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
         .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
@@ -75,11 +116,21 @@ pub async fn fetch_announcements() -> Result<AnnouncementResponse, String> {
 
     save_to_cache(&data);
 
+    let cache = get_memory_cache();
+    cache.write().await.set(data.clone());
+
     Ok(data)
 }
 
 #[tauri::command]
 pub async fn get_announcements() -> AnnouncementResponse {
+    {
+        let cache = get_memory_cache();
+        if let Some(data) = cache.read().await.get() {
+            return data;
+        };
+    }
+
     match fetch_announcements().await {
         Ok(data) => data,
         Err(e) => {

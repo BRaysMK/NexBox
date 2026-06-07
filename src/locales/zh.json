@@ -2,7 +2,9 @@
   "common": {
     "appName": "NexBox",
     "appFullName": "新境盒",
-    "description": "跨平台性能监控（Tauri + Next.js + 传感器服务）"
+    "description": "跨平台性能监控（Tauri + Next.js + 传感器服务）",
+    "cancel": "取消",
+    "add": "添加"
   },
   "onboarding": {
     "title": "欢迎使用新境盒",
@@ -42,8 +44,9 @@
     "settings": "设置",
     "gpuRename": "显卡改写",
     "resolutionConverter": "分辨率换算",
-    "dlssPreset": "三角洲DLSS预设",
-    "epicFree": "Epic 喜加一"
+    "dlssPreset": "三角洲DLSS设置",
+    "epicFree": "喜加一",
+    "lobby": "联机"
   },
   "optimization": {
     "pageTitle": "优化",
@@ -99,8 +102,44 @@
       "adminRequired": "需要管理员权限",
       "options": {
         "11.9gb": "11.9 GB",
+        "13.9gb": "13.9 GB",
         "15.9gb": "15.9 GB"
       }
+    },
+    "powerManagement": {
+      "title": "电源管理",
+      "description": "导入并激活优化电源计划，提升游戏性能",
+      "currentPlan": "当前电源计划",
+      "builtinPlans": "内置电源计划",
+      "systemPlans": "系统电源计划",
+      "import": "导入",
+      "importAndActivate": "导入并激活",
+      "activate": "激活",
+      "importing": "导入中...",
+      "activating": "激活中...",
+      "importSuccess": "电源计划导入成功",
+      "importFailed": "电源计划导入失败",
+      "activateSuccess": "电源计划已激活",
+      "activateFailed": "电源计划激活失败",
+      "alreadyImported": "已导入",
+      "notImported": "未导入",
+      "active": "已激活",
+      "loadFailed": "加载电源计划失败",
+      "refresh": "刷新",
+      "tipTitle": "提示",
+      "tip": "电源计划会影响系统功耗和性能表现，游戏场景建议使用高性能方案。激活电源计划需要管理员权限。",
+      "importAll": "一键导入全部",
+      "importingAll": "批量导入中...",
+      "importAllSuccess": "成功导入 {{count}} 个电源计划",
+      "importAllFailed": "{{count}} 个电源计划导入失败",
+      "allImported": "所有电源计划已导入系统",
+      "delete": "删除",
+      "deleting": "删除中...",
+      "deleteSuccess": "电源计划已删除",
+      "deleteFailed": "删除电源计划失败",
+      "deleteConfirmTitle": "确认删除",
+      "deleteConfirmText": "确定要从系统中删除电源计划「{{name}}」吗？",
+      "cancel": "取消"
     },
     "memoryCleanup": {
       "title": "内存清理",
@@ -121,44 +160,56 @@
       "error": "清理失败"
     },
     "aceOptimize": {
-      "title": "ACE/游戏优化",
-      "description": "优化游戏进程优先级，限制反作弊进程资源占用",
+      "title": "三角洲/ACE优化",
+      "description": "三角洲进程优化与 ACE 反作弊进程资源限制",
+      "deltaSection": {
+        "title": "三角洲优化",
+        "subtitle": "提升三角洲行动游戏性能表现"
+      },
       "deltaBoost": {
-        "title": "三角洲优先级优化",
-        "description": "提高 DeltaForceClient-Win64-Shipping.exe 进程优先级为「超高」（实时），提升游戏流畅度",
-        "button": "优化三角洲",
-        "optimizing": "优化中...",
-        "success": "三角洲进程优先级已提升",
-        "notRunning": "三角洲游戏未运行，请先启动游戏"
+        "title": "进程优先级提升",
+        "description": "将三角洲游戏主进程优先级设为「实时」，优先分配 CPU 资源，显著提升游戏流畅度",
+        "affinityTitle": "核心分配优化",
+        "affinityDescription": "将三角洲进程分配到除 CPU0 外的所有核心，充分发挥多核性能的同时保留核心0供系统使用"
+      },
+      "aceSection": {
+        "title": "ACE 反作弊优化",
+        "subtitle": "限制反作弊进程资源占用，释放更多性能给游戏"
       },
       "aceLimit": {
-        "title": "ACE 进程限制",
-        "description": "将 ACE-Tray、SGuard64、SGuardSvc64 等反作弊进程优先级降为「低」，并限制使用单核心 CPU",
-        "button": "限制 ACE",
-        "limiting": "限制中...",
-        "success": "已限制 {{count}} 个 ACE 进程",
-        "notRunning": "未找到运行中的 ACE 进程"
+        "title": "进程优先级限制",
+        "description": "将 ACE-Tray、SGuard64、SGuardSvc64 反作弊相关进程优先级降为「低」，减少 CPU 抢占",
+        "affinityTitle": "核心分配限制",
+        "affinityDescription": "限制 ACE 反作弊进程仅使用单核心（CPU0）运行，避免占用游戏关键 CPU 资源"
+      },
+      "aceEfficiency": {
+        "title": "Windows 效能模式",
+        "description": "对 ACE 反作弊进程启用任务管理器式效能模式：优先级降为 Idle + 开启电源节流（EcoQoS），大幅减少后台资源占用"
       },
       "optimizeAll": {
         "button": "一键全部优化",
         "optimizing": "优化中...",
+        "title": "一键全部优化",
+        "description": "同时执行三角洲进程优先级提升和 ACE 进程优先级/核心限制",
         "success": "全部优化完成",
         "partial": "部分优化完成，请查看详情"
       },
       "status": {
         "optimized": "已优化",
         "notRunning": "未运行",
-        "notOptimized": "待优化"
+        "notOptimized": "待优化",
+        "processRunning": "进程运行中",
+        "processNotRunning": "进程未运行"
       },
+      "apply": "应用",
+      "applied": "已应用",
       "error": "优化失败"
     }
   },
   "home": {
     "title": "欢迎使用新境盒",
     "welcome": "欢迎",
-    "quickTools": "快捷工具",
     "customHtml": "自定义区域",
-    "addQuickTools": "点击添加快捷工具",
     "selectTools": "选择快捷工具",
     "edit": "编辑",
     "reset": "重置",
@@ -168,7 +219,9 @@
     "htmlPlaceholder": "在此输入HTML代码...",
     "resetToDefault": "重置为默认",
     "save": "保存",
+    "pickImage": "选择图片",
     "todayPopularity": "今日人气",
+    "randomQuote": "随机一言",
     "announcement": "公告",
     "announcementList": "公告列表",
     "loading": "加载中...",
@@ -177,10 +230,19 @@
     "importantAnnouncement": "重要公告",
     "confirmAnnouncement": "好的"
   },
+  "gameLauncher": {
+    "title": "快捷启动",
+    "addGame": "添加游戏",
+    "gameName": "游戏名称",
+    "gameNamePlaceholder": "请输入游戏名称",
+    "gamePath": "游戏路径",
+    "gamePathPlaceholder": "请选择游戏可执行文件"
+  },
   "hardware": {
     "title": "硬件信息",
     "processor": "处理器",
     "model": "型号",
+    "vendor": "厂商",
     "coresThreads": "核心+线程",
     "cores": "核",
     "threads": "线程",
@@ -257,7 +319,8 @@
       "openTool": "打开工具",
       "comingSoon": "即将推出",
       "download": "点击下载",
-      "run": "点击运行"
+      "run": "点击运行",
+      "website": "前往官网"
     },
     "messages": {
       "installerStarted": "安装程序已启动",
@@ -273,6 +336,13 @@
     },
     "ariaLabels": {
       "refreshToolList": "刷新工具列表"
+    },
+    "customAdded": {
+      "add": "手动添加工具",
+      "remove": "删除手动添加",
+      "addSuccess": "已添加工具",
+      "addFailed": "添加失败",
+      "removed": "已删除手动添加"
     }
   },
   "displayFilter": {
@@ -296,7 +366,18 @@
     "tip": "滤镜通过调整显示器 Gamma 曲线实现色彩效果，退出应用时自动恢复默认设置。",
     "customFilter": "自定义滤镜",
     "saveSuccess": "设置已保存并应用",
-    "saveAndApply": "保存并应用"
+    "saveAndApply": "保存并应用",
+    "iccProfiles": "ICC 色彩配置文件",
+    "importIcc": "导入 ICC 文件",
+    "importIccSuccess": "ICC 文件已导入",
+    "importIccFailed": "ICC 文件导入失败",
+    "iccApplied": "ICC 色彩配置已应用",
+    "deleteIcc": "删除",
+    "deleteIccConfirm": "确认删除此 ICC 预设？",
+    "deleteIccSuccess": "ICC 预设已删除",
+    "noIccProfiles": "暂无导入的 ICC 配置文件",
+    "cancel": "取消",
+    "delete": "删除"
   },
   "floatingNav": {
     "title": "悬浮导航框",
@@ -352,18 +433,45 @@
     "statusEnabled": "已启用",
     "statusDisabled": "已关闭",
     "displayItems": "显示项",
+    "hardwareMonitor": "硬件监控",
     "cpuUsage": "CPU占用",
     "gpuTemp": "GPU温度",
     "gpuUsage": "GPU占用",
     "memoryUsage": "内存占用",
     "deltaPassword": "三角洲密码",
+    "gamePing": "游戏延迟",
+    "pingSettings": "延迟测试",
+    "pingDescription": "选择一个服务器来测量网络延迟，延迟数据将显示在悬浮框中",
+    "testPing": "测试延迟",
+    "pingCurrentValue": "当前延迟",
     "custom": "自定义",
     "customText": "自定义文字",
     "color": "颜色",
+    "addCustomItem": "添加自定义项",
     "appearance": "外观设置",
+    "styles": "悬浮框样式",
+    "styles.default": "默认",
+    "styles.dynamicIsland": "灵动岛",
     "opacity": "透明度",
     "startFailed": "启动失败",
-    "stopFailed": "停止失败"
+    "stopFailed": "停止失败",
+    "hotkey": "快捷键",
+    "toggleHotkey": "切换悬浮框",
+    "hotkeySaved": "快捷键已保存",
+    "minOneItem": "至少需要保留一个显示项",
+    "position": "位置设置",
+    "dragMode": "拖动悬浮框",
+    "dragModeHint": "点击进入拖动模式，拖动后点击按钮退出并保存位置",
+    "dragModeStart": "开始拖动",
+    "dragModeActive": "退出拖动",
+    "dragModeEnabled": "已进入拖动模式，拖动后点击按钮退出",
+    "dragModeDisabled": "已退出拖动模式",
+    "dragModeFailed": "切换拖动模式失败",
+    "overlayNotEnabled": "请先启用悬浮框",
+    "positionSaved": "位置已保存",
+    "resetPosition": "恢复默认",
+    "positionReset": "位置已恢复默认",
+    "positionResetFailed": "重置位置失败"
   },
   "deltaForce": {
     "title": "三角洲专区",
@@ -375,7 +483,7 @@
     "officialMaps": "官方地图",
     "openOfficialMap": "三角洲行动官方地图工具",
     "mapToolDesc": "物资点、出生点、撤离点及首领坐标",
-    "dlssPreset": "DLSS模型预设",
+    "dlssPreset": "DLSS预设",
     "dlssPresetDesc": "选择DLSS神经网络模型预设，不同预设适用于不同场景",
     "loading": "加载中...",
     "noPassword": "暂无密码数据",
@@ -414,8 +522,44 @@
     "wallpaperDesc": "官方高清壁纸下载"
   },
   "dlssPreset": {
-    "title": "三角洲DLSS模型预设",
-    "description": "切换DLSS神经网络模型预设以优化游戏画质"
+    "title": "三角洲DLSS设置",
+    "description": "切换DLSS神经网络模型预设以优化游戏画质",
+    "presetLabel": "DLSS 预设",
+    "driverVersion": "驱动版本",
+    "noGpuFound": "未检测到显卡"
+  },
+  "dlssIndicator": {
+    "title": "DLSS 指示器",
+    "description": "在画面左下角显示 DLSS 标识",
+    "enabled": "DLSS 指示器已启用",
+    "disabled": "DLSS 指示器已关闭",
+    "note": "需要管理员权限，重启游戏后生效"
+  },
+  "dlssLock": {
+    "title": "DLSS 锁定",
+    "description": "锁定 nvidiaProfileInspector 驱动配置",
+    "enabled": "DLSS 配置已锁定",
+    "disabled": "DLSS 配置已解锁",
+    "note": "锁定后防止驱动更新覆盖设置"
+  },
+  "dlssPresetTable": {
+    "title": "预设参考表",
+    "description": "不同显卡系列推荐的 DLSS 预设配置",
+    "gpuSeries": "显卡",
+    "recommendedPreset": "预設",
+    "driverVersion": "驱动",
+    "scenario": "类型",
+    "rtx20Series": "RTX 20 系列",
+    "rtx30Series": "RTX 30 系列",
+    "rtx4060Ti": "RTX 4060 Ti",
+    "rtx50HighFps": "RTX 50 高帧",
+    "rtx50HighQuality": "RTX 50 高画质",
+    "presetK": "K",
+    "presetM": "M",
+    "typeGeneralEnhance": "通用增强",
+    "typePerformanceFirst": "性能优先",
+    "typeQualityEnhance": "画质增强",
+    "typeFpsPriority": "帧率优先"
   },
   "musicPlayer": {
     "title": "鼠鼠音乐",
@@ -458,6 +602,8 @@
     "backedUp": "已备份",
     "notBackedUp": "未备份",
     "selectTarget": "选择目标显卡",
+    "lowEnd": "低端显卡",
+    "highEnd": "高端显卡",
     "selectPlaceholder": "请选择显卡",
     "selectGpu": "请先选择显卡",
     "apply": "应用",
@@ -542,13 +688,28 @@
     "schulteCurrent": "当前目标",
     "schulteComplete": "完成！",
     "schulteAverage": "平均每个数字",
-    "schultePlayAgain": "再玩一次"
+    "schultePlayAgain": "再玩一次",
+    "cpsTitle": "手速测试",
+    "cpsDesc": "在规定时间内快速点击，测试你的手速！",
+    "cpsSelectTime": "选择时间",
+    "cpsSeconds": "秒",
+    "cpsStart": "开始测试",
+    "cpsClicks": "点击",
+    "cpsResult": "CPS",
+    "cpsInstruction": "在规定时间内快速点击",
+    "cpsInstruction2": "测试你的手速！",
+    "cpsClickHere": "点击这里！",
+    "cpsClickCount": "已点击: {{clicks}} 次",
+    "cpsTotal": "共点击 {{clicks}} 次 / {{time}} 秒",
+    "cpsAgain": "再来一次"
   },
   "settings": {
     "general": "通用",
     "appearance": "外观",
+    "hotkeys": "热键",
     "network": "网络",
     "sponsor": "赞助",
+    "navigation": "导航栏",
     "about": "关于",
     "generalSettings": {
       "title": "通用设置",
@@ -563,15 +724,18 @@
         "de": "Deutsch"
       },
       "homepage": "主页",
-      "quickToolsLabel": "快捷工具",
-      "quickToolsDesc": "在主页显示快捷工具面板",
+      
       "customHtmlLabel": "自定义区域",
       "customHtmlDesc": "在主页显示可自定义HTML区域",
       "todayPopularityLabel": "今日人气",
       "todayPopularityDesc": "在主页显示今日人气随机数",
       "announcementLabel": "公告",
       "announcementDesc": "在主页显示公告卡片",
-      "splash": "启动动画",
+      "randomQuoteLabel": "随机一言",
+      "randomQuoteDesc": "在主页显示随机一言卡片",
+      "gameLauncherLabel": "快捷启动",
+      "gameLauncherDesc": "在主页显示快捷启动卡片",
+      "splash": "动画",
       "splashLogoLabel": "启动动画 Logo",
       "splashLogoDesc": "自定义启动动画中显示的 Logo 图片",
       "splashLogoReset": "恢复默认",
@@ -595,7 +759,13 @@
       "closeBehaviorLabel": "点击关闭按钮时",
       "closeBehaviorDesc": "选择点击关闭按钮时的行为",
       "closeDirectly": "直接关闭",
-      "minimizeToTray": "最小化到托盘"
+      "minimizeToTray": "最小化到托盘",
+      "sidebarShowLabel": "导航栏标签",
+      "sidebarShowLabelDesc": "选择导航栏的显示模式",
+      "sidebarShowLabelNoText": "无字",
+      "sidebarShowLabelWithText": "有字",
+      "pageTransitionLabel": "页面切换动画",
+      "pageTransitionDesc": "关闭后页面切换将不再有过渡动画"
     },
     "appearanceSettings": {
       "title": "外观设置",
@@ -703,7 +873,10 @@
     "title": "分辨率换算",
     "selectResolution": "选择分辨率",
     "resolution1K": "1K (1080p)",
+    "resolution1_5K": "1.5K",
     "resolution2K": "2K (1440p)",
+    "resolution2_5K": "2.5K",
+    "resolution3K": "3K",
     "resolution4K": "4K (2160p)",
     "aspectRatios": "画面比例",
     "ratio169": "16:9",
@@ -749,6 +922,88 @@
     "scanError": "扫描失败",
     "noVendorSelected": "请至少选择一个显卡厂商"
   },
+  "storageClean": {
+    "title": "存储清理",
+    "description": "清理系统临时文件、缓存和垃圾文件释放磁盘空间",
+    "totalScanned": "扫描总量",
+    "itemsFound": "发现项目",
+    "selectedSize": "选中大小",
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
+    "emptyRecycleBin": "清空回收站",
+    "scanning": "扫描中...",
+    "cleanButton": "开始清理",
+    "cleaning": "清理中...",
+    "scanButton": "重新扫描",
+    "cleanSuccess": "清理完成，释放了 {{size}}",
+    "cleanError": "清理失败",
+    "scanError": "扫描失败",
+    "noItemSelected": "请选择要清理的项目",
+    "skippedFiles": "跳过 {{count}} 个被占用文件",
+    "recycleBinEmpty": "回收站已清空",
+    "recycleBinError": "清空回收站失败",
+    "adminRequired": "需管理员",
+    "items": {
+      "temp_user": {
+        "name": "用户临时文件",
+        "description": "程序运行时产生的中间文件，可安全删除"
+      },
+      "temp_system": {
+        "name": "系统临时文件",
+        "description": "系统级临时文件，需要管理员权限"
+      },
+      "recycle_bin": {
+        "name": "回收站",
+        "description": "已删除文件的暂存区，清空后释放磁盘空间"
+      },
+      "thumbnail_cache": {
+        "name": "缩略图缓存",
+        "description": "图片、视频预览图缓存，删除后自动重建"
+      },
+      "prefetch": {
+        "name": "预读文件",
+        "description": "程序启动预读数据，删除后首次启动略慢"
+      },
+      "wer_archive": {
+        "name": "错误报告存档",
+        "description": "程序崩溃错误报告存档"
+      },
+      "wer_queue": {
+        "name": "错误报告队列",
+        "description": "待上报的错误报告"
+      },
+      "crash_dumps": {
+        "name": "崩溃转储",
+        "description": "应用程序崩溃转储文件"
+      },
+      "memory_dmp": {
+        "name": "完整内存转储",
+        "description": "蓝屏完整内存转储文件"
+      },
+      "minidump": {
+        "name": "蓝屏精简转储",
+        "description": "蓝屏精简转储文件，排查问题后可删除"
+      },
+      "windows_logs": {
+        "name": "系统日志",
+        "description": "Windows各组件运行日志"
+      },
+      "d3dscache": {
+        "name": "DirectX着色器缓存",
+        "description": "显卡着色器编译缓存"
+      },
+      "thumbs_db": {
+        "name": "thumbs.db残留文件",
+        "description": "早期Windows遗留的缩略图缓存文件"
+      }
+    },
+    "tip": {
+      "title": "使用提示",
+      "description": "存储清理功能可以安全删除系统临时文件和缓存，释放磁盘空间。",
+      "note1": "• 需要管理员权限的项目会在清理时自动请求权限",
+      "note2": "• 被占用的文件会自动跳过，不会影响系统运行"
+    }
+  },
   "epic": {
     "title": "Epic 喜加一",
     "loading": "正在加载免费游戏...",
@@ -762,6 +1017,7 @@
   "search": {
     "placeholder": "搜索功能...",
     "noResults": "未找到相关功能",
+    "typeToSearch": "输入关键词搜索...",
     "categories": {
       "pages": "页面",
       "builtinTools": "内置工具",
@@ -780,5 +1036,18 @@
   "tray": {
     "show": "显示主窗口",
     "exit": "退出"
+  },
+  "hotkeySettings": {
+    "title": "热键设置",
+    "overlay": "悬浮框",
+    "overlayToggle": "切换悬浮框",
+    "overlayToggleDesc": "使用快捷键显示或隐藏悬浮框",
+    "crosshair": "准心",
+    "crosshairToggle": "切换准心",
+    "crosshairToggleDesc": "使用快捷键显示或隐藏准心",
+    "filter": "滤镜",
+    "filterToggle": "切换滤镜",
+    "filterToggleDesc": "使用快捷键开启或关闭滤镜",
+    "saved": "快捷键已保存"
   }
 }

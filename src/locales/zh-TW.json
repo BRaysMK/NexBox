@@ -42,8 +42,9 @@
         "settings": "設定",
         "gpuRename": "顯卡改寫",
         "resolutionConverter": "解析度換算",
-        "dlssPreset": "三角洲DLSS預設",
-        "epicFree": "Epic 喜加一"
+        "dlssPreset": "三角洲DLSS設定",
+        "epicFree": "喜加一",
+        "lobby": "聯機"
     },
   "optimization": {
     "pageTitle": "優化",
@@ -99,8 +100,44 @@
       "adminRequired": "需要管理員權限",
       "options": {
             "11.9gb": "11.9 GB",
+            "13.9gb": "13.9 GB",
             "15.9gb": "15.9 GB"
         }
+    },
+    "powerManagement": {
+      "title": "電源管理",
+      "description": "匯入並啟用優化電源計劃，提升遊戲效能",
+      "currentPlan": "目前電源計劃",
+      "builtinPlans": "內建電源計劃",
+      "systemPlans": "系統電源計劃",
+      "import": "匯入",
+      "importAndActivate": "匯入並啟用",
+      "activate": "啟用",
+      "importing": "匯入中...",
+      "activating": "啟用中...",
+      "importSuccess": "電源計劃匯入成功",
+      "importFailed": "電源計劃匯入失敗",
+      "activateSuccess": "電源計劃已啟用",
+      "activateFailed": "電源計劃啟用失敗",
+      "alreadyImported": "已匯入",
+      "notImported": "未匯入",
+      "active": "已啟用",
+      "loadFailed": "載入電源計劃失敗",
+      "refresh": "重新整理",
+      "tipTitle": "提示",
+      "tip": "電源計劃會影響系統功耗與效能表現，遊戲場景建議使用高效能方案。啟用電源計劃需要管理員權限。",
+      "importAll": "一鍵匯入全部",
+      "importingAll": "批次匯入中...",
+      "importAllSuccess": "成功匯入 {{count}} 個電源計劃",
+      "importAllFailed": "{{count}} 個電源計劃匯入失敗",
+      "allImported": "所有電源計劃已匯入系統",
+      "delete": "刪除",
+      "deleting": "刪除中...",
+      "deleteSuccess": "電源計劃已刪除",
+      "deleteFailed": "刪除電源計劃失敗",
+      "deleteConfirmTitle": "確認刪除",
+      "deleteConfirmText": "確定要從系統中刪除電源計劃「{{name}}」嗎？",
+      "cancel": "取消"
     },
     "memoryCleanup": {
         "title": "記憶體清理",
@@ -156,9 +193,7 @@
   "home": {
     "title": "歡迎使用新境盒",
     "welcome": "歡迎",
-    "quickTools": "快捷工具",
     "customHtml": "自訂區域",
-    "addQuickTools": "點擊添加快捷工具",
     "selectTools": "選擇快捷工具",
     "edit": "編輯",
     "reset": "重置",
@@ -168,7 +203,9 @@
     "htmlPlaceholder": "在此輸入HTML程式碼...",
     "resetToDefault": "重置為預設",
     "save": "儲存",
+    "pickImage": "選擇圖片",
     "todayPopularity": "今日人氣",
+    "randomQuote": "隨機一言",
     "announcement": "公告",
     "announcementList": "公告列表",
     "loading": "載入中...",
@@ -255,7 +292,8 @@
       "openTool": "開啟工具",
       "comingSoon": "即將推出",
       "download": "點擊下載",
-      "run": "點擊執行"
+      "run": "點擊執行",
+      "website": "前往官網"
     },
     "messages": {
       "installerStarted": "安裝程式已啟動",
@@ -271,6 +309,13 @@
     },
     "ariaLabels": {
       "refreshToolList": "重新整理工具清單"
+    },
+    "customAdded": {
+      "add": "手動新增工具",
+      "remove": "刪除手動新增",
+      "addSuccess": "已新增工具",
+      "addFailed": "新增失敗",
+      "removed": "已刪除手動新增"
     }
   },
   "displayFilter": {
@@ -294,7 +339,18 @@
     "tip": "濾鏡透過調整顯示器 Gamma 曲線實現色彩效果，退出應用時自動恢復預設設定。",
     "customFilter": "自訂濾鏡",
     "saveSuccess": "設定已儲存並套用",
-    "saveAndApply": "儲存並套用"
+    "saveAndApply": "儲存並套用",
+    "iccProfiles": "ICC 色彩配置文件",
+    "importIcc": "匯入 ICC 檔案",
+    "importIccSuccess": "ICC 檔案已匯入",
+    "importIccFailed": "ICC 檔案匯入失敗",
+    "iccApplied": "ICC 色彩配置已套用",
+    "deleteIcc": "刪除",
+    "deleteIccConfirm": "確認刪除此 ICC 預設？",
+    "deleteIccSuccess": "ICC 預設已刪除",
+    "noIccProfiles": "暫無匯入的 ICC 配置文件",
+    "cancel": "取消",
+    "delete": "刪除"
   },
   "floatingNav": {
     "title": "懸浮導航框",
@@ -350,6 +406,7 @@
     "statusEnabled": "已啟用",
     "statusDisabled": "已關閉",
     "displayItems": "顯示項目",
+    "hardwareMonitor": "硬體監控",
     "cpuUsage": "CPU佔用",
     "gpuTemp": "GPU溫度",
     "gpuUsage": "GPU佔用",
@@ -358,10 +415,17 @@
     "custom": "自訂",
     "customText": "自訂文字",
     "color": "顏色",
+    "addCustomItem": "新增自訂項",
     "appearance": "外觀設定",
+    "styles": "懸浮框樣式",
+    "styles.default": "預設",
+    "styles.dynamicIsland": "動態島",
     "opacity": "透明度",
     "startFailed": "啟動失敗",
-    "stopFailed": "停止失敗"
+    "stopFailed": "停止失敗",
+    "hotkey": "快速鍵",
+    "toggleHotkey": "切換懸浮框",
+    "hotkeySaved": "快速鍵已保存"
   },
   "deltaForce": {
     "title": "三角洲專區",
@@ -373,7 +437,7 @@
     "officialMaps": "官方地圖",
     "openOfficialMap": "三角洲行動官方地圖工具",
     "mapToolDesc": "物資點、出生點、撤離點及首領座標",
-    "dlssPreset": "DLSS模型預設",
+    "dlssPreset": "DLSS預設",
     "dlssPresetDesc": "選擇DLSS類神經網路模型預設，不同預設適用於不同場景",
     "loading": "載入中...",
     "noPassword": "暫無密碼資料",
@@ -412,8 +476,44 @@
     "wallpaperDesc": "官方高清壁紙下載"
   },
   "dlssPreset": {
-    "title": "三角洲DLSS模型預設",
-    "description": "切換DLSS類神經網路模型預設以優化遊戲畫質"
+    "title": "三角洲DLSS設定",
+    "description": "切換DLSS類神經網路模型預設以優化遊戲畫質",
+    "presetLabel": "DLSS 預設",
+    "driverVersion": "驅動版本",
+    "noGpuFound": "未偵測到顯卡"
+  },
+  "dlssIndicator": {
+    "title": "DLSS 指示器",
+    "description": "在畫面左下角顯示 DLSS 標識",
+    "enabled": "DLSS 指示器已啟用",
+    "disabled": "DLSS 指示器已關閉",
+    "note": "需要管理員權限，重啟遊戲後生效"
+  },
+  "dlssLock": {
+    "title": "DLSS 鎖定",
+    "description": "鎖定 nvidiaProfileInspector 驅動配置",
+    "enabled": "DLSS 配置已鎖定",
+    "disabled": "DLSS 配置已解鎖",
+    "note": "鎖定後防止驅動更新覆蓋設置"
+  },
+  "dlssPresetTable": {
+    "title": "預設參考表",
+    "description": "不同顯卡系列推薦的 DLSS 預設配置",
+    "gpuSeries": "顯卡",
+    "recommendedPreset": "預設",
+    "driverVersion": "驅動",
+    "scenario": "類型",
+    "rtx20Series": "RTX 20 系列",
+    "rtx30Series": "RTX 30 系列",
+    "rtx4060Ti": "RTX 4060 Ti",
+    "rtx50HighFps": "RTX 50 高幀",
+    "rtx50HighQuality": "RTX 50 高畫質",
+    "presetK": "K",
+    "presetM": "M",
+    "typeGeneralEnhance": "通用增強",
+    "typePerformanceFirst": "性能優先",
+    "typeQualityEnhance": "畫質增強",
+    "typeFpsPriority": "幀率優先"
   },
   "musicPlayer": {
     "title": "鼠鼠音樂",
@@ -456,6 +556,8 @@
     "backedUp": "已備份",
     "notBackedUp": "未備份",
     "selectTarget": "選擇目標顯卡",
+    "lowEnd": "低階顯卡",
+    "highEnd": "高階顯卡",
     "selectPlaceholder": "請選擇顯卡",
     "selectGpu": "請先選擇顯卡",
     "apply": "套用",
@@ -471,7 +573,10 @@
     "title": "解析度換算",
     "selectResolution": "選擇解析度",
     "resolution1K": "1K (1080p)",
+    "resolution1_5K": "1.5K",
     "resolution2K": "2K (1440p)",
+    "resolution2_5K": "2.5K",
+    "resolution3K": "3K",
     "resolution4K": "4K (2160p)",
     "aspectRatios": "畫面比例",
     "ratio169": "16:9",
@@ -590,13 +695,28 @@
     "schulteCurrent": "當前目標",
     "schulteComplete": "完成！",
     "schulteAverage": "平均每個數字",
-    "schultePlayAgain": "再玩一次"
+    "schultePlayAgain": "再玩一次",
+    "cpsTitle": "手速測試",
+    "cpsDesc": "在規定時間內快速點擊，測試你的手速！",
+    "cpsSelectTime": "選擇時間",
+    "cpsSeconds": "秒",
+    "cpsStart": "開始測試",
+    "cpsClicks": "點擊",
+    "cpsResult": "CPS",
+    "cpsInstruction": "在規定時間內快速點擊",
+    "cpsInstruction2": "測試你的手速！",
+    "cpsClickHere": "點擊這裡！",
+    "cpsClickCount": "已點擊: {{clicks}} 次",
+    "cpsTotal": "共點擊 {{clicks}} 次 / {{time}} 秒",
+    "cpsAgain": "再來一次"
   },
   "settings": {
     "general": "一般",
     "appearance": "外觀",
+    "hotkeys": "熱鍵",
     "network": "網路",
     "sponsor": "贊助",
+    "navigation": "導航欄",
     "about": "關於",
     "generalSettings": {
       "title": "一般設定",
@@ -611,15 +731,18 @@
         "de": "Deutsch"
       },
       "homepage": "首頁",
-      "quickToolsLabel": "快捷工具",
-      "quickToolsDesc": "在首頁顯示快捷工具面板",
+      
       "customHtmlLabel": "自訂區域",
       "customHtmlDesc": "在首頁顯示可自訂HTML區域",
       "todayPopularityLabel": "今日人氣",
       "todayPopularityDesc": "在首頁顯示今日人氣隨機數",
       "announcementLabel": "公告",
       "announcementDesc": "在首頁顯示公告卡片",
-      "splash": "啟動動畫",
+      "randomQuoteLabel": "隨機一言",
+      "randomQuoteDesc": "在首頁顯示隨機一言卡片",
+      "gameLauncherLabel": "快捷啟動",
+      "gameLauncherDesc": "在首頁顯示快捷啟動卡片",
+      "splash": "動畫",
       "splashLogoLabel": "啟動動畫 Logo",
       "splashLogoDesc": "自訂啟動動畫中顯示的 Logo 圖片",
       "splashLogoReset": "恢復預設",
@@ -643,7 +766,13 @@
       "closeBehaviorLabel": "點擊關閉按鈕時",
       "closeBehaviorDesc": "選擇點擊關閉按鈕時的行為",
       "closeDirectly": "直接關閉",
-      "minimizeToTray": "最小化到系統匣"
+      "minimizeToTray": "最小化到系統匣",
+      "sidebarShowLabel": "導航欄標籤",
+      "sidebarShowLabelDesc": "選擇導航欄的顯示模式",
+      "sidebarShowLabelNoText": "無字",
+      "sidebarShowLabelWithText": "有字",
+      "pageTransitionLabel": "頁面切換動畫",
+      "pageTransitionDesc": "關閉後頁面切換將不再有過渡動畫"
     },
     "appearanceSettings": {
       "title": "外觀設定",
@@ -761,6 +890,7 @@
   "search": {
     "placeholder": "搜尋功能...",
     "noResults": "未找到相關功能",
+    "typeToSearch": "輸入關鍵字搜尋...",
     "categories": {
       "pages": "頁面",
       "builtinTools": "內建工具",
@@ -779,5 +909,18 @@
   "tray": {
     "show": "顯示主視窗",
     "exit": "退出"
+  },
+  "hotkeySettings": {
+    "title": "熱鍵設置",
+    "overlay": "懸浮框",
+    "overlayToggle": "切換懸浮框",
+    "overlayToggleDesc": "使用快速鍵顯示或隱藏懸浮框",
+    "crosshair": "準心",
+    "crosshairToggle": "切換準心",
+    "crosshairToggleDesc": "使用快速鍵顯示或隱藏準心",
+    "filter": "濾鏡",
+    "filterToggle": "切換濾鏡",
+    "filterToggleDesc": "使用快速鍵開啟或關閉濾鏡",
+    "saved": "快速鍵已保存"
   }
 }

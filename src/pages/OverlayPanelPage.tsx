@@ -14,30 +14,48 @@ import {
   useToast,
   Badge,
   Icon,
-  Divider,
   IconButton,
+  SimpleGrid,
+  Input,
 } from "@chakra-ui/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Trash2, Plus, Move, RotateCcw } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useNavigate } from "react-router-dom";
+import { CustomSelect } from "@/components/special/custom-select";
+import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { DraggableDisplayItems, DisplayItem } from "@/components/DraggableDisplayItems";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { hexToRgba } from "@/lib/color-utils";
 
-interface DisplayItems {
-  fps: boolean;
-  cpu_usage: boolean;
-  gpu_temp: boolean;
-  gpu_usage: boolean;
-  memory_usage: boolean;
-  delta_password: boolean;
+interface DisplayItemConfig {
+  id: string;
+  label: string;
+  enabled: boolean;
+}
+
+type DisplayItems = DisplayItemConfig[];
+
+interface CustomOverlayItem {
+  id: string;
+  text: string;
+  color: string;
+  enabled: boolean;
 }
 
 interface OverlaySettings {
   display_items: DisplayItems;
+  custom_items: CustomOverlayItem[];
   opacity: number;
+  style: string;
+  font: string;
+  position_x?: number | null;
+  position_y?: number | null;
 }
 
 interface HardwareData {
@@ -47,21 +65,40 @@ interface HardwareData {
   gpu_usage: number | null;
   memory_usage: number | null;
   delta_password: string | null;
+  game_ping: number | null;
 }
 
-const DEFAULT_DISPLAY_ITEMS: DisplayItems = {
-  fps: false,
-  cpu_usage: true,
-  gpu_temp: true,
-  gpu_usage: true,
-  memory_usage: true,
-  delta_password: false,
-};
+const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
+  { id: "cpu_usage", label: "CPU占用", enabled: true },
+  { id: "gpu_temp", label: "GPU温度", enabled: true },
+  { id: "gpu_usage", label: "GPU占用", enabled: true },
+  { id: "memory_usage", label: "内存占用", enabled: true },
+  { id: "delta_password", label: "三角洲密码", enabled: false },
+  { id: "game_ping", label: "游戏延迟", enabled: false },
+  { id: "fps", label: "FPS", enabled: false },
+];
 
 const DEFAULT_SETTINGS: OverlaySettings = {
   display_items: DEFAULT_DISPLAY_ITEMS,
+  custom_items: [],
   opacity: 200,
+  style: "default",
+  font: "Microsoft YaHei",
 };
+
+const BUILTIN_CHINESE_FONTS = [
+  "MiSans Medium",
+  "Microsoft YaHei",
+  "Microsoft YaHei UI",
+  "SimSun",
+  "NSimSun",
+  "SimHei",
+  "KaiTi",
+  "FangSong",
+  "DengXian",
+  "Microsoft JhengHei",
+  "YouYuan",
+];
 
 function SettingCard({
   title,
@@ -73,6 +110,7 @@ function SettingCard({
   const { liquidGlassEnabled } = useBackground();
   const cardBg = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
+  const headerColor = useColorModeValue("gray.900", "#ffffff");
 
   if (liquidGlassEnabled) {
     return (
@@ -88,7 +126,7 @@ function SettingCard({
   return (
     <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
       <VStack align="stretch" spacing={4}>
-        <Text fontWeight="medium" color="white">{title}</Text>
+        <Text fontWeight="medium" color={headerColor}>{title}</Text>
         {children}
       </VStack>
     </Box>
@@ -112,16 +150,17 @@ function SliderControl({
 }) {
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const sliderBg = useColorModeValue("gray.200", "gray.700");
+  const { getActiveColor } = useThemeColor();
 
   return (
     <Box>
       <HStack justify="space-between" mb={2}>
         <Text color={textColor} fontSize="sm">{label}</Text>
-        <Text color="teal.400" fontSize="sm" fontWeight="bold">{value}{suffix}</Text>
+        <Text color={getActiveColor()} fontSize="sm" fontWeight="bold">{value}{suffix}</Text>
       </HStack>
-      <Slider value={value} min={min} max={max} onChange={onChange} colorScheme="teal">
+      <Slider value={value} min={min} max={max} onChange={onChange}>
         <SliderTrack bg={sliderBg}>
-          <SliderFilledTrack />
+          <SliderFilledTrack bg={getActiveColor()} />
         </SliderTrack>
         <SliderThumb />
       </Slider>
@@ -129,49 +168,75 @@ function SliderControl({
   );
 }
 
-function DisplayItemCheckbox({
-  label,
-  isChecked,
-  onChange,
-  icon,
-  value,
-}: {
-  label: string;
-  isChecked: boolean;
-  onChange: (checked: boolean) => void;
-  icon: React.ReactNode;
-  value: string | null;
-}) {
+interface CustomItemCardProps {
+  item: CustomOverlayItem;
+  onUpdate: (id: string, field: keyof CustomOverlayItem, value: string | boolean) => void;
+  onRemove: (id: string) => void;
+}
+
+function CustomItemCard({ item, onUpdate, onRemove }: CustomItemCardProps) {
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const valueColor = useColorModeValue("teal.500", "teal.300");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const inputBg = useColorModeValue("gray.50", "#1a1a1a");
+  const { getActiveColor } = useThemeColor();
 
   return (
-    <HStack justify="space-between" py={2}>
-      <HStack spacing={3}>
-        <Icon as={() => icon} boxSize={5} color={isChecked ? "teal.400" : "gray.400"} />
-        <Text color={textColor} fontSize="sm">{label}</Text>
-      </HStack>
-      <HStack spacing={3}>
-        {value !== null && (
-          <Text color={valueColor} fontSize="sm" fontWeight="bold" minW="60px" textAlign="right">
-            {value}
-          </Text>
-        )}
-        <Switch
-          isChecked={isChecked}
-          onChange={(e) => onChange(e.target.checked)}
-          colorScheme="teal"
-          size="sm"
-        />
-      </HStack>
-    </HStack>
+    <Box p={3} border="1px solid" borderColor={borderColor} borderRadius="lg">
+      <VStack align="stretch" spacing={2}>
+        <HStack justify="space-between">
+          <Input
+            size="sm"
+            value={item.text}
+            onChange={(e) => onUpdate(item.id, "text", e.target.value)}
+            placeholder="输入自定义文字..."
+            bg={inputBg}
+            borderColor={borderColor}
+            color={textColor}
+            flex={1}
+          />
+          <IconButton
+            aria-label="删除"
+            icon={<Trash2 size={14} />}
+            size="xs"
+            variant="ghost"
+            colorScheme="red"
+            onClick={() => onRemove(item.id)}
+          />
+        </HStack>
+        <HStack justify="space-between">
+          <HStack spacing={2}>
+            <Input
+              type="color"
+              value={item.color}
+              onChange={(e) => onUpdate(item.id, "color", e.target.value)}
+              width="32px"
+              height="28px"
+              p={0}
+              border="none"
+              cursor="pointer"
+            />
+            <Text color={textColor} fontSize="xs">{item.color}</Text>
+          </HStack>
+          <Switch
+            isChecked={item.enabled}
+            onChange={(e) => onUpdate(item.id, "enabled", e.target.checked)}
+            size="sm"
+            sx={{
+              '& .chakra-switch__track[data-checked]': {
+                bg: getActiveColor(),
+              },
+            }}
+          />
+        </HStack>
+      </VStack>
+    </Box>
   );
 }
 
 export default function OverlayPanelPage() {
   const { t } = useTranslation();
   const toast = useToast();
-  const { overlaySettings, saveOverlaySettings } = useAppStartup();
+  const { overlaySettings, saveOverlaySettings, overlayHotkey, saveOverlayHotkey } = useAppStartup();
   const navigate = useNavigate();
 
   const [hardwareData, setHardwareData] = useState<HardwareData>({
@@ -181,21 +246,43 @@ export default function OverlayPanelPage() {
     gpu_usage: null,
     memory_usage: null,
     delta_password: null,
+    game_ping: null,
   });
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDragMode, setIsDragMode] = useState(false);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const subTextColor = useColorModeValue("gray.600", "gray.400");
+  const { getActiveColor, getHoverColor } = useThemeColor();
 
   const settings = overlaySettings || DEFAULT_SETTINGS;
 
   useEffect(() => {
     loadStatus();
+    loadHardwareData(0);
+    invoke("get_misans_font_path").catch(() => {});
   }, []);
 
   useEffect(() => {
+    let unlisten: (() => void) | null = null;
+
+    listen<void>("overlay-status-changed", () => {
+      loadStatus();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  useEffect(() => {
+    let requestId = 0;
     const interval = setInterval(() => {
-      loadHardwareData();
+      const currentRequestId = ++requestId;
+      loadHardwareData(currentRequestId);
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -209,10 +296,20 @@ export default function OverlayPanelPage() {
     }
   };
 
-  const loadHardwareData = async () => {
+  const loadHardwareData = async (requestId: number) => {
     try {
       const data = await invoke<HardwareData>("get_overlay_hardware_data");
-      setHardwareData(data);
+      setHardwareData(prev => {
+        return {
+          fps: data.fps ?? prev.fps,
+          cpu_usage: data.cpu_usage ?? prev.cpu_usage,
+          gpu_temp: data.gpu_temp ?? prev.gpu_temp,
+          gpu_usage: data.gpu_usage ?? prev.gpu_usage,
+          memory_usage: data.memory_usage ?? prev.memory_usage,
+          delta_password: data.delta_password ?? prev.delta_password,
+          game_ping: data.game_ping ?? prev.game_ping,
+        };
+      });
     } catch (error) {
       console.error("Failed to load hardware data:", error);
     }
@@ -278,26 +375,142 @@ export default function OverlayPanelPage() {
     }
   };
 
+  const toggleDragMode = async () => {
+    if (!isEnabled) {
+      toast({
+        title: t("overlayPanel.overlayNotEnabled") || "请先启用悬浮框",
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      const newDragMode = !isDragMode;
+      await invoke("set_overlay_drag_mode", { enabled: newDragMode });
+      setIsDragMode(newDragMode);
+      
+      // 退出拖动模式时保存位置
+      if (!newDragMode) {
+        const currentSettings = await invoke<OverlaySettings>("get_overlay_current_settings");
+        saveOverlaySettings(currentSettings);
+        toast({
+          title: t("overlayPanel.positionSaved") || "位置已保存",
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: t("overlayPanel.dragModeEnabled") || "已进入拖动模式，拖动后点击按钮退出",
+          status: "info",
+          duration: 2000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to toggle drag mode:", error);
+      toast({
+        title: t("overlayPanel.dragModeFailed") || "切换拖动模式失败",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const resetPosition = async () => {
+    if (!isEnabled) {
+      toast({
+        title: t("overlayPanel.overlayNotEnabled") || "请先启用悬浮框",
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      await invoke("reset_overlay_position");
+      const currentSettings = await invoke<OverlaySettings>("get_overlay_current_settings");
+      saveOverlaySettings(currentSettings);
+      toast({
+        title: t("overlayPanel.positionReset") || "位置已恢复默认",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to reset position:", error);
+      toast({
+        title: t("overlayPanel.positionResetFailed") || "重置位置失败",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  };
+
   const updateSettings = (newSettings: OverlaySettings) => {
     saveOverlaySettings(newSettings);
   };
 
-  const updateDisplayItem = (key: keyof DisplayItems, value: boolean) => {
+  const updateDisplayItem = (id: string, enabled: boolean) => {
     const newSettings = {
       ...settings,
-      display_items: {
-        ...settings.display_items,
-        [key]: value,
-      },
+      display_items: settings.display_items.map((item) =>
+        item.id === id ? { ...item, enabled } : item
+      ),
     };
     saveOverlaySettings(newSettings);
   };
+
+  const reorderDisplayItems = useCallback((newOrder: DisplayItems) => {
+    const newSettings = {
+      ...settings,
+      display_items: newOrder,
+    };
+    saveOverlaySettings(newSettings);
+  }, [settings, saveOverlaySettings]);
 
   const updateSetting = <K extends keyof OverlaySettings>(
     key: K,
     value: OverlaySettings[K]
   ) => {
     const newSettings = { ...settings, [key]: value };
+    saveOverlaySettings(newSettings);
+  };
+
+  const addCustomItem = () => {
+    const newItem: CustomOverlayItem = {
+      id: crypto.randomUUID(),
+      text: "",
+      color: "#00FF00",
+      enabled: true,
+    };
+    const newSettings = {
+      ...settings,
+      custom_items: [...settings.custom_items, newItem],
+    };
+    saveOverlaySettings(newSettings);
+  };
+
+  const updateCustomItem = (id: string, field: keyof CustomOverlayItem, value: string | boolean) => {
+    const newSettings = {
+      ...settings,
+      custom_items: settings.custom_items.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      ),
+    };
+    saveOverlaySettings(newSettings);
+  };
+
+  const removeCustomItem = (id: string) => {
+    const newSettings = {
+      ...settings,
+      custom_items: settings.custom_items.filter((item) => item.id !== id),
+    };
     saveOverlaySettings(newSettings);
   };
 
@@ -325,78 +538,206 @@ export default function OverlayPanelPage() {
 
       <VStack align="stretch" spacing={5}>
         <SettingCard title={t("overlayPanel.enableOverlay") || "启用悬浮框"}>
-          <HStack justify="space-between">
+          <HStack justify="space-between" wrap="wrap" spacing={4}>
             <HStack>
               <Icon as={isEnabled ? Eye : EyeOff} boxSize={5} color={isEnabled ? "green.400" : "gray.400"} />
               <Badge colorScheme={isEnabled ? "green" : "gray"}>
                 {isEnabled ? (t("overlayPanel.statusEnabled") || "已启用") : (t("overlayPanel.statusDisabled") || "已禁用")}
               </Badge>
             </HStack>
-            <Switch
-              isChecked={isEnabled}
-              onChange={toggleOverlay}
-              colorScheme="teal"
-              isDisabled={isLoading}
-              size="lg"
-            />
+            <HStack spacing={4}>
+              <HotkeyRecorder
+                value={overlayHotkey}
+                onChange={(val) => {
+                  saveOverlayHotkey(val);
+                  toast({
+                    title: t("overlayPanel.hotkeySaved") || "快捷键已保存",
+                    status: "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+              <Switch
+                isChecked={isEnabled}
+                onChange={toggleOverlay}
+                isDisabled={isLoading}
+                size="lg"
+                sx={{
+                  '& .chakra-switch__track[data-checked]': {
+                    bg: getActiveColor(),
+                  },
+                }}
+              />
+              <Button
+                leftIcon={<Move size={16} />}
+                size="sm"
+                variant={isDragMode ? "solid" : "outline"}
+                colorScheme={isDragMode ? "orange" : undefined}
+                color={isDragMode ? undefined : getActiveColor()}
+                borderColor={isDragMode ? undefined : getActiveColor()}
+                onClick={toggleDragMode}
+                isDisabled={!isEnabled}
+              >
+                {isDragMode 
+                  ? (t("overlayPanel.dragModeActive") || "退出拖动") 
+                  : (t("overlayPanel.dragModeStart") || "移动")}
+              </Button>
+              <Button
+                leftIcon={<RotateCcw size={16} />}
+                size="sm"
+                variant="ghost"
+                colorScheme="gray"
+                onClick={resetPosition}
+                isDisabled={!isEnabled}
+              >
+                {t("overlayPanel.resetPosition") || "重置"}
+              </Button>
+            </HStack>
           </HStack>
         </SettingCard>
 
         <SettingCard title={t("overlayPanel.displayItems") || "显示项"}>
-          <VStack align="stretch" spacing={1}>
-            <DisplayItemCheckbox
-              label={t("overlayPanel.cpuUsage") || "CPU占用"}
-              isChecked={settings.display_items.cpu_usage}
-              onChange={(checked) => updateDisplayItem("cpu_usage", checked)}
-              icon={<Cpu size={20} />}
-              value={formatValue(hardwareData.cpu_usage, "%")}
-            />
-            <Divider />
-            <DisplayItemCheckbox
-              label={t("overlayPanel.gpuTemp") || "GPU温度"}
-              isChecked={settings.display_items.gpu_temp}
-              onChange={(checked) => updateDisplayItem("gpu_temp", checked)}
-              icon={<Thermometer size={20} />}
-              value={formatValue(hardwareData.gpu_temp, "C")}
-            />
-            <Divider />
-            <DisplayItemCheckbox
-              label={t("overlayPanel.gpuUsage") || "GPU占用"}
-              isChecked={settings.display_items.gpu_usage}
-              onChange={(checked) => updateDisplayItem("gpu_usage", checked)}
-              icon={<Activity size={20} />}
-              value={formatValue(hardwareData.gpu_usage, "%")}
-            />
-            <Divider />
-            <DisplayItemCheckbox
-              label={t("overlayPanel.memoryUsage") || "内存占用"}
-              isChecked={settings.display_items.memory_usage}
-              onChange={(checked) => updateDisplayItem("memory_usage", checked)}
-              icon={<HardDrive size={20} />}
-              value={hardwareData.memory_usage !== null 
-                ? `${Math.round(hardwareData.memory_usage)}%` 
-                : "--"}
-            />
-            <Divider />
-            <DisplayItemCheckbox
-              label={t("overlayPanel.deltaPassword") || "三角洲密码"}
-              isChecked={settings.display_items.delta_password}
-              onChange={(checked) => updateDisplayItem("delta_password", checked)}
-              icon={<Key size={20} />}
-              value={hardwareData.delta_password ? t("hardware.deltaPasswordFetched") : t("hardware.deltaPasswordNotFetched")}
-            />
-          </VStack>
+          <SimpleGrid columns={2} spacing={4}>
+            <Box>
+              <Text fontSize="sm" fontWeight="medium" mb={2} color={subTextColor}>
+                {t("overlayPanel.hardwareMonitor") || "硬件监控"} (拖拽排序)
+              </Text>
+              <DraggableDisplayItems
+                items={settings.display_items}
+                onReorder={reorderDisplayItems}
+                onToggle={updateDisplayItem}
+              />
+            </Box>
+
+            <Box>
+              <Text fontSize="sm" fontWeight="medium" mb={2} color={subTextColor}>
+                {t("overlayPanel.custom") || "自定义"}
+              </Text>
+              <VStack align="stretch" spacing={2}>
+                {settings.custom_items.length === 0 ? (
+                  <Text fontSize="sm" color="gray.500" fontStyle="italic">
+                    暂无自定义项，点击下方按钮添加
+                  </Text>
+                ) : (
+                  settings.custom_items.map((item) => (
+                    <CustomItemCard
+                      key={item.id}
+                      item={item}
+                      onUpdate={updateCustomItem}
+                      onRemove={removeCustomItem}
+                    />
+                  ))
+                )}
+                <Button
+                  leftIcon={<Plus size={16} />}
+                  size="sm"
+                  variant="outline"
+                  color={getActiveColor()}
+                  borderColor={getActiveColor()}
+                  onClick={addCustomItem}
+                  mt={1}
+                >
+                  {t("overlayPanel.addCustomItem") || "添加自定义项"}
+                </Button>
+              </VStack>
+            </Box>
+          </SimpleGrid>
         </SettingCard>
 
+
+
         <SettingCard title={t("overlayPanel.appearance") || "外观设置"}>
-          <SliderControl
-            label={t("overlayPanel.opacity") || "透明度"}
-            value={Math.round(settings.opacity / 255 * 100)}
-            min={20}
-            max={100}
-            onChange={(val) => updateSetting("opacity", Math.round(val / 100 * 255))}
-            suffix="%"
-          />
+          <HStack align="start" spacing={6}>
+            {/* 左侧：样式选择 */}
+            <VStack align="stretch" spacing={2} flex={1}>
+              <Text fontSize="sm" fontWeight="medium" color={subTextColor}>
+                {t("overlayPanel.styles") || "悬浮框样式"}
+              </Text>
+              <Box
+                as="button"
+                onClick={() => updateSetting("style", "default")}
+                bg={settings.style === "default" ? hexToRgba(getActiveColor(), 0.12) : "transparent"}
+                border="2px solid"
+                borderColor={settings.style === "default" ? getActiveColor() : "gray.600"}
+                borderRadius="xl"
+                p={3}
+                cursor="pointer"
+                textAlign="center"
+                transition="all 0.2s"
+                _hover={{
+                  borderColor: getActiveColor(),
+                  bg: settings.style === "default" ? hexToRgba(getActiveColor(), 0.12) : hexToRgba(getActiveColor(), 0.08),
+                }}
+              >
+                <VStack spacing={2}>
+                  <Box
+                    w="80px"
+                    h="16px"
+                    bg="gray.500"
+                    borderRadius="none"
+                    opacity={0.6}
+                  />
+                  <Text fontSize="sm" fontWeight="medium" color={subTextColor}>
+                    {t("overlayPanel.styles.default") || "默认"}
+                  </Text>
+                </VStack>
+              </Box>
+              <Box
+                as="button"
+                onClick={() => updateSetting("style", "dynamic_island")}
+                bg={settings.style === "dynamic_island" ? hexToRgba(getActiveColor(), 0.12) : "transparent"}
+                border="2px solid"
+                borderColor={settings.style === "dynamic_island" ? getActiveColor() : "gray.600"}
+                borderRadius="xl"
+                p={3}
+                cursor="pointer"
+                textAlign="center"
+                transition="all 0.2s"
+                _hover={{
+                  borderColor: getActiveColor(),
+                  bg: settings.style === "dynamic_island" ? hexToRgba(getActiveColor(), 0.12) : hexToRgba(getActiveColor(), 0.08),
+                }}
+              >
+                <VStack spacing={2}>
+                  <Box
+                    w="64px"
+                    h="20px"
+                    bg="gray.500"
+                    borderRadius="full"
+                    opacity={0.6}
+                  />
+                  <Text fontSize="sm" fontWeight="medium" color={subTextColor}>
+                    {t("overlayPanel.styles.dynamicIsland") || "灵动岛"}
+                  </Text>
+                </VStack>
+              </Box>
+            </VStack>
+
+            {/* 右侧：字体选择 + 不透明度 */}
+            <VStack align="stretch" spacing={4} flex={1}>
+              <Box>
+                <Text fontSize="sm" fontWeight="medium" mb={2} color={subTextColor}>
+                  字体
+                </Text>
+                <CustomSelect
+                  value={settings.font}
+                  onChange={(val) => updateSetting("font", val)}
+                  options={BUILTIN_CHINESE_FONTS.map((f) => ({ value: f, label: f }))}
+                  width="100%"
+                  direction="up"
+                />
+              </Box>
+              <SliderControl
+                label={t("overlayPanel.opacity") || "透明度"}
+                value={Math.round(settings.opacity / 255 * 100)}
+                min={0}
+                max={100}
+                onChange={(val) => updateSetting("opacity", Math.round(val / 100 * 255))}
+                suffix="%"
+              />
+            </VStack>
+          </HStack>
         </SettingCard>
       </VStack>
     </Box>

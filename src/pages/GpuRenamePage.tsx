@@ -20,6 +20,8 @@ import { useBackground } from "@/contexts/background-context";
 import { AnimatedPage } from "@/components/ui/animated-page";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Monitor } from "lucide-react";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { hexToRgba } from "@/lib/color-utils";
 
 interface GpuInfo {
   original_name: string;
@@ -30,6 +32,7 @@ interface GpuInfo {
 interface GpuOption {
   id: string;
   name: string;
+  category: string;
 }
 
 interface GpuRenameResult {
@@ -42,6 +45,10 @@ export default function GpuRenamePage() {
   const { liquidGlassEnabled } = useBackground();
   const toast = useToast();
   const navigate = useNavigate();
+
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const contrastText = getContrastTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const textColor = useColorModeValue("gray.600", "#a0a0a0");
@@ -189,49 +196,68 @@ export default function GpuRenamePage() {
       ) : (
         <>
           <VStack align="start" spacing={3} w="full">
-            <Box w="full">
-              <Text color={textColor} fontSize="sm" mb={1}>
-                {t("gpuRename.currentGpu")}
-              </Text>
-              <Text color={headingColor} fontWeight="medium">
-                {gpuInfo?.current_name || "-"}
-              </Text>
-            </Box>
+            <HStack spacing={6} w="full" align="start">
+              <Box flex={1}>
+                <Text color={textColor} fontSize="sm" mb={1}>
+                  {t("gpuRename.currentGpu")}
+                </Text>
+                <Text color={headingColor} fontWeight="medium" wordBreak="break-all">
+                  {gpuInfo?.current_name || "-"}
+                </Text>
+              </Box>
+
+              <Box flex={1}>
+                <Text color={textColor} fontSize="sm" mb={1}>
+                  {t("gpuRename.backupStatus")}
+                </Text>
+                <Text
+                  color={gpuInfo?.is_backed_up ? "green.500" : "orange.500"}
+                  fontWeight="medium"
+                >
+                  {gpuInfo?.is_backed_up
+                    ? t("gpuRename.backedUp")
+                    : t("gpuRename.notBackedUp")}
+                </Text>
+              </Box>
+            </HStack>
 
             {gpuInfo?.is_backed_up && (
               <Box w="full">
                 <Text color={textColor} fontSize="sm" mb={1}>
                   {t("gpuRename.originalGpu")}
                 </Text>
-                <Text color={headingColor} fontWeight="medium">
+                <Text color={headingColor} fontWeight="medium" wordBreak="break-all">
                   {gpuInfo.original_name}
                 </Text>
               </Box>
             )}
-
-            <Box w="full">
-              <Text color={textColor} fontSize="sm" mb={1}>
-                {t("gpuRename.backupStatus")}
-              </Text>
-              <Text
-                color={gpuInfo?.is_backed_up ? "green.500" : "orange.500"}
-                fontWeight="medium"
-              >
-                {gpuInfo?.is_backed_up
-                  ? t("gpuRename.backedUp")
-                  : t("gpuRename.notBackedUp")}
-              </Text>
-            </Box>
           </VStack>
 
           <Box w="full" mt={4}>
-            <Text color={textColor} fontSize="sm" mb={2}>
-              {t("gpuRename.selectTarget")}
+            <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
+              {t("gpuRename.lowEnd")}
             </Text>
             <CustomSelect
               value={selectedOption}
               onChange={setSelectedOption}
-              options={gpuOptions.map(option => ({ value: option.id, label: option.name }))}
+              options={gpuOptions
+                .filter(option => option.category === "low-end")
+                .map(option => ({ value: option.id, label: option.name }))}
+              placeholder={t("gpuRename.selectPlaceholder")}
+              width="100%"
+            />
+          </Box>
+
+          <Box w="full" mt={4}>
+            <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
+              {t("gpuRename.highEnd")}
+            </Text>
+            <CustomSelect
+              value={selectedOption}
+              onChange={setSelectedOption}
+              options={gpuOptions
+                .filter(option => option.category === "high-end")
+                .map(option => ({ value: option.id, label: option.name }))}
               placeholder={t("gpuRename.selectPlaceholder")}
               width="100%"
             />
@@ -239,11 +265,22 @@ export default function GpuRenamePage() {
 
           <VStack align="start" spacing={3} w="full" mt={4}>
             <Button
-              colorScheme="teal"
+              bg={primaryColor}
+              color={contrastText}
               onClick={handleApply}
               isLoading={applying}
               loadingText={t("gpuRename.applying")}
               w="full"
+              _hover={{
+                bg: hexToRgba(primaryColor, 0.8),
+                transform: "translateY(-1px)",
+                boxShadow: `0 4px 12px ${hexToRgba(primaryColor, 0.3)}`,
+              }}
+              _active={{
+                bg: hexToRgba(primaryColor, 0.6),
+                transform: "translateY(0)",
+              }}
+              transition="all 0.2s"
             >
               {t("gpuRename.apply")}
             </Button>

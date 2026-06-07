@@ -40,7 +40,5 @@ pub fn stop_sensor_process(app: &AppHandle) {
 }
 
 fn spawn_sensor() -> std::io::Result<Option<Child>> {
-  // C# 传感器后端已移除，直接返回 None
-  log::info!("C# 传感器后端已移除，不启动传感器进程。");
   Ok(None)
 }

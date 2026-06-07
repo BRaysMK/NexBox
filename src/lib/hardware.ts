@@ -1,6 +1,13 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
+export enum GpuVendor {
+  NVIDIA = "NVIDIA",
+  AMD = "AMD",
+  Intel = "Intel",
+  Unknown = "Unknown",
+}
+
 export interface CpuInfo {
   name: string;
   cores: number;
@@ -12,6 +19,7 @@ export interface CpuInfo {
 
 export interface GpuInfo {
   name: string;
+  vendor: GpuVendor;
   memory_gb: number;
   driver_version: string;
   temperature: number | null;

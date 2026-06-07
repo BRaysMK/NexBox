@@ -12,7 +12,7 @@ import {
   Image,
 } from "@chakra-ui/react";
 import { Search, Home, Cpu, Wrench, Package, Crosshair, TrendingUp, Heart, Settings } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -57,12 +57,14 @@ export function GlobalSearch() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<GroupedResults>({});
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [flatResults, setFlatResults] = useState<SearchItem[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const activeBg = getActiveColor();
   const activeIconColor = getContrastTextColor();
@@ -112,17 +114,26 @@ export function GlobalSearch() {
   }, []);
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResults({});
-      setFlatResults([]);
-      setSelectedIndex(0);
-      return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
 
-    const allItems: SearchItem[] = [...searchIndex];
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 150);
 
-    tools.forEach(({ tool }) => {
-      allItems.push({
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [query]);
+
+  const allSearchItems = useMemo(() => {
+    const items: SearchItem[] = [...searchIndex];
+    
+    tools.forEach((tool) => {
+      items.push({
         id: tool.id,
         nameKey: `tools.tools.${tool.id}`,
         path: "/tools",
@@ -133,8 +144,19 @@ export function GlobalSearch() {
         toolId: tool.id,
       });
     });
+    
+    return items;
+  }, [tools]);
 
-    const matched = allItems.filter((item) => matchSearch(query, item, t));
+  useEffect(() => {
+    if (!debouncedQuery.trim()) {
+      setResults({});
+      setFlatResults([]);
+      setSelectedIndex(0);
+      return;
+    }
+
+    const matched = allSearchItems.filter((item) => matchSearch(debouncedQuery, item, t));
 
     const grouped: GroupedResults = {};
     categoryOrder.forEach((cat) => {
@@ -163,7 +185,7 @@ export function GlobalSearch() {
     });
     setFlatResults(flat);
     setSelectedIndex(0);
-  }, [query, t, tools]);
+  }, [debouncedQuery, t, allSearchItems]);
 
   const handleSelect = useCallback(
     async (item: SearchItem) => {
@@ -242,7 +264,7 @@ export function GlobalSearch() {
         )}
       </InputGroup>
 
-      {isOpen && query.trim() && (
+      {isOpen && (
         <Box
           position="absolute"
           top="calc(100% + 8px)"
@@ -273,7 +295,7 @@ export function GlobalSearch() {
         >
           {totalResults === 0 ? (
             <Text px={4} py={3} color={noResultColor} fontSize="sm" textAlign="center">
-              {t("search.noResults")}
+              {query.trim() ? t("search.noResults") : t("search.typeToSearch") || "输入关键词搜索..."}
             </Text>
           ) : (
             <VStack align="stretch" spacing={1}>

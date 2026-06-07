@@ -3,9 +3,9 @@
 
 #define MyAppName "NexBox"
 #define MyAppDisplayName "新境盒"
-#define MyAppVersion "2.5.3"
+#define MyAppVersion "3.1.6"
 #define MyAppPublisher "MuLiu"
-#define MyAppURL "https://gitee.com/nexbox"
+#define MyAppURL "https://www.nexbox.top/"
 #define MyAppExeName "nexbox.exe"
 
 [Setup]
@@ -108,11 +108,13 @@ Name: "desktopicon"; Description: "{cm:TasksDesktop}"
 
 [Files]
 Source: "D:\NexBox\src-tauri\target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "D:\NexBox\MiSans-Medium.ttf"; DestDir: "{app}"; Flags: ignoreversion
 Source: "D:\NexBox\nvidiaProfileInspector.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "D:\NexBox\nvidiaProfileInspector.exe.config"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "D:\NexBox\Reference.xml"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "D:\NexBox\src-tauri\target\release\resources\*"; DestDir: "{app}\resources"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "D:\NexBox\src-tauri\target\release\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "D:\NexBox\power-plans\*"; DestDir: "{app}\power-plans"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
 [Icons]
 Name: "{autoprograms}\{#MyAppDisplayName}"; Filename: "{app}\{#MyAppExeName}"
@@ -124,9 +126,11 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:Run}"; Flags: nowait postin
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\resources"
 Type: filesandordirs; Name: "{app}\assets"
+Type: filesandordirs; Name: "{app}\power-plans"
 Type: files; Name: "{app}\nvidiaProfileInspector.exe"
 Type: files; Name: "{app}\nvidiaProfileInspector.exe.config"
 Type: files; Name: "{app}\Reference.xml"
+Type: files; Name: "{app}\MiSans-Medium.ttf"
 
 [Code]
 function InitializeSetup(): Boolean;

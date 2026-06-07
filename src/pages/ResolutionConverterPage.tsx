@@ -12,12 +12,14 @@ import {
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { hexToRgba } from "@/lib/color-utils";
 import { Monitor, ArrowLeft } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
-type ResolutionType = "1K" | "2K" | "4K";
+type ResolutionType = "1K" | "1.5K" | "2K" | "2.5K" | "3K" | "4K";
 
 interface ResolutionInfo {
   width: number;
@@ -28,7 +30,10 @@ interface ResolutionInfo {
 
 const RESOLUTION_PRESETS: Record<ResolutionType, { width: number; height: number }> = {
   "1K": { width: 1920, height: 1080 },
+  "1.5K": { width: 1920, height: 1200 },
   "2K": { width: 2560, height: 1440 },
+  "2.5K": { width: 2560, height: 1600 },
+  "3K": { width: 3200, height: 1800 },
   "4K": { width: 3840, height: 2160 },
 };
 
@@ -211,28 +216,32 @@ function ResolutionSelector({
 }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const contrastText = getContrastTextColor();
   const textColor = useColorModeValue("gray.700", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const buttonBg = useColorModeValue("gray.100", "#222222");
-  const activeBg = useColorModeValue("#4A90E2", "#4A90E2");
+  const activeBg = primaryColor;
 
   const options: { type: ResolutionType; label: string; subLabel: string }[] = [
     { type: "1K", label: t("resolutionConverter.resolution1K"), subLabel: "1920×1080" },
+    { type: "1.5K", label: t("resolutionConverter.resolution1_5K"), subLabel: "1920×1200" },
     { type: "2K", label: t("resolutionConverter.resolution2K"), subLabel: "2560×1440" },
+    { type: "2.5K", label: t("resolutionConverter.resolution2_5K"), subLabel: "2560×1600" },
+    { type: "3K", label: t("resolutionConverter.resolution3K"), subLabel: "3200×1800" },
     { type: "4K", label: t("resolutionConverter.resolution4K"), subLabel: "3840×2160" },
   ];
 
   return (
-    <HStack spacing={3} wrap="wrap">
+    <SimpleGrid columns={{ base: 2, md: 3, lg: 6 }} spacing={3} w="full">
       {options.map((option) => {
         const isActive = selected === option.type;
         return (
           <Box
             key={option.type}
-            flex="1"
-            minW="140px"
             bg={isActive ? activeBg : buttonBg}
-            color={isActive ? "white" : textColor}
+            color={isActive ? contrastText : textColor}
             borderRadius="xl"
             p={4}
             cursor="pointer"
@@ -242,6 +251,7 @@ function ResolutionSelector({
             onClick={() => onSelect(option.type)}
             _hover={{
               borderColor: activeBg,
+              bg: isActive ? activeBg : hexToRgba(primaryColor, 0.1),
               transform: "translateY(-2px)",
             }}
             position="relative"
@@ -254,7 +264,7 @@ function ResolutionSelector({
                 left={0}
                 right={0}
                 h="3px"
-                bg="white"
+                bg={contrastText}
                 opacity={0.3}
               />
             )}
@@ -263,14 +273,14 @@ function ResolutionSelector({
               <Text fontSize="md" fontWeight="600">
                 {option.label}
               </Text>
-              <Text fontSize="xs" color={isActive ? "whiteAlpha.800" : subTextColor}>
+              <Text fontSize="xs" color={isActive ? hexToRgba(contrastText, 0.7) : subTextColor}>
                 {option.subLabel}
               </Text>
             </VStack>
           </Box>
         );
       })}
-    </HStack>
+    </SimpleGrid>
   );
 }
 
@@ -278,6 +288,8 @@ export default function ResolutionConverterPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { liquidGlassEnabled } = useBackground();
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
   const [selectedResolution, setSelectedResolution] = useState<ResolutionType>("1K");
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
@@ -353,9 +365,9 @@ export default function ResolutionConverterPage() {
         w="full"
         p={4}
         borderRadius="xl"
-        bg={useColorModeValue("rgba(74,144,226,0.1)", "rgba(74,144,226,0.1)")}
+        bg={hexToRgba(primaryColor, 0.1)}
         border="1px solid"
-        borderColor={useColorModeValue("rgba(74,144,226,0.3)", "rgba(74,144,226,0.2)")}
+        borderColor={hexToRgba(primaryColor, 0.3)}
       >
         <Text color={subTextColor} fontSize="xs">
           {t("resolutionConverter.tip")}

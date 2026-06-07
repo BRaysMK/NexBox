@@ -6,7 +6,7 @@ import {
   Text,
   useColorModeValue,
 } from "@chakra-ui/react";
-import { Zap, Target, Focus, MousePointerClick, Ban, Grid3X3 } from "lucide-react";
+import { Zap, Target, Focus, MousePointerClick, Ban, Grid3X3, MousePointer2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -101,7 +101,7 @@ function ToolCard({ tool }: { tool: ToolItem }) {
         minH="200px"
         cursor="pointer"
         border="2px solid"
-        borderColor="transparent"
+        borderColor={cardBorder}
         transition="all 0.2s"
         _hover={{
           borderColor: tool.color,
@@ -172,6 +172,14 @@ export default function TestsPage() {
       titleKey: "tests.schulteTitle",
       descriptionKey: "tests.schulteDesc",
       color: "#3B82F6",
+    },
+    {
+      id: "cps",
+      path: "/tests/cps",
+      icon: MousePointer2,
+      titleKey: "tests.cpsTitle",
+      descriptionKey: "tests.cpsDesc",
+      color: "#06b6d4",
     },
   ];
 

@@ -1,353 +1,404 @@
 import {
   Box,
+  Text,
   Heading,
   VStack,
-  Text,
   HStack,
-  useColorModeValue,
   Button,
-  useToast,
   SimpleGrid,
+  useColorModeValue,
+  useToast,
   Badge,
+  IconButton,
 } from "@chakra-ui/react";
-import { ArrowLeft, Gauge, ShieldOff, Zap } from "lucide-react";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
+import {
+  ArrowLeft,
+  Gauge,
+  Cpu,
+  Shield,
+  Zap,
+  RefreshCw,
+} from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
+import { useNavigate } from "react-router-dom";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { hexToRgba } from "@/lib/color-utils";
 
-interface ProcessOptimizeResult {
-  success: boolean;
+interface OptionState {
+  running: boolean;
   message: string;
-  process_name: string;
-  was_running: boolean;
 }
 
-interface AceOptimizeResult {
-  success: boolean;
-  message: string;
-  ace_tray: boolean;
-  sguard64: boolean;
-  sguardsvc64: boolean;
-}
-
-interface AllGameOptimizeResult {
-  success: boolean;
-  message: string;
-  delta_boosted: boolean;
-  ace_limited: boolean;
-  ace_count: number;
-}
-
-export default function AceOptimizePage() {
+function OptionRow({
+  icon,
+  title,
+  description,
+  isLoading,
+  isApplied,
+  gameRunning,
+  onApply,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  isLoading: boolean;
+  isApplied: boolean;
+  gameRunning: boolean | null;
+  onApply: () => void;
+}) {
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
-  const navigate = useNavigate();
-  const toast = useToast();
-
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.700", "#e0e0e0");
+  const rowBg = useColorModeValue("gray.50", "#1a1a1a");
+  const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const iconBg = useColorModeValue("white", "#222222");
+  const { getActiveColor } = useThemeColor();
 
-  const [boostingDelta, setBoostingDelta] = useState(false);
-  const [optimizingAce, setOptimizingAce] = useState(false);
-  const [optimizingAll, setOptimizingAll] = useState(false);
-  const [deltaStatus, setDeltaStatus] = useState<"idle" | "optimized" | "not_running">("idle");
-  const [aceStatus, setAceStatus] = useState<"idle" | "optimized" | "not_running">("idle");
-  const [aceCount, setAceCount] = useState(0);
-
-  const getStatusBadge = (status: "idle" | "optimized" | "not_running") => {
-    if (status === "optimized") {
-      return (
-        <Badge colorScheme="green" variant="subtle" fontSize="xs">
-          {t("optimization.aceOptimize.status.optimized")}
-        </Badge>
-      );
-    }
-    if (status === "not_running") {
-      return (
-        <Badge colorScheme="gray" variant="subtle" fontSize="xs">
-          {t("optimization.aceOptimize.status.notRunning")}
-        </Badge>
-      );
-    }
-    return (
-      <Badge colorScheme="yellow" variant="subtle" fontSize="xs">
-        {t("optimization.aceOptimize.status.notOptimized")}
-      </Badge>
-    );
-  };
-
-  const handleBoostDelta = async () => {
-    setBoostingDelta(true);
-    try {
-      const result = await invoke<ProcessOptimizeResult>("boost_delta_force_priority");
-      if (result.was_running) {
-        setDeltaStatus("optimized");
-        toast({
-          title: t("optimization.aceOptimize.deltaBoost.title"),
-          description: t("optimization.aceOptimize.deltaBoost.success"),
-          status: "success",
-          duration: 4000,
-          isClosable: true,
-        });
-      } else {
-        setDeltaStatus("not_running");
-        toast({
-          title: t("optimization.aceOptimize.deltaBoost.title"),
-          description: t("optimization.aceOptimize.deltaBoost.notRunning"),
-          status: "warning",
-          duration: 4000,
-          isClosable: true,
-        });
-      }
-    } catch (error) {
-      toast({
-        title: t("optimization.aceOptimize.error"),
-        description: String(error),
-        status: "error",
-        duration: 4000,
-        isClosable: true,
-      });
-    } finally {
-      setBoostingDelta(false);
-    }
-  };
-
-  const handleOptimizeAce = async () => {
-    setOptimizingAce(true);
-    try {
-      const result = await invoke<AceOptimizeResult>("optimize_ace_processes");
-      const optimizedCount = [result.ace_tray, result.sguard64, result.sguardsvc64].filter(Boolean).length;
-      if (optimizedCount > 0) {
-        setAceStatus("optimized");
-        setAceCount(optimizedCount);
-        toast({
-          title: t("optimization.aceOptimize.aceLimit.title"),
-          description: t("optimization.aceOptimize.aceLimit.success", { count: optimizedCount }),
-          status: "success",
-          duration: 4000,
-          isClosable: true,
-        });
-      } else {
-        setAceStatus("not_running");
-        toast({
-          title: t("optimization.aceOptimize.aceLimit.title"),
-          description: t("optimization.aceOptimize.aceLimit.notRunning"),
-          status: "warning",
-          duration: 4000,
-          isClosable: true,
-        });
-      }
-    } catch (error) {
-      toast({
-        title: t("optimization.aceOptimize.error"),
-        description: String(error),
-        status: "error",
-        duration: 4000,
-        isClosable: true,
-      });
-    } finally {
-      setOptimizingAce(false);
-    }
-  };
-
-  const handleOptimizeAll = async () => {
-    setOptimizingAll(true);
-    try {
-      const result = await invoke<AllGameOptimizeResult>("optimize_all_game_processes");
-
-      if (result.delta_boosted) {
-        setDeltaStatus("optimized");
-      } else {
-        setDeltaStatus("not_running");
-      }
-      if (result.ace_limited) {
-        setAceStatus("optimized");
-        setAceCount(result.ace_count);
-      } else {
-        setAceStatus("not_running");
-      }
-
-      if (result.delta_boosted && result.ace_limited) {
-        toast({
-          title: t("optimization.aceOptimize.optimizeAll.success"),
-          description: result.message,
-          status: "success",
-          duration: 4000,
-          isClosable: true,
-        });
-      } else if (result.delta_boosted || result.ace_limited) {
-        toast({
-          title: t("optimization.aceOptimize.optimizeAll.partial"),
-          description: result.message,
-          status: "warning",
-          duration: 4000,
-          isClosable: true,
-        });
-      } else {
-        toast({
-          title: t("optimization.aceOptimize.optimizeAll.partial"),
-          description: result.message,
-          status: "info",
-          duration: 4000,
-          isClosable: true,
-        });
-      }
-    } catch (error) {
-      toast({
-        title: t("optimization.aceOptimize.error"),
-        description: String(error),
-        status: "error",
-        duration: 4000,
-        isClosable: true,
-      });
-    } finally {
-      setOptimizingAll(false);
-    }
-  };
-
-  const renderOptimizeCard = (
-    icon: React.ReactNode,
-    title: string,
-    description: string,
-    status: "idle" | "optimized" | "not_running",
-    buttonLabel: string,
-    onOptimize: () => void,
-    isLoading: boolean,
-    loadingLabel: string,
-    accentColor: string,
-    accentBg: string
-  ) => (
+  return (
     <Box
-      bg={cardBg}
+      p={4}
       borderRadius="xl"
-      borderWidth="1px"
-      borderColor={cardBorder}
-      p={5}
-      boxShadow="md"
+      bg={rowBg}
+      border="1px solid"
+      borderColor={borderColor}
+      transition="all 0.15s"
+      _hover={{ borderColor: getActiveColor(), boxShadow: `0 0 0 1px ${hexToRgba(getActiveColor(), 0.3)}` }}
     >
-      <VStack align="start" spacing={3} h="full">
-        <HStack spacing={3} w="full" justify="space-between">
-          <HStack spacing={3}>
-            <Box color={accentColor}>{icon}</Box>
-            <Text fontWeight="bold" color={headingColor} fontSize="md">
-              {title}
-            </Text>
-          </HStack>
-          {getStatusBadge(status)}
-        </HStack>
-        <Text fontSize="sm" color={subTextColor} flex={1}>
-          {description}
-        </Text>
-        <Button
-          colorScheme={accentColor === "green.400" ? "green" : accentColor === "orange.400" ? "orange" : "teal"}
-          size="md"
-          w="full"
-          onClick={onOptimize}
-          isLoading={isLoading}
-          loadingText={loadingLabel}
-          borderRadius="xl"
-          fontWeight="600"
+      <HStack align="flex-start" spacing={4}>
+        <Box
+          w={10} h={10}
+          borderRadius="lg"
+          bg={iconBg}
+          border="1px solid"
+          borderColor={borderColor}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          flexShrink={0}
+          color={isApplied ? getActiveColor() : subTextColor}
         >
-          {buttonLabel}
-        </Button>
-      </VStack>
+          {icon}
+        </Box>
+        <VStack align="flex-start" spacing={1} flex={1}>
+          <Text fontSize="sm" fontWeight="bold" color={textColor}>
+            {title}
+          </Text>
+          <Text fontSize="xs" color={subTextColor} lineHeight="short">
+            {description}
+          </Text>
+        </VStack>
+        <VStack align="flex-end" spacing={2} flexShrink={0}>
+          <Button
+            size="sm"
+            bg={isApplied ? getActiveColor() : undefined}
+            color={isApplied ? "white" : getActiveColor()}
+            borderColor={!isApplied ? getActiveColor() : undefined}
+            variant={!isApplied ? "outline" : undefined}
+            _hover={isApplied ? { bg: getActiveColor(), opacity: 0.9 } : undefined}
+            onClick={onApply}
+            isLoading={isLoading}
+            loadingText=""
+            px={4}
+            borderRadius="lg"
+            minW="72px"
+          >
+            {isApplied ? t("optimization.aceOptimize.applied") : t("optimization.aceOptimize.apply")}
+          </Button>
+          {gameRunning !== null && (
+            <Badge
+              colorScheme={gameRunning ? "green" : "gray"}
+              variant="subtle"
+              fontSize="2xs"
+              px={2}
+              py={0.5}
+              borderRadius="full"
+            >
+              {gameRunning ? t("optimization.aceOptimize.status.processRunning") : t("optimization.aceOptimize.status.processNotRunning")}
+            </Badge>
+          )}
+        </VStack>
+      </HStack>
     </Box>
   );
+}
+
+function SettingCard({
+  title,
+  subTitle,
+  icon,
+  color,
+  children,
+}: {
+  title: string;
+  subTitle?: string;
+  icon?: React.ReactNode;
+  color?: string;
+  children: React.ReactNode;
+}) {
+  const { liquidGlassEnabled } = useBackground();
+  const cardBg = useColorModeValue("white", "#111111");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const headerColor = useColorModeValue("gray.900", "#ffffff");
+  const { getActiveColor } = useThemeColor();
+  const accentColor = color || getActiveColor();
 
   const content = (
-    <VStack align="start" spacing={6}>
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/optimize")}
-          color={headingColor}
-        >
-          {t("tests.back") || "返回"}
-        </Button>
-        <Heading size="lg" color={headingColor} fontWeight="700">
-          {t("optimization.aceOptimize.title")}
-        </Heading>
-        <Box w="100px" />
-      </HStack>
-
-      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} w="full">
-        {renderOptimizeCard(
-          <Zap size={22} />,
-          t("optimization.aceOptimize.deltaBoost.title"),
-          t("optimization.aceOptimize.deltaBoost.description"),
-          deltaStatus,
-          t("optimization.aceOptimize.deltaBoost.button"),
-          handleBoostDelta,
-          boostingDelta,
-          t("optimization.aceOptimize.deltaBoost.optimizing"),
-          "green.400",
-          "rgba(56, 161, 105, 0.1)"
+    <VStack align="stretch" spacing={4}>
+      <HStack spacing={3}>
+        {icon && (
+          <Box
+            w={9} h={9}
+            borderRadius="lg"
+            bg={`${accentColor}15`}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            color={accentColor}
+          >
+            {icon}
+          </Box>
         )}
-        {renderOptimizeCard(
-          <ShieldOff size={22} />,
-          t("optimization.aceOptimize.aceLimit.title"),
-          t("optimization.aceOptimize.aceLimit.description"),
-          aceStatus,
-          t("optimization.aceOptimize.aceLimit.button"),
-          handleOptimizeAce,
-          optimizingAce,
-          t("optimization.aceOptimize.aceLimit.limiting"),
-          "orange.400",
-          "rgba(221, 107, 32, 0.1)"
-        )}
-      </SimpleGrid>
-
-      <HStack w="full" justify="center">
-        <Button
-          colorScheme="teal"
-          size="lg"
-          w="full"
-          maxW="400px"
-          onClick={handleOptimizeAll}
-          isLoading={optimizingAll}
-          loadingText={t("optimization.aceOptimize.optimizeAll.optimizing")}
-          borderRadius="xl"
-          fontWeight="600"
-          leftIcon={<Gauge size={18} />}
-          h="50px"
-        >
-          {t("optimization.aceOptimize.optimizeAll.button")}
-        </Button>
+        <VStack align="flex-start" spacing={0}>
+          <Text fontWeight="bold" fontSize="md" color={headerColor}>
+            {title}
+          </Text>
+          {subTitle && (
+            <Text fontSize="xs" color="gray.500">
+              {subTitle}
+            </Text>
+          )}
+        </VStack>
       </HStack>
+      {children}
     </VStack>
   );
 
   if (liquidGlassEnabled) {
-    return (
-      <Box pt={8}>
-        <LiquidGlassCard w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
-          {content}
-        </LiquidGlassCard>
-      </Box>
-    );
+    return <LiquidGlassCard p={5}>{content}</LiquidGlassCard>;
   }
 
   return (
-    <Box pt={8}>
+    <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
+      {content}
+    </Box>
+  );
+}
+
+export default function AceOptimizePage() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const navigate = useNavigate();
+
+  const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const borderColorVal = useColorModeValue("gray.200", "#333333");
+  const { getActiveColor } = useThemeColor();
+
+  const [deltaPriority, setDeltaPriority] = useState<OptionState>({ running: false, message: "" });
+  const [deltaAffinity, setDeltaAffinity] = useState<OptionState>({ running: false, message: "" });
+  const [acePriority, setAcePriority] = useState<OptionState>({ running: false, message: "" });
+  const [aceAffinity, setAceAffinity] = useState<OptionState>({ running: false, message: "" });
+  const [optimizeAllLoading, setOptimizeAllLoading] = useState(false);
+
+  const applyDeltaPriority = useCallback(async () => {
+    setDeltaPriority(prev => ({ ...prev, running: true }));
+    try {
+      const result = await invoke<{ success: boolean; message: string; was_running: boolean }>("boost_delta_force_priority");
+      setDeltaPriority({ running: false, message: result.message });
+      toast({
+        title: result.was_running ? "三角洲进程优先级已提升至实时" : "三角洲游戏未运行",
+        status: result.was_running ? "success" : "info",
+        duration: 2000,
+      });
+    } catch (e: any) {
+      setDeltaPriority({ running: false, message: String(e) });
+      toast({ title: String(e), status: "error", duration: 2000 });
+    }
+  }, [toast]);
+
+  const applyDeltaAffinity = useCallback(async () => {
+    setDeltaAffinity(prev => ({ ...prev, running: true }));
+    try {
+      const result = await invoke<{ success: boolean; message: string; was_running: boolean }>("boost_delta_force_affinity");
+      setDeltaAffinity({ running: false, message: result.message });
+      toast({
+        title: result.was_running ? "三角洲核心分配已优化" : "三角洲游戏未运行",
+        status: result.was_running ? "success" : "info",
+        duration: 2000,
+      });
+    } catch (e: any) {
+      setDeltaAffinity({ running: false, message: String(e) });
+      toast({ title: String(e), status: "error", duration: 2000 });
+    }
+  }, [toast]);
+
+  const applyAcePriority = useCallback(async () => {
+    setAcePriority(prev => ({ ...prev, running: true }));
+    try {
+      const result = await invoke<{ success: boolean; message: string; count: number }>("limit_ace_priority");
+      setAcePriority({ running: false, message: result.message });
+      toast({
+        title: result.count > 0 ? `已限制 ${result.count} 个 ACE 进程优先级` : "未找到运行中的 ACE 进程",
+        status: result.count > 0 ? "success" : "info",
+        duration: 2000,
+      });
+    } catch (e: any) {
+      setAcePriority({ running: false, message: String(e) });
+      toast({ title: String(e), status: "error", duration: 2000 });
+    }
+  }, [toast]);
+
+  const applyAceAffinity = useCallback(async () => {
+    setAceAffinity(prev => ({ ...prev, running: true }));
+    try {
+      const result = await invoke<{ success: boolean; message: string; count: number }>("restrict_ace_affinity");
+      setAceAffinity({ running: false, message: result.message });
+      toast({
+        title: result.count > 0 ? `已限制 ${result.count} 个 ACE 进程使用单核心` : "未找到运行中的 ACE 进程",
+        status: result.count > 0 ? "success" : "info",
+        duration: 2000,
+      });
+    } catch (e: any) {
+      setAceAffinity({ running: false, message: String(e) });
+      toast({ title: String(e), status: "error", duration: 2000 });
+    }
+  }, [toast]);
+
+  const applyAll = useCallback(async () => {
+    setOptimizeAllLoading(true);
+    try {
+      const result = await invoke<{ success: boolean; message: string; delta_boosted: boolean; ace_limited: boolean; ace_count: number }>("optimize_all_game_processes");
+      if (result.delta_boosted) {
+        setDeltaPriority({ running: false, message: "已优化" });
+        setDeltaAffinity({ running: false, message: "已优化" });
+      }
+      if (result.ace_limited) {
+        setAcePriority({ running: false, message: "已限制" });
+        setAceAffinity({ running: false, message: "已限制" });
+      }
+      toast({
+        title: result.message,
+        status: result.success ? "success" : "info",
+        duration: 3000,
+      });
+    } catch (e: any) {
+      toast({ title: String(e), status: "error", duration: 2000 });
+    }
+    setOptimizeAllLoading(false);
+  }, [toast]);
+
+  return (
+    <Box pt={8} pb={8}>
+      <HStack justify="space-between" mb={6}>
+        <HStack>
+          <IconButton
+            aria-label={t("builtinTools.back")}
+            icon={<ArrowLeft size={20} />}
+            variant="ghost"
+            onClick={() => navigate("/optimize")}
+            color={headingColor}
+          />
+          <Heading size="lg" color={headingColor}>
+            {t("optimization.aceOptimize.title")}
+          </Heading>
+        </HStack>
+      </HStack>
+
+      <SimpleGrid columns={2} spacing={5} mb={5}>
+        <SettingCard
+          title={t("optimization.aceOptimize.deltaSection.title")}
+          subTitle={t("optimization.aceOptimize.deltaSection.subtitle")}
+          icon={<Gauge size={18} />}
+          color={getActiveColor()}
+        >
+          <VStack align="stretch" spacing={3}>
+            <OptionRow
+              icon={<Cpu size={18} />}
+              title={t("optimization.aceOptimize.deltaBoost.title")}
+              description={t("optimization.aceOptimize.deltaBoost.description")}
+              isLoading={deltaPriority.running}
+              isApplied={!!deltaPriority.message && !deltaPriority.message.includes("未运行")}
+              gameRunning={deltaPriority.message ? !deltaPriority.message.includes("未运行") : null}
+              onApply={applyDeltaPriority}
+            />
+            <OptionRow
+              icon={<Cpu size={18} />}
+              title={t("optimization.aceOptimize.deltaBoost.affinityTitle")}
+              description={t("optimization.aceOptimize.deltaBoost.affinityDescription")}
+              isLoading={deltaAffinity.running}
+              isApplied={!!deltaAffinity.message && !deltaAffinity.message.includes("未运行")}
+              gameRunning={deltaAffinity.message ? !deltaAffinity.message.includes("未运行") : null}
+              onApply={applyDeltaAffinity}
+            />
+          </VStack>
+        </SettingCard>
+
+        <SettingCard
+          title={t("optimization.aceOptimize.aceSection.title")}
+          subTitle={t("optimization.aceOptimize.aceSection.subtitle")}
+          icon={<Shield size={18} />}
+          color="#DD6B20"
+        >
+          <VStack align="stretch" spacing={3}>
+            <OptionRow
+              icon={<Gauge size={18} />}
+              title={t("optimization.aceOptimize.aceLimit.title")}
+              description={t("optimization.aceOptimize.aceLimit.description")}
+              isLoading={acePriority.running}
+              isApplied={!!acePriority.message && !acePriority.message.includes("未找到")}
+              gameRunning={acePriority.message ? !acePriority.message.includes("未找到") : null}
+              onApply={applyAcePriority}
+            />
+            <OptionRow
+              icon={<Cpu size={18} />}
+              title={t("optimization.aceOptimize.aceLimit.affinityTitle")}
+              description={t("optimization.aceOptimize.aceLimit.affinityDescription")}
+              isLoading={aceAffinity.running}
+              isApplied={!!aceAffinity.message && !aceAffinity.message.includes("未找到")}
+              gameRunning={aceAffinity.message ? !aceAffinity.message.includes("未找到") : null}
+              onApply={applyAceAffinity}
+            />
+          </VStack>
+        </SettingCard>
+      </SimpleGrid>
+
       <Box
-        bg={cardBg}
+        bg={useColorModeValue("white", "#111111")}
         borderRadius="xl"
-        borderWidth="1px"
-        borderColor={cardBorder}
-        w="full"
-        boxShadow="2xl"
-        overflow="hidden"
-        position="relative"
-        p={6}
+        p={5}
+        border="1px solid"
+        borderColor={borderColorVal}
       >
-        {content}
+        <HStack justify="space-between">
+          <VStack align="flex-start" spacing={1}>
+            <HStack>
+              <RefreshCw size={16} color={getActiveColor()} />
+              <Text fontWeight="bold" fontSize="sm" color={headingColor}>
+                {t("optimization.aceOptimize.optimizeAll.title")}
+              </Text>
+            </HStack>
+            <Text fontSize="xs" color="gray.500">
+              {t("optimization.aceOptimize.optimizeAll.description")}
+            </Text>
+          </VStack>
+          <Button
+            size="md"
+            bg={getActiveColor()}
+            color="white"
+            _hover={{ bg: getActiveColor(), opacity: 0.9 }}
+            onClick={applyAll}
+            isLoading={optimizeAllLoading}
+            loadingText={t("optimization.aceOptimize.optimizeAll.optimizing")}
+            px={6}
+            borderRadius="lg"
+            leftIcon={<Zap size={16} />}
+          >
+            {t("optimization.aceOptimize.optimizeAll.button")}
+          </Button>
+        </HStack>
       </Box>
     </Box>
   );

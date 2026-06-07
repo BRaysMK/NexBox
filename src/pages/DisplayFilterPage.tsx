@@ -9,23 +9,35 @@ import {
   Card,
   CardBody,
   useToast,
-  Switch,
   IconButton,
   Tooltip,
   SimpleGrid,
   Button,
   Input,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { ThemeSwitch } from "@/components/special/theme-switch";
 import { useBackground } from "@/contexts/background-context";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { hexToRgba } from "@/lib/color-utils";
 import { 
   Sun, BookOpen, Monitor, Sparkles, RotateCcw, 
-  Film, Heart, Palette, Gamepad2, Save, Settings2, ArrowLeft
+  Film, Heart, Palette, Gamepad2, Save, Settings2, ArrowLeft,
+  Upload, Trash2, FileImage
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useNavigate } from "react-router-dom";
+import { useAppStartup } from "@/contexts/app-startup-context";
+import { HotkeyRecorder } from "@/components/hotkey-recorder";
 
 interface FilterSettings {
   temperature: number;
@@ -44,6 +56,12 @@ interface FilterPreset {
   brightness: number;
   contrast: number;
   saturation: number;
+  description: string;
+}
+
+interface IccPresetInfo {
+  id: string;
+  name: string;
   description: string;
 }
 
@@ -81,6 +99,7 @@ const modeParams: Record<number, { gamma: number; sCurve: number; rBoost: number
 
 export default function DisplayFilterPage() {
   const navigate = useNavigate();
+  const { filterHotkey, saveFilterHotkey } = useAppStartup();
   const [settings, setSettings] = useState<FilterSettings>({
     temperature: 6500,
     brightness: 100,
@@ -100,6 +119,11 @@ export default function DisplayFilterPage() {
   } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [inputVersion, setInputVersion] = useState(0);
+  const [manualPresetChange, setManualPresetChange] = useState(false);
+  const [iccPresets, setIccPresets] = useState<IccPresetInfo[]>([]);
+  const [activeIccId, setActiveIccId] = useState<string | null>(null);
+  const [deleteIccId, setDeleteIccId] = useState<string | null>(null);
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   
   const editValuesRef = useRef({
     temperature: 6500,
@@ -111,6 +135,10 @@ export default function DisplayFilterPage() {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const toast = useToast();
+
+  const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const contrastText = getContrastTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
@@ -162,15 +190,41 @@ export default function DisplayFilterPage() {
     }
   }, []);
 
+  const loadIccPresets = useCallback(async () => {
+    try {
+      const result: IccPresetInfo[] = await invoke("get_icc_presets");
+      setIccPresets(result);
+    } catch (error) {
+      console.error("Failed to load ICC presets:", error);
+    }
+  }, []);
+
   useEffect(() => {
     loadSettings();
     loadPresets();
     loadCustomSettings();
-  }, [loadSettings, loadPresets, loadCustomSettings]);
+    loadIccPresets();
+  }, [loadSettings, loadPresets, loadCustomSettings, loadIccPresets]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+
+    listen<void>("filter-status-changed", () => {
+      loadSettings();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [loadSettings]);
 
   useEffect(() => {
     if (presets.length === 0 || savedCustom === null) return;
+    if (manualPresetChange) return;
     if (activePresetId === "custom") return;
+    if (activePresetId === "") return; // ICC 预设选中时跳过同步
 
     const exactPreset = presets.find(
       (p) =>
@@ -199,7 +253,7 @@ export default function DisplayFilterPage() {
     }
 
     setActivePresetId((prev) => (prev === nextId ? prev : nextId));
-  }, [presets, settings, savedCustom, activePresetId]);
+  }, [presets, settings, savedCustom, activePresetId, manualPresetChange]);
 
   const toggleFilter = async () => {
     setIsLoading(true);
@@ -234,9 +288,12 @@ export default function DisplayFilterPage() {
 
   const applyPreset = async (preset: FilterPreset) => {
     setIsLoading(true);
+    setManualPresetChange(true);
     setActivePresetId(preset.id);
+    setActiveIccId(null);
     setHasChanges(false);
     setInputVersion(v => v + 1);
+    
     try {
       const result: any = await invoke("apply_preset", {
         presetId: preset.id,
@@ -267,10 +324,13 @@ export default function DisplayFilterPage() {
       });
     } finally {
       setIsLoading(false);
+      // 延迟重置标志，让 useEffect 跳过一次自动同步
+      setTimeout(() => setManualPresetChange(false), 100);
     }
   };
 
   const openCustom = async () => {
+    setManualPresetChange(true);
     setActivePresetId("custom");
     setIsLoading(true);
     // 不要用当前已应用的 settings 覆盖：切换其它预设后 settings 会变成该预设参数，
@@ -311,10 +371,12 @@ export default function DisplayFilterPage() {
       setHasChanges(false);
     }
     setIsLoading(false);
+    setTimeout(() => setManualPresetChange(false), 100);
   };
 
   const saveAndApply = async () => {
     setIsLoading(true);
+    setManualPresetChange(true);
     setActivePresetId("custom");
     
     const temp = Math.max(1000, Math.min(10000, editValuesRef.current.temperature));
@@ -374,11 +436,14 @@ export default function DisplayFilterPage() {
       });
     } finally {
       setIsLoading(false);
+      setTimeout(() => setManualPresetChange(false), 100);
     }
   };
 
   const resetToDefault = async () => {
+    setManualPresetChange(true);
     setActivePresetId("normal");
+    setActiveIccId(null);
     try {
       const result: any = await invoke("apply_preset", { presetId: "normal" });
       if (result.success) {
@@ -423,6 +488,105 @@ export default function DisplayFilterPage() {
         duration: 3000,
         isClosable: true,
       });
+    } finally {
+      setTimeout(() => setManualPresetChange(false), 100);
+    }
+  };
+
+  const handleImportIcc = async () => {
+    setIsLoading(true);
+    try {
+      const filePath: string | null = await invoke("select_icc_file");
+      if (!filePath) {
+        setIsLoading(false);
+        return;
+      }
+
+      const result: any = await invoke("import_icc_profile", { path: filePath });
+      if (result.success && result.preset) {
+        setIccPresets(prev => [...prev, result.preset]);
+        toast({
+          title: t("displayFilter.importIccSuccess"),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: t("displayFilter.importIccFailed"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleApplyIcc = async (id: string) => {
+    setIsLoading(true);
+    setActiveIccId(id);
+    setActivePresetId(""); // 取消内置预设选中状态
+    setManualPresetChange(true);
+    try {
+      const result: any = await invoke("apply_icc_preset", { id });
+      if (result.success) {
+        setSettings((prev: FilterSettings) => ({
+          ...prev,
+          is_active: true,
+        }));
+        toast({
+          title: t("displayFilter.iccApplied"),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      setActiveIccId(null);
+      toast({
+        title: t("displayFilter.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setManualPresetChange(false), 100);
+    }
+  };
+
+  const handleDeleteIcc = async () => {
+    if (!deleteIccId) return;
+    setIsLoading(true);
+    try {
+      const result: any = await invoke("delete_icc_preset", { id: deleteIccId });
+      if (result.success) {
+        setIccPresets(prev => prev.filter(p => p.id !== deleteIccId));
+        if (activeIccId === deleteIccId) {
+          setActiveIccId(null);
+        }
+        toast({
+          title: t("displayFilter.deleteIccSuccess"),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: t("displayFilter.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setDeleteIccId(null);
+      setIsLoading(false);
     }
   };
 
@@ -487,7 +651,7 @@ export default function DisplayFilterPage() {
           borderColor={cardBorder}
           borderRadius="md"
           px={2}
-          _focus={{ borderColor: "#98DDD0", boxShadow: "none" }}
+          _focus={{ borderColor: primaryColor, boxShadow: "none" }}
         />
         <Text color={subTextColor} fontSize="sm" minW="20px">
           {unit}
@@ -550,23 +714,36 @@ export default function DisplayFilterPage() {
               isDisabled={isLoading}
             />
           </Tooltip>
-          <HStack
-            bg={settings.is_active ? "rgba(152,221,208,0.2)" : sliderBg}
-            px={4}
-            py={2}
-            borderRadius="xl"
-            border="1px solid"
-            borderColor={settings.is_active ? "#98DDD0" : "transparent"}
-          >
-            <Text color={textColor} fontSize="sm" fontWeight="500">
-              {t("displayFilter.enable")}
-            </Text>
-            <Switch
-              isChecked={settings.is_active}
-              onChange={toggleFilter}
-              colorScheme="teal"
-              isDisabled={isLoading}
+          <HStack spacing={4}>
+            <HotkeyRecorder
+              value={filterHotkey}
+              onChange={(val) => {
+                saveFilterHotkey(val);
+                toast({
+                  title: t("displayFilter.hotkeySaved") || "快捷键已保存",
+                  status: "success",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
             />
+            <HStack
+              bg={settings.is_active ? hexToRgba(primaryColor, 0.2) : sliderBg}
+              px={4}
+              py={2}
+              borderRadius="xl"
+              border="1px solid"
+              borderColor={settings.is_active ? primaryColor : "transparent"}
+            >
+              <Text color={textColor} fontSize="sm" fontWeight="500">
+                {t("displayFilter.enable")}
+              </Text>
+              <ThemeSwitch
+                isChecked={settings.is_active}
+                onChange={toggleFilter}
+                isDisabled={isLoading}
+              />
+            </HStack>
           </HStack>
         </HStack>
       </HStack>
@@ -588,7 +765,7 @@ export default function DisplayFilterPage() {
           {presets.map((preset) => {
             const Icon = presetIcons[preset.id] || Monitor;
             const isActive = activePresetId === preset.id;
-            const accentColor = presetColors[preset.id] || "#98DDD0";
+            const accentColor = preset.id === "normal" ? primaryColor : (presetColors[preset.id] || primaryColor);
             return (
               <Tooltip key={preset.id} label={preset.description} placement="top">
                 <Box
@@ -671,7 +848,104 @@ export default function DisplayFilterPage() {
         </SimpleGrid>
       </VStack>
 
+      {/* ICC Color Profiles Section */}
       <VStack align="start" spacing={4} w="full">
+        <HStack justify="space-between" w="full">
+          <HStack>
+            <FileImage size={20} color={textColor} />
+            <Text color={textColor} fontSize="md" fontWeight="600">
+              {t("displayFilter.iccProfiles")}
+            </Text>
+          </HStack>
+          <Button
+            size="sm"
+            leftIcon={<Upload size={16} />}
+            variant="outline"
+            colorScheme="blue"
+            onClick={handleImportIcc}
+            isLoading={isLoading}
+          >
+            {t("displayFilter.importIcc")}
+          </Button>
+        </HStack>
+        {iccPresets.length === 0 ? (
+          <Text color={subTextColor} fontSize="sm" py={2}>
+            {t("displayFilter.noIccProfiles")}
+          </Text>
+        ) : (
+          <SimpleGrid
+            columns={{
+              base: 2,
+              sm: 3,
+              md: 4,
+              lg: 5,
+            }}
+            spacing={3}
+            w="full"
+          >
+            {iccPresets.map((icc) => {
+              const isActive = activeIccId === icc.id;
+              const accentColor = "#38B2AC";
+              return (
+                <Box
+                  key={icc.id}
+                  bg={isActive ? `${accentColor}20` : sliderBg}
+                  borderRadius="xl"
+                  p={4}
+                  cursor="pointer"
+                  onClick={() => handleApplyIcc(icc.id)}
+                  border="2px solid"
+                  borderColor={isActive ? accentColor : "transparent"}
+                  transition="all 0.2s"
+                  _hover={{
+                    borderColor: accentColor,
+                    transform: "translateY(-2px)",
+                  }}
+                  position="relative"
+                  overflow="hidden"
+                >
+                  {isActive && (
+                    <Box
+                      position="absolute"
+                      top={0}
+                      left={0}
+                      right={0}
+                      h="3px"
+                      bg={accentColor}
+                    />
+                  )}
+                  <Tooltip label={icc.description} placement="top">
+                    <IconButton
+                      aria-label={t("displayFilter.deleteIcc")}
+                      icon={<Trash2 size={14} />}
+                      size="xs"
+                      variant="ghost"
+                      position="absolute"
+                      top={1}
+                      right={1}
+                      color="red.400"
+                      _hover={{ bg: "red.50" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteIccId(icc.id);
+                      }}
+                    />
+                  </Tooltip>
+                  <VStack spacing={2}>
+                    <FileImage size={24} color={accentColor} />
+                    <Text color={textColor} fontSize="sm" fontWeight="600" noOfLines={1}>
+                      {icc.name}
+                    </Text>
+                  </VStack>
+                </Box>
+              );
+            })}
+          </SimpleGrid>
+        )}
+      </VStack>
+
+      <VStack align="start" spacing={4} w="full">
+        {(activePresetId === "custom" || activeIccId) && (
         <HStack justify="space-between" w="full">
           <HStack>
             <Text color={textColor} fontSize="md" fontWeight="600">
@@ -682,21 +956,40 @@ export default function DisplayFilterPage() {
                 BETA
               </Text>
             )}
+            {activeIccId && (
+              <Text fontSize="10px" fontWeight="700" color={primaryColor} bg={`${primaryColor}20`} px={1.5} py={0.5} borderRadius="full">
+                ICC
+              </Text>
+            )}
           </HStack>
           {activePresetId === "custom" && (
             <Button
               size="sm"
               leftIcon={<Save size={16} />}
-              colorScheme="teal"
+              bg={primaryColor}
+              color={contrastText}
               onClick={saveAndApply}
               isLoading={isLoading}
               isDisabled={!hasChanges}
+              _hover={{
+                bg: getHoverColor(),
+              }}
             >
               {t("displayFilter.saveAndApply")}
             </Button>
           )}
         </HStack>
-        
+        )}
+
+        {activeIccId && (
+          <Box w="full" p={4} borderRadius="md" bg={sliderBg}>
+            <Text color={textColor} fontSize="sm">
+              {iccPresets.find(p => p.id === activeIccId)?.description || t("displayFilter.iccApplied")}
+            </Text>
+          </Box>
+        )}
+
+        {!activeIccId && (
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} w="full">
           <VStack spacing={2} align="stretch">
             {activePresetId === "custom" ? (
@@ -780,15 +1073,16 @@ export default function DisplayFilterPage() {
             />
           </VStack>
         </SimpleGrid>
+        )}
       </VStack>
 
       <Box 
         w="full" 
         p={4} 
         borderRadius="xl" 
-        bg={useColorModeValue("rgba(152,221,208,0.1)", "rgba(152,221,208,0.1)")}
+        bg={useColorModeValue(hexToRgba(primaryColor, 0.1), hexToRgba(primaryColor, 0.1))}
         border="1px solid"
-        borderColor={useColorModeValue("rgba(152,221,208,0.3)", "rgba(152,221,208,0.2)")}
+        borderColor={useColorModeValue(hexToRgba(primaryColor, 0.3), hexToRgba(primaryColor, 0.2))}
       >
         <Text color={subTextColor} fontSize="xs">
           {t("displayFilter.tip")}
@@ -799,6 +1093,31 @@ export default function DisplayFilterPage() {
 
   return (
     <Box pt={8}>
+      {/* Delete ICC Confirmation Dialog */}
+      <AlertDialog
+        isOpen={deleteIccId !== null}
+        leastDestructiveRef={cancelDeleteRef}
+        onClose={() => setDeleteIccId(null)}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              {t("displayFilter.deleteIcc")}
+            </AlertDialogHeader>
+            <AlertDialogBody>
+              {t("displayFilter.deleteIccConfirm")}
+            </AlertDialogBody>
+            <AlertDialogFooter>
+              <Button ref={cancelDeleteRef} onClick={() => setDeleteIccId(null)}>
+                {t("displayFilter.cancel")}
+              </Button>
+              <Button colorScheme="red" onClick={handleDeleteIcc} ml={3} isLoading={isLoading}>
+                {t("displayFilter.delete")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
       {liquidGlassEnabled ? (
         <LiquidGlassCard
           w="full"

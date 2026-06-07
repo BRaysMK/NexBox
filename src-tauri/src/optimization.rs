@@ -2,8 +2,53 @@ use std::os::windows::process::CommandExt;
 use std::process::Command;
 use std::{env, fs, path::Path};
 use sysinfo::System;
+use tauri::Manager;
+use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+use windows_sys::Win32::System::Threading::{OpenProcess, SetPriorityClass};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+const PROCESS_SET_INFORMATION: u32 = 0x0200;
+const IDLE_PRIORITY_CLASS: u32 = 0x00000040;
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn SetProcessInformation(
+        hProcess: HANDLE,
+        ProcessInformationClass: u32,
+        ProcessInformation: *const std::ffi::c_void,
+        ProcessInformationSize: u32,
+    ) -> i32;
+}
+
+fn enable_process_efficiency_mode(pid: u32) -> bool {
+    unsafe {
+        let handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+
+        let mut ok = true;
+
+        if SetPriorityClass(handle, IDLE_PRIORITY_CLASS) == 0 {
+            ok = false;
+        }
+
+        let state: [u32; 3] = [1, 1, 1];
+        if SetProcessInformation(
+            handle,
+            12,
+            &state as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<[u32; 3]>() as u32,
+        ) == 0
+        {
+            ok = false;
+        }
+
+        CloseHandle(handle);
+        ok
+    }
+}
 
 fn run_bcdedit_admin(args: &str) -> Result<String, String> {
     let ps_script = format!(
@@ -435,6 +480,46 @@ pub async fn optimize_ace_processes() -> Result<AceOptimizeResult, String> {
 }
 
 #[derive(serde::Serialize)]
+pub struct AceEfficiencyResult {
+    pub success: bool,
+    pub message: String,
+    pub count: u32,
+}
+
+#[tauri::command]
+pub async fn set_ace_efficiency_mode() -> Result<AceEfficiencyResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let process_names = ["ACE-Tray.exe", "SGuard64.exe", "SGuardSvc64.exe"];
+    let mut count = 0u32;
+
+    let mut system = System::new();
+    system.refresh_processes();
+
+    for (_, process) in system.processes() {
+        let name = process.name().to_string();
+        let name_lower = name.to_lowercase();
+        if process_names.iter().any(|n| n.to_lowercase() == name_lower) {
+            if enable_process_efficiency_mode(process.pid().as_u32()) {
+                count += 1;
+            }
+        }
+    }
+
+    Ok(AceEfficiencyResult {
+        success: count > 0,
+        message: if count > 0 {
+            format!("已为 {} 个 ACE 进程开启效能模式", count)
+        } else {
+            "未找到运行中的 ACE 进程".to_string()
+        },
+        count,
+    })
+}
+
+#[derive(serde::Serialize)]
 pub struct DnsFlushResult {
     success: bool,
     message: String,
@@ -663,6 +748,12 @@ fn get_memory_limit_options_internal() -> Vec<MemoryLimitOption> {
             id: "11.9gb".to_string(),
             label: "11.9 GB".to_string(),
             limit_gb: 11.9,
+            min_physical_gb: 0.0,
+        },
+        MemoryLimitOption {
+            id: "13.9gb".to_string(),
+            label: "13.9 GB".to_string(),
+            limit_gb: 13.9,
             min_physical_gb: 0.0,
         },
         MemoryLimitOption {
@@ -1062,6 +1153,162 @@ pub async fn boost_delta_force_priority() -> Result<ProcessOptimizeResult, Strin
 }
 
 #[derive(serde::Serialize)]
+pub struct PriorityResult {
+    pub success: bool,
+    pub message: String,
+    pub process_name: String,
+    pub was_running: bool,
+}
+
+#[tauri::command]
+pub async fn boost_delta_force_affinity() -> Result<PriorityResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let ps_script = r#"
+        $proc = Get-Process -Name "DeltaForceClient-Win64-Shipping" -ErrorAction SilentlyContinue
+        if ($proc) {
+            $numCores = [Environment]::ProcessorCount
+            $allCores = [Math]::Pow(2, $numCores) - 1
+            $affinity = $allCores -bxor 1
+            $proc.ProcessorAffinity = $affinity
+            Write-Host "AFFINITY_SET"
+            exit 0
+        } else {
+            Write-Host "NOT_FOUND"
+            exit 1
+        }
+    "#;
+
+    let result = Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            if stdout.contains("AFFINITY_SET") {
+                Ok(PriorityResult {
+                    success: true,
+                    message: "三角洲进程已设置为使用所有处理器核心".to_string(),
+                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
+                    was_running: true,
+                })
+            } else {
+                Ok(PriorityResult {
+                    success: false,
+                    message: "三角洲游戏未运行，请先启动游戏".to_string(),
+                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
+                    was_running: false,
+                })
+            }
+        }
+        Err(e) => Err(format!("设置三角洲进程核心分配失败: {}", e)),
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct AcePartialResult {
+    pub success: bool,
+    pub message: String,
+    pub count: u32,
+}
+
+#[tauri::command]
+pub async fn limit_ace_priority() -> Result<AcePartialResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let ps_script = r#"
+        $count = 0
+        $processNames = @("ACE-Tray", "SGuard64", "SGuardSvc64")
+        foreach ($name in $processNames) {
+            $processes = Get-Process -Name $name -ErrorAction SilentlyContinue
+            if ($processes) {
+                foreach ($proc in $processes) {
+                    try {
+                        $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Low
+                        $count++
+                    } catch {}
+                }
+            }
+        }
+        Write-Host "LIMITED:$count"
+        if ($count -gt 0) { exit 0 } else { exit 1 }
+    "#;
+
+    let result = Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let count: u32 = stdout.lines()
+                .find_map(|l| l.strip_prefix("LIMITED:"))
+                .and_then(|s| s.trim().parse().ok())
+                .unwrap_or(0);
+            Ok(AcePartialResult {
+                success: count > 0,
+                message: if count > 0 { format!("已限制 {} 个 ACE 进程优先级", count) } else { "未找到运行中的 ACE 进程".to_string() },
+                count,
+            })
+        }
+        Err(e) => Err(format!("限制 ACE 进程优先级失败: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub async fn restrict_ace_affinity() -> Result<AcePartialResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let ps_script = r#"
+        $count = 0
+        $processNames = @("ACE-Tray", "SGuard64", "SGuardSvc64")
+        foreach ($name in $processNames) {
+            $processes = Get-Process -Name $name -ErrorAction SilentlyContinue
+            if ($processes) {
+                foreach ($proc in $processes) {
+                    try {
+                        $proc.ProcessorAffinity = 1
+                        $count++
+                    } catch {}
+                }
+            }
+        }
+        Write-Host "RESTRICTED:$count"
+        if ($count -gt 0) { exit 0 } else { exit 1 }
+    "#;
+
+    let result = Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let count: u32 = stdout.lines()
+                .find_map(|l| l.strip_prefix("RESTRICTED:"))
+                .and_then(|s| s.trim().parse().ok())
+                .unwrap_or(0);
+            Ok(AcePartialResult {
+                success: count > 0,
+                message: if count > 0 { format!("已限制 {} 个 ACE 进程使用单核心", count) } else { "未找到运行中的 ACE 进程".to_string() },
+                count,
+            })
+        }
+        Err(e) => Err(format!("限制 ACE 进程核心分配失败: {}", e)),
+    }
+}
+
+#[derive(serde::Serialize)]
 pub struct AllGameOptimizeResult {
     pub success: bool,
     pub message: String,
@@ -1145,5 +1392,480 @@ pub async fn optimize_all_game_processes() -> Result<AllGameOptimizeResult, Stri
             })
         }
         Err(e) => Err(format!("全部游戏优化失败: {}", e)),
+    }
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct BuiltinPowerPlan {
+    pub id: String,
+    pub filename: String,
+    pub name: String,
+    pub description: String,
+    pub is_imported: bool,
+    pub guid: Option<String>,
+    pub is_active: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct SystemPowerPlan {
+    pub guid: String,
+    pub name: String,
+    pub is_active: bool,
+}
+
+#[derive(serde::Serialize)]
+pub struct ActivePowerPlan {
+    pub guid: String,
+    pub name: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct PowerPlanOperationResult {
+    pub success: bool,
+    pub message: String,
+    pub guid: Option<String>,
+}
+
+fn get_builtin_plan_metadata(id: &str) -> (String, String) {
+    match id {
+        "ACMEPCAMD" => ("ACMEPCAMD".to_string(), "AMD平台极致性能优化，最大化CPU/GPU频率与响应".to_string()),
+        "AMD电源计划" => ("AMD电源计划".to_string(), "AMD官方推荐高性能电源方案，适合Ryzen平台".to_string()),
+        "ggOSDesktopGaming" => ("ggOS Desktop Gaming".to_string(), "桌面游戏场景深度优化，降低延迟提升帧率".to_string()),
+        "Intel大核心电源计划" => ("Intel大核心电源计划".to_string(), "Intel大小核调度优化，优先使用大核心运行游戏".to_string()),
+        _ => (id.to_string(), String::new()),
+    }
+}
+
+fn extract_guid_from_line(line: &str) -> Option<String> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    for part in parts {
+        let segs: Vec<&str> = part.split('-').collect();
+        if segs.len() == 5
+            && segs[0].len() == 8
+            && segs[1].len() == 4
+            && segs[2].len() == 4
+            && segs[3].len() == 4
+            && segs[4].len() == 12
+            && segs.iter().all(|s| s.chars().all(|c| c.is_ascii_hexdigit()))
+        {
+            return Some(part.to_string());
+        }
+    }
+    None
+}
+
+fn parse_powercfg_list(output: &str) -> Vec<(String, String, bool)> {
+    let mut plans = Vec::new();
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(guid) = extract_guid_from_line(trimmed) {
+            let is_active = trimmed.contains('*');
+            let after_guid = trimmed.find(&guid).map(|pos| &trimmed[pos + guid.len()..]).unwrap_or("");
+            let name = after_guid
+                .trim()
+                .trim_start_matches('(')
+                .trim_end_matches(')')
+                .trim()
+                .trim_end_matches('*')
+                .trim()
+                .to_string();
+            plans.push((guid, name, is_active));
+        }
+    }
+    plans
+}
+
+fn run_powercfg_ps(script: &str) -> std::io::Result<std::process::Output> {
+    let full_script = format!(
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; {}",
+        script
+    );
+    Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &full_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+}
+
+fn get_system_plans_internal() -> Vec<(String, String, bool)> {
+    let result = run_powercfg_ps("powercfg /list");
+
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            parse_powercfg_list(&stdout)
+        }
+        Err(_) => Vec::new(),
+    }
+}
+
+fn get_active_plan_internal() -> Option<(String, String)> {
+    let result = run_powercfg_ps("powercfg /getactivescheme");
+
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let trimmed = stdout.trim();
+            if let Some(guid) = extract_guid_from_line(trimmed) {
+                let after_guid = trimmed.find(&guid).map(|pos| &trimmed[pos + guid.len()..]).unwrap_or("");
+                let name = after_guid
+                    .trim()
+                    .trim_start_matches('(')
+                    .trim_end_matches(')')
+                    .trim()
+                    .to_string();
+                Some((guid, name))
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+fn find_plan_guid_by_name(system_plans: &[(String, String, bool)], plan_name: &str) -> Option<String> {
+    for (guid, name, _) in system_plans {
+        if name.contains(plan_name) {
+            return Some(guid.clone());
+        }
+    }
+    None
+}
+
+fn resolve_power_plans_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let candidates = [
+            resource_dir.join("power-plans"),
+            resource_dir.join("_up_").join("power-plans"),
+        ];
+        for path in &candidates {
+            if path.exists() {
+                return Some(path.clone());
+            }
+        }
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            let candidates = [
+                parent.join("power-plans"),
+                parent.join("_up_").join("power-plans"),
+            ];
+            for path in &candidates {
+                if path.exists() {
+                    return Some(path.clone());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[tauri::command]
+pub async fn get_builtin_power_plans(app: tauri::AppHandle) -> Result<Vec<BuiltinPowerPlan>, String> {
+    let power_plans_dir = resolve_power_plans_dir(&app)
+        .ok_or("未找到电源计划文件目录，请确保 power-plans 文件夹存在")?;
+
+    let system_plans = get_system_plans_internal();
+    let active_plan = get_active_plan_internal();
+    let active_guid = active_plan.as_ref().map(|(g, _)| g.as_str()).unwrap_or("");
+
+    let builtin_ids = ["ACMEPCAMD", "AMD电源计划", "ggOSDesktopGaming", "Intel大核心电源计划"];
+
+    let mut plans = Vec::new();
+
+    for id in builtin_ids {
+        let (display_name, description) = get_builtin_plan_metadata(id);
+        let filename = format!("{}.pow", id);
+        let file_path = power_plans_dir.join(&filename);
+        let file_exists = file_path.exists();
+
+        let (is_imported, guid, is_active) = if file_exists {
+            let matched_guid = find_plan_guid_by_name(&system_plans, &display_name);
+            let active = matched_guid.as_ref().map(|g| g == active_guid).unwrap_or(false);
+            (matched_guid.is_some(), matched_guid, active)
+        } else {
+            (false, None, false)
+        };
+
+        plans.push(BuiltinPowerPlan {
+            id: id.to_string(),
+            filename,
+            name: display_name.to_string(),
+            description: description.to_string(),
+            is_imported,
+            guid,
+            is_active,
+        });
+    }
+
+    Ok(plans)
+}
+
+#[tauri::command]
+pub async fn get_system_power_plans() -> Result<Vec<SystemPowerPlan>, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let plans = get_system_plans_internal();
+    Ok(plans.into_iter().map(|(guid, name, is_active)| SystemPowerPlan { guid, name, is_active }).collect())
+}
+
+#[tauri::command]
+pub async fn get_active_power_plan() -> Result<ActivePowerPlan, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    match get_active_plan_internal() {
+        Some((guid, name)) => Ok(ActivePowerPlan { guid, name }),
+        None => Err("获取当前电源计划失败".to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn import_power_plan(app: tauri::AppHandle, plan_id: String) -> Result<PowerPlanOperationResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let (display_name, _) = get_builtin_plan_metadata(&plan_id);
+
+    let system_plans_before = get_system_plans_internal();
+    let guids_before: Vec<String> = system_plans_before.iter().map(|(g, _, _)| g.clone()).collect();
+
+    if let Some(existing_guid) = find_plan_guid_by_name(&system_plans_before, &display_name) {
+        return Ok(PowerPlanOperationResult {
+            success: true,
+            message: format!("电源计划 '{}' 已存在于系统中", display_name),
+            guid: Some(existing_guid),
+        });
+    }
+
+    let power_plans_dir = resolve_power_plans_dir(&app)
+        .ok_or("未找到电源计划文件目录")?;
+    let file_path = power_plans_dir.join(format!("{}.pow", plan_id));
+
+    if !file_path.exists() {
+        return Err(format!("电源计划文件不存在: {}", plan_id));
+    }
+
+    let file_path_str = file_path.to_string_lossy().to_string();
+    let result = Command::new("powercfg")
+        .args(["/import", &file_path_str])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match result {
+        Ok(output) => {
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
+                return Err(format!("导入电源计划失败: {}", err_msg));
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(800));
+
+            let system_plans_after = get_system_plans_internal();
+            
+            let mut new_guid: Option<String> = None;
+            for (guid, _, _) in &system_plans_after {
+                if !guids_before.contains(guid) {
+                    new_guid = Some(guid.clone());
+                    break;
+                }
+            }
+
+            if let Some(guid) = new_guid {
+                Ok(PowerPlanOperationResult {
+                    success: true,
+                    message: format!("电源计划 '{}' 导入成功", display_name),
+                    guid: Some(guid),
+                })
+            } else if let Some(guid) = find_plan_guid_by_name(&system_plans_after, &display_name) {
+                Ok(PowerPlanOperationResult {
+                    success: true,
+                    message: format!("电源计划 '{}' 导入成功", display_name),
+                    guid: Some(guid),
+                })
+            } else {
+                Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败", display_name))
+            }
+        }
+        Err(e) => Err(format!("执行导入命令失败: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub async fn activate_power_plan(guid: String) -> Result<PowerPlanOperationResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let result = Command::new("powercfg")
+        .args(["/setactive", &guid])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match result {
+        Ok(output) => {
+            if output.status.success() {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                let verify = get_active_plan_internal();
+                match verify {
+                    Some((active_guid, active_name)) => {
+                        if active_guid == guid {
+                            Ok(PowerPlanOperationResult {
+                                success: true,
+                                message: format!("电源计划 '{}' 已激活", active_name),
+                                guid: Some(guid),
+                            })
+                        } else {
+                            Ok(PowerPlanOperationResult {
+                                success: true,
+                                message: "激活命令已执行，请确认是否生效".to_string(),
+                                guid: Some(guid),
+                            })
+                        }
+                    }
+                    None => Ok(PowerPlanOperationResult {
+                        success: true,
+                        message: "激活命令已执行".to_string(),
+                        guid: Some(guid),
+                    }),
+                }
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
+                Err(format!("激活电源计划失败: {}", err_msg))
+            }
+        }
+        Err(e) => Err(format!("执行激活命令失败: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub async fn import_and_activate_power_plan(app: tauri::AppHandle, plan_id: String) -> Result<PowerPlanOperationResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let (display_name, _) = get_builtin_plan_metadata(&plan_id);
+
+    let system_plans_before = get_system_plans_internal();
+    let guids_before: Vec<String> = system_plans_before.iter().map(|(g, _, _)| g.clone()).collect();
+    let existing_guid = find_plan_guid_by_name(&system_plans_before, &display_name);
+
+    let (guid, was_existing) = match existing_guid {
+        Some(g) => (g, true),
+        None => {
+            let power_plans_dir = resolve_power_plans_dir(&app)
+                .ok_or("未找到电源计划文件目录")?;
+            let file_path = power_plans_dir.join(format!("{}.pow", plan_id));
+
+            if !file_path.exists() {
+                return Err(format!("电源计划文件不存在: {}", plan_id));
+            }
+
+            let file_path_str = file_path.to_string_lossy().to_string();
+            let import_result = Command::new("powercfg")
+                .args(["/import", &file_path_str])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+
+            let g = match import_result {
+                Ok(output) => {
+                    if !output.status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                        let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
+                        return Err(format!("导入失败: {}", err_msg));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(800));
+                    let system_plans_after = get_system_plans_internal();
+                    
+                    let mut new_guid: Option<String> = None;
+                    for (guid, _, _) in &system_plans_after {
+                        if !guids_before.contains(guid) {
+                            new_guid = Some(guid.clone());
+                            break;
+                        }
+                    }
+
+                    if let Some(g) = new_guid {
+                        g
+                    } else if let Some(g) = find_plan_guid_by_name(&system_plans_after, &display_name) {
+                        g
+                    } else {
+                        return Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败", display_name));
+                    }
+                }
+                Err(e) => return Err(format!("导入失败: {}", e)),
+            };
+            (g, false)
+        }
+    };
+
+    let activate_result = activate_power_plan(guid.clone()).await?;
+    Ok(PowerPlanOperationResult {
+        success: true,
+        message: if was_existing {
+            format!("电源计划 '{}' 已存在，{}", display_name, activate_result.message)
+        } else {
+            format!("电源计划 '{}' 导入并激活成功", display_name)
+        },
+        guid: Some(guid),
+    })
+}
+
+#[tauri::command]
+pub async fn delete_power_plan(guid: String) -> Result<PowerPlanOperationResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let active_plan = get_active_plan_internal();
+    if let Some((active_guid, _)) = active_plan {
+        if active_guid == guid {
+            return Err("无法删除当前激活的电源计划，请先切换到其他计划".to_string());
+        }
+    }
+
+    let result = Command::new("powercfg")
+        .args(["/delete", &guid])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match result {
+        Ok(output) => {
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
+                return Err(format!("删除电源计划失败: {}", err_msg));
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(500));
+
+            let system_plans = get_system_plans_internal();
+            let still_exists = system_plans.iter().any(|(g, _, _)| g == &guid);
+
+            if still_exists {
+                Err("电源计划删除可能未生效，请确认是否具有管理员权限".to_string())
+            } else {
+                Ok(PowerPlanOperationResult {
+                    success: true,
+                    message: "电源计划已删除".to_string(),
+                    guid: None,
+                })
+            }
+        }
+        Err(e) => Err(format!("执行删除命令失败: {}", e)),
     }
 }

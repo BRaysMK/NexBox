@@ -63,7 +63,8 @@ export function getBorderGlowStyle(
     WebkitMaskComposite: "xor",
     maskComposite: "exclude",
     pointerEvents: "none" as const,
-    transition: "background 0.2s ease",
+    transition: "opacity 0.2s ease",
     opacity: isHovering ? 1 : 0,
+    willChange: "opacity",
   };
 }

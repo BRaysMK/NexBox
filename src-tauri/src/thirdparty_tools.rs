@@ -16,13 +16,8 @@ pub struct ThirdPartyTool {
     pub tool_type: String,
     pub download_url: String,
     pub file_name: String,
+    pub website_url: Option<String>,
     pub check_executable: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolWithStatus {
-    pub tool: ThirdPartyTool,
-    pub installed: bool,
 }
 
 fn get_tools_directory() -> PathBuf {
@@ -43,19 +38,10 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "内存清理工具".to_string(),
             category: "optimization".to_string(),
             tool_type: "install".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/memreduct-3.5.2-setup.exe".to_string(),
-            file_name: "memreduct-3.5.2-setup.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://memreduct.org".to_string()),
             check_executable: Some("memreduct.exe".to_string()),
-        },
-        ThirdPartyTool {
-            id: "windows-core-optimizer".to_string(),
-            name: "Windows大小核优化".to_string(),
-            description: "仅对有大小核心的CPU有效".to_string(),
-            category: "optimization".to_string(),
-            tool_type: "portable".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/Windows%E5%A4%A7%E5%B0%8F%E6%A0%B8%E8%B0%83%E5%BA%A6%E4%B8%80%E9%94%AE%E4%BC%98%E5%8C%96_x64.exe".to_string(),
-            file_name: "Windows大小核调度一键优化_x64.exe".to_string(),
-            check_executable: None,
         },
         ThirdPartyTool {
             id: "optimizer".to_string(),
@@ -63,8 +49,9 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "Windows系统优化工具".to_string(),
             category: "optimization".to_string(),
             tool_type: "portable".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/Optimizer-16.7.exe".to_string(),
-            file_name: "Optimizer-16.7.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://github.com/hellzerg/optimizer/".to_string()),
             check_executable: None,
         },
         ThirdPartyTool {
@@ -73,8 +60,9 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "CPU信息检测工具".to_string(),
             category: "hardware".to_string(),
             tool_type: "install".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/cpu-z_2.19-cn.exe".to_string(),
-            file_name: "cpu-z_2.19-cn.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://www.cpuid.com/softwares/cpu-z.html".to_string()),
             check_executable: Some("cpuz.exe".to_string()),
         },
         ThirdPartyTool {
@@ -83,8 +71,9 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "显卡信息检测工具".to_string(),
             category: "hardware".to_string(),
             tool_type: "portable".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/GPU-Z.2.69.0.exe".to_string(),
-            file_name: "GPU-Z.2.69.0.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://www.techpowerup.com/gpuz/".to_string()),
             check_executable: None,
         },
         ThirdPartyTool {
@@ -93,8 +82,9 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "专业网络代理工具".to_string(),
             category: "network".to_string(),
             tool_type: "install".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/CV-2.2.3.exe".to_string(),
-            file_name: "CV-2.2.3.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://github.com/Clash-Verge-rev/clash-verge-rev".to_string()),
             check_executable: Some("clash-verge.exe".to_string()),
         },
         ThirdPartyTool {
@@ -103,8 +93,9 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "系统进程优化工具".to_string(),
             category: "optimization".to_string(),
             tool_type: "install".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/ProcesLasso.exe".to_string(),
-            file_name: "ProcesLasso.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://bitsum.com/download-process-lasso/".to_string()),
             check_executable: Some("ProcessLassoLauncher.exe".to_string()),
         },
         ThirdPartyTool {
@@ -113,8 +104,9 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "音频增强工具".to_string(),
             category: "assistant".to_string(),
             tool_type: "install".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/fxsound_setup.exe".to_string(),
-            file_name: "fxsound_setup.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://www.fxsound.com/download".to_string()),
             check_executable: Some("FxSound.exe".to_string()),
         },
         ThirdPartyTool {
@@ -123,8 +115,9 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "显卡超频监控工具".to_string(),
             category: "hardware".to_string(),
             tool_type: "install".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/MSIAfterburnerInstaller466.exe".to_string(),
-            file_name: "MSIAfterburnerInstaller466.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://www.msi.cn/Landing/afterburner/graphics-cards".to_string()),
             check_executable: Some("MSIAfterburner.exe".to_string()),
         },
         ThirdPartyTool {
@@ -133,8 +126,9 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             description: "软件卸载清理工具".to_string(),
             category: "assistant".to_string(),
             tool_type: "portable".to_string(),
-            download_url: "https://gitee.com/muliuawa/nexboxtools/releases/download/Tools/geek.exe".to_string(),
-            file_name: "geek.exe".to_string(),
+            download_url: String::new(),
+            file_name: String::new(),
+            website_url: Some("https://geekuninstaller.com/".to_string()),
             check_executable: None,
         },
     ]
@@ -143,58 +137,6 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
 #[tauri::command]
 pub fn get_thirdparty_tools() -> Vec<ThirdPartyTool> {
     get_tools_list()
-}
-
-#[tauri::command]
-pub fn get_thirdparty_tools_with_status() -> Vec<ToolWithStatus> {
-    let tools = get_tools_list();
-    let tools_dir = get_tools_directory();
-
-    tools
-        .into_iter()
-        .map(|tool| {
-            let installed = match tool.tool_type.as_str() {
-                "install" => {
-                    if let Some(check_exe) = &tool.check_executable {
-                        find_via_desktop_shortcut(check_exe).is_some()
-                    } else {
-                        false
-                    }
-                }
-                "portable" => {
-                    let tool_path = tools_dir.join(&tool.file_name);
-                    tool_path.exists()
-                }
-                _ => false,
-            };
-
-            ToolWithStatus { tool, installed }
-        })
-        .collect()
-}
-
-#[tauri::command]
-pub fn check_tool_installed(tool_id: String) -> bool {
-    let tools = get_tools_list();
-    if let Some(tool) = tools.iter().find(|t| t.id == tool_id) {
-        match tool.tool_type.as_str() {
-            "install" => {
-                if let Some(check_exe) = &tool.check_executable {
-                    find_via_desktop_shortcut(check_exe).is_some()
-                } else {
-                    false
-                }
-            }
-            "portable" => {
-                let tools_dir = get_tools_directory();
-                let tool_path = tools_dir.join(&tool.file_name);
-                tool_path.exists()
-            }
-            _ => false,
-        }
-    } else {
-        false
-    }
 }
 
 #[tauri::command]

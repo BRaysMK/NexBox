@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 interface AnimatedPageProps {
   children: ReactNode;
@@ -29,6 +29,29 @@ const pageVariants = {
 };
 
 export function AnimatedPage({ children }: AnimatedPageProps) {
+  const [enabled, setEnabled] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("nexbox_page_transition_enabled");
+    if (stored !== null) {
+      setEnabled(stored === "true");
+    }
+
+    const handler = () => {
+      const updated = localStorage.getItem("nexbox_page_transition_enabled");
+      if (updated !== null) {
+        setEnabled(updated === "true");
+      }
+    };
+
+    window.addEventListener("page-transition-setting-changed", handler);
+    return () => window.removeEventListener("page-transition-setting-changed", handler);
+  }, []);
+
+  if (!enabled) {
+    return <div style={{ width: "100%", height: "100%" }}>{children}</div>;
+  }
+
   return (
     <motion.div
       initial="initial"

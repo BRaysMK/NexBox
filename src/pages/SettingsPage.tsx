@@ -39,6 +39,7 @@ import {
   LuWifi,
   LuGlobe,
   LuHeart,
+  LuKeyboard,
 } from "react-icons/lu";
 import { RiBilibiliFill, RiTiktokFill } from "react-icons/ri";
 import { useState, useRef, useEffect } from "react";
@@ -54,10 +55,13 @@ import { ThemeSwitch } from "@/components/special/theme-switch";
 import { CustomSelect } from "@/components/special/custom-select";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { useAppStartup } from "@/contexts/app-startup-context";
 
 const settingItems = [
   { id: "general", labelKey: "settings.general", icon: LuSettings },
   { id: "appearance", labelKey: "settings.appearance", icon: LuMonitor },
+  { id: "hotkeys", labelKey: "settings.hotkeys", icon: LuKeyboard },
   { id: "network", labelKey: "settings.network", icon: LuWifi },
   { id: "sponsor", labelKey: "settings.sponsor", icon: LuHeart },
   { id: "about", labelKey: "settings.about", icon: LuInfo },
@@ -66,14 +70,17 @@ const settingItems = [
 function GeneralSettings() {
   const { t, i18n } = useTranslation();
   const [language, setLanguage] = useState(i18n.language || "zh");
-  const [quickToolsEnabled, setQuickToolsEnabled] = useState(true);
   const [customHtmlEnabled, setCustomHtmlEnabled] = useState(true);
   const [todayPopularityEnabled, setTodayPopularityEnabled] = useState(true);
   const [announcementEnabled, setAnnouncementEnabled] = useState(true);
+  const [randomQuoteEnabled, setRandomQuoteEnabled] = useState(true);
+  const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
   const [closeBehavior, setCloseBehavior] = useState<string>(() => {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
   });
+  const [sidebarShowLabel, setSidebarShowLabel] = useState(false);
+  const [pageTransitionEnabled, setPageTransitionEnabled] = useState(true);
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#888888");
@@ -82,11 +89,6 @@ function GeneralSettings() {
   useEffect(() => {
     const savedLang = i18n.language || "zh";
     setLanguage(savedLang);
-    
-    const savedQuickTools = localStorage.getItem("nexbox_quick_tools_enabled");
-    if (savedQuickTools !== null) {
-      setQuickToolsEnabled(savedQuickTools === "true");
-    }
 
     const savedCustomHtml = localStorage.getItem("nexbox_custom_html_enabled");
     if (savedCustomHtml !== null) {
@@ -103,6 +105,16 @@ function GeneralSettings() {
       setAnnouncementEnabled(savedAnnouncement === "true");
     }
 
+    const savedRandomQuote = localStorage.getItem("nexbox_random_quote_enabled");
+    if (savedRandomQuote !== null) {
+      setRandomQuoteEnabled(savedRandomQuote === "true");
+    }
+
+    const savedGameLauncher = localStorage.getItem("nexbox_game_launcher_enabled");
+    if (savedGameLauncher !== null) {
+      setGameLauncherEnabled(savedGameLauncher === "true");
+    }
+
     const savedSplashLogo = localStorage.getItem("nexbox_splash_logo");
     if (savedSplashLogo) {
       setSplashLogo(savedSplashLogo);
@@ -112,19 +124,22 @@ function GeneralSettings() {
     if (savedCloseBehavior) {
       setCloseBehavior(savedCloseBehavior);
     }
+
+    const savedSidebarShowLabel = localStorage.getItem("nexbox_sidebar_show_label");
+    if (savedSidebarShowLabel !== null) {
+      setSidebarShowLabel(savedSidebarShowLabel === "true");
+    }
+
+    const savedPageTransition = localStorage.getItem("nexbox_page_transition_enabled");
+    if (savedPageTransition !== null) {
+      setPageTransitionEnabled(savedPageTransition === "true");
+    }
   }, [i18n.language]);
 
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
     i18n.changeLanguage(newLang);
     localStorage.setItem("i18nextLng", newLang);
-  };
-
-  const handleQuickToolsToggle = () => {
-    const newValue = !quickToolsEnabled;
-    setQuickToolsEnabled(newValue);
-    localStorage.setItem("nexbox_quick_tools_enabled", String(newValue));
-    window.dispatchEvent(new CustomEvent("quick-tools-setting-changed", { detail: newValue }));
   };
 
   const handleCustomHtmlToggle = () => {
@@ -146,6 +161,20 @@ function GeneralSettings() {
     setAnnouncementEnabled(newValue);
     localStorage.setItem("nexbox_announcement_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("announcement-setting-changed", { detail: newValue }));
+  };
+
+  const handleRandomQuoteToggle = () => {
+    const newValue = !randomQuoteEnabled;
+    setRandomQuoteEnabled(newValue);
+    localStorage.setItem("nexbox_random_quote_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("random-quote-setting-changed", { detail: newValue }));
+  };
+
+  const handleGameLauncherToggle = () => {
+    const newValue = !gameLauncherEnabled;
+    setGameLauncherEnabled(newValue);
+    localStorage.setItem("nexbox_game_launcher_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("game-launcher-setting-changed", { detail: newValue }));
   };
 
   const handleSplashLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,6 +200,20 @@ function GeneralSettings() {
     setCloseBehavior(value);
     localStorage.setItem("nexbox_close_behavior", value);
     window.dispatchEvent(new CustomEvent("close-behavior-changed"));
+  };
+
+  const handleSidebarShowLabelChange = (value: string) => {
+    const newValue = value === "true";
+    setSidebarShowLabel(newValue);
+    localStorage.setItem("nexbox_sidebar_show_label", String(newValue));
+    window.dispatchEvent(new CustomEvent("sidebar-show-label-changed", { detail: newValue }));
+  };
+
+  const handlePageTransitionToggle = () => {
+    const newValue = !pageTransitionEnabled;
+    setPageTransitionEnabled(newValue);
+    localStorage.setItem("nexbox_page_transition_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("page-transition-setting-changed", { detail: newValue }));
   };
 
   return (
@@ -228,22 +271,6 @@ function GeneralSettings() {
             <HStack justify="space-between" py={2}>
               <Box flex={1}>
                 <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.quickToolsLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.quickToolsDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={quickToolsEnabled}
-                onChange={handleQuickToolsToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
                   {t("settings.generalSettings.customHtmlLabel")}
                 </Text>
                 <Text fontSize="xs" color={subLabelColor} mt={0.5}>
@@ -288,6 +315,38 @@ function GeneralSettings() {
                 onChange={handleAnnouncementToggle}
               />
             </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.randomQuoteLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.randomQuoteDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={randomQuoteEnabled}
+                onChange={handleRandomQuoteToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.gameLauncherLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.gameLauncherDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={gameLauncherEnabled}
+                onChange={handleGameLauncherToggle}
+              />
+            </HStack>
           </VStack>
         </LiquidGlassCard>
       </Box>
@@ -304,51 +363,69 @@ function GeneralSettings() {
           {t("settings.generalSettings.splash")}
         </Text>
         <LiquidGlassCard px={4} py={3} boxShadow="sm">
-          <HStack justify="space-between" align="center">
-            <Box flex={1}>
-              <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                {t("settings.generalSettings.splashLogoLabel")}
-              </Text>
-              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                {t("settings.generalSettings.splashLogoDesc")}
-              </Text>
-              {splashLogo && (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  mt={1.5}
-                  onClick={handleSplashLogoReset}
-                  leftIcon={<LuX size={12} />}
-                  color={subLabelColor}
-                  _hover={{ color: "red.400" }}
-                >
-                  {t("settings.generalSettings.splashLogoReset")}
-                </Button>
-              )}
-            </Box>
-            <Box
-              w="48px"
-              h="48px"
-              borderRadius="md"
-              overflow="hidden"
-              border="1px solid"
-              borderColor={cardBorder}
-              cursor="pointer"
-              onClick={() => {
-                const input = document.getElementById("splash-logo-upload") as HTMLInputElement;
-                input?.click();
-              }}
-              _hover={{ borderColor: useColorModeValue("blue.400", "blue.300") }}
-              transition="all 0.2s"
-              flexShrink={0}
-            >
-              <img
-                src={splashLogo || "/logo/Chinesew.png"}
-                alt="Splash Logo"
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          <VStack spacing={0} align="stretch">
+            <HStack justify="space-between" align="center" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.splashLogoLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.splashLogoDesc")}
+                </Text>
+                {splashLogo && (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    mt={1.5}
+                    onClick={handleSplashLogoReset}
+                    leftIcon={<LuX size={12} />}
+                    color={subLabelColor}
+                    _hover={{ color: "red.400" }}
+                  >
+                    {t("settings.generalSettings.splashLogoReset")}
+                  </Button>
+                )}
+              </Box>
+              <Box
+                w="48px"
+                h="48px"
+                borderRadius="md"
+                overflow="hidden"
+                border="1px solid"
+                borderColor={cardBorder}
+                cursor="pointer"
+                onClick={() => {
+                  const input = document.getElementById("splash-logo-upload") as HTMLInputElement;
+                  input?.click();
+                }}
+                _hover={{ borderColor: useColorModeValue("blue.400", "blue.300") }}
+                transition="all 0.2s"
+                flexShrink={0}
+              >
+                <img
+                  src={splashLogo || "/logo/Chinesew.png"}
+                  alt="Splash Logo"
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                />
+              </Box>
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.pageTransitionLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.pageTransitionDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={pageTransitionEnabled}
+                onChange={handlePageTransitionToggle}
               />
-            </Box>
-          </HStack>
+            </HStack>
+          </VStack>
           <input
             id="splash-logo-upload"
             type="file"
@@ -388,6 +465,40 @@ function GeneralSettings() {
                 { value: "minimize", label: t("settings.generalSettings.minimizeToTray") },
               ]}
               width="140px"
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box>
+
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          {t("settings.navigation")}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between">
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("settings.generalSettings.sidebarShowLabel")}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("settings.generalSettings.sidebarShowLabelDesc")}
+              </Text>
+            </Box>
+            <CustomSelect
+              value={String(sidebarShowLabel)}
+              onChange={handleSidebarShowLabelChange}
+              options={[
+                { value: "false", label: t("settings.generalSettings.sidebarShowLabelNoText") },
+                { value: "true", label: t("settings.generalSettings.sidebarShowLabelWithText") },
+              ]}
+              width="100px"
             />
           </HStack>
         </LiquidGlassCard>
@@ -1318,7 +1429,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "2.5.7";
+  const currentVersion = "3.1.6";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
@@ -1603,6 +1714,47 @@ function AboutSettings() {
               </Text>
             </HStack>
           </HStack>
+          <Divider my={3} borderColor={dividerColor} />
+          <HStack justify="space-between">
+            <Text fontSize="sm" color={subLabelColor}>
+              QQ 交流群
+            </Text>
+            <HStack spacing={2}>
+              <Box
+                w="24px"
+                h="24px"
+                borderRadius="md"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                cursor="pointer"
+                transition="all 0.2s"
+                _hover={{ transform: "scale(1.1)" }}
+                onClick={() => handleOpenLink("https://qm.qq.com/q/lhjntH1V1S")}
+                title="点击加入 QQ 群"
+              >
+                <img
+                  src="https://img.icons8.com/color/96/qq.png"
+                  alt="QQ"
+                  style={{ width: "18px", height: "18px", objectFit: "contain" }}
+                  onError={(e) => {
+                    // Fallback to inline SVG if image fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = "none";
+                    const parent = target.parentElement!;
+                    parent.innerHTML = `
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="#12B7F5">
+                        <path d="M12.002 2c-5.338 0-9.668 3.93-9.668 8.774 0 2.822 1.589 5.33 4.064 6.887l.113.072-.575 1.926c-.042.142.045.29.192.29.04 0 .081-.01.118-.03l2.485-1.347.201.012c.984.06 1.99.06 2.977 0l.202-.012 2.484 1.347c.038.02.079.03.119.03.146 0 .234-.148.192-.29l-.575-1.926.113-.072c2.476-1.557 4.065-4.065 4.065-6.887 0-4.845-4.33-8.774-9.668-8.774z"/>
+                      </svg>
+                    `;
+                  }}
+                />
+              </Box>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium" userSelect="all">
+                526045683
+              </Text>
+            </HStack>
+          </HStack>
         </Box>
       </LiquidGlassCard>
 
@@ -1720,10 +1872,146 @@ function AboutSettings() {
   );
 }
 
+function HotkeySettings() {
+  const { t } = useTranslation();
+  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey } = useAppStartup();
+  const toast = useToast();
+  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
+  const subLabelColor = useColorModeValue("gray.500", "#888888");
+
+  return (
+    <Box>
+      <Text fontSize="lg" fontWeight="bold" mb={6} color={titleColor}>
+        {t("hotkeySettings.title") || "热键设置"}
+      </Text>
+
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          {t("hotkeySettings.overlay") || "悬浮框"}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between">
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("hotkeySettings.overlayToggle") || "切换悬浮框"}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("hotkeySettings.overlayToggleDesc") || "使用快捷键显示或隐藏悬浮框"}
+              </Text>
+            </Box>
+            <HotkeyRecorder
+              value={overlayHotkey}
+              onChange={(val) => {
+                saveOverlayHotkey(val);
+                toast({
+                  title: t("hotkeySettings.saved") || "快捷键已保存",
+                  status: "success",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box>
+
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          {t("hotkeySettings.crosshair") || "准心"}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between">
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("hotkeySettings.crosshairToggle") || "切换准心"}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("hotkeySettings.crosshairToggleDesc") || "使用快捷键显示或隐藏准心"}
+              </Text>
+            </Box>
+            <HotkeyRecorder
+              value={crosshairHotkey}
+              onChange={(val) => {
+                saveCrosshairHotkey(val);
+                toast({
+                  title: t("hotkeySettings.saved") || "快捷键已保存",
+                  status: "success",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box>
+
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          {t("hotkeySettings.filter") || "滤镜"}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between">
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("hotkeySettings.filterToggle") || "切换滤镜"}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("hotkeySettings.filterToggleDesc") || "使用快捷键开启或关闭滤镜"}
+              </Text>
+            </Box>
+            <HotkeyRecorder
+              value={filterHotkey}
+              onChange={(val) => {
+                saveFilterHotkey(val);
+                toast({
+                  title: t("hotkeySettings.saved") || "快捷键已保存",
+                  status: "success",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box>
+    </Box>
+  );
+}
+
 export default function SettingsPage() {
   const [activeItem, setActiveItem] = useState("general");
+  const [pageTransitionEnabled, setPageTransitionEnabled] = useState(true);
   const { t } = useTranslation();
   const { config } = useThemeColor();
+
+  useEffect(() => {
+    const stored = localStorage.getItem("nexbox_page_transition_enabled");
+    if (stored !== null) {
+      setPageTransitionEnabled(stored === "true");
+    }
+  }, []);
 
   const pageVariants = {
     initial: { opacity: 0, x: 20 },
@@ -1761,21 +2049,33 @@ export default function SettingsPage() {
 
       <Box flex={1}>
         <AnimatePresence mode="wait">
-          <motion.div
-            key={activeItem}
-            initial="initial"
-            animate="in"
-            exit="out"
-            variants={pageVariants}
-            transition={pageTransition}
-            style={{ position: 'relative', zIndex: 1 }}
-          >
-            {activeItem === "general" && <GeneralSettings />}
-            {activeItem === "appearance" && <AppearanceSettings />}
-            {activeItem === "network" && <NetworkSettings />}
-            {activeItem === "sponsor" && <SponsorSettings />}
-            {activeItem === "about" && <AboutSettings />}
-          </motion.div>
+          {pageTransitionEnabled ? (
+            <motion.div
+              key={activeItem}
+              initial="initial"
+              animate="in"
+              exit="out"
+              variants={pageVariants}
+              transition={pageTransition}
+              style={{ position: 'relative', zIndex: 1 }}
+            >
+              {activeItem === "general" && <GeneralSettings />}
+              {activeItem === "appearance" && <AppearanceSettings />}
+              {activeItem === "hotkeys" && <HotkeySettings />}
+              {activeItem === "network" && <NetworkSettings />}
+              {activeItem === "sponsor" && <SponsorSettings />}
+              {activeItem === "about" && <AboutSettings />}
+            </motion.div>
+          ) : (
+            <div key={activeItem} style={{ position: 'relative', zIndex: 1 }}>
+              {activeItem === "general" && <GeneralSettings />}
+              {activeItem === "appearance" && <AppearanceSettings />}
+              {activeItem === "hotkeys" && <HotkeySettings />}
+              {activeItem === "network" && <NetworkSettings />}
+              {activeItem === "sponsor" && <SponsorSettings />}
+              {activeItem === "about" && <AboutSettings />}
+            </div>
+          )}
         </AnimatePresence>
       </Box>
     </Flex>

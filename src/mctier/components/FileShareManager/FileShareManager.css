@@ -1,0 +1,489 @@
+/* 文件共享容器 - 全屏独立界面 */
+.file-share-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 主内容区域 */
+.file-share-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 左侧垂直选择栏 */
+.sidebar-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 60px;
+  padding: 12px 8px;
+  gap: 8px;
+}
+
+.sidebar-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sidebar-tab.active {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.sidebar-tab svg {
+  flex-shrink: 0;
+}
+
+.transfer-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 右侧内容区域 */
+.content-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 共享列表 */
+.share-list {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.share-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.share-list::-webkit-scrollbar-track {
+  border-radius: 3px;
+}
+
+.share-list::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+}
+
+.share-list::-webkit-scrollbar-thumb:hover {
+}
+
+.share-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.share-item button {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  z-index: 10;
+}
+
+.share-item.clickable {
+  cursor: pointer;
+}
+
+.share-item.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 右上角状态图标容器 */
+.share-status-icons {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 3px;
+  z-index: 2;
+}
+
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  cursor: help;
+  transition: all 0.3s ease;
+  border-width: 1px;
+  border-style: solid;
+}
+
+.status-icon:hover {
+  transform: scale(1.1);
+}
+
+.lock-icon {
+}
+
+.compress-icon {
+}
+
+.expiry-icon {
+}
+
+/* 右下角用户名 */
+.share-owner {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  font-size: 10px;
+  white-space: nowrap;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* 文件浏览器 */
+.file-browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+}
+
+.browser-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.current-path {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.file-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.file-list::-webkit-scrollbar-track {
+  border-radius: 3px;
+}
+
+.file-list::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+}
+
+.file-list::-webkit-scrollbar-thumb:hover {
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  transition: all 0.2s ease;
+}
+
+.file-item.clickable {
+  cursor: pointer;
+}
+
+.file-item.clickable:hover {
+}
+
+.file-item:hover {
+}
+
+.file-icon {
+  flex-shrink: 0;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* 传输列表 */
+.transfer-list {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 传输子标签 */
+.transfers-subtabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  flex-shrink: 0;
+}
+
+.subtab {
+  position: relative;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subtab.active {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.subtab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+}
+
+.transfer-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transfer-list::-webkit-scrollbar-track {
+  border-radius: 3px;
+}
+
+.transfer-list::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+}
+
+.transfer-list::-webkit-scrollbar-thumb:hover {
+}
+
+.transfer-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.transfer-item.clickable {
+  cursor: pointer;
+}
+
+.transfer-item.clickable:hover {
+  transform: translateX(4px);
+}
+
+.transfer-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.transfer-info {
+  flex: 1;
+  min-width: 0;
+  padding-right: 30px; /* 为取消按钮留出空间 */
+}
+
+.transfer-name {
+  font-size: 13px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%; /* 限制文件名宽度 */
+}
+
+.transfer-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.transfer-size {
+  flex: 0 0 auto;
+}
+
+.transfer-speed {
+  flex: 0 0 auto;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* 添加共享表单 */
+.add-share-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-item label {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+/* 自定义确认对话框 */
+.custom-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.custom-confirm-dialog {
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+}
+
+.confirm-icon {
+  margin: 0 auto 20px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: iconPulse 2s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+.confirm-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.confirm-message {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.confirm-btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+.cancel-btn {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.cancel-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.delete-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+.confirm-btn:active {
+  transform: translateY(0);
+}

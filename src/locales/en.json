@@ -2,7 +2,9 @@
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
-    "description": "Cross-platform performance monitoring (Tauri + Next.js + Sensor Service)"
+    "description": "Cross-platform performance monitoring (Tauri + Next.js + Sensor Service)",
+    "cancel": "Cancel",
+    "add": "Add"
   },
   "onboarding": {
     "title": "Welcome to NexBox",
@@ -41,8 +43,9 @@
     "mood": "Mood",
     "settings": "Settings",
     "gpuRename": "GPU Rename",
-    "dlssPreset": "Delta Force DLSS Preset",
-    "epicFree": "Epic Free Games"
+    "dlssPreset": "Delta Force DLSS Settings",
+    "epicFree": "Epic Free Games",
+    "lobby": "Multiplayer"
   },
   "optimization": {
     "pageTitle": "Optimize",
@@ -98,8 +101,44 @@
       "adminRequired": "Administrator Required",
       "options": {
         "11.9gb": "11.9 GB",
+        "13.9gb": "13.9 GB",
         "15.9gb": "15.9 GB"
       }
+    },
+    "powerManagement": {
+      "title": "Power Management",
+      "description": "Import and activate optimized power plans for better gaming performance",
+      "currentPlan": "Current Power Plan",
+      "builtinPlans": "Built-in Power Plans",
+      "systemPlans": "System Power Plans",
+      "import": "Import",
+      "importAndActivate": "Import and Activate",
+      "activate": "Activate",
+      "importing": "Importing...",
+      "activating": "Activating...",
+      "importSuccess": "Power plan imported successfully",
+      "importFailed": "Failed to import power plan",
+      "activateSuccess": "Power plan activated",
+      "activateFailed": "Failed to activate power plan",
+      "alreadyImported": "Imported",
+      "notImported": "Not Imported",
+      "active": "Active",
+      "loadFailed": "Failed to load power plans",
+      "refresh": "Refresh",
+      "tipTitle": "Tip",
+      "tip": "Power plans affect system power consumption and performance. High performance plans are recommended for gaming. Activating a power plan requires administrator privileges.",
+      "importAll": "Import All",
+      "importingAll": "Batch importing...",
+      "importAllSuccess": "Successfully imported {{count}} power plan(s)",
+      "importAllFailed": "{{count}} power plan(s) failed to import",
+      "allImported": "All power plans have been imported",
+      "delete": "Delete",
+      "deleting": "Deleting...",
+      "deleteSuccess": "Power plan deleted",
+      "deleteFailed": "Failed to delete power plan",
+      "deleteConfirmTitle": "Confirm Delete",
+      "deleteConfirmText": "Are you sure you want to delete the power plan \"{{name}}\" from the system?",
+      "cancel": "Cancel"
     },
     "memoryCleanup": {
       "title": "Memory Cleanup",
@@ -120,44 +159,56 @@
       "error": "Cleanup failed"
     },
     "aceOptimize": {
-      "title": "ACE/Game Optimize",
-      "description": "Optimize game process priority and limit anti-cheat resource usage",
+      "title": "Delta/ACE Optimize",
+      "description": "Delta Force process optimization and ACE anti-cheat resource limiting",
+      "deltaSection": {
+        "title": "Delta Force Optimize",
+        "subtitle": "Boost Delta Force gaming performance"
+      },
       "deltaBoost": {
-        "title": "Delta Force Priority Boost",
+        "title": "Priority Boost",
         "description": "Set DeltaForceClient-Win64-Shipping.exe priority to RealTime for smoother gameplay",
-        "button": "Boost Delta Force",
-        "optimizing": "Optimizing...",
-        "success": "Delta Force priority boosted to RealTime",
-        "notRunning": "Delta Force is not running, please start the game first"
+        "affinityTitle": "Core Affinity Optimize",
+        "affinityDescription": "Assign Delta Force process to all CPU cores except CPU0 to maximize multi-core performance while reserving core 0 for system"
+      },
+      "aceSection": {
+        "title": "ACE Anti-Cheat Optimize",
+        "subtitle": "Limit anti-cheat resource usage, free more performance for the game"
       },
       "aceLimit": {
-        "title": "ACE Process Limit",
-        "description": "Lower ACE-Tray, SGuard64, SGuardSvc64 priority to Low and restrict to single CPU core",
-        "button": "Limit ACE",
-        "limiting": "Limiting...",
-        "success": "Limited {{count}} ACE process(es)",
-        "notRunning": "No running ACE processes found"
+        "title": "Priority Limit",
+        "description": "Lower ACE-Tray, SGuard64, SGuardSvc64 priority to Low to reduce CPU contention",
+        "affinityTitle": "Core Affinity Restrict",
+        "affinityDescription": "Restrict ACE anti-cheat processes to single core (CPU0) only, preventing them from occupying critical game CPU resources"
+      },
+      "aceEfficiency": {
+        "title": "Windows Efficiency Mode",
+        "description": "Enable task manager style efficiency mode for ACE processes: set priority to Idle + enable power throttling (EcoQoS), significantly reducing background resource usage"
       },
       "optimizeAll": {
         "button": "Optimize All",
         "optimizing": "Optimizing...",
+        "title": "Optimize All at Once",
+        "description": "Execute delta priority boost and ACE priority/core restrictions together",
         "success": "All optimizations complete",
         "partial": "Partial optimization complete, check details"
       },
       "status": {
         "optimized": "Optimized",
         "notRunning": "Not Running",
-        "notOptimized": "Not Optimized"
+        "notOptimized": "Not Optimized",
+        "processRunning": "Process Running",
+        "processNotRunning": "Process Not Running"
       },
+      "apply": "Apply",
+      "applied": "Applied",
       "error": "Optimization failed"
     }
   },
   "home": {
     "title": "Welcome to NexBox",
     "welcome": "Welcome",
-    "quickTools": "Quick Tools",
     "customHtml": "Custom Widget",
-    "addQuickTools": "Click to add quick tools",
     "selectTools": "Select Quick Tools",
     "edit": "Edit",
     "reset": "Reset",
@@ -167,7 +218,9 @@
     "htmlPlaceholder": "Enter HTML code here...",
     "resetToDefault": "Reset to Default",
     "save": "Save",
+    "pickImage": "Pick Image",
     "todayPopularity": "Today's Popularity",
+    "randomQuote": "Random Quote",
     "announcement": "Announcement",
     "announcementList": "Announcements",
     "loading": "Loading...",
@@ -176,10 +229,19 @@
     "importantAnnouncement": "Important Announcement",
     "confirmAnnouncement": "OK"
   },
+  "gameLauncher": {
+    "title": "Quick Launch",
+    "addGame": "Add Game",
+    "gameName": "Game Name",
+    "gameNamePlaceholder": "Enter game name",
+    "gamePath": "Game Path",
+    "gamePathPlaceholder": "Select game executable"
+  },
   "hardware": {
     "title": "Hardware Info",
     "processor": "Processor",
     "model": "Model",
+    "vendor": "Vendor",
     "coresThreads": "Cores + Threads",
     "cores": "cores",
     "threads": "threads",
@@ -254,7 +316,8 @@
       "openTool": "Open Tool",
       "comingSoon": "Coming Soon",
       "download": "Click to Download",
-      "run": "Click to Run"
+      "run": "Click to Run",
+      "website": "Visit Website"
     },
     "messages": {
       "installerStarted": "Installer Started",
@@ -270,6 +333,13 @@
     },
     "ariaLabels": {
       "refreshToolList": "Refresh tool list"
+    },
+    "customAdded": {
+      "add": "Manually add tool",
+      "remove": "Remove manual addition",
+      "addSuccess": "Tool added",
+      "addFailed": "Failed to add",
+      "removed": "Manual addition removed"
     }
   },
   "displayFilter": {
@@ -293,7 +363,18 @@
     "tip": "Filter adjusts display gamma curve for color effects. Settings are automatically restored when the app exits.",
     "customFilter": "Custom Filter",
     "saveSuccess": "Settings saved and applied",
-    "saveAndApply": "Save & Apply"
+    "saveAndApply": "Save & Apply",
+    "iccProfiles": "ICC Color Profiles",
+    "importIcc": "Import ICC File",
+    "importIccSuccess": "ICC file imported",
+    "importIccFailed": "ICC import failed",
+    "iccApplied": "ICC profile applied",
+    "deleteIcc": "Delete",
+    "deleteIccConfirm": "Confirm delete this ICC preset?",
+    "deleteIccSuccess": "ICC preset deleted",
+    "noIccProfiles": "No ICC profiles imported",
+    "cancel": "Cancel",
+    "delete": "Delete"
   },
   "floatingNav": {
     "title": "Floating Navigation Box",
@@ -349,18 +430,45 @@
     "statusEnabled": "Enabled",
     "statusDisabled": "Disabled",
     "displayItems": "Display Items",
+    "hardwareMonitor": "Hardware Monitor",
     "cpuUsage": "CPU Usage",
     "gpuTemp": "GPU Temperature",
     "gpuUsage": "GPU Usage",
     "memoryUsage": "Memory Usage",
     "deltaPassword": "Delta Password",
+    "gamePing": "Game Latency",
+    "pingSettings": "Latency Test",
+    "pingDescription": "Select a server to measure network latency. The latency data will be displayed in the overlay",
+    "testPing": "Test Latency",
+    "pingCurrentValue": "Current Latency",
     "custom": "Custom",
     "customText": "Custom Text",
     "color": "Color",
+    "addCustomItem": "Add Custom Item",
     "appearance": "Appearance Settings",
+    "styles": "Overlay Style",
+    "styles.default": "Default",
+    "styles.dynamicIsland": "Dynamic Island",
     "opacity": "Opacity",
     "startFailed": "Failed to start",
-    "stopFailed": "Failed to stop"
+    "stopFailed": "Failed to stop",
+    "hotkey": "Hotkey",
+    "toggleHotkey": "Toggle Overlay",
+    "hotkeySaved": "Hotkey saved",
+    "minOneItem": "At least one display item must be kept",
+    "position": "Position Settings",
+    "dragMode": "Drag Overlay",
+    "dragModeHint": "Click to enter drag mode, click button again to exit and save position",
+    "dragModeStart": "Start Dragging",
+    "dragModeActive": "Stop Dragging",
+    "dragModeEnabled": "Entered drag mode, click button to exit",
+    "dragModeDisabled": "Exited drag mode",
+    "dragModeFailed": "Failed to toggle drag mode",
+    "overlayNotEnabled": "Please enable the overlay first",
+    "positionSaved": "Position saved",
+    "resetPosition": "Reset Position",
+    "positionReset": "Position restored to default",
+    "positionResetFailed": "Failed to reset position"
   },
   "deltaForce": {
     "title": "Delta Force",
@@ -372,7 +480,7 @@
     "officialMaps": "Official Maps",
     "openOfficialMap": "Delta Force Official Map Tool",
     "mapToolDesc": "Loot spots, spawn points, extraction points and boss coordinates",
-    "dlssPreset": "DLSS Model Preset",
+    "dlssPreset": "DLSS Preset",
     "dlssPresetDesc": "Select DLSS neural network model preset, different presets for different scenarios",
     "loading": "Loading...",
     "noPassword": "No password data available",
@@ -411,8 +519,44 @@
     "wallpaperDesc": "Official HD wallpaper download"
   },
   "dlssPreset": {
-    "title": "Delta Force DLSS Model Preset",
-    "description": "Switch DLSS neural network model presets to optimize game graphics"
+    "title": "Delta Force DLSS Settings",
+    "description": "Switch DLSS neural network model presets to optimize game graphics",
+    "presetLabel": "DLSS Preset",
+    "driverVersion": "Driver Version",
+    "noGpuFound": "No GPU detected"
+  },
+  "dlssIndicator": {
+    "title": "DLSS Indicator",
+    "description": "Show DLSS badge in bottom-left corner of game screen",
+    "enabled": "DLSS Indicator enabled",
+    "disabled": "DLSS Indicator disabled",
+    "note": "Requires admin privileges, restart game to take effect"
+  },
+  "dlssLock": {
+    "title": "DLSS Lock",
+    "description": "Lock nvidiaProfileInspector driver configuration",
+    "enabled": "DLSS configuration locked",
+    "disabled": "DLSS configuration unlocked",
+    "note": "Prevents driver updates from overwriting settings"
+  },
+  "dlssPresetTable": {
+    "title": "Preset Reference Table",
+    "description": "Recommended DLSS presets for different GPU series",
+    "gpuSeries": "GPU",
+    "recommendedPreset": "Preset",
+    "driverVersion": "Driver",
+    "scenario": "Type",
+    "rtx20Series": "RTX 20 Series",
+    "rtx30Series": "RTX 30 Series",
+    "rtx4060Ti": "RTX 4060 Ti",
+    "rtx50HighFps": "RTX 50 High FPS",
+    "rtx50HighQuality": "RTX 50 High Quality",
+    "presetK": "K",
+    "presetM": "M",
+    "typeGeneralEnhance": "General Enhancement",
+    "typePerformanceFirst": "Performance First",
+    "typeQualityEnhance": "Quality Enhancement",
+    "typeFpsPriority": "FPS Priority"
   },
   "musicPlayer": {
     "title": "Shushu Music",
@@ -455,6 +599,8 @@
     "backedUp": "Backed up",
     "notBackedUp": "Not backed up",
     "selectTarget": "Select Target GPU",
+    "lowEnd": "Low-end GPU",
+    "highEnd": "High-end GPU",
     "selectPlaceholder": "Please select a GPU",
     "selectGpu": "Please select a GPU first",
     "apply": "Apply",
@@ -539,13 +685,28 @@
     "schulteCurrent": "Current target",
     "schulteComplete": "Complete!",
     "schulteAverage": "Avg per number",
-    "schultePlayAgain": "Play Again"
+    "schultePlayAgain": "Play Again",
+    "cpsTitle": "CPS Test",
+    "cpsDesc": "Click as fast as you can within the time limit!",
+    "cpsSelectTime": "Select Time",
+    "cpsSeconds": "s",
+    "cpsStart": "Start Test",
+    "cpsClicks": "Clicks",
+    "cpsResult": "CPS",
+    "cpsInstruction": "Click as fast as you can within the time limit",
+    "cpsInstruction2": "Test your clicking speed!",
+    "cpsClickHere": "Click here!",
+    "cpsClickCount": "Clicked: {{clicks}} times",
+    "cpsTotal": "Total {{clicks}} clicks / {{time}}s",
+    "cpsAgain": "Try Again"
   },
   "settings": {
     "general": "General",
     "appearance": "Appearance",
+    "hotkeys": "Hotkeys",
     "network": "Network",
     "sponsor": "Sponsor",
+    "navigation": "Navigation",
     "about": "About",
     "generalSettings": {
       "title": "General Settings",
@@ -560,15 +721,18 @@
           "de": "German"
         },
       "homepage": "Homepage",
-      "quickToolsLabel": "Quick Tools",
-      "quickToolsDesc": "Show quick tools panel on homepage",
+      
       "customHtmlLabel": "Custom Area",
       "customHtmlDesc": "Show customizable HTML area on homepage",
       "todayPopularityLabel": "Today's Popularity",
       "todayPopularityDesc": "Show today's popularity random number on homepage",
       "announcementLabel": "Announcement",
       "announcementDesc": "Show announcement card on homepage",
-      "splash": "Splash Screen",
+      "randomQuoteLabel": "Random Quote",
+      "randomQuoteDesc": "Show random quote card on homepage",
+      "gameLauncherLabel": "Quick Launch",
+      "gameLauncherDesc": "Show quick launch card on homepage",
+      "splash": "Animation",
       "splashLogoLabel": "Splash Logo",
       "splashLogoDesc": "Customize the logo image shown during startup",
       "splashLogoReset": "Reset to Default",
@@ -592,7 +756,13 @@
       "closeBehaviorLabel": "When clicking close button",
       "closeBehaviorDesc": "Choose what happens when clicking the close button",
       "closeDirectly": "Close Directly",
-      "minimizeToTray": "Minimize to Tray"
+      "minimizeToTray": "Minimize to Tray",
+      "sidebarShowLabel": "Sidebar Labels",
+      "sidebarShowLabelDesc": "Choose the sidebar display mode",
+      "sidebarShowLabelNoText": "Icons Only",
+      "sidebarShowLabelWithText": "Icons & Text",
+      "pageTransitionLabel": "Page Transition Animation",
+      "pageTransitionDesc": "Disable to turn off page transition animations"
     },
     "appearanceSettings": {
       "title": "Appearance Settings",
@@ -696,6 +866,25 @@
       }
     }
   },
+  "resolutionConverter": {
+    "title": "Resolution Converter",
+    "selectResolution": "Select Resolution",
+    "resolution1K": "1K (1080p)",
+    "resolution1_5K": "1.5K",
+    "resolution2K": "2K (1440p)",
+    "resolution2_5K": "2.5K",
+    "resolution3K": "3K",
+    "resolution4K": "4K (2160p)",
+    "aspectRatios": "Aspect Ratios",
+    "ratio169": "16:9",
+    "ratio43": "4:3",
+    "ratio1610": "16:10",
+    "width": "W",
+    "height": "H",
+    "pixels": "px",
+    "standard": "Standard",
+    "tip": "Select a resolution type to see the specific resolution values for three common aspect ratios below, helping you adjust aspect ratio settings in games."
+  },
   "shaderCache": {
     "title": "Shader Cache Cleanup",
     "vendorTitle": "GPU Vendor",
@@ -743,6 +932,7 @@
   "search": {
     "placeholder": "Search features...",
     "noResults": "No results found",
+    "typeToSearch": "Type to search...",
     "categories": {
       "pages": "Pages",
       "builtinTools": "Built-in Tools",
@@ -761,5 +951,18 @@
   "tray": {
     "show": "Show Main Window",
     "exit": "Exit"
+  },
+  "hotkeySettings": {
+    "title": "Hotkey Settings",
+    "overlay": "Overlay",
+    "overlayToggle": "Toggle Overlay Panel",
+    "overlayToggleDesc": "Use shortcut to show or hide the overlay panel",
+    "crosshair": "Crosshair",
+    "crosshairToggle": "Toggle Crosshair",
+    "crosshairToggleDesc": "Use shortcut to show or hide the crosshair",
+    "filter": "Filter",
+    "filterToggle": "Toggle Display Filter",
+    "filterToggleDesc": "Use shortcut to enable or disable the display filter",
+    "saved": "Hotkey saved"
   }
 }

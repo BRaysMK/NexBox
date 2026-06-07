@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { Check, ExternalLink, ChevronRight, MapPin, Crosshair, ArrowLeft, Music } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
+import { useThemeColor } from "@/contexts/theme-color-context";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { motion, AnimatePresence } from "framer-motion";
 import deltaForceLogo from "@/assets/deltaforce.png";
@@ -74,6 +75,8 @@ function PasswordCard() {
   const [isLoading, setIsLoading] = useState(true);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const cardItemBg = useColorModeValue("gray.50", "#1a1a1a");
   const cardItemHoverBg = useColorModeValue("gray.100", "#222222");
@@ -120,7 +123,7 @@ function PasswordCard() {
     <SectionCard title={t("deltaForce.dailyPassword")}>
       {isLoading ? (
         <HStack justify="center" py={4}>
-          <Spinner size="sm" color="teal.400" />
+          <Spinner size="sm" color={primaryColor} />
           <Text color={subTextColor} fontSize="sm">{t("deltaForce.loading")}</Text>
         </HStack>
       ) : passwords.length === 0 ? (
@@ -141,9 +144,9 @@ function PasswordCard() {
               transition="background-color 0.2s"
             >
               <VStack spacing={2} align="center">
-                <MapPin size={18} color="#98DDD0" />
+                <MapPin size={18} color={primaryColor} />
                 <Text color={subTextColor} fontSize="sm" fontWeight="medium">{item.name}</Text>
-                <Text color="teal.400" fontWeight="bold" fontSize="xl" letterSpacing="wider">
+                <Text color={primaryColor} fontWeight="bold" fontSize="xl" letterSpacing="wider">
                   {item.password}
                 </Text>
                 {copiedIndex === index && (
@@ -163,6 +166,8 @@ function PasswordCard() {
 function QuickEntryCards({ onEnterWeaponCodes }: { onEnterWeaponCodes: () => void }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const cardBg = useColorModeValue("gray.50", "#1a1a1a");
@@ -251,7 +256,7 @@ function QuickEntryCards({ onEnterWeaponCodes }: { onEnterWeaponCodes: () => voi
               </Text>
             </VStack>
           </HStack>
-          <ChevronRight size={22} color="#98DDD0" />
+          <ChevronRight size={22} color={primaryColor} />
         </HStack>
       </EntryCard>
 
@@ -268,7 +273,7 @@ function QuickEntryCards({ onEnterWeaponCodes }: { onEnterWeaponCodes: () => voi
               </Text>
             </VStack>
           </HStack>
-          <ChevronRight size={22} color="#98DDD0" />
+          <ChevronRight size={22} color={primaryColor} />
         </HStack>
       </EntryCard>
 
@@ -285,7 +290,7 @@ function QuickEntryCards({ onEnterWeaponCodes }: { onEnterWeaponCodes: () => voi
               </Text>
             </VStack>
           </HStack>
-          <ChevronRight size={22} color="#98DDD0" />
+          <ChevronRight size={22} color={primaryColor} />
         </HStack>
       </EntryCard>
     </SimpleGrid>
@@ -295,6 +300,8 @@ function QuickEntryCards({ onEnterWeaponCodes }: { onEnterWeaponCodes: () => voi
 function WeaponCodeDetail({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const cardBg = useColorModeValue("gray.50", "#1a1a1a");
@@ -359,8 +366,8 @@ function WeaponCodeDetail({ onBack }: { onBack: () => void }) {
   return (
     <VStack align="stretch" spacing={5}>
       <HStack spacing={3} cursor="pointer" onClick={onBack} _hover={{ opacity: 0.7 }}>
-        <ArrowLeft size={18} color="#98DDD0" />
-        <Text color="teal.400" fontWeight="medium" fontSize="sm">{t("deltaForce.back")}</Text>
+        <ArrowLeft size={18} color={primaryColor} />
+        <Text color={primaryColor} fontWeight="medium" fontSize="sm">{t("deltaForce.back")}</Text>
       </HStack>
 
       <SectionCard title={t("deltaForce.weaponCodePlatforms")}>
@@ -375,8 +382,8 @@ function WeaponCodeDetail({ onBack }: { onBack: () => void }) {
                   <Text color={textColor} fontWeight="bold" fontSize="md">{platform.name}</Text>
                 </HStack>
                 <HStack spacing={2}>
-                  <Text color="teal.400" fontSize="sm">{t("deltaForce.openPlatform")}</Text>
-                  <ExternalLink size={16} color="#98DDD0" />
+                  <Text color={primaryColor} fontSize="sm">{t("deltaForce.openPlatform")}</Text>
+                  <ExternalLink size={16} color={primaryColor} />
                 </HStack>
               </HStack>
             </PlatformCard>
@@ -391,6 +398,24 @@ export default function DeltaForcePage() {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const [showWeaponDetail, setShowWeaponDetail] = useState(false);
+  const [pageTransitionEnabled, setPageTransitionEnabled] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("nexbox_page_transition_enabled");
+    if (stored !== null) {
+      setPageTransitionEnabled(stored === "true");
+    }
+
+    const handler = () => {
+      const updated = localStorage.getItem("nexbox_page_transition_enabled");
+      if (updated !== null) {
+        setPageTransitionEnabled(updated === "true");
+      }
+    };
+
+    window.addEventListener("page-transition-setting-changed", handler);
+    return () => window.removeEventListener("page-transition-setting-changed", handler);
+  }, []);
 
   const pageVariants = {
     initial: { opacity: 0, x: 20 },
@@ -404,32 +429,58 @@ export default function DeltaForcePage() {
     duration: 0.3,
   };
 
-  return (
-    <Box pt={8} pb={8}>
-      <AnimatePresence mode="wait">
+  const renderContent = () => {
+    if (pageTransitionEnabled) {
+      return (
+        <AnimatePresence mode="wait">
+          {showWeaponDetail ? (
+            <motion.div
+              key="detail"
+              initial="initial"
+              animate="in"
+              exit="out"
+              variants={pageVariants}
+              transition={pageTransition}
+            >
+              <Heading size="lg" color={headingColor} mb={6}>
+                {t("deltaForce.weaponCodes")}
+              </Heading>
+              <WeaponCodeDetail onBack={() => setShowWeaponDetail(false)} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="main"
+              initial="initial"
+              animate="in"
+              exit="out"
+              variants={pageVariants}
+              transition={pageTransition}
+            >
+              <Heading size="lg" color={headingColor} mb={6}>
+                {t("deltaForce.title")}
+              </Heading>
+
+              <VStack align="stretch" spacing={5}>
+                <PasswordCard />
+                <QuickEntryCards onEnterWeaponCodes={() => setShowWeaponDetail(true)} />
+              </VStack>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      );
+    }
+
+    return (
+      <>
         {showWeaponDetail ? (
-          <motion.div
-            key="detail"
-            initial="initial"
-            animate="in"
-            exit="out"
-            variants={pageVariants}
-            transition={pageTransition}
-          >
+          <div key="detail">
             <Heading size="lg" color={headingColor} mb={6}>
               {t("deltaForce.weaponCodes")}
             </Heading>
             <WeaponCodeDetail onBack={() => setShowWeaponDetail(false)} />
-          </motion.div>
+          </div>
         ) : (
-          <motion.div
-            key="main"
-            initial="initial"
-            animate="in"
-            exit="out"
-            variants={pageVariants}
-            transition={pageTransition}
-          >
+          <div key="main">
             <Heading size="lg" color={headingColor} mb={6}>
               {t("deltaForce.title")}
             </Heading>
@@ -438,19 +489,15 @@ export default function DeltaForcePage() {
               <PasswordCard />
               <QuickEntryCards onEnterWeaponCodes={() => setShowWeaponDetail(true)} />
             </VStack>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
+    );
+  };
 
-      {/* <Box mt={6}>
-        <HStack spacing={2} mb={3}>
-          <Music size={18} color="#98DDD0" />
-          <Text color={headingColor} fontWeight="semibold" fontSize="md">
-            {t("musicPlayer.title")}
-          </Text>
-        </HStack>
-        <MusicPlayer />
-      </Box> */}
+  return (
+    <Box pt={8} pb={8}>
+      {renderContent()}
     </Box>
   );
 }

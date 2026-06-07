@@ -1,0 +1,75 @@
+/* ============================
+   设置窗口 - 仅保留装饰和布局样式
+   组件样式已迁移至 Chakra UI
+   ============================ */
+
+.settings-window {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 拖拽区域 */
+.settings-drag-area {
+  height: 28px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+/* 背景装饰光球 */
+.settings-bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+.settings-bg-orb-1 {
+  width: 200px;
+  height: 200px;
+  top: -60px;
+  right: -40px;
+  background: radial-gradient(circle, rgba(106, 164, 56, 0.18) 0%, transparent 70%);
+  animation: orbFloat1 8s ease-in-out infinite;
+}
+.settings-bg-orb-2 {
+  width: 160px;
+  height: 160px;
+  bottom: -40px;
+  left: -30px;
+  background: radial-gradient(circle, rgba(139, 111, 71, 0.15) 0%, transparent 70%);
+  animation: orbFloat2 10s ease-in-out infinite;
+}
+@keyframes orbFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-10px, 15px) scale(1.1); }
+}
+@keyframes orbFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(10px, -12px) scale(1.08); }
+}
+
+/* 滚动区域 */
+.settings-window-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  z-index: 1;
+}
+.settings-window-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.settings-window-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-window-scroll::-webkit-scrollbar-thumb {
+  background: rgba(126, 211, 33, 0.2);
+  border-radius: 2px;
+}
+.settings-window-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(126, 211, 33, 0.35);
+}

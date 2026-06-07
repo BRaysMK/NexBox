@@ -42,8 +42,9 @@
         "settings": "Paramètres",
         "gpuRename": "Renommage GPU",
         "resolutionConverter": "Convertisseur de résolution",
-        "dlssPreset": "Préréglage DLSS Delta Force",
-        "epicFree": "Jeux gratuits Epic"
+        "dlssPreset": "Paramètres DLSS Delta Force",
+        "epicFree": "Jeux gratuits Epic",
+        "lobby": "Multijoueur"
     },
   "optimization": {
     "pageTitle": "Optimiser",
@@ -99,8 +100,44 @@
       "adminRequired": "Administrateur requis",
       "options": {
             "11.9gb": "11.9 GB",
+            "13.9gb": "13.9 GB",
             "15.9gb": "15.9 GB"
         }
+    },
+    "powerManagement": {
+      "title": "Gestion de l'alimentation",
+      "description": "Importer et activer des plans d'alimentation optimisés pour de meilleures performances de jeu",
+      "currentPlan": "Plan d'alimentation actuel",
+      "builtinPlans": "Plans d'alimentation intégrés",
+      "systemPlans": "Plans d'alimentation système",
+      "import": "Importer",
+      "importAndActivate": "Importer et activer",
+      "activate": "Activer",
+      "importing": "Importation...",
+      "activating": "Activation...",
+      "importSuccess": "Plan d'alimentation importé avec succès",
+      "importFailed": "Échec de l'importation du plan d'alimentation",
+      "activateSuccess": "Plan d'alimentation activé",
+      "activateFailed": "Échec de l'activation du plan d'alimentation",
+      "alreadyImported": "Importé",
+      "notImported": "Non importé",
+      "active": "Actif",
+      "loadFailed": "Échec du chargement des plans d'alimentation",
+      "refresh": "Actualiser",
+      "tipTitle": "Conseil",
+      "tip": "Les plans d'alimentation affectent la consommation et les performances du système. Les plans haute performance sont recommandés pour le jeu. L'activation nécessite des privilèges d'administrateur.",
+      "importAll": "Tout importer",
+      "importingAll": "Importation en lot...",
+      "importAllSuccess": "{{count}} plan(s) d'alimentation importé(s) avec succès",
+      "importAllFailed": "{{count}} plan(s) d'alimentation n'ont pas pu être importé(s)",
+      "allImported": "Tous les plans d'alimentation ont déjà été importés",
+      "delete": "Supprimer",
+      "deleting": "Suppression...",
+      "deleteSuccess": "Plan d'alimentation supprimé",
+      "deleteFailed": "Échec de la suppression du plan d'alimentation",
+      "deleteConfirmTitle": "Confirmer la suppression",
+      "deleteConfirmText": "Voulez-vous vraiment supprimer le plan d'alimentation \"{{name}}\" du système ?",
+      "cancel": "Annuler"
     },
     "memoryCleanup": {
         "title": "Nettoyage de la mémoire",
@@ -156,9 +193,7 @@
   "home": {
     "title": "Bienvenue sur NexBox",
     "welcome": "Bienvenue",
-    "quickTools": "Outils rapides",
     "customHtml": "Widget personnalisé",
-    "addQuickTools": "Cliquez pour ajouter des outils rapides",
     "selectTools": "Sélectionner les outils rapides",
     "edit": "Modifier",
     "reset": "Réinitialiser",
@@ -168,7 +203,9 @@
     "htmlPlaceholder": "Entrez le code HTML ici...",
     "resetToDefault": "Réinitialiser par défaut",
     "save": "Enregistrer",
+    "pickImage": "Choisir une image",
     "todayPopularity": "Popularité du jour",
+    "randomQuote": "Citation aléatoire",
     "announcement": "Annonce",
     "announcementList": "Liste des annonces",
     "loading": "Chargement...",
@@ -255,7 +292,8 @@
       "openTool": "Ouvrir l'outil",
       "comingSoon": "Bientôt disponible",
       "download": "Cliquez pour télécharger",
-      "run": "Cliquez pour exécuter"
+      "run": "Cliquez pour exécuter",
+      "website": "Visiter le site"
     },
     "messages": {
       "installerStarted": "Installateur démarré",
@@ -271,6 +309,13 @@
     },
     "ariaLabels": {
       "refreshToolList": "Actualiser la liste des outils"
+    },
+    "customAdded": {
+      "add": "Ajouter l'outil manuellement",
+      "remove": "Supprimer l'ajout manuel",
+      "addSuccess": "Outil ajouté",
+      "addFailed": "Échec de l'ajout",
+      "removed": "Ajout manuel supprimé"
     }
   },
   "displayFilter": {
@@ -294,7 +339,18 @@
     "tip": "Le filtre ajuste la courbe gamma de l'affichage pour des effets de couleur. Les paramètres sont automatiquement restaurés lorsque l'application se ferme.",
     "customFilter": "Filtre personnalisé",
     "saveSuccess": "Paramètres sauvegardés et appliqués",
-    "saveAndApply": "Sauvegarder et appliquer"
+    "saveAndApply": "Sauvegarder et appliquer",
+    "iccProfiles": "Profils de couleur ICC",
+    "importIcc": "Importer un fichier ICC",
+    "importIccSuccess": "Fichier ICC importé",
+    "importIccFailed": "Échec de l'importation ICC",
+    "iccApplied": "Profil ICC appliqué",
+    "deleteIcc": "Supprimer",
+    "deleteIccConfirm": "Confirmer la suppression de ce préréglage ICC ?",
+    "deleteIccSuccess": "Préréglage ICC supprimé",
+    "noIccProfiles": "Aucun profil ICC importé",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
   },
   "floatingNav": {
     "title": "Boîte de navigation flottante",
@@ -350,6 +406,7 @@
     "statusEnabled": "Activé",
     "statusDisabled": "Désactivé",
     "displayItems": "Éléments affichés",
+    "hardwareMonitor": "Moniteur matériel",
     "cpuUsage": "Utilisation CPU",
     "gpuTemp": "Température GPU",
     "gpuUsage": "Utilisation GPU",
@@ -358,10 +415,17 @@
     "custom": "Personnalisé",
     "customText": "Texte personnalisé",
     "color": "Couleur",
+    "addCustomItem": "Ajouter un élément",
     "appearance": "Paramètres d'apparence",
+    "styles": "Style de superposition",
+    "styles.default": "Par défaut",
+    "styles.dynamicIsland": "Île dynamique",
     "opacity": "Opacité",
     "startFailed": "Échec du démarrage",
-    "stopFailed": "Échec de l'arrêt"
+    "stopFailed": "Échec de l'arrêt",
+    "hotkey": "Raccourci clavier",
+    "toggleHotkey": "Activer/Désactiver l'overlay",
+    "hotkeySaved": "Raccourci enregistré"
   },
   "deltaForce": {
     "title": "Delta Force",
@@ -373,7 +437,7 @@
     "officialMaps": "Cartes officielles",
     "openOfficialMap": "Outil de carte officiel de Delta Force",
     "mapToolDesc": "Points de butin, points d'apparition, points d'extraction et coordonnées des boss",
-    "dlssPreset": "Préréglage de modèle DLSS",
+    "dlssPreset": "Préréglage DLSS",
     "dlssPresetDesc": "Sélectionnez un préréglage de modèle de réseau neuronal DLSS, différents préréglages pour différents scénarios",
     "loading": "Chargement...",
     "noPassword": "Aucune donnée de mot de passe disponible",
@@ -412,8 +476,44 @@
     "wallpaperDesc": "Téléchargement de fonds d'écran HD officiels"
   },
   "dlssPreset": {
-    "title": "Préréglage de modèle DLSS Delta Force",
-    "description": "Changer les préréglages de modèle de réseau neuronal DLSS pour optimiser les graphismes du jeu"
+    "title": "Paramètres DLSS Delta Force",
+    "description": "Changer les préréglages de modèle de réseau neuronal DLSS pour optimiser les graphismes du jeu",
+    "presetLabel": "Préréglage DLSS",
+    "driverVersion": "Version du pilote",
+    "noGpuFound": "Aucun GPU détecté"
+  },
+  "dlssIndicator": {
+    "title": "Indicateur DLSS",
+    "description": "Afficher le badge DLSS dans le coin inférieur gauche de l'écran de jeu",
+    "enabled": "Indicateur DLSS activé",
+    "disabled": "Indicateur DLSS désactivé",
+    "note": "Nécessite des privilèges administrateur, redémarrer le jeu pour appliquer"
+  },
+  "dlssLock": {
+    "title": "Verrouillage DLSS",
+    "description": "Verrouiller la configuration du pilote nvidiaProfileInspector",
+    "enabled": "Configuration DLSS verrouillée",
+    "disabled": "Configuration DLSS déverrouillée",
+    "note": "Empêche les mises à jour de pilote d'écraser les paramètres"
+  },
+  "dlssPresetTable": {
+    "title": "Tableau de référence des préréglages",
+    "description": "Préréglages DLSS recommandés pour différentes séries de GPU",
+    "gpuSeries": "GPU",
+    "recommendedPreset": "Prérégl.",
+    "driverVersion": "Pilote",
+    "scenario": "Type",
+    "rtx20Series": "Série RTX 20",
+    "rtx30Series": "Série RTX 30",
+    "rtx4060Ti": "RTX 4060 Ti",
+    "rtx50HighFps": "RTX 50 Haut FPS",
+    "rtx50HighQuality": "RTX 50 Haute Qualité",
+    "presetK": "K",
+    "presetM": "M",
+    "typeGeneralEnhance": "Amélioration générale",
+    "typePerformanceFirst": "Performance prioritaire",
+    "typeQualityEnhance": "Amélioration qualité",
+    "typeFpsPriority": "Priorité FPS"
   },
   "musicPlayer": {
     "title": "Musique Shushu",
@@ -456,6 +556,8 @@
     "backedUp": "Sauvegardé",
     "notBackedUp": "Non sauvegardé",
     "selectTarget": "Sélectionner le GPU cible",
+    "lowEnd": "GPU bas de gamme",
+    "highEnd": "GPU haut de gamme",
     "selectPlaceholder": "Veuillez sélectionner un GPU",
     "selectGpu": "Veuillez d'abord sélectionner un GPU",
     "apply": "Appliquer",
@@ -471,7 +573,10 @@
     "title": "Convertisseur de résolution",
     "selectResolution": "Sélectionner la résolution",
     "resolution1K": "1K (1080p)",
+    "resolution1_5K": "1.5K",
     "resolution2K": "2K (1440p)",
+    "resolution2_5K": "2.5K",
+    "resolution3K": "3K",
     "resolution4K": "4K (2160p)",
     "aspectRatios": "Ratios d'aspect",
     "ratio169": "16:9",
@@ -589,14 +694,29 @@
     "schulteStart": "Demarrer",
     "schulteCurrent": "Cible actuelle",
     "schulteComplete": "Termine !",
-    "schulteAverage": "Moyenne par nombre",
-    "schultePlayAgain": "Rejouer"
+    "schulteAverage": "Moyenne par numéro",
+    "schultePlayAgain": "Rejouer",
+    "cpsTitle": "Test CPS",
+    "cpsDesc": "Clique aussi vite que possible dans le temps imparti !",
+    "cpsSelectTime": "Choisir le temps",
+    "cpsSeconds": "s",
+    "cpsStart": "Commencer",
+    "cpsClicks": "Clics",
+    "cpsResult": "CPS",
+    "cpsInstruction": "Clique aussi vite que possible dans le temps imparti",
+    "cpsInstruction2": "Teste ta vitesse de clic !",
+    "cpsClickHere": "Clique ici !",
+    "cpsClickCount": "Clics: {{clicks}}",
+    "cpsTotal": "Total {{clicks}} clics / {{time}}s",
+    "cpsAgain": "Réessayer"
   },
   "settings": {
     "general": "Général",
     "appearance": "Apparence",
+    "hotkeys": "Hotkeys",
     "network": "Réseau",
     "sponsor": "Soutenir",
+    "navigation": "Navigation",
     "about": "À propos",
     "generalSettings": {
       "title": "Paramètres généraux",
@@ -611,15 +731,18 @@
         "de": "Allemand"
       },
       "homepage": "Page d'accueil",
-      "quickToolsLabel": "Outils rapides",
-      "quickToolsDesc": "Afficher le panneau des outils rapides sur la page d'accueil",
+      
       "customHtmlLabel": "Zone personnalisée",
       "customHtmlDesc": "Afficher une zone HTML personnalisable sur la page d'accueil",
       "todayPopularityLabel": "Popularité du jour",
       "todayPopularityDesc": "Afficher le nombre aléatoire de popularité du jour sur la page d'accueil",
       "announcementLabel": "Annonces",
       "announcementDesc": "Afficher la carte d'annonces sur la page d'accueil",
-      "splash": "Écran de démarrage",
+      "randomQuoteLabel": "Citation aléatoire",
+      "randomQuoteDesc": "Afficher la carte de citation aléatoire sur la page d'accueil",
+      "gameLauncherLabel": "Lancement rapide",
+      "gameLauncherDesc": "Afficher la carte de lancement rapide sur la page d'accueil",
+      "splash": "Animation",
       "splashLogoLabel": "Logo de démarrage",
       "splashLogoDesc": "Personnalisez l'image du logo affichée au démarrage",
       "splashLogoReset": "Réinitialiser",
@@ -643,7 +766,13 @@
       "closeBehaviorLabel": "Lors du clic sur fermer",
       "closeBehaviorDesc": "Choisir l'action lors du clic sur le bouton fermer",
       "closeDirectly": "Fermer directement",
-      "minimizeToTray": "Minimiser dans la barre"
+      "minimizeToTray": "Minimiser dans la barre",
+      "sidebarShowLabel": "Étiquettes de la barre latérale",
+      "sidebarShowLabelDesc": "Choisir le mode d'affichage de la barre latérale",
+      "sidebarShowLabelNoText": "Icônes uniquement",
+      "sidebarShowLabelWithText": "Icônes et texte",
+      "pageTransitionLabel": "Animation de transition de page",
+      "pageTransitionDesc": "Désactiver pour supprimer les animations de transition"
     },
     "appearanceSettings": {
       "title": "Paramètres d'apparence",
@@ -761,6 +890,7 @@
   "search": {
     "placeholder": "Rechercher...",
     "noResults": "Aucun résultat trouvé",
+    "typeToSearch": "Tapez pour rechercher...",
     "categories": {
       "pages": "Pages",
       "builtinTools": "Outils intégrés",
@@ -779,5 +909,18 @@
   "tray": {
     "show": "Afficher la fenêtre principale",
     "exit": "Quitter"
+  },
+  "hotkeySettings": {
+    "title": "Paramètres des raccourcis",
+    "overlay": "Overlay",
+    "overlayToggle": "Activer/Désactiver le panneau overlay",
+    "overlayToggleDesc": "Utiliser un raccourci pour afficher ou masquer le panneau overlay",
+    "crosshair": "Réticule",
+    "crosshairToggle": "Activer/Désactiver le réticule",
+    "crosshairToggleDesc": "Utiliser un raccourci pour afficher ou masquer le réticule",
+    "filter": "Filtre",
+    "filterToggle": "Activer/Désactiver le filtre",
+    "filterToggleDesc": "Utiliser un raccourci pour activer ou désactiver le filtre d'affichage",
+    "saved": "Raccourci enregistré"
   }
 }

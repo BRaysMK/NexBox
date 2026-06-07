@@ -22,12 +22,12 @@ const theme = extendTheme({
     },
   },
   styles: {
-    global: {
+    global: (props: any) => ({
       body: {
-        bg: "#000000",
-        color: "#e0e0e0",
+        bg: props.colorMode === 'dark' ? '#000000' : '#f7fafc',
+        color: props.colorMode === 'dark' ? '#e0e0e0' : '#1a202c',
       },
-    },
+    }),
   },
   components: {
     Button: {
@@ -40,9 +40,9 @@ const theme = extendTheme({
       baseStyle: {
         container: {
           borderRadius: "xl",
-          bg: "#111111",
-          borderColor: "#333333",
-          borderWidth: "1px",
+          bg: undefined,
+          borderColor: undefined,
+          borderWidth: undefined,
         },
       },
     },

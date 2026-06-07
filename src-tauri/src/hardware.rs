@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use thiserror::Error;
 use sysinfo::System;
 
@@ -24,9 +25,18 @@ pub struct CpuInfo {
     pub load_percentage: Option<u16>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum GpuVendor {
+    NVIDIA,
+    AMD,
+    Intel,
+    Unknown,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GpuInfo {
     pub name: String,
+    pub vendor: GpuVendor,
     pub memory_gb: f64,
     pub driver_version: String,
     pub temperature: Option<u32>,
@@ -67,6 +77,7 @@ struct PsProcessor {
 struct PsVideoController {
     Name: String,
     DriverVersion: Option<String>,
+    AdapterRAM: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,12 +117,28 @@ struct StaticHardwareInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct GpuStaticInfo {
     name: String,
+    vendor: GpuVendor,
     memory_gb: f64,
     driver_version: String,
 }
 
 static STATIC_HARDWARE_CACHE: Mutex<Option<StaticHardwareInfo>> = Mutex::new(None);
 static CPU_SYSTEM: Mutex<Option<System>> = Mutex::new(None);
+
+fn detect_gpu_vendor(name: &str) -> GpuVendor {
+    let name_lower = name.to_lowercase();
+    if name_lower.contains("nvidia") || name_lower.contains("geforce") || 
+       name_lower.contains("gtx") || name_lower.contains("rtx") {
+        GpuVendor::NVIDIA
+    } else if name_lower.contains("amd") || name_lower.contains("radeon") || 
+              name_lower.contains("rx ") {
+        GpuVendor::AMD
+    } else if name_lower.contains("intel") {
+        GpuVendor::Intel
+    } else {
+        GpuVendor::Unknown
+    }
+}
 
 fn run_powershell<T: for<'de> Deserialize<'de>>(command: &str) -> Result<Vec<T>, HardwareError> {
     let mut cmd = Command::new("powershell");
@@ -190,6 +217,7 @@ fn get_nvidia_gpus_with_nvml() -> Result<Vec<GpuInfo>, HardwareError> {
 
         gpus.push(GpuInfo {
             name,
+            vendor: GpuVendor::NVIDIA,
             memory_gb,
             driver_version,
             temperature,
@@ -239,6 +267,7 @@ fn get_nvidia_gpus_with_smi() -> Vec<GpuInfo> {
                     );
                     gpus.push(GpuInfo {
                         name,
+                        vendor: GpuVendor::NVIDIA,
                         memory_gb,
                         driver_version,
                         temperature,
@@ -255,19 +284,26 @@ fn get_nvidia_gpus_with_smi() -> Vec<GpuInfo> {
 fn get_gpus_from_wmi() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
 
-    let gpu_cmd = "Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion | ConvertTo-Json -Compress";
+    let gpu_cmd = "Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM | ConvertTo-Json -Compress";
     if let Ok(gpu_results) = run_powershell::<PsVideoController>(gpu_cmd) {
         for g in gpu_results {
-            // 过滤掉集成显卡
             let name_lower = g.Name.to_lowercase();
             let is_integrated = name_lower.contains("intel")
                 && (g.Name.contains("HD") || g.Name.contains("UHD") || g.Name.contains("Iris"));
 
             if !is_integrated {
-                log::info!("独立显卡(WMI): {}", g.Name);
+                let vendor = detect_gpu_vendor(&g.Name);
+                let memory_gb = g.AdapterRAM
+                    .map(|ram| ram as f64 / (1024.0 * 1024.0 * 1024.0))
+                    .unwrap_or(0.0);
+                
+                log::info!("显卡(WMI): {}, 厂商: {:?}, 显存: {:.1}GB", 
+                          g.Name, vendor, memory_gb);
+                
                 gpus.push(GpuInfo {
                     name: g.Name.clone(),
-                    memory_gb: 0.0,
+                    vendor,
+                    memory_gb,
                     driver_version: g.DriverVersion.unwrap_or_else(|| "未知".to_string()),
                     temperature: None,
                     usage: None,
@@ -326,19 +362,27 @@ fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<u32>, Optio
 // 获取CPU的动态数据（占用）- 使用 sysinfo 库
 fn get_cpu_dynamic_info() -> Option<u16> {
     use sysinfo::CpuRefreshKind;
+    use std::thread;
+    use std::time::Duration;
     
     let mut cpu_system = CPU_SYSTEM.lock().unwrap();
     
     if cpu_system.is_none() {
         let mut sys = System::new();
+        // 第一次刷新：初始化
+        sys.refresh_cpu_specifics(CpuRefreshKind::everything());
+        // 短暂等待，让 sysinfo 有时间采集第一个样本
+        thread::sleep(Duration::from_millis(50));
+        // 第二次刷新：获取准确的 CPU 使用率
         sys.refresh_cpu_specifics(CpuRefreshKind::everything());
         *cpu_system = Some(sys);
-        return Some(0);
+    } else {
+        // 正常情况下只需要刷新一次
+        let sys = cpu_system.as_mut().unwrap();
+        sys.refresh_cpu_specifics(CpuRefreshKind::everything());
     }
     
-    let sys = cpu_system.as_mut().unwrap();
-    sys.refresh_cpu_specifics(CpuRefreshKind::everything());
-    
+    let sys = cpu_system.as_ref().unwrap();
     let cpus = sys.cpus();
     if cpus.is_empty() {
         return None;
@@ -361,107 +405,132 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         }
     }
 
-    log::info!("开始获取静态硬件信息...");
+    log::info!("开始并行获取静态硬件信息...");
 
-    // 获取CPU信息（包括静态和初始动态数据）
-    let cpu_cmd = "Get-WmiObject Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L3CacheSize, LoadPercentage | ConvertTo-Json -Compress";
-    let cpu_results: Vec<PsProcessor> = run_powershell(cpu_cmd)?;
-    log::info!("获取到{}个CPU信息", cpu_results.len());
-    let cpu = cpu_results
-        .first()
-        .map(|p| {
-            log::info!("CPU型号: {}", p.Name);
-            log::info!(
-                "核心数: {}, 线程数: {}",
-                p.NumberOfCores,
-                p.NumberOfLogicalProcessors
-            );
-            log::info!("最大时钟速度: {} MHz", p.MaxClockSpeed);
-            log::info!("CPU占用: {:?}%", p.LoadPercentage);
-            CpuInfo {
-                name: p.Name.clone(),
-                cores: p.NumberOfCores,
-                threads: p.NumberOfLogicalProcessors,
-                max_clock_speed: p.MaxClockSpeed,
-                l3_cache_size: p.L3CacheSize.unwrap_or(0),
-                load_percentage: p.LoadPercentage,
+    let errors: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let errors_cpu = errors.clone();
+    let cpu_handle = thread::spawn(move || {
+        let cpu_cmd = "Get-WmiObject Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L3CacheSize, LoadPercentage | ConvertTo-Json -Compress";
+        match run_powershell::<PsProcessor>(cpu_cmd) {
+            Ok(cpu_results) => {
+                log::info!("获取到{}个CPU信息", cpu_results.len());
+                cpu_results.into_iter().next().map(|p| {
+                    log::info!("CPU型号: {}", p.Name);
+                    CpuInfo {
+                        name: p.Name,
+                        cores: p.NumberOfCores,
+                        threads: p.NumberOfLogicalProcessors,
+                        max_clock_speed: p.MaxClockSpeed,
+                        l3_cache_size: p.L3CacheSize.unwrap_or(0),
+                        load_percentage: p.LoadPercentage,
+                    }
+                })
             }
-        })
-        .unwrap_or_else(|| CpuInfo {
-            name: "未知CPU".to_string(),
-            cores: 0,
-            threads: 0,
-            max_clock_speed: 0,
-            l3_cache_size: 0,
-            load_percentage: None,
-        });
+            Err(e) => {
+                if let Ok(mut errs) = errors_cpu.lock() {
+                    errs.push(format!("CPU: {}", e));
+                }
+                None
+            }
+        }
+    });
 
-    // 获取GPU信息
-    let gpu = get_gpu_info();
-    let gpu_static: Vec<GpuStaticInfo> = gpu
-        .iter()
-        .map(|g| GpuStaticInfo {
-            name: g.name.clone(),
+    let gpu_handle = thread::spawn(move || {
+        let gpu = get_gpu_info();
+        gpu.into_iter().map(|g| GpuStaticInfo {
+            name: g.name,
+            vendor: g.vendor,
             memory_gb: g.memory_gb,
-            driver_version: g.driver_version.clone(),
-        })
-        .collect();
+            driver_version: g.driver_version,
+        }).collect::<Vec<GpuStaticInfo>>()
+    });
 
-    // 获取主板信息
-    let mobo_cmd = "Get-WmiObject Win32_BaseBoard | Select-Object Manufacturer, Product | ConvertTo-Json -Compress";
-    let mobo_results: Vec<PsBaseBoard> = run_powershell(mobo_cmd)?;
-    log::info!("获取到{}个主板信息", mobo_results.len());
-    let motherboard = mobo_results
-        .first()
-        .map(|m| {
-            log::info!("主板: {}", m.Product);
-            m.Product.clone()
-        })
-        .unwrap_or_else(|| "未知主板".to_string());
+    let errors_mobo = errors.clone();
+    let mobo_handle = thread::spawn(move || {
+        let mobo_cmd = "Get-WmiObject Win32_BaseBoard | Select-Object Manufacturer, Product | ConvertTo-Json -Compress";
+        match run_powershell::<PsBaseBoard>(mobo_cmd) {
+            Ok(results) => {
+                log::info!("获取到{}个主板信息", results.len());
+                results.into_iter().next().map(|m| {
+                    log::info!("主板: {}", m.Product);
+                    m.Product
+                })
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_mobo.lock() {
+                    errs.push(format!("主板: {}", e));
+                }
+                None
+            }
+        }
+    });
 
-    // 获取内存信息
-    let mem_cmd = "Get-WmiObject Win32_PhysicalMemory | Select-Object Manufacturer, PartNumber, Capacity, Speed, BankLabel | ConvertTo-Json -Compress";
-    let mem_results: Vec<PsPhysicalMemory> = run_powershell(mem_cmd)?;
-    log::info!("获取到{}个内存条信息", mem_results.len());
-    let mut memory = Vec::new();
-    for mem in mem_results {
-        let capacity_gb = mem.Capacity as f64 / (1024.0 * 1024.0 * 1024.0);
-        let memory_info = MemoryInfo {
-            manufacturer: mem.Manufacturer.unwrap_or_else(|| "未知".to_string()),
-            part_number: mem
-                .PartNumber
-                .unwrap_or_else(|| "未知".to_string())
-                .trim()
-                .to_string(),
-            capacity_gb,
-            speed_mhz: mem.Speed.unwrap_or(0),
-            bank_label: mem.BankLabel.unwrap_or_else(|| "未知".to_string()),
-        };
-        log::info!(
-            "内存: {} {} {}GB {}MHz {}",
-            memory_info.manufacturer,
-            memory_info.part_number,
-            memory_info.capacity_gb,
-            memory_info.speed_mhz,
-            memory_info.bank_label
-        );
-        memory.push(memory_info);
+    let errors_mem = errors.clone();
+    let mem_handle = thread::spawn(move || {
+        let mem_cmd = "Get-WmiObject Win32_PhysicalMemory | Select-Object Manufacturer, PartNumber, Capacity, Speed, BankLabel | ConvertTo-Json -Compress";
+        match run_powershell::<PsPhysicalMemory>(mem_cmd) {
+            Ok(results) => {
+                log::info!("获取到{}个内存条信息", results.len());
+                results.into_iter().map(|mem| {
+                    let capacity_gb = mem.Capacity as f64 / (1024.0 * 1024.0 * 1024.0);
+                    MemoryInfo {
+                        manufacturer: mem.Manufacturer.unwrap_or_else(|| "未知".to_string()),
+                        part_number: mem.PartNumber.unwrap_or_else(|| "未知".to_string()).trim().to_string(),
+                        capacity_gb,
+                        speed_mhz: mem.Speed.unwrap_or(0),
+                        bank_label: mem.BankLabel.unwrap_or_else(|| "未知".to_string()),
+                    }
+                }).collect::<Vec<MemoryInfo>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_mem.lock() {
+                    errs.push(format!("内存: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
+    let errors_disk = errors.clone();
+    let disk_handle = thread::spawn(move || {
+        let disk_cmd = "Get-WmiObject Win32_DiskDrive | Select-Object Model, Size | ConvertTo-Json -Compress";
+        match run_powershell::<PsDiskDrive>(disk_cmd) {
+            Ok(results) => {
+                log::info!("获取到{}个硬盘信息", results.len());
+                results.into_iter().map(|d| {
+                    let size_gb = d.Size / (1024 * 1024 * 1024);
+                    format!("{} ({}GB)", d.Model, size_gb)
+                }).collect::<Vec<String>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_disk.lock() {
+                    errs.push(format!("硬盘: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
+    let cpu = cpu_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| CpuInfo {
+        name: "未知CPU".to_string(),
+        cores: 0,
+        threads: 0,
+        max_clock_speed: 0,
+        l3_cache_size: 0,
+        load_percentage: None,
+    });
+
+    let gpu_static = gpu_handle.join().unwrap_or_else(|_| Vec::new());
+    let motherboard = mobo_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| "未知主板".to_string());
+    let memory = mem_handle.join().unwrap_or_else(|_| Vec::new());
+    let disk = disk_handle.join().unwrap_or_else(|_| Vec::new());
+
+    if let Ok(errs) = errors.lock() {
+        for e in errs.iter() {
+            log::warn!("硬件获取警告: {}", e);
+        }
     }
-
-    // 获取硬盘信息
-    let disk_cmd =
-        "Get-WmiObject Win32_DiskDrive | Select-Object Model, Size | ConvertTo-Json -Compress";
-    let disk_results: Vec<PsDiskDrive> = run_powershell(disk_cmd)?;
-    log::info!("获取到{}个硬盘信息", disk_results.len());
-    let disk: Vec<String> = disk_results
-        .iter()
-        .map(|d| {
-            let size_gb = d.Size / (1024 * 1024 * 1024);
-            let disk_info = format!("{} ({}GB)", d.Model, size_gb);
-            log::info!("硬盘: {}", disk_info);
-            disk_info
-        })
-        .collect();
 
     let static_info = StaticHardwareInfo {
         cpu,
@@ -471,13 +540,12 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         disk,
     };
 
-    // 缓存静态硬件信息
     {
         let mut cache = STATIC_HARDWARE_CACHE.lock().unwrap();
         *cache = Some(static_info.clone());
     }
 
-    log::info!("静态硬件信息获取完成");
+    log::info!("静态硬件信息并行获取完成");
     Ok(static_info)
 }
 
@@ -503,6 +571,7 @@ pub fn get_hardware_info() -> Result<HardwareInfo, HardwareError> {
             let (temp, usage) = gpu_dynamic.get(i).copied().unwrap_or((None, None));
             GpuInfo {
                 name: gs.name.clone(),
+                vendor: gs.vendor.clone(),
                 memory_gb: gs.memory_gb,
                 driver_version: gs.driver_version.clone(),
                 temperature: temp,

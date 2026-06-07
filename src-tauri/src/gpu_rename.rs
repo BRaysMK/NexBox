@@ -24,6 +24,7 @@ pub struct GpuRenameResult {
 pub struct GpuOption {
     pub id: String,
     pub name: String,
+    pub category: String,
 }
 
 fn get_backup_path() -> Result<PathBuf, String> {
@@ -73,28 +74,55 @@ fn find_gpu_registry_keys() -> Result<Vec<(RegKey, String)>, String> {
                 .map_err(|e| format!("打开设备键失败: {}", e))?;
             let key_path = vendor_key_name.clone() + "\\" + &device_key_name;
             
+            // 排除 USB 控制器等其他带 NVIDIA 标识的非显卡设备
+            // 路径格式：VEN_10DE&DEV_XXXX...，10DE 是 NVIDIA 的 PCI 厂商 ID
+            if !vendor_key_name.to_uppercase().contains("VEN_10DE") {
+                continue;
+            }
+            
+            // 排除关键词：USB控制器等非显卡设备即使带 NVIDIA 标识也要跳过
+            let exclude_keywords = ["usb", "controller", "控制器", "host", "xhci", "ehci", "uhci"];
+            
             let mut is_nvidia_gpu = false;
+            let mut is_excluded = false;
             
             if let Ok(device_desc) = device_key.get_value::<String, _>("DeviceDesc") {
                 let device_desc_lower = device_desc.to_lowercase();
-                if device_desc_lower.contains("nvidia") || 
+                // 先检查是否命中排除词
+                for &kw in &exclude_keywords {
+                    if device_desc_lower.contains(kw) {
+                        is_excluded = true;
+                        break;
+                    }
+                }
+                if !is_excluded && (device_desc_lower.contains("nvidia") || 
                    device_desc_lower.contains("geforce") || 
                    device_desc_lower.contains("gtx") ||
-                   device_desc_lower.contains("rtx") {
+                   device_desc_lower.contains("rtx")) {
                     is_nvidia_gpu = true;
                 }
             }
             
-            if !is_nvidia_gpu {
+            if !is_nvidia_gpu && !is_excluded {
                 if let Ok(friendly_name) = device_key.get_value::<String, _>("FriendlyName") {
                     let friendly_name_lower = friendly_name.to_lowercase();
-                    if friendly_name_lower.contains("nvidia") || 
+                    for &kw in &exclude_keywords {
+                        if friendly_name_lower.contains(kw) {
+                            is_excluded = true;
+                            break;
+                        }
+                    }
+                    if !is_excluded && (friendly_name_lower.contains("nvidia") || 
                        friendly_name_lower.contains("geforce") || 
                        friendly_name_lower.contains("gtx") ||
-                       friendly_name_lower.contains("rtx") {
+                       friendly_name_lower.contains("rtx")) {
                         is_nvidia_gpu = true;
                     }
                 }
+            }
+            
+            if is_excluded {
+                continue;
             }
             
             if is_nvidia_gpu {
@@ -156,24 +184,54 @@ try {{
     if (Test-Path $pciPath) {{
         $vendors = Get-ChildItem $pciPath
         foreach ($vendor in $vendors) {{
+            # 只处理 NVIDIA 设备（VEN_10DE），排除 USB 控制器等其他带 NVIDIA 标识的设备
+            if ($vendor.PSChildName -notmatch "VEN_10DE") {{
+                continue
+            }}
             $devices = Get-ChildItem $vendor.PSPath
             foreach ($device in $devices) {{
                 $isNvidia = $false
+                $isExcluded = $false
                 $keyPath = $device.PSPath
+                
+                # 排除关键词：USB控制器等非显卡设备
+                $excludeKeywords = @("usb", "controller", "host", "xhci", "ehci", "uhci")
                 
                 try {{
                     $deviceDesc = (Get-ItemProperty -Path $keyPath -Name "DeviceDesc" -ErrorAction SilentlyContinue).DeviceDesc
-                    if ($deviceDesc -and ($deviceDesc -match "NVIDIA|GeForce|GTX|RTX")) {{
+                    # 先检查排除词
+                    if ($deviceDesc) {{
+                        foreach ($kw in $excludeKeywords) {{
+                            if ($deviceDesc -match [regex]::Escape($kw)) {{
+                                $isExcluded = $true
+                                break
+                            }}
+                        }}
+                    }}
+                    if (-not $isExcluded -and $deviceDesc -and ($deviceDesc -match "NVIDIA|GeForce|GTX|RTX")) {{
                         $isNvidia = $true
                         Write-Host "找到NVIDIA显卡(DeviceDesc): $($device.PSChildName)"
                     }}
                     
-                    if (-not $isNvidia) {{
+                    if (-not $isNvidia -and -not $isExcluded) {{
                         $friendlyName = (Get-ItemProperty -Path $keyPath -Name "FriendlyName" -ErrorAction SilentlyContinue).FriendlyName
-                        if ($friendlyName -and ($friendlyName -match "NVIDIA|GeForce|GTX|RTX")) {{
+                        if ($friendlyName) {{
+                            foreach ($kw in $excludeKeywords) {{
+                                if ($friendlyName -match [regex]::Escape($kw)) {{
+                                    $isExcluded = $true
+                                    break
+                                }}
+                            }}
+                        }}
+                        if (-not $isExcluded -and $friendlyName -and ($friendlyName -match "NVIDIA|GeForce|GTX|RTX")) {{
                             $isNvidia = $true
                             Write-Host "找到NVIDIA显卡(FriendlyName): $($device.PSChildName)"
                         }}
+                    }}
+                    
+                    if ($isExcluded) {{
+                        Write-Host "跳过非显卡设备: $($device.PSChildName)"
+                        continue
                     }}
                     
                     if ($isNvidia) {{
@@ -340,17 +398,67 @@ pub async fn get_gpu_info() -> Result<GpuInfo, String> {
 #[tauri::command]
 pub async fn get_gpu_options() -> Result<Vec<GpuOption>, String> {
     Ok(vec![
+        // 低端显卡
+        GpuOption {
+            id: "gtx650".to_string(),
+            name: "NVIDIA GeForce GTX 650".to_string(),
+            category: "low-end".to_string(),
+        },
         GpuOption {
             id: "gtx750".to_string(),
             name: "NVIDIA GeForce GTX 750".to_string(),
+            category: "low-end".to_string(),
         },
         GpuOption {
             id: "gtx750ti".to_string(),
             name: "NVIDIA GeForce GTX 750 Ti".to_string(),
+            category: "low-end".to_string(),
         },
         GpuOption {
             id: "gtx1050".to_string(),
             name: "NVIDIA GeForce GTX 1050".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "rx460".to_string(),
+            name: "AMD Radeon RX 460".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "rx560".to_string(),
+            name: "AMD Radeon RX 560".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "r7240".to_string(),
+            name: "AMD Radeon R7 240".to_string(),
+            category: "low-end".to_string(),
+        },
+        // 高端显卡
+        GpuOption {
+            id: "rtx4080".to_string(),
+            name: "NVIDIA GeForce RTX 4080".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rtx4090".to_string(),
+            name: "NVIDIA GeForce RTX 4090".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rtx5080".to_string(),
+            name: "NVIDIA GeForce RTX 5080".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rtx5090".to_string(),
+            name: "NVIDIA GeForce RTX 5090".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx9060xt".to_string(),
+            name: "AMD Radeon RX 9060 XT".to_string(),
+            category: "high-end".to_string(),
         },
     ])
 }

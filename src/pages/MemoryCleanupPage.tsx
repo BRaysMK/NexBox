@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
+import { useThemeColor } from "@/contexts/theme-color-context";
 
 interface MemoryData {
   physical_total: number;
@@ -46,6 +47,7 @@ function formatMemory(mb: number): string {
 export default function MemoryCleanupPage() {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
+  const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -196,7 +198,7 @@ export default function MemoryCleanupPage() {
         boxShadow="md"
       >
         <HStack mb={4} spacing={3}>
-          <Box color="teal.400">{icon}</Box>
+          <Box color={themeConfig.primaryColor}>{icon}</Box>
           <Text fontWeight="bold" color={headingColor} fontSize="md">
             {title}
           </Text>
@@ -289,7 +291,8 @@ export default function MemoryCleanupPage() {
 
             <VStack spacing={3} w="full" mt={2}>
               <Button
-                colorScheme="teal"
+                bg={themeConfig.primaryColor}
+                color={getContrastTextColor()}
                 size="lg"
                 w="full"
                 maxW="320px"
@@ -298,6 +301,14 @@ export default function MemoryCleanupPage() {
                 loadingText={t("optimization.memoryCleanup.cleaning")}
                 borderRadius="xl"
                 fontWeight="600"
+                _hover={{
+                  bg: themeConfig.primaryColor,
+                  filter: "brightness(0.9)",
+                }}
+                _active={{
+                  bg: themeConfig.primaryColor,
+                  filter: "brightness(0.8)",
+                }}
               >
                 {t("optimization.memoryCleanup.cleanAll")}
               </Button>

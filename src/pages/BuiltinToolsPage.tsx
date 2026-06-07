@@ -101,7 +101,7 @@ function ToolCard({ tool }: { tool: ToolItem }) {
         minH="200px"
         cursor="pointer"
         border="2px solid"
-        borderColor="transparent"
+        borderColor={cardBorder}
         transition="all 0.2s"
         _hover={{
           borderColor: tool.color,

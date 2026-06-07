@@ -1,0 +1,179 @@
+/* ============================
+   全局 EasyTier 高级配置 - CSS覆盖
+   Ant Design 组件内部样式需通过 CSS 类覆盖
+   ============================ */
+
+/* ===== 亮色模式 ===== */
+.chakra-ui-light .advanced-config-collapse .ant-collapse-content {
+  border-top-color: rgba(0, 0, 0, 0.1) !important;
+  background: transparent !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-collapse-content-box {
+  padding: 16px !important;
+  background: transparent !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-collapse-header-text {
+  color: #1a202c !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-collapse-arrow {
+  color: #718096 !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-switch {
+  background: #cbd5e0 !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-switch-checked {
+  background: rgba(126, 211, 33, 0.8) !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-input,
+.chakra-ui-light .advanced-config-collapse .ant-input-number,
+.chakra-ui-light .advanced-config-collapse .ant-input-affix-wrapper {
+  background: #edf2f7 !important;
+  border-color: #e2e8f0 !important;
+  color: #1a202c !important;
+  border-radius: 6px !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-input-number-input {
+  color: #1a202c !important;
+  background: transparent !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-input::placeholder,
+.chakra-ui-light .advanced-config-collapse .ant-input-number-input::placeholder {
+  color: #a0aec0 !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-input-affix-wrapper {
+  border-color: #e2e8f0 !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-input-number-handler-wrap {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-input-number-handler {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #4a5568 !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-form-item-label > label {
+  color: #2d3748 !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-form-item
+  .ant-form-item-label
+  > label.ant-form-item-required:not(.ant-form-item-required-mark-optional)::before {
+  color: #e53e3e !important;
+}
+.chakra-ui-light .advanced-config-collapse .ant-form-item
+  .ant-form-item-label
+  > label.ant-form-item-required:not(.ant-form-item-required-mark-optional)::after {
+  color: #e53e3e !important;
+}
+
+/* ===== 暗色模式 ===== */
+.chakra-ui-dark .advanced-config-collapse .ant-collapse-content {
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+  background: transparent !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-collapse-content-box {
+  padding: 16px !important;
+  background: transparent !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-collapse-header-text {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-collapse-arrow {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-switch {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-switch-checked {
+  background: rgba(126, 211, 33, 0.8) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-input,
+.chakra-ui-dark .advanced-config-collapse .ant-input-number,
+.chakra-ui-dark .advanced-config-collapse .ant-input-affix-wrapper {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  border-radius: 6px !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-input-number-input {
+  color: rgba(255, 255, 255, 0.9) !important;
+  background: transparent !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-input::placeholder,
+.chakra-ui-dark .advanced-config-collapse .ant-input-number-input::placeholder {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-input-affix-wrapper {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-input-number-handler-wrap {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-input-number-handler {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-form-item-label > label {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+.chakra-ui-dark .advanced-config-collapse .ant-form-item
+  .ant-form-item-label
+  > label.ant-form-item-required:not(.ant-form-item-required-mark-optional)::before {
+  color: #fc8181 !important;
+}
+
+/* ===== 布局样式（不依赖主题） ===== */
+.global-advanced-config-panel {
+  padding: 0;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.advanced-config-collapse {
+  background: transparent !important;
+  border: none !important;
+}
+
+.advanced-config-collapse .ant-collapse-item {
+  border-radius: 8px !important;
+  margin-bottom: 12px !important;
+  overflow: hidden !important;
+}
+
+.advanced-config-collapse .ant-collapse-header {
+  padding: 12px 16px !important;
+  background: transparent !important;
+}
+
+.advanced-config-collapse .ant-collapse-content-box {
+  padding: 16px !important;
+}
+
+.advanced-config-collapse .ant-form-item {
+  margin-bottom: 16px !important;
+}
+
+/* 滚动条样式 */
+.global-advanced-config-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.chakra-ui-dark .global-advanced-config-panel::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+.chakra-ui-light .global-advanced-config-panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 3px;
+}
+.chakra-ui-dark .global-advanced-config-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+.chakra-ui-light .global-advanced-config-panel::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+.chakra-ui-dark .global-advanced-config-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+.chakra-ui-light .global-advanced-config-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}

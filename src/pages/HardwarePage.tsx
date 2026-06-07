@@ -393,6 +393,7 @@ export default function HardwarePage() {
 
   const gpuDisplayInfos: DisplayInfo[][] = hardwareInfo.gpu.map((gpu) => [
     { name: t("hardware.model"), value: gpu.name },
+    { name: t("hardware.vendor"), value: gpu.vendor },
     { name: t("hardware.memory"), value: `${gpu.memory_gb.toFixed(1)} GB` },
     { name: t("hardware.driverVersion"), value: gpu.driver_version },
   ]);

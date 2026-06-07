@@ -1,0 +1,130 @@
+/* 顶部拖拽区域 */
+.lobby-form-drag-area {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  z-index: 10;
+  -webkit-app-region: drag;
+  app-region: drag;
+  pointer-events: auto;
+}
+
+/* 确保交互元素不受拖拽影响 */
+.lobby-form-drag-area ~ * button,
+.lobby-form-drag-area ~ * input,
+.lobby-form-drag-area ~ * select,
+.lobby-form-drag-area ~ * textarea,
+.lobby-form-drag-area ~ * a {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.lobby-form-card {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 滚动提示 - 悬浮在底部 */
+.scroll-hint-floating {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  margin-left: -24px;
+  z-index: 1000;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: floatingPulse 2s ease-in-out infinite;
+}
+
+@keyframes floatingPulse {
+  0%, 100% {
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  }
+}
+
+.lobby-form-title {
+  text-align: center;
+  margin-bottom: 20px !important;
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.lobby-form-card::-webkit-scrollbar {
+  display: none;
+}
+
+.lobby-form-card {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 网络环境提示 */
+.lobby-form-network-tip {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.network-tip-icon {
+  flex-shrink: 0;
+  animation: tipPulse 2s ease-in-out infinite;
+  margin-top: 2px;
+}
+
+@keyframes tipPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.network-tip-content {
+  flex: 1;
+}
+
+.network-tip-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
+}
+
+.network-tip-text {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.network-tip-text strong {
+  font-weight: 700;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .lobby-form-card {
+    padding: 24px 20px;
+  }
+
+  .lobby-form-title {
+    font-size: 18px !important;
+  }
+}

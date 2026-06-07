@@ -1,6 +1,7 @@
-import { Box, HStack, Text, Portal, useColorModeValue } from "@chakra-ui/react";
+import { Box, HStack, Text, useColorModeValue } from "@chakra-ui/react";
 import { LuChevronDown, LuCheck } from "react-icons/lu";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 interface CustomSelectProps {
   value: string;
@@ -8,6 +9,7 @@ interface CustomSelectProps {
   options: { value: string; label: string }[];
   width?: string;
   placeholder?: string;
+  direction?: "up" | "down";
 }
 
 export function CustomSelect({ 
@@ -15,12 +17,14 @@ export function CustomSelect({
   onChange, 
   options, 
   width = "140px",
-  placeholder 
+  placeholder,
+  direction = "down"
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [dropdownPos, setDropdownPos] = useState<{ top?: number; bottom?: number; left: number; width: number } | null>(null);
   const selectRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const scrollTopRef = useRef(0);
   
   const bgColor = useColorModeValue("gray.50", "#111111");
   const borderColor = useColorModeValue("gray.300", "#333333");
@@ -49,30 +53,87 @@ export function CustomSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const updatePosition = () => {
-    if (selectRef.current) {
+  // Set initial position when opening
+  useEffect(() => {
+    if (isOpen && selectRef.current) {
       const rect = selectRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
+      if (direction === "up") {
+        setDropdownPos({
+          bottom: window.innerHeight - rect.top + 4,
+          left: rect.left,
+          width: rect.width,
+        });
+      } else {
+        setDropdownPos({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width,
+        });
+      }
+    } else {
+      setDropdownPos(null);
     }
-  };
+  }, [isOpen, direction]);
 
-  const toggleSelect = () => {
-    if (!isOpen) {
-      updatePosition();
+  // Follow scroll container via direct DOM manipulation (no re-render)
+  useEffect(() => {
+    if (!isOpen || !selectRef.current) return;
+
+    // Find nearest scrollable ancestor
+    let scrollContainer: HTMLElement | null = selectRef.current.parentElement;
+    while (scrollContainer) {
+      const style = window.getComputedStyle(scrollContainer);
+      if (style.overflowY === "auto" || style.overflowY === "scroll") {
+        break;
+      }
+      scrollContainer = scrollContainer.parentElement;
     }
-    setIsOpen(!isOpen);
-  };
+    if (!scrollContainer) return;
+
+    scrollTopRef.current = scrollContainer.scrollTop;
+
+    const onScroll = () => {
+      const el = dropdownRef.current;
+      if (!el || !scrollContainer) return;
+      const offset = scrollTopRef.current - scrollContainer.scrollTop;
+      el.style.transform = `translateY(${offset}px)`;
+    };
+
+    const onResize = () => {
+      const el = dropdownRef.current;
+      if (!el || !selectRef.current || !scrollContainer) return;
+      const rect = selectRef.current.getBoundingClientRect();
+      el.style.transform = "";
+      scrollTopRef.current = scrollContainer.scrollTop;
+      if (direction === "up") {
+        el.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+        el.style.top = "";
+      } else {
+        el.style.top = `${rect.bottom + 4}px`;
+        el.style.bottom = "";
+      }
+      el.style.left = `${rect.left}px`;
+      el.style.width = `${rect.width}px`;
+    };
+
+    scrollContainer.addEventListener("scroll", onScroll);
+    window.addEventListener("resize", onResize);
+    return () => {
+      scrollContainer?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [isOpen, direction]);
+
+  const toggleSelect = useCallback(() => {
+    setIsOpen((prev) => !prev);
+  }, []);
 
   const selectedOption = options.find((opt) => opt.value === value);
   const displayLabel = selectedOption?.label || placeholder || "";
 
   return (
     <>
-      <Box ref={selectRef} position="relative" w={width}>
+      <Box ref={selectRef} w={width}>
         <Box
           bg={bgColor}
           border="1px solid"
@@ -101,21 +162,22 @@ export function CustomSelect({
         </Box>
       </Box>
 
-      {isOpen && (
-        <Portal>
+      {isOpen && dropdownPos && createPortal(
           <Box
             ref={dropdownRef}
             position="fixed"
-            top={dropdownPosition.top}
-            left={dropdownPosition.left}
-            width={dropdownPosition.width}
+            top={dropdownPos.top}
+            bottom={dropdownPos.bottom}
+            left={dropdownPos.left}
+            width={`${dropdownPos.width}px`}
             bg={dropdownBg}
             border="1px solid"
             borderColor={dropdownBorder}
             borderRadius="lg"
             boxShadow="2xl"
             zIndex={99999}
-            overflow="hidden"
+            maxH="280px"
+            overflowY="auto"
           >
             {options.map((option) => (
               <Box
@@ -138,9 +200,9 @@ export function CustomSelect({
                 </HStack>
               </Box>
             ))}
-          </Box>
-        </Portal>
-      )}
+          </Box>,
+          document.body
+        )}
     </>
   );
 }

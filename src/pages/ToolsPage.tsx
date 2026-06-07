@@ -10,13 +10,14 @@ import {
   VStack,
   HStack,
   Divider,
-  Progress,
   useToast,
   IconButton,
+  Tooltip,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { LiquidGlassToolCard } from "@/components/special/liquid-glass-tool-card";
+import { useThemeColor } from "@/contexts/theme-color-context";
 import {
   Cpu,
   Zap,
@@ -24,22 +25,26 @@ import {
   Layers,
   Network,
   TrendingUp,
-  Download,
   Play,
   Circle,
   Monitor,
   Bot,
-  RefreshCw,
   Volume2,
   Trash2,
+  Plus,
+  X,
+  ExternalLink,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { Image } from "@chakra-ui/react";
-import { useThemeColor } from "@/contexts/theme-color-context";
+import { LazyStore } from "@tauri-apps/plugin-store";
+
+const SETTINGS_FILE = "settings.json";
+const store = new LazyStore(SETTINGS_FILE);
+const CUSTOM_TOOLS_KEY = "custom-added-tools";
 
 const toolIcons = import.meta.glob<{ default: string }>(
   "@/assets/tools/*.{png,jpg,jpeg,svg,webp}",
@@ -65,19 +70,8 @@ interface ThirdPartyTool {
   tool_type: string;
   download_url: string;
   file_name: string;
+  website_url: string | null;
   check_executable: string | null;
-}
-
-interface ToolWithStatus {
-  tool: ThirdPartyTool;
-  installed: boolean;
-}
-
-interface ToolStatus {
-  installed: boolean;
-  checking: boolean;
-  downloading: boolean;
-  downloadProgress: number;
 }
 
 const handleToolClick = async (toolId: string) => {
@@ -126,6 +120,7 @@ function ToolCardComponent({
   const iconColor = useColorModeValue("gray.700", "#cccccc");
   const titleColor = useColorModeValue("gray.800", "#e0e0e0");
   const descColor = useColorModeValue("gray.500", "#888888");
+  const { getActiveColor } = useThemeColor();
 
   return (
     <LiquidGlassToolCard
@@ -164,35 +159,38 @@ function ToolCardComponent({
 function ThirdPartyToolCard({
   tool,
   initialInstalled,
-  onStatusChange,
-  onInstallComplete,
   categoryLabels,
+  customToolPath,
+  onAddCustomTool,
+  onRemoveCustomTool,
 }: {
   tool: ThirdPartyTool;
   initialInstalled: boolean;
-  onStatusChange?: (id: string, status: ToolStatus) => void;
-  onInstallComplete?: () => void;
   categoryLabels: Record<string, string>;
+  customToolPath?: string;
+  onAddCustomTool?: (toolId: string, filePath: string) => void;
+  onRemoveCustomTool?: (toolId: string) => void;
 }) {
   const { t } = useTranslation();
-  const [status, setStatus] = useState<ToolStatus>({
-    installed: initialInstalled,
-    checking: false,
-    downloading: false,
-    downloadProgress: 0,
-  });
+  const [installed, setInstalled] = useState(initialInstalled);
   const toast = useToast();
 
   const iconColor = useColorModeValue("gray.700", "#cccccc");
   const titleColor = useColorModeValue("gray.800", "#e0e0e0");
   const descColor = useColorModeValue("gray.500", "#888888");
+  const { getActiveColor } = useThemeColor();
+
+  const isCustomAdded = !!customToolPath;
+  const isInstalled = installed || isCustomAdded;
+
+  useEffect(() => {
+    setInstalled(initialInstalled);
+  }, [initialInstalled]);
 
   const getToolIcon = (toolId: string) => {
     switch (toolId) {
       case "memreduct":
         return Zap;
-      case "windows-core-optimizer":
-        return Cpu;
       case "optimizer":
         return TrendingUp;
       case "cpu-z":
@@ -217,110 +215,13 @@ function ThirdPartyToolCard({
   const toolIconImage = getToolIconImage(tool.id);
   const FallbackIcon = getToolIcon(tool.id);
 
-  useEffect(() => {
-    const unlisten = listen<{ tool_id: string; progress: number }>(
-      "tool-download-progress",
-      (event) => {
-        const { tool_id, progress } = event.payload;
-        if (tool_id === tool.id) {
-          const newStatus = { ...status, downloadProgress: progress };
-          setStatus(newStatus);
-          onStatusChange?.(tool.id, newStatus);
-        }
-      },
-    );
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [tool.id, status, onStatusChange]);
-
-  const updateStatus = (newStatus: ToolStatus) => {
-    setStatus(newStatus);
-    onStatusChange?.(tool.id, newStatus);
-  };
-
-  const startInstallationPolling = () => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const installed = await invoke<boolean>("check_tool_installed", { toolId: tool.id });
-        if (installed) {
-          clearInterval(pollInterval);
-          const newStatus = {
-            installed: true,
-            checking: false,
-            downloading: false,
-            downloadProgress: 100,
-          };
-          updateStatus(newStatus);
-          toast({
-            title: t("tools.messages.installComplete"),
-            description: t("tools.messages.installCompleteDesc"),
-            status: "success",
-            duration: 3000,
-            isClosable: true,
-          });
-          onInstallComplete?.();
-        }
-      } catch (error) {
-        console.error("Failed to check tool installed:", error);
-      }
-    }, 3000);
-
-    setTimeout(() => {
-      clearInterval(pollInterval);
-    }, 300000);
-  };
-
-  const handleDownload = async () => {
-    updateStatus({ ...status, downloading: true, downloadProgress: 0 });
-
-    try {
-      const filePath = await invoke<string>("download_tool", { toolId: tool.id });
-
-      if (tool.tool_type === "install") {
-        await invoke("open_tool_installer", { filePath });
-        updateStatus({ ...status, downloading: false });
-        toast({
-          title: t("tools.messages.installerStartedAlt"),
-          description: t("tools.messages.installerStartedDescAlt"),
-          status: "info",
-          duration: 5000,
-          isClosable: true,
-        });
-        startInstallationPolling();
-      } else {
-        toast({
-          title: t("tools.messages.downloadComplete"),
-          description: t("tools.messages.downloadCompleteDesc"),
-          status: "success",
-          duration: 3000,
-          isClosable: true,
-        });
-        const newStatus = {
-          installed: true,
-          checking: false,
-          downloading: false,
-          downloadProgress: 100,
-        };
-        updateStatus(newStatus);
-        onInstallComplete?.();
-      }
-    } catch (error) {
-      console.error("Failed to download tool:", error);
-      toast({
-        title: t("tools.messages.downloadFailed"),
-        description: String(error),
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
-      updateStatus({ ...status, downloading: false });
-    }
-  };
-
   const handleRun = async () => {
     try {
-      await invoke("run_tool", { toolId: tool.id });
+      if (customToolPath) {
+        await invoke("launch_game", { gamePath: customToolPath });
+      } else {
+        await invoke("run_tool", { toolId: tool.id });
+      }
     } catch (error) {
       console.error("Failed to run tool:", error);
       toast({
@@ -333,26 +234,86 @@ function ThirdPartyToolCard({
     }
   };
 
+  const handleOpenWebsite = async () => {
+    if (!tool.website_url) return;
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(tool.website_url);
+    } catch (error) {
+      console.error("Failed to open website:", error);
+    }
+  };
+
   const handleClick = () => {
-    if (status.downloading || status.checking) return;
-    if (status.installed) {
+    if (isInstalled) {
       handleRun();
     } else {
-      handleDownload();
+      handleOpenWebsite();
     }
+  };
+
+  const handleCustomButtonClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const selectedPath = await invoke<string | null>("select_exe_file");
+      if (selectedPath) {
+        onAddCustomTool?.(tool.id, selectedPath);
+        toast({
+          title: t("tools.customAdded.addSuccess"),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to select file:", error);
+      toast({
+        title: t("tools.customAdded.addFailed"),
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleRemoveCustom = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRemoveCustomTool?.(tool.id);
+    toast({
+      title: t("tools.customAdded.removed"),
+      status: "info",
+      duration: 2000,
+      isClosable: true,
+    });
   };
 
   return (
     <LiquidGlassToolCard
       size="md"
-      cursor={status.downloading || status.checking ? "wait" : "pointer"}
+      cursor="pointer"
       onClick={handleClick}
       position="relative"
     >
-      {status.installed && (
+      {isInstalled && !isCustomAdded && (
         <Box position="absolute" top={3} right={3}>
           <Icon as={Circle} boxSize={3} fill="green.400" color="green.400" />
         </Box>
+      )}
+
+      {isCustomAdded && (
+        <HStack position="absolute" top={2} right={2} spacing={1}>
+          <Icon as={Circle} boxSize={3} fill="green.400" color="green.400" />
+          <Tooltip label={t("tools.customAdded.remove")} placement="top">
+            <IconButton
+              aria-label={t("tools.customAdded.remove")}
+              icon={<Icon as={X} boxSize={3} />}
+              size="xs"
+              variant="ghost"
+              colorScheme="red"
+              onClick={handleRemoveCustom}
+            />
+          </Tooltip>
+        </HStack>
       )}
 
       <VStack align="start" spacing={3}>
@@ -395,34 +356,14 @@ function ThirdPartyToolCard({
             {t(`tools.descriptions.${tool.id}`, tool.description)}
           </Text>
 
-          {status.downloading && (
-            <Box w="full">
-              <Progress
-                value={status.downloadProgress}
-                size="sm"
-                colorScheme="teal"
-                borderRadius="full"
-              />
-              <Text fontSize="xs" color={descColor} mt={1}>
-                {t("tools.status.downloading")} {status.downloadProgress}%
-              </Text>
-            </Box>
-          )}
-
-          {!status.downloading && !status.installed && !status.checking && (
-            <HStack spacing={1} color="teal.500">
-              <Icon as={Download} boxSize={3} />
-              <Text fontSize="xs">{t("tools.buttons.download")}</Text>
+          {!isInstalled && (
+            <HStack spacing={1} color={getActiveColor()}>
+              <Icon as={ExternalLink} boxSize={3} />
+              <Text fontSize="xs">{t("tools.buttons.website")}</Text>
             </HStack>
           )}
 
-          {!status.downloading && !status.installed && status.checking && (
-            <HStack spacing={1} color="gray.500">
-              <Text fontSize="xs">{t("tools.status.scanning")}</Text>
-            </HStack>
-          )}
-
-          {!status.downloading && status.installed && (
+          {isInstalled && (
             <HStack spacing={1} color="green.500">
               <Icon as={Play} boxSize={3} />
               <Text fontSize="xs">{t("tools.buttons.run")}</Text>
@@ -430,6 +371,30 @@ function ThirdPartyToolCard({
           )}
         </Box>
       </VStack>
+
+      {!isInstalled && (
+        <Tooltip
+          label={t("tools.customAdded.add")}
+          placement="top"
+        >
+          <IconButton
+            aria-label={t("tools.customAdded.add")}
+            icon={<Icon as={Plus} boxSize={3} />}
+            size="xs"
+            position="absolute"
+            bottom={3}
+            right={3}
+            borderRadius="full"
+            variant="outline"
+            colorScheme="gray"
+            bg="transparent"
+            _hover={{
+              bg: useColorModeValue("gray.100", "gray.700"),
+            }}
+            onClick={handleCustomButtonClick}
+          />
+        </Tooltip>
+      )}
     </LiquidGlassToolCard>
   );
 }
@@ -491,43 +456,59 @@ function ThirdPartyToolSection({
   activeCategory: string;
   categoryLabels: Record<string, string>;
 }) {
-  const { t } = useTranslation();
-  const { tools, refreshTools } = useAppStartup();
-  const [localStatus, setLocalStatus] = useState<Record<string, ToolStatus>>({});
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { tools, initTools } = useAppStartup();
+  const [customToolPaths, setCustomToolPaths] = useState<Record<string, string>>({});
 
   const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
   const dividerColor = useColorModeValue("gray.200", "#333333");
 
   useEffect(() => {
-    if (tools.length > 0) {
-      const map: Record<string, ToolStatus> = {};
-      for (const { tool, installed } of tools) {
-        map[tool.id] = {
-          installed,
-          checking: false,
-          downloading: false,
-          downloadProgress: 0,
-        };
-      }
-      setLocalStatus(map);
+    if (tools.length === 0) {
+      initTools();
     }
-  }, [tools]);
+  }, []);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refreshTools();
-    setTimeout(() => setIsRefreshing(false), 500);
-  };
+  useEffect(() => {
+    const loadCustomTools = async () => {
+      try {
+        const savedTools = await store.get<Record<string, string>>(CUSTOM_TOOLS_KEY);
+        if (savedTools && typeof savedTools === "object") {
+          setCustomToolPaths(savedTools);
+        }
+      } catch (error) {
+        console.error("Failed to load custom tools:", error);
+      }
+    };
+    loadCustomTools();
+  }, []);
+
+  const addCustomTool = useCallback(async (toolId: string, filePath: string) => {
+    setCustomToolPaths((prev) => {
+      const newPaths = { ...prev, [toolId]: filePath };
+      store.set(CUSTOM_TOOLS_KEY, newPaths);
+      store.save();
+      return newPaths;
+    });
+  }, []);
+
+  const removeCustomTool = useCallback(async (toolId: string) => {
+    setCustomToolPaths((prev) => {
+      const newPaths = { ...prev };
+      delete newPaths[toolId];
+      store.set(CUSTOM_TOOLS_KEY, newPaths);
+      store.save();
+      return newPaths;
+    });
+  }, []);
 
   const filteredTools =
     activeCategory === "all"
       ? tools
-      : tools.filter(({ tool }) => tool.category === activeCategory);
+      : tools.filter((tool) => tool.category === activeCategory);
 
   const sortedTools = [...filteredTools].sort((a, b) => {
-    const aInstalled = a.installed ? 1 : 0;
-    const bInstalled = b.installed ? 1 : 0;
+    const aInstalled = customToolPaths[a.id] ? 1 : 0;
+    const bInstalled = customToolPaths[b.id] ? 1 : 0;
     return bInstalled - aInstalled;
   });
 
@@ -535,23 +516,13 @@ function ThirdPartyToolSection({
 
   return (
     <Box mb={8}>
-      <HStack mb={4} spacing={3} justify="space-between">
-        <HStack spacing={3}>
-          <Text fontSize="lg" fontWeight="bold" color={sectionTitleColor}>
-            {title}
-          </Text>
-          <Badge fontSize="xs" colorScheme="gray">
-            {filteredTools.length}
-          </Badge>
-        </HStack>
-        <IconButton
-          aria-label={t("tools.ariaLabels.refreshToolList")}
-          icon={<Icon as={RefreshCw} boxSize={4} />}
-          size="sm"
-          variant="ghost"
-          onClick={handleRefresh}
-          isLoading={isRefreshing}
-        />
+      <HStack mb={4} spacing={3}>
+        <Text fontSize="lg" fontWeight="bold" color={sectionTitleColor}>
+          {title}
+        </Text>
+        <Badge fontSize="xs" colorScheme="gray">
+          {filteredTools.length}
+        </Badge>
       </HStack>
       <Divider borderColor={dividerColor} mb={4} />
       <Grid
@@ -562,16 +533,15 @@ function ThirdPartyToolSection({
         }}
         gap={4}
       >
-        {sortedTools.map(({ tool, installed }) => (
+        {sortedTools.map((tool) => (
           <ThirdPartyToolCard 
             key={tool.id} 
             tool={tool} 
-            initialInstalled={installed} 
-            onStatusChange={(id, status) => {
-              setLocalStatus(prev => ({ ...prev, [id]: status }));
-            }}
-            onInstallComplete={refreshTools}
-            categoryLabels={categoryLabels} 
+            initialInstalled={!!customToolPaths[tool.id]} 
+            categoryLabels={categoryLabels}
+            customToolPath={customToolPaths[tool.id]}
+            onAddCustomTool={addCustomTool}
+            onRemoveCustomTool={removeCustomTool}
           />
         ))}
       </Grid>

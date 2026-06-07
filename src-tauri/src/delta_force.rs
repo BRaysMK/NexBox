@@ -43,11 +43,22 @@ pub struct DLSSApplyResult {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DLSSPresetStatus {
+    pub preset: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct MapInfo {
     pub id: String,
     pub name: String,
     pub url: String,
     pub description: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct DLSSSettingsStatus {
+    pub dlss_indicator_enabled: bool,
+    pub dlss_lock_enabled: bool,
 }
 
 static DELTA_PASSWORD_CACHE: std::sync::Mutex<Option<(Vec<DeltaPasswordItem>, std::time::Instant)>> = std::sync::Mutex::new(None);
@@ -220,7 +231,7 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
         "M" => "13",
         _ => "11",
     };
-    
+
     let xml_content = format!(
         r#"<?xml version="1.0" encoding="utf-16"?>
 <ArrayOfProfile>
@@ -231,18 +242,6 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
     </Executeables>
     <Settings>
       <ProfileSetting>
-        <SettingNameInfo />
-        <SettingID>983226</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo />
-        <SettingID>1752079</SettingID>
-        <SettingValue>1073741824</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
         <SettingNameInfo>Vertical Sync Tear Control</SettingNameInfo>
         <SettingID>5912412</SettingID>
         <SettingValue>2525368439</SettingValue>
@@ -252,12 +251,6 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
         <SettingNameInfo>DLSS Model Preset Profile</SettingNameInfo>
         <SettingID>6505105</SettingID>
         <SettingValue>2</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo> </SettingNameInfo>
-        <SettingID>6710885</SettingID>
-        <SettingValue>0</SettingValue>
         <ValueType>Dword</ValueType>
       </ProfileSetting>
       <ProfileSetting>
@@ -285,12 +278,6 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
         <ValueType>Dword</ValueType>
       </ProfileSetting>
       <ProfileSetting>
-        <SettingNameInfo />
-        <SettingID>269308407</SettingID>
-        <SettingValue>Buffers=(Depth)</SettingValue>
-        <ValueType>String</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
         <SettingNameInfo>Flag to control smooth AFR behavior</SettingNameInfo>
         <SettingID>270198627</SettingID>
         <SettingValue>0</SettingValue>
@@ -299,18 +286,6 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
       <ProfileSetting>
         <SettingNameInfo>Override DLSSG mode</SettingNameInfo>
         <SettingID>271614616</SettingID>
-        <SettingValue>1</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>NVIDIA Predefined FXAA Usage</SettingNameInfo>
-        <SettingID>271895433</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>NVIDIA Predefined Ansel Usage</SettingNameInfo>
-        <SettingID>271965065</SettingID>
         <SettingValue>1</SettingValue>
         <ValueType>Dword</ValueType>
       </ProfileSetting>
@@ -327,27 +302,9 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
         <ValueType>Dword</ValueType>
       </ProfileSetting>
       <ProfileSetting>
-        <SettingNameInfo />
-        <SettingID>274606621</SettingID>
-        <SettingValue>4</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Do not display this profile in the Control Panel</SettingNameInfo>
-        <SettingID>275602687</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
         <SettingNameInfo>VRR requested state</SettingNameInfo>
         <SettingID>278196727</SettingID>
         <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Override DLSS-SR performance mode</SettingNameInfo>
-        <SettingID>279951208</SettingID>
-        <SettingValue>3</SettingValue>
         <ValueType>Dword</ValueType>
       </ProfileSetting>
       <ProfileSetting>
@@ -369,12 +326,6 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
         <ValueType>Dword</ValueType>
       </ProfileSetting>
       <ProfileSetting>
-        <SettingNameInfo>Override scaling ratio for DLSS-SR</SettingNameInfo>
-        <SettingID>283385333</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
         <SettingNameInfo>Enable DLSS-SR override</SettingNameInfo>
         <SettingID>283385345</SettingID>
         <SettingValue>1</SettingValue>
@@ -386,36 +337,12 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
         <SettingValue>0</SettingValue>
         <ValueType>Dword</ValueType>
       </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Enable application for Optimus</SettingNameInfo>
-        <SettingID>284810369</SettingID>
-        <SettingValue>17</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Shim Rendering Mode Options per application for Optimus</SettingNameInfo>
-        <SettingID>284810372</SettingID>
-        <SettingValue>16777216</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo />
-        <SettingID>2156231208</SettingID>
-        <SettingValue>1</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo />
-        <SettingID>2966161525</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
     </Settings>
   </Profile>
 </ArrayOfProfile>"#,
         preset_value
     );
-    
+
     let mut bytes: Vec<u8> = vec![0xFF, 0xFE];
     bytes.extend(
         xml_content.encode_utf16().collect::<Vec<u16>>()
@@ -428,9 +355,9 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
 #[tauri::command]
 pub async fn apply_dlss_model_preset(preset: String) -> Result<DLSSApplyResult, String> {
     let npi_path = get_npi_path()?;
-    
+
     let config_content = generate_nip_config(&preset);
-    
+
     let temp_dir = std::env::temp_dir();
     let temp_path = temp_dir.join("delta_force_dlss.nip");
     fs::write(&temp_path, &config_content)
@@ -454,9 +381,20 @@ pub async fn apply_dlss_model_preset(preset: String) -> Result<DLSSApplyResult, 
     let _ = fs::remove_file(&temp_path);
     
     if output.status.success() {
+        // 保存当前应用的预设状态，供前端查询
+        let status = DLSSPresetStatus {
+            preset: preset.clone(),
+        };
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(parent_dir) = exe_path.parent() {
+                let status_path = parent_dir.join("delta_force_dlss_status.json");
+                let _ = fs::write(&status_path, serde_json::to_string(&status).unwrap_or_default());
+            }
+        }
+
         Ok(DLSSApplyResult {
             success: true,
-            message: format!("DLSS模型预设已切换为 Preset {}", preset),
+            message: format!("DLSS预设: {}", preset),
             preset,
         })
     } else {
@@ -487,4 +425,198 @@ pub async fn get_delta_maps() -> Result<Vec<MapInfo>, String> {
             description: "城市战斗地图".to_string(),
         },
     ])
+}
+
+fn get_dlss_indicator_registry_value() -> bool {
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+    let path = r"SOFTWARE\NVIDIA Corporation\Global\NGXCore";
+    if let Ok(key) = hklm.open_subkey(path) {
+        if let Ok(value) = key.get_value::<u32, _>("ShowDlssIndicator") {
+            return value != 0;
+        }
+    }
+    false
+}
+
+#[tauri::command]
+pub async fn toggle_dlss_indicator(enable: bool) -> Result<bool, String> {
+    let value = if enable { 1024 } else { 0 };
+
+    let script_content = format!(
+        "$p='HKLM:\\SOFTWARE\\NVIDIA Corporation\\Global\\NGXCore'; \
+         if(-not(Test-Path $p)){{New-Item -Path $p -Force|Out-Null}}; \
+         Set-ItemProperty -Path $p -Name 'ShowDlssIndicator' -Value {} -Type DWord",
+        value
+    );
+
+    let temp_dir = std::env::temp_dir();
+    let temp_script = temp_dir.join("dlss_indicator.ps1");
+    fs::write(&temp_script, &script_content)
+        .map_err(|e| format!("写入临时脚本失败: {}", e))?;
+
+    let script_path = temp_script.to_str().ok_or("路径编码错误")?;
+
+    let vbs_content = format!(
+        "Set objShell = CreateObject(\"Shell.Application\")\r\n\
+         objShell.ShellExecute \"powershell.exe\", \"-NoProfile -ExecutionPolicy Bypass -File \"\"{}\"\"\", \"\", \"runas\", 0",
+        script_path.replace('"', "\"\"")
+    );
+
+    let temp_vbs = temp_dir.join("dlss_indicator.vbs");
+    fs::write(&temp_vbs, &vbs_content)
+        .map_err(|e| format!("写入VBScript失败: {}", e))?;
+
+    let vbs_path = temp_vbs.to_str().ok_or("路径编码错误")?;
+
+    let output = Command::new("wscript.exe")
+        .arg(vbs_path)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行失败: {}", e))?;
+
+    let _ = fs::remove_file(&temp_script);
+    let _ = fs::remove_file(&temp_vbs);
+
+    if output.status.success() {
+        Ok(enable)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        Err(format!("设置DLSS指示器失败(需要管理员权限): {}", stderr))
+    }
+}
+
+#[tauri::command]
+pub async fn toggle_dlss_lock(enable: bool) -> Result<bool, String> {
+    let npi_path = get_npi_path()?;
+
+    let lock_config = generate_dlss_lock_config(enable);
+
+    let temp_dir = std::env::temp_dir();
+    let temp_path = temp_dir.join("delta_force_dlss_lock.nip");
+    fs::write(&temp_path, &lock_config)
+        .map_err(|e| format!("写入锁定配置文件失败: {}", e))?;
+
+    let npi_str = npi_path.to_str().ok_or("路径编码错误")?;
+    let temp_str = temp_path.to_str().ok_or("临时路径编码错误")?;
+
+    let ps_command = format!(
+        "Start-Process -FilePath '{}' -ArgumentList '-silentImport','\"{}\"' -Verb RunAs -Wait",
+        npi_str.replace('\'', "''"),
+        temp_str.replace('\'', "''")
+    );
+
+    let output = Command::new("powershell")
+        .args(["-WindowStyle", "Hidden", "-NoProfile", "-Command", &ps_command])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行失败: {}", e))?;
+
+    let _ = fs::remove_file(&temp_path);
+
+    if output.status.success() {
+        Ok(enable)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        Err(format!("DLSS锁定操作失败: {}", stderr))
+    }
+}
+
+fn generate_dlss_lock_config(lock_enabled: bool) -> Vec<u8> {
+    let lock_value = if lock_enabled { "1" } else { "0" };
+
+    let xml_content = format!(
+        r#"<?xml version="1.0" encoding="utf-16"?>
+<ArrayOfProfile>
+  <Profile>
+    <ProfileName>Delta Force DLSS Lock</ProfileName>
+    <Executeables>
+      <string>deltaforceclient-win64-shipping.exe</string>
+    </Executeables>
+    <Settings>
+      <ProfileSetting>
+        <SettingNameInfo />
+        <SettingID>275602687</SettingID>
+        <SettingValue>{}</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Override DLSS-SR presets</SettingNameInfo>
+        <SettingID>283385331</SettingID>
+        <SettingValue>11</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Enable DLSS-SR override</SettingNameInfo>
+        <SettingID>283385345</SettingID>
+        <SettingValue>1</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+    </Settings>
+  </Profile>
+</ArrayOfProfile>"#,
+        lock_value
+    );
+
+    let mut bytes: Vec<u8> = vec![0xFF, 0xFE];
+    bytes.extend(
+        xml_content.encode_utf16().collect::<Vec<u16>>()
+            .iter()
+            .flat_map(|&c| c.to_le_bytes())
+    );
+    bytes
+}
+
+#[tauri::command]
+pub async fn get_dlss_settings_status() -> Result<DLSSSettingsStatus, String> {
+    let dlss_indicator_enabled = get_dlss_indicator_registry_value();
+
+    let dlss_lock_enabled = false;
+
+    Ok(DLSSSettingsStatus {
+        dlss_indicator_enabled,
+        dlss_lock_enabled,
+    })
+}
+
+#[tauri::command]
+pub async fn get_dlss_preset_status() -> Result<DLSSPresetStatus, String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("获取程序路径失败: {}", e))?;
+    let parent_dir = exe_path.parent().ok_or("无法获取父目录")?;
+    let status_path = parent_dir.join("delta_force_dlss_status.json");
+
+    if status_path.exists() {
+        let content = fs::read_to_string(&status_path)
+            .map_err(|e| format!("读取状态文件失败: {}", e))?;
+        if let Ok(status) = serde_json::from_str::<DLSSPresetStatus>(&content) {
+            return Ok(status);
+        }
+    }
+
+    Ok(DLSSPresetStatus { preset: "K".to_string() })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decode_utf16_le(bytes: &[u8]) -> String {
+        if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+            // skip BOM
+            let rest = &bytes[2..];
+            let mut u16s = Vec::with_capacity(rest.len() / 2);
+            for chunk in rest.chunks(2) {
+                if chunk.len() == 2 {
+                    let lo = chunk[0] as u16;
+                    let hi = chunk[1] as u16;
+                    u16s.push(lo | (hi << 8));
+                }
+            }
+            String::from_utf16(&u16s).unwrap_or_default()
+        } else {
+            String::from_utf8(bytes.to_vec()).unwrap_or_default()
+        }
+    }
+
+
 }

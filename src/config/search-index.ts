@@ -15,6 +15,7 @@ import {
   MousePointerClick,
   Ban,
   Grid3X3,
+  MousePointer2,
   Monitor,
   Download,
   Play,
@@ -25,6 +26,9 @@ import {
   MemoryStick,
   Gauge,
   Gamepad2,
+  Battery,
+  HardDrive,
+  Users,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -116,6 +120,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["epic", "喜加一", "免费", "游戏", "free", "games", "白嫖"],
   },
   {
+    id: "lobby",
+    nameKey: "sidebar.lobby",
+    path: "/lobby",
+    icon: Users,
+    category: "page",
+    keywords: ["联机", "联机大厅", "MCTier", "大厅", "lobby", "multiplayer", "联机对战"],
+  },
+  {
     id: "sponsor",
     nameKey: "settings.sponsor",
     path: "/settings",
@@ -172,14 +184,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["分辨率", "换算", "resolution", "converter", "比例"],
   },
   {
-    id: "dlss-preset",
-    nameKey: "sidebar.dlssPreset",
-    path: "/dlss-preset",
-    icon: Zap,
-    category: "builtin-tool",
-    keywords: ["dlss", "预设", "preset", "三角洲", "delta", "force", "nvidia", "模型"],
-  },
-  {
+      id: "dlss-preset",
+      nameKey: "sidebar.dlssPreset",
+      path: "/dlss-preset",
+      icon: Zap,
+      category: "builtin-tool",
+      keywords: ["dlss", "预设", "preset", "三角洲", "delta", "force", "nvidia", "模型"],
+    },
+    {
     id: "reaction-test",
     nameKey: "tests.reactionTitle",
     path: "/tests/reaction",
@@ -228,12 +240,12 @@ export const searchIndex: SearchItem[] = [
     keywords: ["舒尔特", "schulte", "方格", "专注", "测试"],
   },
   {
-    id: "windows-optimize",
-    nameKey: "optimization.windowsTitle",
-    path: "/optimize/windows",
-    icon: Monitor,
-    category: "optimization",
-    keywords: ["windows", "优化", "系统", "性能"],
+    id: "cps-test",
+    nameKey: "tests.cpsTitle",
+    path: "/tests/cps",
+    icon: MousePointer2,
+    category: "test",
+    keywords: ["手速", "cps", "click", "点击", "测试", "速度"],
   },
   {
     id: "memory-limit",
@@ -266,6 +278,22 @@ export const searchIndex: SearchItem[] = [
     icon: Trash2,
     category: "optimization",
     keywords: ["着色器", "缓存", "shader", "cache", "清理", "nvidia", "amd"],
+  },
+  {
+    id: "power-management",
+    nameKey: "optimization.powerManagement.title",
+    path: "/optimize/power-management",
+    icon: Battery,
+    category: "optimization",
+    keywords: ["电源", "管理", "power", "management", "电源计划", "高性能"],
+  },
+  {
+    id: "storage-clean",
+    nameKey: "storageClean.title",
+    path: "/optimize/storage-clean",
+    icon: HardDrive,
+    category: "optimization",
+    keywords: ["存储", "清理", "storage", "clean", "磁盘", "垃圾", "临时文件", "缓存"],
   },
 ];
 
