@@ -1,8 +1,12 @@
-{
+﻿{
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
     "description": "Plattformübergreifende Leistungsüberwachung (Tauri + Next.js + Sensordienst)"
+  },
+  "view": {
+    "grid": "Rasteransicht",
+    "list": "Listenansicht"
   },
   "onboarding": {
     "title": "Willkommen bei NexBox",
@@ -43,8 +47,7 @@
         "gpuRename": "GPU-Umbenennung",
         "resolutionConverter": "Auflösungskonverter",
         "dlssPreset": "Delta Force DLSS-Einstellungen",
-        "epicFree": "Epic Gratis-Spiele",
-        "lobby": "Mehrspieler"
+        "epicFree": "Epic Gratis-Spiele"
     },
   "optimization": {
     "pageTitle": "Optimieren",
@@ -81,6 +84,143 @@
       "memoryOptimizeComplete": "Abgeschlossen",
       "aceProcess": "ACE-Prozess",
       "powerPlan": "Energieplan"
+    },
+    "startupManager": {
+      "title": "Startup-Manager",
+      "description": "Systemstart-Elemente verwalten",
+      "scanError": "Fehler beim Scannen der Startelemente",
+      "deleteSuccess": "Gelöscht: {{name}}",
+      "deleteError": "Löschen fehlgeschlagen",
+      "locateError": "Datei konnte nicht gefunden werden",
+      "registryError": "Registrierung konnte nicht geöffnet werden",
+      "totalItems": "{{count}} Startelemente",
+      "refresh": "Aktualisieren",
+      "scanning": "Startelemente werden gescannt...",
+      "noItems": "Keine Startelemente gefunden",
+      "columnName": "Name",
+      "columnPath": "Pfad",
+      "columnActions": "Aktionen",
+      "locateFile": "Datei öffnen",
+      "findInRegistry": "In Registrierung suchen",
+      "delete": "Löschen",
+      "tipTitle": "💡 Tipp",
+      "tipDescription": "Der Startup-Manager hilft Ihnen, alle Autostart-Elemente Ihres Systems anzuzeigen und zu verwalten. Das Deaktivieren unnötiger Elemente kann die Systemstartzeit verkürzen. Gehen Sie vorsichtig vor, da einige Elemente für den normalen Systembetrieb erforderlich sein können."
+    },
+    "systemOptimize": {
+      "title": "Systemoptimierung",
+      "description": "Systemdienste und Datenschutzeinstellungen optimieren",
+      "loadFailed": "Status laden fehlgeschlagen",
+      "loading": "Aktuellen Status prüfen...",
+      "optimizing": "Optimiere...",
+      "restoring": "Stelle wieder her...",
+      "optimizeAll": {
+        "title": "Alle aktivieren",
+        "description": "Alle Schalter einschalten, um alle Optimierungen zu aktivieren",
+        "button": "Alle aktivieren"
+      },
+      "restore": {
+        "title": "Alle deaktivieren",
+        "description": "Alle Schalter ausschalten, um alle Optimierungen zu deaktivieren",
+        "button": "Alle deaktivieren"
+      },
+      "enabled": "Aktiviert",
+      "tweakList": "Optimierungsstatus",
+      "tweaks": {
+        "master": "Nicht reagierende Programme automatisch beenden",
+        "removeMenuDelay": "Menüverzögerung reduzieren",
+        "disableNetworkThrottling": "Netzwerkdrosselung deaktivieren",
+        "disableErrorReporting": "Fehlerberichterstattung deaktivieren",
+        "disableCompatibilityAssistant": "Kompatibilitätsassistent deaktivieren",
+        "disablePrintService": "Druckdienst deaktivieren",
+        "disableFaxService": "Faxdienst deaktivieren",
+        "disableStickyKeys": "Klebrige Tasten deaktivieren",
+        "disableSmartScreen": "SmartScreen deaktivieren",
+        "disableSystemRestore": "Systemwiederherstellung deaktivieren",
+        "disableSuperfetch": "Superfetch/SysMain deaktivieren",
+        "disableHibernate": "Ruhezustand deaktivieren",
+        "disableNtfsTimestamp": "NTFS-Zeitstempel deaktivieren",
+        "disableTelemetryTasks": "Telemetrieaufgaben deaktivieren",
+        "disableMediaPlayerSharing": "Media Player-Freigabe deaktivieren",
+        "disableHomeGroup": "HomeGroup deaktivieren",
+        "disableSmb1": "SMB1-Protokoll deaktivieren",
+        "disableSmb2": "SMB2-Protokoll deaktivieren",
+        "disableCortana": "Cortana deaktivieren",
+        "disableTelemetryServices": "Telemetriedienste deaktivieren",
+        "disableNewsInterests": "Nachrichten und Interessen deaktivieren",
+        "disableStartMenuAds": "Startmenü-Werbung deaktivieren",
+        "disableAdvertisingId": "Werbe-ID deaktivieren",
+        "disableDiagnosticData": "Diagnosedatenerfassung deaktivieren",
+        "disableOfficeTelemetry": "Office-Telemetrie deaktivieren",
+        "disableFirefoxTelemetry": "Firefox-Telemetrie deaktivieren",
+        "disableChromeTelemetry": "Chrome-Telemetrie deaktivieren",
+        "disableNvidiaTelemetry": "NVIDIA-Telemetrie deaktivieren",
+        "disableVsTelemetry": "VS-Telemetrie deaktivieren",
+        "disableEdgeTelemetry": "Edge-Telemetrie deaktivieren",
+        "disableEdgeDiscoverBar": "Edge-Entdecken-Leiste deaktivieren",
+        "optimizeProcessCount": "Prozessaufteilungsschwelle optimieren",
+        "disableStoreSearchApp": "Store-Suche-App deaktivieren",
+        "disableStorePromotions": "Store-Werbung deaktivieren",
+        "disableStoreAutoUpdate": "Store-Auto-Update deaktivieren",
+        "disableSpotlightLock": "Spotlight-Sperrbildschirm deaktivieren",
+        "disableMyPeople": "Meine Personen deaktivieren",
+        "disableTPMCheck": "TPM-Prüfung deaktivieren",
+        "disableSensorServices": "Sensor-Dienste deaktivieren",
+        "removeCastToDevice": "Cast to Device entfernen",
+        "disableVBS": "Virtualisierungsbasierte Sicherheit deaktivieren",
+        "disableModernStandby": "Modernen Standby deaktivieren",
+        "enableGameMode": "Spielemodus aktivieren",
+        "disableXboxLive": "Xbox Live deaktivieren",
+        "disableGameBar": "Spieleleiste deaktivieren",
+        "disableWindowsInk": "Windows Ink deaktivieren",
+        "disableSpellCheck": "Rechtschreibprüfung deaktivieren",
+        "disableCloudClipboard": "Cloud-Zwischenablage deaktivieren",
+        "disableAppLaunchTracking": "App-Startverfolgung deaktivieren",
+        "disableFileSystemAccess": "Dateisystemzugriff deaktivieren",
+        "disableDocumentsAccess": "Dokumentenzugriff deaktivieren",
+        "disableCalendarAccess": "Kalenderzugriff deaktivieren",
+        "disableContactsAccess": "Kontaktzugriff deaktivieren",
+        "disableLanguageTracking": "Sprachverfolgung deaktivieren",
+        "disableWelcomeExperience": "Begrüßungserlebnis deaktivieren",
+        "disableFeedbackFrequency": "Rückmeldungshäufigkeit deaktivieren",
+        "disableWritingHabits": "Eingabegewohnheiten deaktivieren"
+      }
+    },
+    "networkOptimize": {
+      "title": "Netzwerkoptimierung",
+      "description": "Netzwerkparameter und DNS optimieren",
+      "loadFailed": "Status laden fehlgeschlagen",
+      "restore": "Standard wiederherstellen",
+      "tcpCongestion": {
+        "title": "TCP-Überlastungssteuerung",
+        "description": "TCP-Überlastungssteuerung auf CTCP/CUBIC setzen"
+      },
+      "chimney": {
+        "title": "TCP Chimney Offload",
+        "description": "TCP Chimney Offload deaktivieren zur Reduzierung der Latenz"
+      },
+      "nagle": {
+        "title": "Nagle-Algorithmus",
+        "description": "Nagle-Algorithmus deaktivieren für geringere Paketlatenz"
+      },
+      "adapterPower": {
+        "title": "Adapter-Energiesparen",
+        "description": "Energiesparen auf Netzwerkadaptern deaktivieren"
+      },
+      "dns": {
+        "title": "DNS-Einstellungen",
+        "primary": "Primärer DNS",
+        "secondary": "Sekundärer DNS",
+        "apply": "DNS anwenden",
+        "applied": "Angewendet",
+        "restore": "Automatischen DNS wiederherstellen"
+      },
+      "dnsRequired": "Bitte geben Sie mindestens die primäre DNS-Adresse ein",
+      "batch": {
+        "title": "Batch-Optimierung",
+        "description": "Alle Netzwerkoptimierungen auf einmal anwenden/wiederherstellen",
+        "enable": "Alle aktivieren",
+        "disable": "Alle wiederherstellen"
+      }
     },
     "memoryLimit": {
       "title": "Speicherlimit",
@@ -238,6 +378,8 @@
     "speed": "Geschwindigkeit",
     "bankLabel": "Slot",
     "storage": "Speicher",
+    "totalCapacity": "Gesamtkapazität",
+    "count": "Module",
     "deltaPasswordFetched": "Abgerufen",
     "deltaPasswordNotFetched": "--"
   },
@@ -251,7 +393,7 @@
     "network": "Netzwerk",
     "optimization": "Optimierung",
     "builtinTools": "Eingebaute Werkzeuge",
-    "thirdpartyTools": "Drittanbieter-Werkzeuge",
+    "officialTools": "Offizielle Empfehlungen",
     "tools": {
       "assistantCrosshair": "Fadenkreuzassistent",
       "memreduct": "Memreduct",
@@ -266,6 +408,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
+    "mctierDesc": "Minecraft-Server-Leistungstest- und Ranking-Tool",
     "descriptions": {
       "assistantCrosshair": "Fadenkreuz-Hilfswerkzeug für Spielbildschirme",
       "memreduct": "Speicherbereinigungs-Tool",
@@ -349,6 +492,8 @@
     "deleteIccConfirm": "Diese ICC-Voreinstellung löschen?",
     "deleteIccSuccess": "ICC-Voreinstellung gelöscht",
     "noIccProfiles": "Keine ICC-Profile importiert",
+    "selectDisplay": "Bildschirm auswählen",
+    "primary": "Primär",
     "cancel": "Abbrechen",
     "delete": "Löschen"
   },
@@ -388,6 +533,8 @@
     "opacity": "Deckkraft",
     "preview": "Vorschau",
     "parameters": "Parameter",
+    "monitor": "Bildschirm",
+    "primaryMonitor": "Hauptbildschirm",
     "advanced": "Erweitert",
     "resetDefault": "Auf Standard zurücksetzen",
     "updateFailed": "Einstellungen aktualisieren fehlgeschlagen",
@@ -559,6 +706,9 @@
     "lowEnd": "Low-End GPU",
     "highEnd": "High-End GPU",
     "selectPlaceholder": "Bitte GPU auswählen",
+    "presetTab": "Voreingestellte GPU",
+    "customTab": "Benutzerdefinierte GPU",
+    "customPlaceholder": "Benutzerdefinierten GPU-Namen eingeben",
     "selectGpu": "Bitte zuerst eine GPU auswählen",
     "apply": "Anwenden",
     "applying": "Anwendung...",
@@ -762,6 +912,9 @@
         "byInstance": "Nach Instanz",
         "byGroup": "Nach Gruppe"
       },
+      "startup": "Start",
+      "autoStartLabel": "Beim Start ausführen",
+      "autoStartDesc": "NexBox automatisch beim Systemstart starten",
       "closeBehavior": "Schließverhalten",
       "closeBehaviorLabel": "Beim Klicken auf Schließen",
       "closeBehaviorDesc": "Wählen Sie, was beim Klicken auf den Schließen-Button passiert",
@@ -821,7 +974,13 @@
       "wechat": "WeChat Pay",
       "alipay": "Alipay",
       "thankYou": "Vielen Dank für Ihre Unterstützung!",
-      "placeholder": "Bitte QR-Code-Bild hinzufügen"
+      "placeholder": "Bitte QR-Code-Bild hinzufügen",
+      "sponsorList": {
+        "title": "Sponsorenliste",
+        "loading": "Laden...",
+        "error": "Laden fehlgeschlagen",
+        "empty": "Noch keine Sponsoren"
+      }
     },
     "aboutSettings": {
       "title": "Über",
@@ -923,3 +1082,4 @@
     "saved": "Tastenkürzel gespeichert"
   }
 }
+

@@ -1,10 +1,14 @@
-{
+﻿{
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
     "description": "Cross-platform performance monitoring (Tauri + Next.js + Sensor Service)",
     "cancel": "Cancel",
     "add": "Add"
+  },
+  "view": {
+    "grid": "Grid View",
+    "list": "List View"
   },
   "onboarding": {
     "title": "Welcome to NexBox",
@@ -44,8 +48,7 @@
     "settings": "Settings",
     "gpuRename": "GPU Rename",
     "dlssPreset": "Delta Force DLSS Settings",
-    "epicFree": "Epic Free Games",
-    "lobby": "Multiplayer"
+    "epicFree": "Epic Free Games"
   },
   "optimization": {
     "pageTitle": "Optimize",
@@ -82,6 +85,159 @@
       "memoryOptimizeComplete": "Complete",
       "aceProcess": "ACE Process",
       "powerPlan": "Power Plan"
+    },
+    "startupManager": {
+      "title": "Startup Manager",
+      "description": "Manage system startup items",
+      "scanError": "Failed to scan startup items",
+      "deleteSuccess": "Deleted: {{name}}",
+      "deleteError": "Failed to delete",
+      "locateError": "Failed to locate file",
+      "registryError": "Failed to open registry",
+      "totalItems": "{{count}} startup items",
+      "refresh": "Refresh",
+      "scanning": "Scanning startup items...",
+      "noItems": "No startup items found",
+      "columnName": "Name",
+      "columnPath": "Path",
+      "columnActions": "Actions",
+      "locateFile": "Locate file",
+      "findInRegistry": "Find in registry",
+      "delete": "Delete",
+      "tipTitle": "💡 Tip",
+      "tipDescription": "Startup Manager helps you view and manage all auto-start items on your system. Disabling unnecessary startup items can speed up system boot time. Please proceed with caution, as some system startup items may be required for normal operation."
+    },
+    "systemOptimize": {
+      "title": "System Optimization",
+      "description": "Optimize system services and privacy settings",
+      "loadFailed": "Failed to load state",
+      "loading": "Checking current state...",
+      "optimizing": "Optimizing...",
+      "restoring": "Restoring...",
+      "optimizeAll": {
+        "title": "Enable All",
+        "description": "Turn on all switches to enable all optimizations",
+        "button": "Enable All"
+      },
+      "restore": {
+        "title": "Disable All",
+        "description": "Turn off all switches to disable all optimizations",
+        "button": "Disable All"
+      },
+      "enabled": "Enabled",
+      "tweakList": "Optimization Status",
+      "tweaks": {
+        "master": "Auto-end non-responsive programs",
+        "removeMenuDelay": "Reduce menu delay",
+        "disableNetworkThrottling": "Disable network throttling",
+        "disableErrorReporting": "Disable error reporting",
+        "disableCompatibilityAssistant": "Disable compatibility assistant",
+        "disablePrintService": "Disable print service",
+        "disableFaxService": "Disable fax service",
+        "disableStickyKeys": "Disable sticky keys",
+        "disableSmartScreen": "Disable SmartScreen",
+        "disableSystemRestore": "Disable system restore",
+        "disableSuperfetch": "Disable Superfetch/SysMain",
+        "disableHibernate": "Disable hibernate",
+        "disableNtfsTimestamp": "Disable NTFS timestamp updates",
+        "disableTelemetryTasks": "Disable telemetry scheduled tasks",
+        "disableMediaPlayerSharing": "Disable media player sharing",
+        "disableHomeGroup": "Disable home group",
+        "disableSmb1": "Disable SMB1 protocol",
+        "disableSmb2": "Disable SMB2 protocol",
+        "disableCortana": "Disable Cortana",
+        "disableTelemetryServices": "Disable telemetry services",
+        "disableNewsInterests": "Disable news & interests",
+        "disableStartMenuAds": "Disable start menu ads",
+        "disableAdvertisingId": "Disable advertising ID",
+        "disableDiagnosticData": "Disable diagnostic data collection",
+        "disableOfficeTelemetry": "Disable Office telemetry",
+        "disableFirefoxTelemetry": "Disable Firefox telemetry",
+        "disableChromeTelemetry": "Disable Chrome telemetry",
+        "disableNvidiaTelemetry": "Disable NVIDIA telemetry",
+        "disableVsTelemetry": "Disable VS telemetry",
+        "disableEdgeTelemetry": "Disable Edge telemetry",
+        "disableEdgeDiscoverBar": "Disable Edge discover bar",
+        "optimizeProcessCount": "Optimize process count",
+        "disableStoreSearchApp": "Disable Store search app",
+        "disableStorePromotions": "Disable Store promotions",
+        "disableStoreAutoUpdate": "Disable Store auto-update",
+        "disableSpotlightLock": "Disable Spotlight lock screen",
+        "disableMyPeople": "Disable My People",
+        "disableTPMCheck": "Disable TPM check",
+        "disableSensorServices": "Disable sensor services",
+        "removeCastToDevice": "Remove Cast to Device",
+        "disableVBS": "Disable Virtualization-Based Security",
+        "disableModernStandby": "Disable modern standby",
+        "enableGameMode": "Enable game mode",
+        "disableXboxLive": "Disable Xbox Live",
+        "disableGameBar": "Disable game bar",
+        "disableWindowsInk": "Disable Windows Ink",
+        "disableSpellCheck": "Disable spell check",
+        "disableCloudClipboard": "Disable cloud clipboard",
+        "disableAppLaunchTracking": "Disable app launch tracking",
+        "disableFileSystemAccess": "Disable file system access",
+        "disableDocumentsAccess": "Disable documents access",
+        "disableCalendarAccess": "Disable calendar access",
+        "disableContactsAccess": "Disable contacts access",
+        "disableLanguageTracking": "Disable language tracking",
+        "disableWelcomeExperience": "Disable welcome experience",
+        "disableFeedbackFrequency": "Disable feedback frequency",
+        "disableWritingHabits": "Disable writing habits collection"
+      }
+    },
+    "networkOptimize": {
+      "title": "Network Optimization",
+      "pageTitle": "Network Optimization",
+      "description": "Optimize network parameters and DNS settings",
+      "pageDesc": "Optimize network parameters and DNS settings",
+      "loadFailed": "Failed to load state",
+      "scanning": "Scanning...",
+      "restore": "Restore default",
+      "currentDns": "Current DNS",
+      "noDnsConfig": "Auto-obtained",
+      "dnsApplied": "DNS Applied",
+      "dnsRestored": "DNS restored to auto",
+      "applyError": "DNS apply failed",
+      "tcpCongestion": {
+        "title": "TCP Congestion Control",
+        "description": "Set TCP congestion control to CTCP/CUBIC for better throughput"
+      },
+      "chimney": {
+        "title": "TCP Chimney Offload",
+        "description": "Disable TCP Chimney Offload to reduce latency"
+      },
+      "nagle": {
+        "title": "Nagle Algorithm",
+        "description": "Disable Nagle algorithm to reduce small packet latency for gaming"
+      },
+      "adapterPower": {
+        "title": "Adapter Power Saving",
+        "description": "Disable power saving on network adapters to reduce latency spikes"
+      },
+      "dns": {
+        "title": "DNS Settings",
+        "primary": "Primary DNS",
+        "secondary": "Secondary DNS",
+        "apply": "Apply DNS",
+        "applied": "Applied",
+        "restore": "Restore Auto DNS",
+        "customLabel": "Custom DNS"
+      },
+      "dnsRequired": "Please enter at least primary DNS address",
+      "batch": {
+        "title": "Batch Optimization",
+        "description": "Apply or restore all network optimizations at once",
+        "enable": "Enable All",
+        "disable": "Restore All"
+      },
+      "batchOptimized": "All network optimizations applied",
+      "batchReverted": "All network optimizations restored",
+      "batchError": "Batch operation failed",
+      "optimized": "Optimized",
+      "reverted": "Reverted",
+      "optimizing": "Applying...",
+      "operationError": "Operation failed"
     },
     "memoryLimit": {
       "title": "Memory Limit",
@@ -140,6 +296,7 @@
       "deleteConfirmText": "Are you sure you want to delete the power plan \"{{name}}\" from the system?",
       "cancel": "Cancel"
     },
+
     "memoryCleanup": {
       "title": "Memory Cleanup",
       "description": "View memory details and free up memory",
@@ -156,7 +313,25 @@
       "cleaning": "Cleaning...",
       "freedMemory": "Freed {{size}} MB",
       "noMemoryFreed": "No memory needs cleaning",
-      "error": "Cleanup failed"
+      "error": "Cleanup failed",
+      "autoClean": "Auto Clean",
+      "autoCleanDesc": "Automatically clean memory when conditions are met",
+      "interval": "Interval",
+      "intervalSec": "{{seconds}}s",
+      "interval5min": "5 min",
+      "interval10min": "10 min",
+      "interval30min": "30 min",
+      "interval1hour": "1 hour",
+      "threshold": "Memory Threshold",
+      "thresholdDesc": "Trigger cleanup when used memory exceeds this value",
+      "thresholdGB": "{{gb}} GB",
+      "cleanType": "Clean Type",
+      "cleanTypeAll": "Clean All",
+      "cleanTypeStandby": "Clean Standby Memory",
+      "cleanTypeWorkingSet": "Trim Working Set",
+      "autoCleanEnabled": "Auto clean enabled",
+      "autoCleanDisabled": "Auto clean disabled",
+      "configSaved": "Auto clean config saved"
     },
     "aceOptimize": {
       "title": "Delta/ACE Optimize",
@@ -262,6 +437,8 @@
     "speed": "Speed",
     "bankLabel": "Slot",
     "storage": "Storage",
+    "totalCapacity": "Total Capacity",
+    "count": "Sticks",
     "deltaPasswordFetched": "Fetched",
     "deltaPasswordNotFetched": "--"
   },
@@ -275,7 +452,7 @@
     "network": "Network",
     "optimization": "Optimization",
     "builtinTools": "Built-in Tools",
-    "thirdpartyTools": "Third-party Tools",
+    "officialTools": "Official Recommendations",
     "tools": {
       "assistantCrosshair": "Assistant Crosshair",
       "memreduct": "Memreduct",
@@ -290,6 +467,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
+    "mctierDesc": "Minecraft server performance testing and ranking tool",
     "descriptions": {
       "assistantCrosshair": "Game screen crosshair assistant tool",
       "memreduct": "Memory cleaning tool",
@@ -373,6 +551,8 @@
     "deleteIccConfirm": "Confirm delete this ICC preset?",
     "deleteIccSuccess": "ICC preset deleted",
     "noIccProfiles": "No ICC profiles imported",
+    "selectDisplay": "Select Display",
+    "primary": "Primary",
     "cancel": "Cancel",
     "delete": "Delete"
   },
@@ -412,6 +592,8 @@
     "opacity": "Opacity",
     "preview": "Preview",
     "parameters": "Parameters",
+    "monitor": "Display Monitor",
+    "primaryMonitor": "Primary Monitor",
     "advanced": "Advanced",
     "resetDefault": "Reset to Default",
     "updateFailed": "Failed to update settings",
@@ -602,6 +784,9 @@
     "lowEnd": "Low-end GPU",
     "highEnd": "High-end GPU",
     "selectPlaceholder": "Please select a GPU",
+    "presetTab": "Preset GPU",
+    "customTab": "Custom GPU",
+    "customPlaceholder": "Enter a custom GPU name",
     "selectGpu": "Please select a GPU first",
     "apply": "Apply",
     "applying": "Applying...",
@@ -752,6 +937,9 @@
         "byInstance": "By Instance",
         "byGroup": "By Group"
       },
+      "startup": "Startup",
+      "autoStartLabel": "Launch on Startup",
+      "autoStartDesc": "Automatically launch NexBox when system starts",
       "closeBehavior": "Close Behavior",
       "closeBehaviorLabel": "When clicking close button",
       "closeBehaviorDesc": "Choose what happens when clicking the close button",
@@ -834,7 +1022,13 @@
       "wechat": "WeChat Pay",
       "alipay": "Alipay",
       "thankYou": "Thank you for your support!",
-      "placeholder": "Please add QR code image"
+      "placeholder": "Please add QR code image",
+      "sponsorList": {
+        "title": "Sponsors",
+        "loading": "Loading...",
+        "error": "Failed to load",
+        "empty": "No sponsors yet"
+      }
     },
     "aboutSettings": {
       "title": "About",
@@ -849,6 +1043,7 @@
       "acknowledgments": "Acknowledgments",
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "Thanks to SJTU Minecraft Club open source project",
+      "joinUs": "Join Us",
       "changelog": "Changelog",
       "changelogTitle": "Current Version Updates",
       "noChangelog": "No changelog available",
@@ -884,6 +1079,123 @@
     "pixels": "px",
     "standard": "Standard",
     "tip": "Select a resolution type to see the specific resolution values for three common aspect ratios below, helping you adjust aspect ratio settings in games."
+  },
+  "systemOptimizer": {
+    "pageTitle": "System Optimizer",
+    "pageDesc": "Toggle system optimizations for better performance and privacy",
+    "category": {
+      "system": "System",
+      "disk": "Disk",
+      "privacy": "Privacy",
+      "apps": "Applications",
+      "touch": "Touch",
+      "gaming": "Gaming"
+    },
+    "system": {
+      "performanceTweaks": "Enable Performance Tweaks",
+      "performanceTweaksDesc": "Auto-end hung tasks, reduce timeouts, show hidden files, optimize multimedia",
+      "removeMenuDelay": "Remove Menu Delay",
+      "removeMenuDelayDesc": "Reduce menu show delay to 0 for snappier UI",
+      "disableNetworkThrottling": "Disable Network Throttling",
+      "disableNetworkThrottlingDesc": "Remove Windows network bandwidth limitations",
+      "disableErrorReporting": "Disable Error Reporting",
+      "disableErrorReportingDesc": "Turn off Windows Error Reporting service",
+      "disableCompatibilityAssistant": "Disable Compatibility Assistant",
+      "disableCompatibilityAssistantDesc": "Disable Program Compatibility Assistant service",
+      "disablePrintService": "Disable Print Service",
+      "disablePrintServiceDesc": "Disable print spooler service, saves resources if no printer",
+      "disableFaxService": "Disable Fax Service",
+      "disableFaxServiceDesc": "Disable fax service, safe to turn off if not used",
+      "disableStickyKeys": "Disable Sticky Keys",
+      "disableStickyKeysDesc": "Disable sticky, filter, and toggle keys accessibility features",
+      "disableSmartScreen": "Disable SmartScreen",
+      "disableSmartScreenDesc": "Turn off Microsoft Defender SmartScreen filter"
+    },
+    "disk": {
+      "disableSystemRestore": "Disable System Restore",
+      "disableSystemRestoreDesc": "Turn off system restore point creation, free up disk space",
+      "disableSuperfetch": "Disable Superfetch",
+      "disableSuperfetchDesc": "Disable SysMain service and prefetch, reduce disk I/O",
+      "disableHibernate": "Disable Hibernation",
+      "disableHibernateDesc": "Turn off system hibernation, free up disk space (~RAM size)",
+      "disableNtfsTimestamp": "Disable NTFS Timestamp",
+      "disableNtfsTimestampDesc": "Disable NTFS last access time updates, reduce disk writes",
+      "disableMyPeople": "Disable My People",
+      "disableMyPeopleDesc": "Disable the My People taskbar feature",
+      "disableTPMCheck": "Disable TPM 2.0 Check",
+      "disableTPMCheckDesc": "Bypass TPM 2.0 and CPU compatibility checks",
+      "disableSensorServices": "Disable Sensor Services",
+      "disableSensorServicesDesc": "Disable sensor and location services for privacy",
+      "removeCastToDevice": "Remove Cast to Device",
+      "removeCastToDeviceDesc": "Remove 'Cast to Device' from the context menu"
+    },
+    "privacy": {
+      "disableTelemetryTasks": "Disable Telemetry Tasks",
+      "disableTelemetryTasksDesc": "Disable dozens of Windows CEIP and diagnostic scheduled tasks",
+      "disableMediaPlayerSharing": "Disable Media Player Sharing",
+      "disableMediaPlayerSharingDesc": "Disable WMP network sharing service",
+      "disableHomeGroup": "Disable HomeGroup",
+      "disableHomeGroupDesc": "Disable HomeGroup listener and provider services",
+      "disableSmb1": "Disable SMBv1 Protocol",
+      "disableSmb1Desc": "Disable outdated SMBv1 protocol for better security",
+      "disableSmb2": "Disable SMBv2 Protocol",
+      "disableSmb2Desc": "Disable SMBv2 protocol",
+      "disableTelemetryServices": "Disable Telemetry Services",
+      "disableTelemetryServicesDesc": "Disable DiagTrack, dmwappushservice and compatibility engine",
+      "disableCortana": "Disable Cortana",
+      "disableCortanaDesc": "Disable Cortana, web search, and cloud search features",
+      "disableNewsInterests": "Disable News & Interests",
+      "disableNewsInterestsDesc": "Disable taskbar news and interests widget",
+      "disableStartMenuAds": "Disable Start Menu Ads",
+      "disableStartMenuAdsDesc": "Disable promotional suggestions and auto-installed apps",
+      "disableEdgeTelemetry": "Disable Edge Telemetry",
+      "disableEdgeTelemetryDesc": "Disable Edge personalization, feedback, and metrics telemetry",
+      "disableEdgeDiscoverBar": "Disable Edge Discover Bar",
+      "disableEdgeDiscoverBarDesc": "Disable Edge sidebar discover feature"
+    },
+    "apps": {
+      "disableOfficeTelemetry": "Disable Office Telemetry",
+      "disableOfficeTelemetryDesc": "Disable Office telemetry agents and scheduled tasks",
+      "disableFirefoxTelemetry": "Disable Firefox Telemetry",
+      "disableFirefoxTelemetryDesc": "Disable Firefox telemetry via group policy",
+      "disableChromeTelemetry": "Disable Chrome Telemetry",
+      "disableChromeTelemetryDesc": "Disable Chrome metrics, cleanup reporting via group policy",
+      "disableNvidiaTelemetry": "Disable NVIDIA Telemetry",
+      "disableNvidiaTelemetryDesc": "Disable NVIDIA telemetry container service and tasks",
+      "disableVsTelemetry": "Disable Visual Studio Telemetry",
+      "disableVsTelemetryDesc": "Disable VS telemetry switch and collector service"
+    },
+    "touch": {
+      "disableWindowsInk": "Disable Windows Ink",
+      "disableWindowsInkDesc": "Disable Windows Ink workspace and inking suggestions",
+      "disableSpellCheck": "Disable Spell Check",
+      "disableSpellCheckDesc": "Disable touch keyboard autocorrect, spell check, and text prediction",
+      "disableCloudClipboard": "Disable Cloud Clipboard",
+      "disableCloudClipboardDesc": "Disable clipboard history and cross-device sync"
+    },
+    "gaming": {
+      "enableGameMode": "Enable Game Mode",
+      "enableGameModeDesc": "Enable hardware accelerated GPU scheduling and game mode",
+      "disableXboxLive": "Disable Xbox Live Services",
+      "disableXboxLiveDesc": "Disable Xbox Live auth, game save, and background services",
+      "disableGameBar": "Disable Game Bar",
+      "disableGameBarDesc": "Disable game bar, DVR recording, and background recording"
+    },
+    "scan": "Scan System State",
+    "scanning": "Scanning...",
+    "scanComplete": "System state scan complete",
+    "scanError": "System state scan failed",
+    "scanHint": "Click 'Scan System State' to detect current optimization status. Items requiring reboot will be tracked via saved state.",
+    "batchEnable": "Optimize All",
+    "batchDisable": "Revert All",
+    "batchOptimized": "All optimizations applied successfully",
+    "batchReverted": "All optimizations reverted",
+    "batchError": "Batch operation failed",
+    "optimized": "Optimized",
+    "reverted": "Reverted",
+    "optimizing": "Running...",
+    "operationError": "Operation failed",
+    "requiresReboot": "Requires system reboot to take full effect"
   },
   "shaderCache": {
     "title": "Shader Cache Cleanup",
@@ -966,3 +1278,4 @@
     "saved": "Hotkey saved"
   }
 }
+

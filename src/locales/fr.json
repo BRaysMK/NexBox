@@ -1,8 +1,12 @@
-{
+﻿{
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
     "description": "Surveillance des performances multiplateforme (Tauri + Next.js + Service de capteur)"
+  },
+  "view": {
+    "grid": "Vue grille",
+    "list": "Vue liste"
   },
   "onboarding": {
     "title": "Bienvenue sur NexBox",
@@ -43,8 +47,7 @@
         "gpuRename": "Renommage GPU",
         "resolutionConverter": "Convertisseur de résolution",
         "dlssPreset": "Paramètres DLSS Delta Force",
-        "epicFree": "Jeux gratuits Epic",
-        "lobby": "Multijoueur"
+        "epicFree": "Jeux gratuits Epic"
     },
   "optimization": {
     "pageTitle": "Optimiser",
@@ -81,6 +84,143 @@
       "memoryOptimizeComplete": "Terminé",
       "aceProcess": "Processus ACE",
       "powerPlan": "Plan d'alimentation"
+    },
+    "startupManager": {
+      "title": "Gestionnaire de démarrage",
+      "description": "Gérer les éléments de démarrage du système",
+      "scanError": "Échec de l'analyse des éléments de démarrage",
+      "deleteSuccess": "Supprimé: {{name}}",
+      "deleteError": "Échec de la suppression",
+      "locateError": "Échec de la localisation du fichier",
+      "registryError": "Échec de l'ouverture du registre",
+      "totalItems": "{{count}} éléments de démarrage",
+      "refresh": "Actualiser",
+      "scanning": "Analyse des éléments de démarrage...",
+      "noItems": "Aucun élément de démarrage trouvé",
+      "columnName": "Nom",
+      "columnPath": "Chemin",
+      "columnActions": "Actions",
+      "locateFile": "Localiser le fichier",
+      "findInRegistry": "Rechercher dans le registre",
+      "delete": "Supprimer",
+      "tipTitle": "💡 Astuce",
+      "tipDescription": "Le gestionnaire de démarrage vous aide à voir et gérer tous les éléments de démarrage automatique de votre système. La désactivation des éléments inutiles peut accélérer le démarrage. Soyez prudent, certains éléments peuvent être nécessaires au fonctionnement normal du système."
+    },
+    "systemOptimize": {
+      "title": "Optimisation système",
+      "description": "Optimiser les services système et les paramètres de confidentialité",
+      "loadFailed": "Échec du chargement",
+      "loading": "Vérification de l'état...",
+      "optimizing": "Optimisation...",
+      "restoring": "Restauration...",
+      "optimizeAll": {
+        "title": "Tout activer",
+        "description": "Activer tous les interrupteurs pour activer toutes les optimisations",
+        "button": "Tout activer"
+      },
+      "restore": {
+        "title": "Tout désactiver",
+        "description": "Désactiver tous les interrupteurs pour annuler toutes les optimisations",
+        "button": "Tout désactiver"
+      },
+      "enabled": "Activé",
+      "tweakList": "État des optimisations",
+      "tweaks": {
+        "master": "Arrêt auto des programmes sans réponse",
+        "removeMenuDelay": "Réduire le délai des menus",
+        "disableNetworkThrottling": "Désactiver la limitation réseau",
+        "disableErrorReporting": "Désactiver les rapports d'erreurs",
+        "disableCompatibilityAssistant": "Désactiver l'assistant de compatibilité",
+        "disablePrintService": "Désactiver le service d'impression",
+        "disableFaxService": "Désactiver le service de fax",
+        "disableStickyKeys": "Désactiver les touches rémanentes",
+        "disableSmartScreen": "Désactiver SmartScreen",
+        "disableSystemRestore": "Désactiver la restauration système",
+        "disableSuperfetch": "Désactiver Superfetch/SysMain",
+        "disableHibernate": "Désactiver la mise en veille prolongée",
+        "disableNtfsTimestamp": "Désactiver les horodatages NTFS",
+        "disableTelemetryTasks": "Désactiver les tâches de télémétrie",
+        "disableMediaPlayerSharing": "Désactiver le partage du lecteur média",
+        "disableHomeGroup": "Désactiver le groupe résidentiel",
+        "disableSmb1": "Désactiver le protocole SMB1",
+        "disableSmb2": "Désactiver le protocole SMB2",
+        "disableCortana": "Désactiver Cortana",
+        "disableTelemetryServices": "Désactiver les services de télémétrie",
+        "disableNewsInterests": "Désactiver les actualités et centres d'intérêt",
+        "disableStartMenuAds": "Désactiver les pubs du menu démarrer",
+        "disableAdvertisingId": "Désactiver l'identifiant publicitaire",
+        "disableDiagnosticData": "Désactiver la collecte de données de diagnostic",
+        "disableOfficeTelemetry": "Désactiver la télémétrie Office",
+        "disableFirefoxTelemetry": "Désactiver la télémétrie Firefox",
+        "disableChromeTelemetry": "Désactiver la télémétrie Chrome",
+        "disableNvidiaTelemetry": "Désactiver la télémétrie NVIDIA",
+        "disableVsTelemetry": "Désactiver la télémétrie VS",
+        "disableEdgeTelemetry": "Désactiver la télémétrie Edge",
+        "disableEdgeDiscoverBar": "Désactiver la barre de découverte Edge",
+        "optimizeProcessCount": "Optimiser le seuil de fractionnement",
+        "disableStoreSearchApp": "Désactiver l'application de recherche Store",
+        "disableStorePromotions": "Désactiver les promotions Store",
+        "disableStoreAutoUpdate": "Désactiver la mise à jour auto Store",
+        "disableSpotlightLock": "Désactiver l'écran de verrouillage Spotlight",
+        "disableMyPeople": "Désactiver Mes contacts",
+        "disableTPMCheck": "Désactiver la vérification TPM",
+        "disableSensorServices": "Désactiver les services de capteurs",
+        "removeCastToDevice": "Supprimer Cast vers l'appareil",
+        "disableVBS": "Désactiver la sécurité basée sur la virtualisation",
+        "disableModernStandby": "Désactiver la veille moderne",
+        "enableGameMode": "Activer le mode jeu",
+        "disableXboxLive": "Désactiver Xbox Live",
+        "disableGameBar": "Désactiver la barre de jeu",
+        "disableWindowsInk": "Désactiver Windows Ink",
+        "disableSpellCheck": "Désactiver la vérification orthographique",
+        "disableCloudClipboard": "Désactiver le presse-papiers cloud",
+        "disableAppLaunchTracking": "Désactiver le suivi des lancements",
+        "disableFileSystemAccess": "Désactiver l'accès au système de fichiers",
+        "disableDocumentsAccess": "Désactiver l'accès aux documents",
+        "disableCalendarAccess": "Désactiver l'accès au calendrier",
+        "disableContactsAccess": "Désactiver l'accès aux contacts",
+        "disableLanguageTracking": "Désactiver le suivi linguistique",
+        "disableWelcomeExperience": "Désactiver l'expérience d'accueil",
+        "disableFeedbackFrequency": "Désactiver la fréquence des retours",
+        "disableWritingHabits": "Désactiver la collecte d'habitudes d'écriture"
+      }
+    },
+    "networkOptimize": {
+      "title": "Optimisation réseau",
+      "description": "Optimiser les paramètres réseau et DNS",
+      "loadFailed": "Échec du chargement",
+      "restore": "Restaurer",
+      "tcpCongestion": {
+        "title": "Contrôle de congestion TCP",
+        "description": "Définir le contrôle de congestion TCP sur CTCP/CUBIC"
+      },
+      "chimney": {
+        "title": "TCP Chimney Offload",
+        "description": "Désactiver TCP Chimney Offload pour réduire la latence"
+      },
+      "nagle": {
+        "title": "Algorithme de Nagle",
+        "description": "Désactiver l'algorithme de Nagle pour réduire la latence des petits paquets"
+      },
+      "adapterPower": {
+        "title": "Économie d'énergie adaptateur",
+        "description": "Désactiver l'économie d'énergie sur les adaptateurs réseau"
+      },
+      "dns": {
+        "title": "Paramètres DNS",
+        "primary": "DNS principal",
+        "secondary": "DNS secondaire",
+        "apply": "Appliquer DNS",
+        "applied": "Appliqué",
+        "restore": "Restaurer DNS automatique"
+      },
+      "dnsRequired": "Veuillez entrer au moins l'adresse DNS principale",
+      "batch": {
+        "title": "Optimisation par lot",
+        "description": "Appliquer ou restaurer toutes les optimisations réseau",
+        "enable": "Tout activer",
+        "disable": "Tout restaurer"
+      }
     },
     "memoryLimit": {
       "title": "Limite de mémoire",
@@ -238,6 +378,8 @@
     "speed": "Vitesse",
     "bankLabel": "Emplacement",
     "storage": "Stockage",
+    "totalCapacity": "Capacité totale",
+    "count": "Barrettes",
     "deltaPasswordFetched": "Récupéré",
     "deltaPasswordNotFetched": "--"
   },
@@ -251,7 +393,7 @@
     "network": "Réseau",
     "optimization": "Optimisation",
     "builtinTools": "Outils intégrés",
-    "thirdpartyTools": "Outils tiers",
+    "officialTools": "Recommandations officielles",
     "tools": {
       "assistantCrosshair": "Réticule d'assistance",
       "memreduct": "Memreduct",
@@ -266,6 +408,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
+    "mctierDesc": "Outil de test de performance et de classement des serveurs Minecraft",
     "descriptions": {
       "assistantCrosshair": "Outil d'assistance de réticule d'écran de jeu",
       "memreduct": "Outil de nettoyage de mémoire",
@@ -349,6 +492,8 @@
     "deleteIccConfirm": "Confirmer la suppression de ce préréglage ICC ?",
     "deleteIccSuccess": "Préréglage ICC supprimé",
     "noIccProfiles": "Aucun profil ICC importé",
+    "selectDisplay": "Sélectionner l'écran",
+    "primary": "Principal",
     "cancel": "Annuler",
     "delete": "Supprimer"
   },
@@ -388,6 +533,8 @@
     "opacity": "Opacité",
     "preview": "Aperçu",
     "parameters": "Paramètres",
+    "monitor": "Moniteur",
+    "primaryMonitor": "Moniteur principal",
     "advanced": "Avancé",
     "resetDefault": "Réinitialiser par défaut",
     "updateFailed": "Échec de la mise à jour des paramètres",
@@ -559,6 +706,9 @@
     "lowEnd": "GPU bas de gamme",
     "highEnd": "GPU haut de gamme",
     "selectPlaceholder": "Veuillez sélectionner un GPU",
+    "presetTab": "GPU prédéfini",
+    "customTab": "GPU personnalisé",
+    "customPlaceholder": "Entrez un nom GPU personnalisé",
     "selectGpu": "Veuillez d'abord sélectionner un GPU",
     "apply": "Appliquer",
     "applying": "Application...",
@@ -762,6 +912,9 @@
         "byInstance": "Par instance",
         "byGroup": "Par groupe"
       },
+      "startup": "Démarrage",
+      "autoStartLabel": "Lancer au démarrage",
+      "autoStartDesc": "Lancer NexBox automatiquement au démarrage du système",
       "closeBehavior": "Comportement de fermeture",
       "closeBehaviorLabel": "Lors du clic sur fermer",
       "closeBehaviorDesc": "Choisir l'action lors du clic sur le bouton fermer",
@@ -822,7 +975,13 @@
       "wechat": "WeChat Pay",
       "alipay": "Alipay",
       "thankYou": "Merci pour votre soutien !",
-      "placeholder": "Veuillez ajouter l'image du code QR"
+      "placeholder": "Veuillez ajouter l'image du code QR",
+      "sponsorList": {
+        "title": "Liste des sponsors",
+        "loading": "Chargement...",
+        "error": "Échec du chargement",
+        "empty": "Aucun sponsor pour l'instant"
+      }
     },
     "aboutSettings": {
       "title": "À propos",
@@ -924,3 +1083,4 @@
     "saved": "Raccourci enregistré"
   }
 }
+

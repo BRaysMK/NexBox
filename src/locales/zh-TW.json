@@ -1,8 +1,12 @@
-{
+﻿{
   "common": {
     "appName": "NexBox",
     "appFullName": "新境盒",
     "description": "跨平台性能監控（Tauri + Next.js + 傳感器服務）"
+  },
+  "view": {
+    "grid": "網格視圖",
+    "list": "列表視圖"
   },
   "onboarding": {
     "title": "歡迎使用新境盒",
@@ -43,8 +47,7 @@
         "gpuRename": "顯卡改寫",
         "resolutionConverter": "解析度換算",
         "dlssPreset": "三角洲DLSS設定",
-        "epicFree": "喜加一",
-        "lobby": "聯機"
+        "epicFree": "喜加一"
     },
   "optimization": {
     "pageTitle": "優化",
@@ -81,6 +84,143 @@
       "memoryOptimizeComplete": "完成",
       "aceProcess": "ACE程序",
       "powerPlan": "電源計劃"
+    },
+    "startupManager": {
+      "title": "啟動項管理",
+      "description": "管理系統開機自啟項",
+      "scanError": "掃描啟動項失敗",
+      "deleteSuccess": "已刪除: {{name}}",
+      "deleteError": "刪除失敗",
+      "locateError": "定位檔案失敗",
+      "registryError": "打開登錄檔失敗",
+      "totalItems": "共 {{count}} 個啟動項",
+      "refresh": "重新整理",
+      "scanning": "正在掃描啟動項...",
+      "noItems": "未發現啟動項",
+      "columnName": "名稱",
+      "columnPath": "路徑",
+      "columnActions": "操作",
+      "locateFile": "定位檔案",
+      "findInRegistry": "在登錄檔中查詢",
+      "delete": "刪除",
+      "tipTitle": "💡 提示",
+      "tipDescription": "啟動項管理可以幫助您檢視和管理系統中所有開機自啟的專案。禁用不必要的啟動項可以加快系統開機速度。請謹慎操作，某些系統啟動項可能為系統正常執行所必需。"
+    },
+    "systemOptimize": {
+      "title": "系統優化",
+      "description": "優化系統服務與隱私設定",
+      "loadFailed": "載入狀態失敗",
+      "loading": "正在檢測目前狀態...",
+      "optimizing": "優化中...",
+      "restoring": "恢復中...",
+      "optimizeAll": {
+        "title": "全部優化",
+        "description": "將所有開關打開，啟用全部優化項目",
+        "button": "全部優化"
+      },
+      "restore": {
+        "title": "全部取消優化",
+        "description": "將所有開關關閉，取消全部優化項目",
+        "button": "全部取消優化"
+      },
+      "enabled": "已啟用",
+      "tweakList": "優化項目狀態",
+      "tweaks": {
+        "master": "自動結束無響應程式",
+        "removeMenuDelay": "減少選單延遲",
+        "disableNetworkThrottling": "禁用網路限制",
+        "disableErrorReporting": "禁用錯誤報告",
+        "disableCompatibilityAssistant": "禁用相容性助手",
+        "disablePrintService": "禁用列印服務",
+        "disableFaxService": "禁用傳真服務",
+        "disableStickyKeys": "禁用粘滯鍵",
+        "disableSmartScreen": "禁用 SmartScreen",
+        "disableSystemRestore": "禁用系統還原",
+        "disableSuperfetch": "禁用 Superfetch/SysMain",
+        "disableHibernate": "禁用休眠",
+        "disableNtfsTimestamp": "禁用 NTFS 時間戳更新",
+        "disableTelemetryTasks": "禁用遙測計劃任務",
+        "disableMediaPlayerSharing": "禁用媒體播放器共用",
+        "disableHomeGroup": "禁用家庭組",
+        "disableSmb1": "禁用 SMB1 協定",
+        "disableSmb2": "禁用 SMB2 協定",
+        "disableCortana": "禁用 Cortana",
+        "disableTelemetryServices": "禁用遙測服務",
+        "disableNewsInterests": "禁用資訊與興趣",
+        "disableStartMenuAds": "禁用開始功能表廣告",
+        "disableAdvertisingId": "禁用廣告識別碼",
+        "disableDiagnosticData": "禁用診斷資料收集",
+        "disableOfficeTelemetry": "禁用 Office 遙測",
+        "disableFirefoxTelemetry": "禁用 Firefox 遙測",
+        "disableChromeTelemetry": "禁用 Chrome 遙測",
+        "disableNvidiaTelemetry": "禁用 NVIDIA 遙測",
+        "disableVsTelemetry": "禁用 VS 遙測",
+        "disableEdgeTelemetry": "禁用 Edge 遙測",
+        "disableEdgeDiscoverBar": "禁用 Edge 發現欄",
+        "optimizeProcessCount": "優化行程拆分閾值",
+        "disableStoreSearchApp": "禁用商店搜尋應用",
+        "disableStorePromotions": "禁用商店推廣",
+        "disableStoreAutoUpdate": "禁用商店自動更新",
+        "disableSpotlightLock": "禁用聚焦鎖屏",
+        "disableMyPeople": "禁用人員列",
+        "disableTPMCheck": "禁用 TPM 檢查",
+        "disableSensorServices": "禁用感應器服務",
+        "removeCastToDevice": "移除投射到裝置",
+        "disableVBS": "禁用虛擬化安全",
+        "disableModernStandby": "禁用新式待機",
+        "enableGameMode": "啟用遊戲模式",
+        "disableXboxLive": "禁用 Xbox Live",
+        "disableGameBar": "禁用遊戲列",
+        "disableWindowsInk": "禁用 Windows Ink",
+        "disableSpellCheck": "禁用拼字檢查",
+        "disableCloudClipboard": "禁用雲端剪貼簿",
+        "disableAppLaunchTracking": "禁用應用啟動追蹤",
+        "disableFileSystemAccess": "禁用檔案系統存取",
+        "disableDocumentsAccess": "禁用文件存取",
+        "disableCalendarAccess": "禁用日曆存取",
+        "disableContactsAccess": "禁用連絡人存取",
+        "disableLanguageTracking": "禁用語言追蹤",
+        "disableWelcomeExperience": "禁用歡迎體驗",
+        "disableFeedbackFrequency": "禁用回饋頻率",
+        "disableWritingHabits": "禁用輸入習慣收集"
+      }
+    },
+    "networkOptimize": {
+      "title": "網路優化",
+      "description": "優化網路參數與 DNS 設定",
+      "loadFailed": "載入狀態失敗",
+      "restore": "恢復預設",
+      "tcpCongestion": {
+        "title": "TCP 擁塞控制",
+        "description": "設定 TCP 擁塞控制協定為 CTCP/CUBIC，提升網路吞吐量"
+      },
+      "chimney": {
+        "title": "TCP Chimney Offload",
+        "description": "禁用 TCP Chimney Offload，減少網路延遲"
+      },
+      "nagle": {
+        "title": "Nagle 演算法優化",
+        "description": "關閉 Nagle 演算法，減少小數據包延遲，適合遊戲場景"
+      },
+      "adapterPower": {
+        "title": "網卡省電模式",
+        "description": "禁用物理網卡省電模式，減少網路延遲波動"
+      },
+      "dns": {
+        "title": "DNS 設定",
+        "primary": "首選 DNS",
+        "secondary": "備選 DNS",
+        "apply": "套用 DNS",
+        "applied": "已套用",
+        "restore": "恢復自動獲取"
+      },
+      "dnsRequired": "請至少輸入首選 DNS 位址",
+      "batch": {
+        "title": "批次優化",
+        "description": "一鍵套用或恢復所有網路優化項目",
+        "enable": "全部啟用",
+        "disable": "全部恢復"
+      }
     },
     "memoryLimit": {
       "title": "記憶體限制",
@@ -238,6 +378,8 @@
     "speed": "時脈",
     "bankLabel": "插槽",
     "storage": "儲存",
+    "totalCapacity": "總容量",
+    "count": "條數",
     "deltaPasswordFetched": "已取得",
     "deltaPasswordNotFetched": "--"
   },
@@ -251,7 +393,7 @@
     "network": "網路",
     "optimization": "優化",
     "builtinTools": "內建工具",
-    "thirdpartyTools": "第三方工具",
+    "officialTools": "官方推薦",
     "tools": {
       "assistantCrosshair": "輔助準心",
       "memreduct": "Memreduct",
@@ -266,6 +408,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
+    "mctierDesc": "Minecraft 伺服器效能檢測與排名工具",
     "descriptions": {
       "assistantCrosshair": "遊戲畫面準心輔助工具",
       "memreduct": "記憶體清理工具",
@@ -349,6 +492,8 @@
     "deleteIccConfirm": "確認刪除此 ICC 預設？",
     "deleteIccSuccess": "ICC 預設已刪除",
     "noIccProfiles": "暫無匯入的 ICC 配置文件",
+    "selectDisplay": "選擇顯示器",
+    "primary": "主",
     "cancel": "取消",
     "delete": "刪除"
   },
@@ -388,6 +533,8 @@
     "opacity": "透明度",
     "preview": "預覽",
     "parameters": "參數調整",
+    "monitor": "顯示器選擇",
+    "primaryMonitor": "主顯示器",
     "advanced": "進階設定",
     "resetDefault": "恢復預設",
     "updateFailed": "更新設定失敗",
@@ -559,6 +706,9 @@
     "lowEnd": "低階顯卡",
     "highEnd": "高階顯卡",
     "selectPlaceholder": "請選擇顯卡",
+    "presetTab": "預設顯卡",
+    "customTab": "自訂顯卡",
+    "customPlaceholder": "輸入自訂顯卡名稱",
     "selectGpu": "請先選擇顯卡",
     "apply": "套用",
     "applying": "套用中...",
@@ -762,6 +912,9 @@
         "byInstance": "按執行個體",
         "byGroup": "按分組"
       },
+      "startup": "啟動",
+      "autoStartLabel": "開機自啟",
+      "autoStartDesc": "系統啟動時自動執行 NexBox",
       "closeBehavior": "關閉行為",
       "closeBehaviorLabel": "點擊關閉按鈕時",
       "closeBehaviorDesc": "選擇點擊關閉按鈕時的行為",
@@ -822,7 +975,13 @@
       "wechat": "微信支付",
       "alipay": "支付寶",
       "thankYou": "感謝您的支持！",
-      "placeholder": "請新增收款碼圖片"
+      "placeholder": "請新增收款碼圖片",
+      "sponsorList": {
+        "title": "贊助者名單",
+        "loading": "載入中...",
+        "error": "載入失敗",
+        "empty": "暫無贊助者"
+      }
     },
     "aboutSettings": {
       "title": "關於",
@@ -924,3 +1083,4 @@
     "saved": "快速鍵已保存"
   }
 }
+

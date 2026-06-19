@@ -1,10 +1,14 @@
-{
+﻿﻿{
   "common": {
     "appName": "NexBox",
     "appFullName": "新境盒",
     "description": "跨平台性能监控（Tauri + Next.js + 传感器服务）",
     "cancel": "取消",
     "add": "添加"
+  },
+  "view": {
+    "grid": "网格视图",
+    "list": "列表视图"
   },
   "onboarding": {
     "title": "欢迎使用新境盒",
@@ -45,8 +49,7 @@
     "gpuRename": "显卡改写",
     "resolutionConverter": "分辨率换算",
     "dlssPreset": "三角洲DLSS设置",
-    "epicFree": "喜加一",
-    "lobby": "联机"
+    "epicFree": "喜加一"
   },
   "optimization": {
     "pageTitle": "优化",
@@ -83,6 +86,27 @@
       "memoryOptimizeComplete": "完成",
       "aceProcess": "ACE进程",
       "powerPlan": "电源计划"
+    },
+    "startupManager": {
+      "title": "启动项管理",
+      "description": "管理系统开机自启项",
+      "scanError": "扫描启动项失败",
+      "deleteSuccess": "已删除: {{name}}",
+      "deleteError": "删除失败",
+      "locateError": "定位文件失败",
+      "registryError": "打开注册表失败",
+      "totalItems": "共 {{count}} 个启动项",
+      "refresh": "刷新",
+      "scanning": "正在扫描启动项...",
+      "noItems": "未发现启动项",
+      "columnName": "名称",
+      "columnPath": "路径",
+      "columnActions": "操作",
+      "locateFile": "定位文件",
+      "findInRegistry": "在注册表中查找",
+      "delete": "删除",
+      "tipTitle": "💡 提示",
+      "tipDescription": "启动项管理可以帮助您查看和管理系统中所有开机自启的项目。禁用不必要的启动项可以加快系统开机速度。请谨慎操作，某些系统启动项可能为系统正常运行所必需。"
     },
     "memoryLimit": {
       "title": "内存限制",
@@ -141,6 +165,7 @@
       "deleteConfirmText": "确定要从系统中删除电源计划「{{name}}」吗？",
       "cancel": "取消"
     },
+
     "memoryCleanup": {
       "title": "内存清理",
       "description": "查看内存详情并释放内存",
@@ -157,7 +182,25 @@
       "cleaning": "清理中...",
       "freedMemory": "释放了 {{size}} MB 内存",
       "noMemoryFreed": "当前无需清理",
-      "error": "清理失败"
+      "error": "清理失败",
+      "autoClean": "定时清理",
+      "autoCleanDesc": "自动在设定的条件满足时清理内存",
+      "interval": "间隔时间",
+      "intervalSec": "{{seconds}}秒",
+      "interval5min": "5分钟",
+      "interval10min": "10分钟",
+      "interval30min": "30分钟",
+      "interval1hour": "1小时",
+      "threshold": "内存阈值",
+      "thresholdDesc": "当已用内存超过此值时触发清理",
+      "thresholdGB": "{{gb}} GB",
+      "cleanType": "清理类型",
+      "cleanTypeAll": "全部清理",
+      "cleanTypeStandby": "清理待机内存",
+      "cleanTypeWorkingSet": "收紧系统工作集",
+      "autoCleanEnabled": "定时清理已开启",
+      "autoCleanDisabled": "定时清理已关闭",
+      "configSaved": "定时清理配置已保存"
     },
     "aceOptimize": {
       "title": "三角洲/ACE优化",
@@ -263,6 +306,8 @@
     "speed": "频率",
     "bankLabel": "插槽",
     "storage": "存储",
+    "totalCapacity": "总容量",
+    "count": "条数",
     "deltaPasswordFetched": "已获取",
     "deltaPasswordNotFetched": "--"
   },
@@ -276,7 +321,7 @@
     "network": "网络",
     "optimization": "优化",
     "builtinTools": "内置工具",
-    "thirdpartyTools": "第三方工具",
+    "officialTools": "官方推荐",
     "tools": {
       "assistantCrosshair": "辅助准心",
       "memreduct": "Memreduct",
@@ -290,8 +335,9 @@
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner",
-      "geek": "Geek"
+      "geek": "Geek",
     },
+    "mctierDesc": "Minecraft 服务器性能检测与排名工具",
     "descriptions": {
       "assistantCrosshair": "游戏屏幕准心辅助工具",
       "memreduct": "内存清理工具",
@@ -376,6 +422,8 @@
     "deleteIccConfirm": "确认删除此 ICC 预设？",
     "deleteIccSuccess": "ICC 预设已删除",
     "noIccProfiles": "暂无导入的 ICC 配置文件",
+    "selectDisplay": "选择显示器",
+    "primary": "主",
     "cancel": "取消",
     "delete": "删除"
   },
@@ -415,6 +463,8 @@
     "opacity": "透明度",
     "parameters": "参数调整",
     "preview": "预览",
+    "monitor": "显示器选择",
+    "primaryMonitor": "主显示器",
     "advanced": "高级设置",
     "resetDefault": "恢复默认",
     "updateFailed": "更新设置失败",
@@ -605,6 +655,9 @@
     "lowEnd": "低端显卡",
     "highEnd": "高端显卡",
     "selectPlaceholder": "请选择显卡",
+    "presetTab": "预设显卡",
+    "customTab": "自定义显卡",
+    "customPlaceholder": "输入自定义显卡名称",
     "selectGpu": "请先选择显卡",
     "apply": "应用",
     "applying": "应用中...",
@@ -755,6 +808,9 @@
         "byInstance": "按实例",
         "byGroup": "按分组"
       },
+      "startup": "启动",
+      "autoStartLabel": "开机自启",
+      "autoStartDesc": "系统启动时自动运行 NexBox",
       "closeBehavior": "关闭行为",
       "closeBehaviorLabel": "点击关闭按钮时",
       "closeBehaviorDesc": "选择点击关闭按钮时的行为",
@@ -837,7 +893,13 @@
       "wechat": "微信支付",
       "alipay": "支付宝",
       "thankYou": "感谢您的支持！",
-      "placeholder": "请添加收款码图片"
+      "placeholder": "请添加收款码图片",
+      "sponsorList": {
+        "title": "赞助者名单",
+        "loading": "加载中...",
+        "error": "加载失败",
+        "empty": "暂无赞助者"
+      }
     },
     "aboutSettings": {
       "title": "关于",
@@ -852,6 +914,7 @@
       "acknowledgments": "致谢",
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "感谢上海交通大学Minecraft社开源项目",
+      "joinUs": "加入我们",
       "changelog": "更新日志",
       "changelogTitle": "当前版本更新内容",
       "noChangelog": "暂无更新日志",
@@ -887,6 +950,172 @@
     "pixels": "像素",
     "standard": "标准",
     "tip": "选择分辨率类型后，下方将显示三种常见画面比例的具体分辨率值，方便您在游戏中调整画面比例设置。"
+  },
+  "systemOptimizer": {
+    "pageTitle": "系统优化",
+    "pageDesc": "一键开关系统各项优化，提升性能与隐私保护",
+    "category": {
+      "system": "系统",
+      "disk": "磁盘",
+      "privacy": "隐私",
+      "apps": "常规应用程序",
+      "touch": "触碰",
+      "gaming": "游戏"
+    },
+    "system": {
+      "performanceTweaks": "启用性能调整",
+      "performanceTweaksDesc": "自动结束卡顿进程、缩短超时、显示隐藏文件、优化多媒体性能",
+      "removeMenuDelay": "删除菜单延迟",
+      "removeMenuDelayDesc": "将菜单弹出延迟降至0，界面操作更跟手",
+      "disableNetworkThrottling": "禁用网络节流",
+      "disableNetworkThrottlingDesc": "解除 Windows 网络带宽限制，提升网络吞吐量",
+      "disableErrorReporting": "禁用错误报告",
+      "disableErrorReportingDesc": "关闭 Windows 错误报告服务及相关功能",
+      "disableCompatibilityAssistant": "禁用兼容性助手",
+      "disableCompatibilityAssistantDesc": "关闭程序兼容性助手服务，减少后台开销",
+      "disablePrintService": "禁用打印服务",
+      "disablePrintServiceDesc": "禁用打印后台处理程序，不使用打印机可节省资源",
+      "disableFaxService": "禁用传真服务",
+      "disableFaxServiceDesc": "禁用传真服务，不使用传真的系统可安全关闭",
+      "disableStickyKeys": "禁用粘滞键",
+      "disableStickyKeysDesc": "关闭粘滞键、筛选键和切换键等辅助功能",
+      "disableSmartScreen": "禁用SmartScreen",
+      "disableSmartScreenDesc": "关闭 Microsoft Defender SmartScreen 筛选器"
+    },
+    "disk": {
+      "disableSystemRestore": "禁用系统还原",
+      "disableSystemRestoreDesc": "关闭系统还原点创建，释放磁盘空间",
+      "disableSuperfetch": "禁用 Superfetch",
+      "disableSuperfetchDesc": "关闭 SysMain 服务及预取功能，减少磁盘I/O",
+      "disableHibernate": "禁用休眠",
+      "disableHibernateDesc": "关闭系统休眠功能，释放磁盘空间（约内存大小）",
+      "disableNtfsTimestamp": "禁用NTFS时间戳",
+      "disableNtfsTimestampDesc": "关闭 NTFS 最后访问时间更新，减少磁盘写入",
+      "disableMyPeople": "禁用 My People",
+      "disableMyPeopleDesc": "关闭任务栏「我的联系人」功能",
+      "disableTPMCheck": "禁用TPM2.0检测",
+      "disableTPMCheckDesc": "绕过 TPM 2.0 和 CPU 兼容性检查",
+      "disableSensorServices": "禁用传感器服务",
+      "disableSensorServicesDesc": "关闭传感器和定位服务，保护隐私并节省资源",
+      "removeCastToDevice": "移除 Cast to device",
+      "removeCastToDeviceDesc": "从右键菜单移除「投射到设备」功能"
+    },
+    "privacy": {
+      "disableTelemetryTasks": "禁用遥测任务",
+      "disableTelemetryTasksDesc": "禁用 Windows 体验改善计划等数十个计划任务",
+      "disableMediaPlayerSharing": "禁用媒体播放器共享",
+      "disableMediaPlayerSharingDesc": "关闭 WMP 网络共享服务",
+      "disableHomeGroup": "禁用家庭组",
+      "disableHomeGroupDesc": "关闭家庭组监听和提供程序服务",
+      "disableSmb1": "禁用SMBv1协议",
+      "disableSmb1Desc": "关闭过时的 SMBv1 协议，提升安全性",
+      "disableSmb2": "禁用SMBv2协议",
+      "disableSmb2Desc": "关闭 SMBv2 协议",
+      "disableTelemetryServices": "禁用遥测服务",
+      "disableTelemetryServicesDesc": "关闭 DiagTrack、dmwappushservice 等遥测服务及兼容性引擎",
+      "disableCortana": "禁用小娜Cortana",
+      "disableCortanaDesc": "关闭 Cortana、Web搜索、云搜索等功能",
+      "disableNewsInterests": "禁用新闻和兴趣",
+      "disableNewsInterestsDesc": "关闭任务栏新闻和兴趣 Widget",
+      "disableStartMenuAds": "禁用开始菜单广告",
+      "disableStartMenuAdsDesc": "关闭开始菜单中的推广建议和自动安装应用",
+      "disableEdgeTelemetry": "禁用Edge遥测",
+      "disableEdgeTelemetryDesc": "关闭 Edge 个性化报告、反馈、指标遥测",
+      "disableEdgeDiscoverBar": "禁用 Edge发现栏",
+      "disableEdgeDiscoverBarDesc": "关闭 Edge 侧边栏发现功能"
+    },
+    "apps": {
+      "disableOfficeTelemetry": "禁用 Office 遥测",
+      "disableOfficeTelemetryDesc": "关闭 Office 遥测代理程序和相关计划任务",
+      "disableFirefoxTelemetry": "禁用 Firefox 遥测",
+      "disableFirefoxTelemetryDesc": "通过组策略禁用 Firefox 遥测和默认浏览器代理",
+      "disableChromeTelemetry": "禁用 Chrome 遥测",
+      "disableChromeTelemetryDesc": "通过组策略禁用 Chrome 指标报告、清理报告等遥测",
+      "disableNvidiaTelemetry": "禁用 NVIDIA 遥测",
+      "disableNvidiaTelemetryDesc": "禁用 NVIDIA 遥测容器服务和计划任务",
+      "disableVsTelemetry": "禁用 Visual Studio 遥测",
+      "disableVsTelemetryDesc": "关闭 VS 遥测开关和收集器服务"
+    },
+    "touch": {
+      "disableWindowsInk": "禁用 Windows Ink",
+      "disableWindowsInkDesc": "关闭 Windows Ink 工作区和笔迹建议",
+      "disableSpellCheck": "禁用拼写检查",
+      "disableSpellCheckDesc": "关闭触控键盘的自动更正、拼写检查和文本预测",
+      "disableCloudClipboard": "禁用云剪贴板",
+      "disableCloudClipboardDesc": "关闭剪贴板历史和跨设备同步"
+    },
+    "gaming": {
+      "enableGameMode": "启用游戏模式",
+      "enableGameModeDesc": "开启硬件加速GPU调度和游戏模式配置",
+      "disableXboxLive": "禁用Xbox Live 服务",
+      "disableXboxLiveDesc": "禁用 Xbox Live 认证管理器、游戏存档等后台服务",
+      "disableGameBar": "禁用游戏栏功能",
+      "disableGameBarDesc": "关闭游戏栏、游戏DVR录制和后台录制功能"
+    },
+    "scan": "扫描系统状态",
+    "scanning": "扫描中...",
+    "scanComplete": "系统状态扫描完成",
+    "scanError": "扫描系统状态失败",
+    "scanHint": "点击「扫描系统状态」按钮检测当前系统各项优化状态。部分需要重启才能生效的优化项将通过记录保存。",
+    "batchEnable": "全部优化",
+    "batchDisable": "全部取消优化",
+    "batchOptimized": "全部优化已执行完成",
+    "batchReverted": "全部优化已取消",
+    "batchError": "批量操作执行失败",
+    "optimized": "已优化",
+    "reverted": "已取消优化",
+    "optimizing": "执行中...",
+    "operationError": "操作执行失败",
+    "requiresReboot": "需要重启系统才能完全生效"
+  },
+  "networkOptimize": {
+    "pageTitle": "网络优化",
+    "pageDesc": "优化网络参数，配置 DNS 提升解析速度",
+    "loadFailed": "加载状态失败",
+    "scanning": "扫描中...",
+    "currentDns": "当前 DNS",
+    "noDnsConfig": "使用自动获取",
+    "dnsApplied": "DNS 已应用",
+    "dnsRestored": "DNS 已恢复为自动获取",
+    "applyError": "DNS 应用失败",
+    "dns": {
+      "title": "DNS 设置",
+      "primary": "首选 DNS",
+      "secondary": "备选 DNS",
+      "apply": "应用",
+      "applied": "已应用",
+      "restore": "恢复自动获取",
+      "customLabel": "自定义 DNS"
+    },
+    "dnsRequired": "请至少填写首选 DNS 地址",
+    "tcpCongestion": {
+      "title": "TCP 拥塞控制",
+      "description": "启用 CTCP/CUBIC 拥塞控制算法，提升网络吞吐量"
+    },
+    "chimney": {
+      "title": "TCP Chimney Offload",
+      "description": "关闭 TCP Chimney Offload 降低网络延迟"
+    },
+    "nagle": {
+      "title": "Nagle 算法",
+      "description": "禁用 Nagle 算法，减少小包延迟（适合游戏）"
+    },
+    "adapterPower": {
+      "title": "网卡节能禁用",
+      "description": "关闭网卡电源节省模式，降低延迟抖动"
+    },
+    "batch": {
+      "title": "批量优化",
+      "enable": "全部优化",
+      "disable": "全部恢复默认"
+    },
+    "batchOptimized": "全部网络优化已执行",
+    "batchReverted": "全部网络优化已恢复",
+    "batchError": "批量操作执行失败",
+    "optimized": "已优化",
+    "reverted": "已取消优化",
+    "optimizing": "执行中...",
+    "operationError": "操作执行失败"
   },
   "shaderCache": {
     "title": "着色器缓存清理",
@@ -1051,3 +1280,5 @@
     "saved": "快捷键已保存"
   }
 }
+
+

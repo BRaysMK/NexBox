@@ -1,4 +1,4 @@
-import {
+﻿import {
   Box,
   Flex,
   Grid,
@@ -447,6 +447,88 @@ function ToolSection({
   );
 }
 
+function OfficialToolSection({
+  activeCategory,
+}: {
+  activeCategory: string;
+}) {
+  const { t } = useTranslation();
+  const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
+  const dividerColor = useColorModeValue("gray.200", "#333333");
+  const iconColor = useColorModeValue("gray.700", "#cccccc");
+  const titleColor = useColorModeValue("gray.800", "#e0e0e0");
+  const descColor = useColorModeValue("gray.500", "#888888");
+
+  // Official recommendation only shows when category is "all"
+  if (activeCategory !== "all") return null;
+
+  const handleOpen = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://mctier.pmhs.top/");
+    }).catch(() => {
+      window.open("https://mctier.pmhs.top/", "_blank");
+    });
+  };
+
+  return (
+    <Box mb={8}>
+      <HStack mb={4} spacing={3}>
+        <Text fontSize={"lg"} fontWeight={"bold"} color={sectionTitleColor}>
+          {t("tools.officialTools")}
+        </Text>
+        <Badge fontSize={"xs"} colorScheme={"blue"}>
+          {t("tools.recommended")}
+        </Badge>
+      </HStack>
+      <Divider borderColor={dividerColor} mb={4} />
+      <Grid
+        templateColumns={{
+          base: "1fr",
+          sm: "repeat(2, 1fr)",
+          md: "repeat(3, 1fr)",
+        }}
+        gap={4}
+      >
+        <LiquidGlassToolCard size={"md"} onClick={handleOpen}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("mctier") || ""}
+                alt={"MCTier"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  MCTier
+                </Text>
+                <Badge colorScheme={"blue"} fontSize={"xs"} variant={"subtle"}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.mctierDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+      </Grid>
+    </Box>
+  );
+}
+
 function ThirdPartyToolSection({
   title,
   activeCategory,
@@ -639,6 +721,8 @@ export default function ToolsPage() {
             <Heading size="lg" color={headingColor} mb={6}>
               {t("tools.title")}
             </Heading>
+
+            <OfficialToolSection activeCategory={activeCategory} />
 
             <ToolSection
               title={t("tools.builtinTools")}

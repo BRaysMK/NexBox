@@ -1,8 +1,12 @@
-{
+﻿{
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
     "description": "クロスプラットフォームパフォーマンスモニタリング (Tauri + Next.js + センサーサービス)"
+  },
+  "view": {
+    "grid": "グリッド表示",
+    "list": "リスト表示"
   },
   "onboarding": {
     "title": "NexBoxへようこそ",
@@ -43,8 +47,7 @@
         "gpuRename": "GPU名前変更",
         "resolutionConverter": "解像度変換",
         "dlssPreset": "デルタフォースDLSS設定",
-        "epicFree": "Epic 料ゲーム",
-        "lobby": "マルチプレイ"
+        "epicFree": "Epic 料ゲーム"
     },
   "optimization": {
     "pageTitle": "最適化",
@@ -81,6 +84,143 @@
       "memoryOptimizeComplete": "完了",
       "aceProcess": "ACEプロセス",
       "powerPlan": "電源プラン"
+    },
+    "startupManager": {
+      "title": "スタートアップ管理",
+      "description": "システムの起動項目を管理",
+      "scanError": "スタートアップ項目のスキャンに失敗",
+      "deleteSuccess": "削除しました: {{name}}",
+      "deleteError": "削除に失敗",
+      "locateError": "ファイルの特定に失敗",
+      "registryError": "レジストリの開封に失敗",
+      "totalItems": "全 {{count}} 個のスタートアップ項目",
+      "refresh": "更新",
+      "scanning": "スタートアップ項目をスキャン中...",
+      "noItems": "スタートアップ項目が見つかりません",
+      "columnName": "名前",
+      "columnPath": "パス",
+      "columnActions": "操作",
+      "locateFile": "ファイルを開く",
+      "findInRegistry": "レジストリで検索",
+      "delete": "削除",
+      "tipTitle": "💡 ヒント",
+      "tipDescription": "スタートアップ管理では、システムの自動起動項目を表示・管理できます。不要な項目を無効にすると起動時間を短縮できます。システムに必要な項目もあるため、注意して操作してください。"
+    },
+    "systemOptimize": {
+      "title": "システム最適化",
+      "description": "システムサービスとプライバシー設定を最適化",
+      "loadFailed": "状態の読み込みに失敗",
+      "loading": "現在の状態を確認中...",
+      "optimizing": "最適化中...",
+      "restoring": "復元中...",
+      "optimizeAll": {
+        "title": "すべて有効",
+        "description": "すべてのスイッチをオンにして最適化を有効化",
+        "button": "すべて有効"
+      },
+      "restore": {
+        "title": "すべて無効",
+        "description": "すべてのスイッチをオフにして最適化を無効化",
+        "button": "すべて無効"
+      },
+      "enabled": "有効",
+      "tweakList": "最適化ステータス",
+      "tweaks": {
+        "master": "応答しないプログラムを自動終了",
+        "removeMenuDelay": "メニュー遅延を削減",
+        "disableNetworkThrottling": "ネットワーク調整を無効化",
+        "disableErrorReporting": "エラー報告を無効化",
+        "disableCompatibilityAssistant": "互性アシスタントを無効化",
+        "disablePrintService": "印刷サービスを無効化",
+        "disableFaxService": "FAXサービスを無効化",
+        "disableStickyKeys": "固定キーを無効化",
+        "disableSmartScreen": "SmartScreenを無効化",
+        "disableSystemRestore": "システムの復元を無効化",
+        "disableSuperfetch": "Superfetch/SysMainを無効化",
+        "disableHibernate": "休止状態を無効化",
+        "disableNtfsTimestamp": "NTFSタイムスタンプ更新を無効化",
+        "disableTelemetryTasks": "テレメトリタスクを無効化",
+        "disableMediaPlayerSharing": "メディアプレイヤー共有を無効化",
+        "disableHomeGroup": "ホームグループを無効化",
+        "disableSmb1": "SMB1プロトコルを無効化",
+        "disableSmb2": "SMB2プロトコルを無効化",
+        "disableCortana": "Cortanaを無効化",
+        "disableTelemetryServices": "テレメトリサービスを無効化",
+        "disableNewsInterests": "ニュースと興味を無効化",
+        "disableStartMenuAds": "スタートメニュー広告を無効化",
+        "disableAdvertisingId": "広告IDを無効化",
+        "disableDiagnosticData": "診断データ収集を無効化",
+        "disableOfficeTelemetry": "Officeテレメトリを無効化",
+        "disableFirefoxTelemetry": "Firefoxテレメトリを無効化",
+        "disableChromeTelemetry": "Chromeテレメトリを無効化",
+        "disableNvidiaTelemetry": "NVIDIAテレメトリを無効化",
+        "disableVsTelemetry": "VSテレメトリを無効化",
+        "disableEdgeTelemetry": "Edgeテレメトリを無効化",
+        "disableEdgeDiscoverBar": "Edgeディスカバーバーを無効化",
+        "optimizeProcessCount": "プロセス分割しきい値を最適化",
+        "disableStoreSearchApp": "ストア検索アプリを無効化",
+        "disableStorePromotions": "ストアプロモーションを無効化",
+        "disableStoreAutoUpdate": "ストア自動更新を無効化",
+        "disableSpotlightLock": "スポットライトロックを無効化",
+        "disableMyPeople": "My Peopleを無効化",
+        "disableTPMCheck": "TPMチェックを無効化",
+        "disableSensorServices": "センサーサービスを無効化",
+        "removeCastToDevice": "デバイスへのキャストを削除",
+        "disableVBS": "仮想化ベースのセキュリティを無効化",
+        "disableModernStandby": "モダンスタンバイを無効化",
+        "enableGameMode": "ゲームモードを有効化",
+        "disableXboxLive": "Xbox Liveを無効化",
+        "disableGameBar": "ゲームバーを無効化",
+        "disableWindowsInk": "Windows Inkを無効化",
+        "disableSpellCheck": "スペルチェックを無効化",
+        "disableCloudClipboard": "クラウドクリップボードを無効化",
+        "disableAppLaunchTracking": "アプリ起動追跡を無効化",
+        "disableFileSystemAccess": "ファイルシステムアクセスを無効化",
+        "disableDocumentsAccess": "ドキュメントアクセスを無効化",
+        "disableCalendarAccess": "カレンダーアクセスを無効化",
+        "disableContactsAccess": "連絡先アクセスを無効化",
+        "disableLanguageTracking": "言語追跡を無効化",
+        "disableWelcomeExperience": "ウェルカム体験を無効化",
+        "disableFeedbackFrequency": "フィードバック頻度を無効化",
+        "disableWritingHabits": "入力習慣収集を無効化"
+      }
+    },
+    "networkOptimize": {
+      "title": "ネットワーク最適化",
+      "description": "ネットワーク設定とDNSを最適化",
+      "loadFailed": "状態の読み込みに失敗",
+      "restore": "デフォルトに戻す",
+      "tcpCongestion": {
+        "title": "TCP輻輳制御",
+        "description": "TCP輻輳制御をCTCP/CUBICに設定"
+      },
+      "chimney": {
+        "title": "TCP Chimney Offload",
+        "description": "TCP Chimney Offloadを無効にしてレイテンシを削減"
+      },
+      "nagle": {
+        "title": "Nagleアルゴリズム",
+        "description": "Nagleアルゴリズムを無効にしてゲームの遅延を削減"
+      },
+      "adapterPower": {
+        "title": "アダプター省電力",
+        "description": "ネットワークアダプターの省電力を無効化"
+      },
+      "dns": {
+        "title": "DNS設定",
+        "primary": "プライマリDNS",
+        "secondary": "セカンダリDNS",
+        "apply": "DNSを適用",
+        "applied": "適用済み",
+        "restore": "自動取得に戻す"
+      },
+      "dnsRequired": "プライマリDNSアドレスを入力してください",
+      "batch": {
+        "title": "一括最適化",
+        "description": "すべてのネットワーク最適化を一括で適用/復元",
+        "enable": "すべて有効",
+        "disable": "すべて復元"
+      }
     },
     "memoryLimit": {
       "title": "メモリ制限",
@@ -238,6 +378,8 @@
     "speed": "速度",
     "bankLabel": "スロット",
     "storage": "ストレージ",
+    "totalCapacity": "合計容量",
+    "count": "枚数",
     "deltaPasswordFetched": "取得済み",
     "deltaPasswordNotFetched": "--"
   },
@@ -251,7 +393,7 @@
     "network": "ネットワーク",
     "optimization": "最適化",
     "builtinTools": "内蔵ツール",
-    "thirdpartyTools": "サードパーティツール",
+    "officialTools": "公式おすすめ",
     "tools": {
       "assistantCrosshair": "アシスタントクロスヘア",
       "memreduct": "Memreduct",
@@ -266,6 +408,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
+    "mctierDesc": "Minecraft サーバーパフォーマンステストとランキングツール",
     "descriptions": {
       "assistantCrosshair": "ゲーム画面クロスヘアアシスタントツール",
       "memreduct": "メモリクリーニングツール",
@@ -349,6 +492,8 @@
     "deleteIccConfirm": "この ICC プリセットを削除しますか？",
     "deleteIccSuccess": "ICC プリセットが削除されました",
     "noIccProfiles": "インポートされた ICC プロファイルはありません",
+    "selectDisplay": "ディスプレイを選択",
+    "primary": "メイン",
     "cancel": "キャンセル",
     "delete": "削除"
   },
@@ -388,6 +533,8 @@
     "opacity": "不透明度",
     "preview": "プレビュー",
     "parameters": "パラメーター",
+    "monitor": "モニター選択",
+    "primaryMonitor": "プライマリモニター",
     "advanced": "詳細設定",
     "resetDefault": "デフォルトにリセット",
     "updateFailed": "設定の更新に失敗しました",
@@ -559,6 +706,9 @@
     "lowEnd": "ローエンドGPU",
     "highEnd": "ハイエンドGPU",
     "selectPlaceholder": "GPUを選択してください",
+    "presetTab": "プリセットGPU",
+    "customTab": "カスタムGPU",
+    "customPlaceholder": "カスタムGPU名を入力",
     "selectGpu": "先にGPUを選択してください",
     "apply": "適用",
     "applying": "適用中...",
@@ -762,6 +912,9 @@
         "byInstance": "インスタンス別",
         "byGroup": "グループ別"
       },
+      "startup": "起動",
+      "autoStartLabel": "起動時に自動起動",
+      "autoStartDesc": "システム起動時にNexBoxを自動起動します",
       "closeBehavior": "終了動作",
       "closeBehaviorLabel": "閉じるボタンを押した時",
       "closeBehaviorDesc": "閉じるボタンを押した時の動作を選択",
@@ -822,7 +975,13 @@
       "wechat": "WeChat Pay",
       "alipay": "Alipay",
       "thankYou": "ご支援ありがとうございます！",
-      "placeholder": "QRコード画像を追加してください"
+      "placeholder": "QRコード画像を追加してください",
+      "sponsorList": {
+        "title": "スポンサー一覧",
+        "loading": "読み込み中...",
+        "error": "読み込み失敗",
+        "empty": "スポンサーはいません"
+      }
     },
     "aboutSettings": {
       "title": "について",
@@ -924,3 +1083,4 @@
     "saved": "ホットキーを保存しました"
   }
 }
+
