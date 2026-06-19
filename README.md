@@ -1,6 +1,6 @@
 # NexBox - 游戏工具箱
 
-[![Version](https://img.shields.io/badge/version-2.5.7-blue.svg)](https://github.com/MuLiu_SaMa/nexbox)
+[![Version](https://img.shields.io/badge/version-3.8.3-blue.svg)](https://github.com/MuLiu_SaMa/nexbox)
 [![Tauri](https://img.shields.io/badge/Tauri-2.10-orange.svg)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19.0-blue.svg)](https://reactjs.org/)
 [![Rust](https://img.shields.io/badge/Rust-1.77.2-red.svg)](https://www.rust-lang.org/)
