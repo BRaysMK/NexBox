@@ -1,4 +1,4 @@
-﻿{
+{
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
@@ -333,17 +333,7 @@
   "home": {
     "title": "Bienvenue sur NexBox",
     "welcome": "Bienvenue",
-    "customHtml": "Widget personnalisé",
     "selectTools": "Sélectionner les outils rapides",
-    "edit": "Modifier",
-    "reset": "Réinitialiser",
-    "editHtml": "Modifier HTML",
-    "code": "Code",
-    "preview": "Aperçu",
-    "htmlPlaceholder": "Entrez le code HTML ici...",
-    "resetToDefault": "Réinitialiser par défaut",
-    "save": "Enregistrer",
-    "pickImage": "Choisir une image",
     "todayPopularity": "Popularité du jour",
     "randomQuote": "Citation aléatoire",
     "announcement": "Annonce",
@@ -393,7 +383,9 @@
     "network": "Réseau",
     "optimization": "Optimisation",
     "builtinTools": "Outils intégrés",
+    "thirdpartyTools": "Outils tiers",
     "officialTools": "Recommandations officielles",
+    "recommended": "Recommandé",
     "tools": {
       "assistantCrosshair": "Réticule d'assistance",
       "memreduct": "Memreduct",
@@ -408,7 +400,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
-    "mctierDesc": "Outil de test de performance et de classement des serveurs Minecraft",
+    "mctierDesc": "Outil de mise en réseau universel LAN virtuel",
     "descriptions": {
       "assistantCrosshair": "Outil d'assistance de réticule d'écran de jeu",
       "memreduct": "Outil de nettoyage de mémoire",
@@ -881,9 +873,6 @@
         "de": "Allemand"
       },
       "homepage": "Page d'accueil",
-      
-      "customHtmlLabel": "Zone personnalisée",
-      "customHtmlDesc": "Afficher une zone HTML personnalisable sur la page d'accueil",
       "todayPopularityLabel": "Popularité du jour",
       "todayPopularityDesc": "Afficher le nombre aléatoire de popularité du jour sur la page d'accueil",
       "announcementLabel": "Annonces",

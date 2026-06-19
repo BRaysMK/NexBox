@@ -83,7 +83,7 @@ export function LiquidGlassToolCard({
       {...props}
     >
       <Box
-        style={getBorderGlowStyle(mouseX, mouseY, isHovering, glowColor)}
+        style={getBorderGlowStyle(glowColor)}
       />
       {children}
     </Box>

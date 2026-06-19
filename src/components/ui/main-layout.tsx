@@ -17,12 +17,48 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { config } = useThemeColor();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoReady, setVideoReady] = useState(false);
+  const idCounter = useRef(0);
 
   const activeImage = customBgImages[activeBgIndex];
   const activePreset = presetBackgrounds[activePresetIndex];
   const showImageBg = backgroundMode === "image" && activeImage;
   const showDynamicBg = backgroundMode === "dynamic" && dynamicBgVideo;
   const showPresetBg = backgroundMode === "preset" && activePreset;
+
+  // 背景交叉淡化
+  interface BgLayer {
+    url: string;
+    id: number;
+    fading: boolean;
+  }
+  const [bgLayers, setBgLayers] = useState<BgLayer[]>([]);
+
+  useEffect(() => {
+    const src = showPresetBg
+      ? activePreset?.path ?? null
+      : showImageBg
+        ? activeImage
+        : null;
+
+    if (!src) {
+      setBgLayers([]);
+      return;
+    }
+
+    const newId = ++idCounter.current;
+
+    setBgLayers((prev) => [
+      ...prev.map((l) => ({ ...l, fading: true })),
+      { url: src, id: newId, fading: false },
+    ]);
+
+    // 动画完成后移除旧的图层
+    const timer = setTimeout(() => {
+      setBgLayers((prev) => prev.filter((l) => l.id === newId));
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [showPresetBg, activePresetIndex, showImageBg, activeBgIndex, activeImage, activePreset]);
 
   // 预加载视频：当 dynamicBgVideo 变化时，提前创建 link 预加载
   useEffect(() => {
@@ -46,39 +82,20 @@ export function MainLayout({ children }: MainLayoutProps) {
   }, [dynamicBgVideo]);
 
   useEffect(() => {
-    let bgImage = "";
     let bgColorToUse = bgColor;
 
-    if (showImageBg) {
-      bgImage = `url(${activeImage})`;
-      bgColorToUse = "transparent";
-    } else if (showPresetBg) {
-      bgImage = `url(${activePreset.path})`;
+    if (showImageBg || showPresetBg) {
       bgColorToUse = "transparent";
     } else if (showDynamicBg) {
       bgColorToUse = "transparent";
     }
 
-    if (bgImage) {
-      document.body.style.backgroundImage = bgImage;
-      document.body.style.backgroundSize = "cover";
-      document.body.style.backgroundPosition = "center";
-      document.body.style.backgroundRepeat = "no-repeat";
-      document.body.style.backgroundAttachment = "fixed";
-      document.body.style.backgroundColor = bgColorToUse;
-    } else {
-      document.body.style.backgroundImage = "none";
-      document.body.style.backgroundColor = bgColorToUse;
-    }
+    document.body.style.backgroundColor = bgColorToUse;
+
     return () => {
-      document.body.style.backgroundImage = "";
-      document.body.style.backgroundSize = "";
-      document.body.style.backgroundPosition = "";
-      document.body.style.backgroundRepeat = "";
-      document.body.style.backgroundAttachment = "";
       document.body.style.backgroundColor = "";
     };
-  }, [showImageBg, showDynamicBg, showPresetBg, activeImage, activePreset, bgColor]);
+  }, [showImageBg, showDynamicBg, showPresetBg, bgColor]);
 
   useEffect(() => {
     if (videoRef.current && dynamicBgVideo) {
@@ -92,6 +109,31 @@ export function MainLayout({ children }: MainLayoutProps) {
       minHeight="100vh"
       bg="transparent"
     >
+      {/* 预设和图片背景的交叉淡化层 */}
+      {bgLayers.map((layer) => (
+        <Box
+          key={layer.id}
+          position="fixed"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          zIndex={-1}
+          bgImage={`url(${layer.url})`}
+          bgSize="cover"
+          bgPosition="center"
+          bgRepeat="no-repeat"
+          opacity={layer.fading ? 0 : 1}
+          transition={layer.fading ? "opacity 0.5s ease-in-out" : undefined}
+          animation={!layer.fading ? "bgFadeIn 0.5s ease-in-out" : undefined}
+          sx={{
+            "@keyframes bgFadeIn": {
+              from: { opacity: 0 },
+              to: { opacity: 1 },
+            },
+          }}
+        />
+      ))}
       {showDynamicBg && (
         <Box
           position="fixed"

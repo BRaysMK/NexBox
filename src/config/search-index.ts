@@ -2,6 +2,7 @@ import {
   Home,
   Cpu,
   Wrench,
+  List,
   Package,
   Crosshair,
   TrendingUp,
@@ -28,7 +29,7 @@ import {
   Gamepad2,
   Battery,
   HardDrive,
-  Users,
+  Settings2,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -118,14 +119,6 @@ export const searchIndex: SearchItem[] = [
     icon: Gamepad2,
     category: "page",
     keywords: ["epic", "喜加一", "免费", "游戏", "free", "games", "白嫖"],
-  },
-  {
-    id: "lobby",
-    nameKey: "sidebar.lobby",
-    path: "/lobby",
-    icon: Users,
-    category: "page",
-    keywords: ["联机", "联机大厅", "MCTier", "大厅", "lobby", "multiplayer", "联机对战"],
   },
   {
     id: "sponsor",
@@ -294,6 +287,30 @@ export const searchIndex: SearchItem[] = [
     icon: HardDrive,
     category: "optimization",
     keywords: ["存储", "清理", "storage", "clean", "磁盘", "垃圾", "临时文件", "缓存"],
+  },
+  {
+    id: "startup-manager",
+    nameKey: "optimization.startupManager.title",
+    path: "/optimize/startup-manager",
+    icon: List,
+    category: "optimization",
+    keywords: ["启动", "startup", "开机自启", "管理"],
+  },
+  {
+    id: "system-optimizer",
+    nameKey: "systemOptimizer.pageTitle",
+    path: "/optimize/system-optimizer",
+    icon: Settings2,
+    category: "optimization",
+    keywords: ["系统优化", "system", "optimizer", "注册表", "服务", "性能", "隐私", "游戏", "一键优化"],
+  },
+  {
+    id: "network-optimizer",
+    nameKey: "networkOptimize.pageTitle",
+    path: "/optimize/network-optimizer",
+    icon: Network,
+    category: "optimization",
+    keywords: ["网络优化", "network", "dns", "tcp", "延迟", "网速", "域名", "解析"],
   },
 ];
 

@@ -31,6 +31,9 @@ fn default_display_items() -> DisplayItems {
         DisplayItem { id: "cpu_usage".to_string(), label: "CPU占用".to_string(), enabled: true },
         DisplayItem { id: "gpu_temp".to_string(), label: "GPU温度".to_string(), enabled: true },
         DisplayItem { id: "gpu_usage".to_string(), label: "GPU占用".to_string(), enabled: true },
+        DisplayItem { id: "gpu_fan_speed".to_string(), label: "GPU风扇(仅NVIDIA)".to_string(), enabled: false },
+        DisplayItem { id: "gpu_power".to_string(), label: "GPU功耗(仅NVIDIA)".to_string(), enabled: false },
+        DisplayItem { id: "gpu_clock".to_string(), label: "GPU频率(仅NVIDIA)".to_string(), enabled: false },
         DisplayItem { id: "memory_usage".to_string(), label: "内存占用".to_string(), enabled: true },
         DisplayItem { id: "game_ping".to_string(), label: "游戏延迟".to_string(), enabled: true },
         DisplayItem { id: "delta_password".to_string(), label: "三角洲密码".to_string(), enabled: true },
@@ -93,6 +96,11 @@ pub struct OverlayHardwareData {
     memory_usage: Option<f64>,
     delta_password: Option<String>,
     game_ping: Option<u32>,
+    heart_rate: Option<u16>,
+    heart_rate_device: Option<String>,
+    gpu_fan_speed: Option<u32>,
+    gpu_power: Option<u32>,
+    gpu_clock: Option<u32>,
 }
 
 impl Default for OverlayHardwareData {
@@ -105,6 +113,11 @@ impl Default for OverlayHardwareData {
             memory_usage: None,
             delta_password: None,
             game_ping: None,
+            heart_rate: None,
+            heart_rate_device: None,
+            gpu_fan_speed: None,
+            gpu_power: None,
+            gpu_clock: None,
         }
     }
 }
@@ -124,7 +137,7 @@ fn get_or_init_settings() -> OverlaySettings {
 fn collect_hardware_data() -> OverlayHardwareData {
     let fps = crate::game_fps::get_cached_fps();
     let cpu_usage = crate::hardware::get_overlay_cpu_usage();
-    let (gpu_temp, gpu_usage) = crate::hardware::get_overlay_gpu_info();
+    let extended = crate::hardware::get_overlay_gpu_extended_info();
 
     let memory_usage = {
         use sysinfo::System;
@@ -141,14 +154,22 @@ fn collect_hardware_data() -> OverlayHardwareData {
 
     let game_ping = crate::game_ping::get_cached_ping();
 
+    let heart_rate = crate::heart_rate::get_cached_heart_rate();
+    let heart_rate_device = crate::heart_rate::get_heart_rate_device_name();
+
     let new_data = OverlayHardwareData {
         fps,
         cpu_usage,
-        gpu_temp,
-        gpu_usage,
+        gpu_temp: extended.temperature,
+        gpu_usage: extended.usage,
         memory_usage,
         delta_password,
         game_ping,
+        heart_rate,
+        heart_rate_device,
+        gpu_fan_speed: extended.fan_speed,
+        gpu_power: extended.power_watts,
+        gpu_clock: extended.clock_mhz,
     };
 
     let prev_data = CURRENT_HARDWARE_DATA.lock().unwrap().clone();
@@ -161,6 +182,11 @@ fn collect_hardware_data() -> OverlayHardwareData {
             memory_usage: new_data.memory_usage.or(prev.memory_usage),
             delta_password: new_data.delta_password.or_else(|| prev.delta_password.clone()),
             game_ping: new_data.game_ping.or(prev.game_ping),
+            heart_rate: new_data.heart_rate.or(prev.heart_rate),
+            heart_rate_device: new_data.heart_rate_device.or_else(|| prev.heart_rate_device.clone()),
+            gpu_fan_speed: new_data.gpu_fan_speed.or(prev.gpu_fan_speed),
+            gpu_power: new_data.gpu_power.or(prev.gpu_power),
+            gpu_clock: new_data.gpu_clock.or(prev.gpu_clock),
         }
     } else {
         new_data
@@ -527,6 +553,29 @@ mod win32 {
                         None => ("--".to_string(), None),
                     };
                     items.push(DisplayItem { label: "FPS".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: color });
+                }
+                "heart_rate" => {
+                    let val = data.heart_rate.map(|v| format!("{}", v)).unwrap_or_else(|| "--".to_string());
+                    let color = match data.heart_rate {
+                        Some(v) if v < 60 => Some(0x0000FFFFu32),
+                        Some(v) if v < 100 => Some(0x0000FF00u32),
+                        Some(v) if v < 140 => Some(0x0000FFFFu32),
+                        Some(_) => Some(0x000000FFu32),
+                        None => None,
+                    };
+                    items.push(DisplayItem { label: "❤".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: color });
+                }
+                "gpu_fan_speed" => {
+                    let val = data.gpu_fan_speed.map(|v| format!("{}%", v)).unwrap_or_else(|| "--%".to_string());
+                    items.push(DisplayItem { label: "GPU转速".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                }
+                "gpu_power" => {
+                    let val = data.gpu_power.map(|v| format!("{}W", v)).unwrap_or_else(|| "--W".to_string());
+                    items.push(DisplayItem { label: "GPU功耗".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                }
+                "gpu_clock" => {
+                    let val = data.gpu_clock.map(|v| format!("{}MHz", v)).unwrap_or_else(|| "--MHz".to_string());
+                    items.push(DisplayItem { label: "GPU频率".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 _ => {}
             }
@@ -1492,6 +1541,7 @@ pub fn cleanup() {
     }
     crate::game_ping::cleanup();
     crate::game_fps::cleanup();
+    crate::heart_rate::cleanup();
     #[cfg(target_os = "windows")]
     unsafe {
         // Unregister MiSans font

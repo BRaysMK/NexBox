@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "3.1.6"
+version = "3.8.3"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -58,6 +58,7 @@ async-stream = "0.3"
 zip = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
+btleplug = "0.12"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
@@ -66,6 +67,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_Graphics_GdiPlus",
     "Win32_UI_Accessibility",
     "Win32_UI_ColorSystem",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_LibraryLoader",
     "Win32_System_ProcessStatus",
@@ -82,5 +84,12 @@ windows = { version = "0.58", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Security",
     "Win32_System_Threading",
+    "Devices_Bluetooth",
+    "Devices_Bluetooth_Advertisement",
+    "Devices_Bluetooth_GenericAttributeProfile",
+    "Devices_Enumeration",
+    "Foundation",
+    "Foundation_Collections",
+    "Storage_Streams",
 ] }
 

@@ -16,19 +16,24 @@ import {
   Icon,
   IconButton,
   Button,
-  Tooltip,
-  Input,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  Portal,
 } from "@chakra-ui/react";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { LazyStore } from "@tauri-apps/plugin-store";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, ArrowLeft, RotateCcw } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, RotateCcw, Monitor, ChevronDown, Check } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useNavigate } from "react-router-dom";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
 interface CrosshairSettings {
@@ -40,7 +45,20 @@ interface CrosshairSettings {
   gap: number;
   dot_size: number;
   opacity: number;
+  monitor_index: number;
 }
+
+interface DisplayInfo {
+  index: number;
+  name: string;
+  device_name: string;
+  is_primary: boolean;
+  width: number;
+  height: number;
+}
+
+const CROSSHAIR_STORE_KEY = "crosshair-settings";
+const store = new LazyStore("settings.json");
 
 const DEFAULT_SETTINGS: CrosshairSettings = {
   enabled: false,
@@ -51,6 +69,7 @@ const DEFAULT_SETTINGS: CrosshairSettings = {
   gap: 0,
   dot_size: 2,
   opacity: 255,
+  monitor_index: -1,
 };
 
 const STYLE_OPTIONS = [
@@ -115,15 +134,20 @@ export default function CrosshairPage() {
 
   const [settings, setSettings] = useState<CrosshairSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
+  const [displays, setDisplays] = useState<DisplayInfo[]>([]);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const sliderBg = useColorModeValue("gray.200", "gray.600");
+  const hoverBg = useColorModeValue("gray.100", "#252525");
+  const menuListBg = useColorModeValue("white", "#1a1a1a");
+  const inputBg = useColorModeValue("white", "#1a1a1a");
 
   useEffect(() => {
     loadSettings();
+    loadDisplays();
   }, []);
 
   useEffect(() => {
@@ -143,9 +167,28 @@ export default function CrosshairPage() {
   const loadSettings = async () => {
     try {
       const status = await invoke<CrosshairSettings>("get_crosshair_status");
+      const isDefault = JSON.stringify(status) === JSON.stringify({ ...DEFAULT_SETTINGS, enabled: status.enabled });
+      if (isDefault) {
+        const saved = await store.get<CrosshairSettings>(CROSSHAIR_STORE_KEY);
+        if (saved) {
+          saved.enabled = status.enabled;
+          setSettings(saved);
+          await invoke("update_crosshair_settings", { settings: saved });
+          return;
+        }
+      }
       setSettings(status);
     } catch (error) {
       console.error("Failed to load crosshair settings:", error);
+    }
+  };
+
+  const loadDisplays = async () => {
+    try {
+      const list = await invoke<DisplayInfo[]>("get_crosshair_displays");
+      setDisplays(list);
+    } catch (error) {
+      console.error("Failed to load displays:", error);
     }
   };
 
@@ -162,6 +205,8 @@ export default function CrosshairPage() {
     setIsLoading(true);
     try {
       await invoke("update_crosshair_settings", { settings: newSettings });
+      await store.set(CROSSHAIR_STORE_KEY, newSettings);
+      await store.save();
     } catch (error) {
       console.error("Failed to update settings:", error);
       toast({
@@ -262,6 +307,61 @@ export default function CrosshairPage() {
             </HStack>
           </SettingCard>
 
+          <SettingCard title={t("crosshair.monitor")}>
+            <Menu matchWidth>
+              <MenuButton
+                as={Button}
+                rightIcon={<ChevronDown size={16} />}
+                bg={inputBg}
+                borderColor={cardBorder}
+                borderWidth="1px"
+                borderRadius="lg"
+                size="sm"
+                w="full"
+                textAlign="left"
+                fontWeight="normal"
+                _hover={{ bg: hoverBg }}
+                _active={{ bg: hoverBg }}
+              >
+                <HStack spacing={2}>
+                  <Monitor size={14} />
+                  <Text fontSize="sm" color={textColor}>
+                    {settings.monitor_index === -1
+                      ? t("crosshair.primaryMonitor")
+                      : displays.find(d => d.index === settings.monitor_index)?.name || t("crosshair.primaryMonitor")}
+                  </Text>
+                </HStack>
+              </MenuButton>
+              <Portal>
+                <MenuList bg={menuListBg} borderColor={cardBorder} maxH="300px" overflowY="auto" zIndex={9999}>
+                  <MenuItem
+                    onClick={() => updateSetting("monitor_index", -1)}
+                    bg={settings.monitor_index === -1 ? hoverBg : "transparent"}
+                    _hover={{ bg: hoverBg }}
+                  >
+                    <HStack spacing={2} w="full" justify="space-between">
+                      <Text fontSize="sm">{t("crosshair.primaryMonitor")}</Text>
+                      {settings.monitor_index === -1 && <Check size={14} color={getActiveColor()} />}
+                    </HStack>
+                  </MenuItem>
+                  {displays.map((d) => (
+                    <MenuItem
+                      key={d.index}
+                      onClick={() => updateSetting("monitor_index", d.index)}
+                      bg={settings.monitor_index === d.index ? hoverBg : "transparent"}
+                      _hover={{ bg: hoverBg }}
+                    >
+                      <HStack spacing={2} w="full" justify="space-between">
+                        <Text fontSize="sm">{d.name}</Text>
+                        {settings.monitor_index === d.index && <Check size={14} color={getActiveColor()} />}
+                      </HStack>
+                    </MenuItem>
+                  ))}
+                </MenuList>
+              </Portal>
+            </Menu>
+          </SettingCard>
+
           <SettingCard title={t("crosshair.style")}>
             <SimpleGrid columns={5} spacing={2}>
               {STYLE_OPTIONS.map((option) => {
@@ -308,37 +408,8 @@ export default function CrosshairPage() {
                     boxShadow={settings.color === color.value ? `0 0 8px ${color.value}` : "none"}
                   />
                 ))}
-                <Tooltip label={t("crosshair.customColor") || "自定义颜色"}>
-                  <Box
-                    position="relative"
-                    w={8}
-                    h={8}
-                    borderRadius="md"
-                    overflow="hidden"
-                    cursor="pointer"
-                    border="2px dashed"
-                    borderColor={cardBorder}
-                    flexShrink={0}
-                  >
-                    <Box w="100%" h="100%" bg={settings.color} />
-                    <Input
-                      type="color"
-                      value={settings.color}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting("color", e.target.value)}
-                      position="absolute"
-                      top={0}
-                      left={0}
-                      w="100%"
-                      h="100%"
-                      opacity={0}
-                      cursor="pointer"
-                    />
-                  </Box>
-                </Tooltip>
+                <CustomColorPicker color={settings.color} onChange={(c) => updateSetting("color", c)} />
               </HStack>
-              <Text fontSize="xs" color={subTextColor} fontFamily="mono">
-                {settings.color.toUpperCase()}
-              </Text>
             </VStack>
           </SettingCard>
         </VStack>

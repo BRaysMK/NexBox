@@ -10,6 +10,12 @@ import {
   IconButton,
   Card,
   CardBody,
+  Input,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
 } from "@chakra-ui/react";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useEffect, useState } from "react";
@@ -61,6 +67,8 @@ export default function GpuRenamePage() {
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [tabIndex, setTabIndex] = useState(0);
+  const [customName, setCustomName] = useState("");
 
   useEffect(() => {
     loadData();
@@ -89,23 +97,38 @@ export default function GpuRenamePage() {
   };
 
   const handleApply = async () => {
-    if (!selectedOption) {
-      toast({
-        title: t("gpuRename.selectGpu"),
-        status: "warning",
-        duration: 2000,
-        isClosable: true,
-      });
-      return;
-    }
+    let targetName = "";
 
-    const selectedGpu = gpuOptions.find((opt) => opt.id === selectedOption);
-    if (!selectedGpu) return;
+    if (tabIndex === 1) {
+      if (!customName.trim()) {
+        toast({
+          title: t("gpuRename.selectGpu"),
+          status: "warning",
+          duration: 2000,
+          isClosable: true,
+        });
+        return;
+      }
+      targetName = customName.trim();
+    } else {
+      if (!selectedOption) {
+        toast({
+          title: t("gpuRename.selectGpu"),
+          status: "warning",
+          duration: 2000,
+          isClosable: true,
+        });
+        return;
+      }
+      const selectedGpu = gpuOptions.find((opt) => opt.id === selectedOption);
+      if (!selectedGpu) return;
+      targetName = selectedGpu.name;
+    }
 
     try {
       setApplying(true);
       const result = await invoke<GpuRenameResult>("apply_gpu_rename", {
-        newName: selectedGpu.name,
+        newName: targetName,
       });
 
       if (result.success) {
@@ -233,35 +256,59 @@ export default function GpuRenamePage() {
             )}
           </VStack>
 
-          <Box w="full" mt={4}>
-            <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
-              {t("gpuRename.lowEnd")}
-            </Text>
-            <CustomSelect
-              value={selectedOption}
-              onChange={setSelectedOption}
-              options={gpuOptions
-                .filter(option => option.category === "low-end")
-                .map(option => ({ value: option.id, label: option.name }))}
-              placeholder={t("gpuRename.selectPlaceholder")}
-              width="100%"
-            />
-          </Box>
-
-          <Box w="full" mt={4}>
-            <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
-              {t("gpuRename.highEnd")}
-            </Text>
-            <CustomSelect
-              value={selectedOption}
-              onChange={setSelectedOption}
-              options={gpuOptions
-                .filter(option => option.category === "high-end")
-                .map(option => ({ value: option.id, label: option.name }))}
-              placeholder={t("gpuRename.selectPlaceholder")}
-              width="100%"
-            />
-          </Box>
+          <Tabs index={tabIndex} onChange={setTabIndex} variant="enclosed" w="full" mt={4}>
+            <TabList>
+              <Tab color={textColor} _selected={{ color: headingColor, fontWeight: "600" }}>{t("gpuRename.presetTab")}</Tab>
+              <Tab color={textColor} _selected={{ color: headingColor, fontWeight: "600" }}>{t("gpuRename.customTab")}</Tab>
+            </TabList>
+            <TabPanels>
+              <TabPanel px={0}>
+                <Box w="full">
+                  <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
+                    {t("gpuRename.lowEnd")}
+                  </Text>
+                  <CustomSelect
+                    value={selectedOption}
+                    onChange={setSelectedOption}
+                    options={gpuOptions
+                      .filter(option => option.category === "low-end")
+                      .map(option => ({ value: option.id, label: option.name }))}
+                    placeholder={t("gpuRename.selectPlaceholder")}
+                    width="100%"
+                  />
+                </Box>
+                <Box w="full" mt={4}>
+                  <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
+                    {t("gpuRename.highEnd")}
+                  </Text>
+                  <CustomSelect
+                    value={selectedOption}
+                    onChange={setSelectedOption}
+                    options={gpuOptions
+                      .filter(option => option.category === "high-end")
+                      .map(option => ({ value: option.id, label: option.name }))}
+                    placeholder={t("gpuRename.selectPlaceholder")}
+                    width="100%"
+                  />
+                </Box>
+              </TabPanel>
+              <TabPanel px={0}>
+                <Box w="full">
+                  <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
+                    {t("gpuRename.customTab")}
+                  </Text>
+                  <Input
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    placeholder={t("gpuRename.customPlaceholder")}
+                    color={headingColor}
+                    borderColor={cardBorder}
+                    _focus={{ borderColor: primaryColor }}
+                  />
+                </Box>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
 
           <VStack align="start" spacing={3} w="full" mt={4}>
             <Button

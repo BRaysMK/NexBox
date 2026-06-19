@@ -1,4 +1,4 @@
-﻿{
+{
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
@@ -333,17 +333,7 @@
   "home": {
     "title": "Willkommen bei NexBox",
     "welcome": "Willkommen",
-    "customHtml": "Benutzerdefiniertes Widget",
     "selectTools": "Schnelltools auswählen",
-    "edit": "Bearbeiten",
-    "reset": "Zurücksetzen",
-    "editHtml": "HTML bearbeiten",
-    "code": "Code",
-    "preview": "Vorschau",
-    "htmlPlaceholder": "HTML-Code hier eingeben...",
-    "resetToDefault": "Standard wiederherstellen",
-    "save": "Speichern",
-    "pickImage": "Bild auswählen",
     "todayPopularity": "Heutige Beliebtheit",
     "randomQuote": "Zufälliges Zitat",
     "announcement": "Ankündigung",
@@ -393,7 +383,9 @@
     "network": "Netzwerk",
     "optimization": "Optimierung",
     "builtinTools": "Eingebaute Werkzeuge",
+    "thirdpartyTools": "Drittanbieter-Tools",
     "officialTools": "Offizielle Empfehlungen",
+    "recommended": "Empfohlen",
     "tools": {
       "assistantCrosshair": "Fadenkreuzassistent",
       "memreduct": "Memreduct",
@@ -408,7 +400,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
-    "mctierDesc": "Minecraft-Server-Leistungstest- und Ranking-Tool",
+    "mctierDesc": "Universelles virtuelles LAN-Netzwerk-Tool",
     "descriptions": {
       "assistantCrosshair": "Fadenkreuz-Hilfswerkzeug für Spielbildschirme",
       "memreduct": "Speicherbereinigungs-Tool",
@@ -881,9 +873,6 @@
         "de": "Deutsch"
       },
       "homepage": "Startseite",
-      
-      "customHtmlLabel": "Benutzerdefinierter Bereich",
-      "customHtmlDesc": "Benutzerdefinierbaren HTML-Bereich auf der Startseite anzeigen",
       "todayPopularityLabel": "Heutige Beliebtheit",
       "todayPopularityDesc": "Zeige die heutige Beliebtheits-Zufallszahl auf der Startseite",
       "announcementLabel": "Ankündigungen",

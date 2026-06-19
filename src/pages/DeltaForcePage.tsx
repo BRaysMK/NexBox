@@ -30,7 +30,7 @@ interface DeltaPasswordItem {
 
 const getWeaponPlatforms = (t: (key: string) => string) => [
   { id: "atguns", name: "ATGUNS", url: "https://guns.anxu.cc/", color: "#FF6B35" },
-  { id: "maqt", name: t("deltaForce.weaponCodePlatformNames.maqt"), url: "https://maqt.top/", color: "#4ECDC4" },
+  { id: "maqt", name: t("deltaForce.weaponCodePlatformNames.maqt"), url: "https://maqt.top/home", color: "#4ECDC4" },
   { id: "anchor-codes", name: t("deltaForce.weaponCodePlatformNames.anchor-codes"), url: "https://g.aitags.cn/live", color: "#FF6B35" },
   { id: "xiaotao-check", name: t("deltaForce.weaponCodePlatformNames.xiaotao-check"), url: "https://orzice.com/v/gun_fw", color: "#4ECDC4" },
   { id: "delta-workshop", name: t("deltaForce.weaponCodePlatformNames.delta-workshop"), url: "https://gamefun66.com/gunChangePlan", color: "#9B59B6" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { LazyStore } from "@tauri-apps/plugin-store";
 
 type BackgroundMode = "none" | "preset" | "image" | "dynamic";
@@ -13,6 +13,9 @@ interface PresetBackground {
 
 const PRESET_BACKGROUNDS: PresetBackground[] = [
   { id: 1, name: "预设1", path: "/backgrounds/preset1.jpg" },
+  { id: 2, name: "预设2", path: "/backgrounds/preset2.jpg" },
+  { id: 3, name: "预设3", path: "/backgrounds/preset3.png" },
+  { id: 4, name: "预设4", path: "/backgrounds/preset4.png" },
 ];
 
 interface BackgroundContextType {
@@ -23,6 +26,7 @@ interface BackgroundContextType {
   liquidGlassEnabled: boolean;
   activePresetIndex: number;
   presetBackgrounds: PresetBackground[];
+  carouselEnabled: boolean;
   setBackgroundMode: (mode: BackgroundMode) => void;
   setCustomBgImages: (images: string[]) => void;
   addCustomBgImage: (image: string) => boolean;
@@ -31,6 +35,7 @@ interface BackgroundContextType {
   setDynamicBgVideo: (video: string | null) => void;
   setLiquidGlassEnabled: (enabled: boolean) => void;
   setActivePresetIndex: (index: number) => void;
+  setCarouselEnabled: (enabled: boolean) => void;
 }
 
 const BackgroundContext = createContext<BackgroundContextType>({
@@ -41,6 +46,7 @@ const BackgroundContext = createContext<BackgroundContextType>({
   liquidGlassEnabled: false,
   activePresetIndex: 0,
   presetBackgrounds: PRESET_BACKGROUNDS,
+  carouselEnabled: false,
   setBackgroundMode: () => {},
   setCustomBgImages: () => {},
   addCustomBgImage: () => false,
@@ -49,6 +55,7 @@ const BackgroundContext = createContext<BackgroundContextType>({
   setDynamicBgVideo: () => {},
   setLiquidGlassEnabled: () => {},
   setActivePresetIndex: () => {},
+  setCarouselEnabled: () => {},
 });
 
 export function useBackground() {
@@ -66,6 +73,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [dynamicBgVideo, setDynamicBgVideo] = useState<string | null>(null);
   const [liquidGlassEnabled, setLiquidGlassEnabled] = useState(false);
   const [activePresetIndex, setActivePresetIndex] = useState(0);
+  const [carouselEnabled, setCarouselEnabled] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isFirstLaunch, setIsFirstLaunch] = useState(false);
 
@@ -73,7 +81,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     async function loadSettings() {
       try {
         // 批量读取所有设置，减少 store IO 调用次数
-        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedActivePreset, hasLaunched] =
+        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedActivePreset, savedCarousel, hasLaunched] =
           await Promise.all([
             store.get<string>("background-mode"),
             store.get<string[]>("custom-bg-images"),
@@ -81,6 +89,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
             store.get<string>("dynamic-bg-video"),
             store.get<boolean>("liquid-glass-enabled"),
             store.get<number>("active-preset-index"),
+            store.get<boolean>("carousel-enabled"),
             store.get<boolean>("has-launched"),
           ]);
 
@@ -99,6 +108,9 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
           }
           if (savedActivePreset !== null && savedActivePreset !== undefined) {
             setActivePresetIndex(savedActivePreset);
+          }
+          if (savedCarousel !== null && savedCarousel !== undefined) {
+            setCarouselEnabled(savedCarousel);
           }
         }
 
@@ -148,6 +160,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         }
 
         await store.set("liquid-glass-enabled", liquidGlassEnabled);
+        await store.set("carousel-enabled", carouselEnabled);
 
         await store.save();
       } catch (error) {
@@ -156,7 +169,30 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     }
 
     saveSettings();
-  }, [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, activePresetIndex, isLoaded]);
+  }, [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, activePresetIndex, carouselEnabled, isLoaded]);
+
+  // 预设壁纸轮播定时器
+  const carouselTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (backgroundMode === "preset" && carouselEnabled) {
+      carouselTimerRef.current = setInterval(() => {
+        setActivePresetIndex((prev) => (prev + 1) % PRESET_BACKGROUNDS.length);
+      }, 10000);
+    } else {
+      if (carouselTimerRef.current) {
+        clearInterval(carouselTimerRef.current);
+        carouselTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (carouselTimerRef.current) {
+        clearInterval(carouselTimerRef.current);
+        carouselTimerRef.current = null;
+      }
+    };
+  }, [backgroundMode, carouselEnabled, setActivePresetIndex]);
 
   const addCustomBgImage = (image: string): boolean => {
     if (customBgImages.length >= MAX_BG_IMAGES) {
@@ -184,6 +220,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         liquidGlassEnabled,
         activePresetIndex,
         presetBackgrounds: PRESET_BACKGROUNDS,
+        carouselEnabled,
         setBackgroundMode,
         setCustomBgImages,
         addCustomBgImage,
@@ -192,6 +229,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         setDynamicBgVideo,
         setLiquidGlassEnabled,
         setActivePresetIndex,
+        setCarouselEnabled,
       }}
     >
       {children}

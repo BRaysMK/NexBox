@@ -2,7 +2,7 @@
 
 import { Box, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
-import { useGlowEffect, getBorderGlowStyle } from "@/hooks/use-glow-effect";
+import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { useMemo } from "react";
 
 interface LiquidGlassCardProps {
@@ -13,7 +13,6 @@ interface LiquidGlassCardProps {
 
 export function LiquidGlassCard({ children, className, ...props }: LiquidGlassCardProps) {
   const { liquidGlassEnabled } = useBackground();
-  const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
   
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
@@ -65,13 +64,10 @@ export function LiquidGlassCard({ children, className, ...props }: LiquidGlassCa
       className={className}
       {...cardStyles}
       position="relative"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onMouseEnter={handleMouseEnter}
       {...props}
     >
       <Box
-        style={getBorderGlowStyle(mouseX, mouseY, isHovering, glowColor)}
+        style={getBorderGlowStyle(glowColor)}
       />
       {children}
     </Box>

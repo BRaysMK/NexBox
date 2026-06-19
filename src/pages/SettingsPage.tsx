@@ -20,7 +20,6 @@ import {
   ModalFooter,
   Progress,
   useToast,
-  Portal,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -34,6 +33,7 @@ import {
   LuUpload,
   LuX,
   LuDownload,
+  LuExternalLink,
   LuRefreshCw,
   LuPalette,
   LuWifi,
@@ -46,7 +46,8 @@ import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { PRESET_COLORS, isValidHexColor } from "@/lib/color-utils";
+import { PRESET_COLORS } from "@/lib/color-utils";
+import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { fetchLatestRelease, compareVersions, fetchReleaseByTag, type GiteeRelease } from "@/lib/update-checker";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
@@ -70,17 +71,19 @@ const settingItems = [
 function GeneralSettings() {
   const { t, i18n } = useTranslation();
   const [language, setLanguage] = useState(i18n.language || "zh");
-  const [customHtmlEnabled, setCustomHtmlEnabled] = useState(true);
   const [todayPopularityEnabled, setTodayPopularityEnabled] = useState(true);
   const [announcementEnabled, setAnnouncementEnabled] = useState(true);
   const [randomQuoteEnabled, setRandomQuoteEnabled] = useState(true);
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
+  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
   const [closeBehavior, setCloseBehavior] = useState<string>(() => {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
   });
   const [sidebarShowLabel, setSidebarShowLabel] = useState(false);
   const [pageTransitionEnabled, setPageTransitionEnabled] = useState(true);
+  const [autoStart, setAutoStart] = useState(false);
+  const [autoStartLoading, setAutoStartLoading] = useState(true);
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#888888");
@@ -89,11 +92,6 @@ function GeneralSettings() {
   useEffect(() => {
     const savedLang = i18n.language || "zh";
     setLanguage(savedLang);
-
-    const savedCustomHtml = localStorage.getItem("nexbox_custom_html_enabled");
-    if (savedCustomHtml !== null) {
-      setCustomHtmlEnabled(savedCustomHtml === "true");
-    }
 
     const savedTodayPopularity = localStorage.getItem("nexbox_today_popularity_enabled");
     if (savedTodayPopularity !== null) {
@@ -115,6 +113,11 @@ function GeneralSettings() {
       setGameLauncherEnabled(savedGameLauncher === "true");
     }
 
+    const savedHomeHardwareModel = localStorage.getItem("nexbox_home_hardware_model_enabled");
+    if (savedHomeHardwareModel !== null) {
+      setHomeHardwareModelEnabled(savedHomeHardwareModel === "true");
+    }
+
     const savedSplashLogo = localStorage.getItem("nexbox_splash_logo");
     if (savedSplashLogo) {
       setSplashLogo(savedSplashLogo);
@@ -134,19 +137,17 @@ function GeneralSettings() {
     if (savedPageTransition !== null) {
       setPageTransitionEnabled(savedPageTransition === "true");
     }
+
+    invoke<boolean>("check_nexbox_auto_start")
+      .then((enabled) => setAutoStart(enabled))
+      .catch(() => {})
+      .finally(() => setAutoStartLoading(false));
   }, [i18n.language]);
 
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
     i18n.changeLanguage(newLang);
     localStorage.setItem("i18nextLng", newLang);
-  };
-
-  const handleCustomHtmlToggle = () => {
-    const newValue = !customHtmlEnabled;
-    setCustomHtmlEnabled(newValue);
-    localStorage.setItem("nexbox_custom_html_enabled", String(newValue));
-    window.dispatchEvent(new CustomEvent("custom-html-setting-changed", { detail: newValue }));
   };
 
   const handleTodayPopularityToggle = () => {
@@ -175,6 +176,13 @@ function GeneralSettings() {
     setGameLauncherEnabled(newValue);
     localStorage.setItem("nexbox_game_launcher_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("game-launcher-setting-changed", { detail: newValue }));
+  };
+
+  const handleHomeHardwareModelToggle = () => {
+    const newValue = !homeHardwareModelEnabled;
+    setHomeHardwareModelEnabled(newValue);
+    localStorage.setItem("nexbox_home_hardware_model_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("home-hardware-model-setting-changed", { detail: newValue }));
   };
 
   const handleSplashLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,6 +217,13 @@ function GeneralSettings() {
     window.dispatchEvent(new CustomEvent("sidebar-show-label-changed", { detail: newValue }));
   };
 
+  const handleAutoStartToggle = () => {
+    const newValue = !autoStart;
+    invoke("set_nexbox_auto_start", { enable: newValue })
+      .then(() => setAutoStart(newValue))
+      .catch(() => {});
+  };
+
   const handlePageTransitionToggle = () => {
     const newValue = !pageTransitionEnabled;
     setPageTransitionEnabled(newValue);
@@ -221,6 +236,33 @@ function GeneralSettings() {
       <Text fontSize="lg" fontWeight="bold" mb={6} color={titleColor}>
         {t("settings.generalSettings.title")}
       </Text>
+
+      {/* 开机自启暂时隐藏 */}
+      {/* <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          {t("settings.generalSettings.startup")}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between" py={2}>
+            <Text fontSize="sm" color={labelColor} fontWeight="medium">
+              {t("settings.generalSettings.autoStartLabel")}
+            </Text>
+            <ThemeSwitch
+              size="md"
+              isChecked={autoStart}
+              onChange={handleAutoStartToggle}
+              isDisabled={autoStartLoading}
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box> */}
 
       <Box mb={6}>
         <Text
@@ -268,22 +310,6 @@ function GeneralSettings() {
         </Text>
         <LiquidGlassCard px={4} py={3} boxShadow="sm">
           <VStack spacing={0} align="stretch">
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.customHtmlLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.customHtmlDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={customHtmlEnabled}
-                onChange={handleCustomHtmlToggle}
-              />
-            </HStack>
-            <Divider />
             <HStack justify="space-between" py={2}>
               <Box flex={1}>
                 <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -345,6 +371,22 @@ function GeneralSettings() {
                 size="md"
                 isChecked={gameLauncherEnabled}
                 onChange={handleGameLauncherToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.homeHardwareModelLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.homeHardwareModelDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={homeHardwareModelEnabled}
+                onChange={handleHomeHardwareModelToggle}
               />
             </HStack>
           </VStack>
@@ -515,33 +557,13 @@ function ThemeColorSettings() {
     resetToDefault,
   } = useThemeColor();
   
-  const [customColorInput, setCustomColorInput] = useState(config.primaryColor);
-  
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#888888");
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const presetBorderColor = useColorModeValue("gray.200", "#444444");
   const presetActiveBorderColor = useColorModeValue("gray.400", "#666666");
   
-  useEffect(() => {
-    setCustomColorInput(config.primaryColor);
-  }, [config.primaryColor]);
-  
-  const handleCustomColorChange = (value: string) => {
-    setCustomColorInput(value);
-    if (isValidHexColor(value)) {
-      setPrimaryColor(value);
-    }
-  };
-  
   const handlePresetClick = (color: string) => {
-    setCustomColorInput(color);
-    setPrimaryColor(color);
-  };
-  
-  const handleColorPickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const color = e.target.value;
-    setCustomColorInput(color);
     setPrimaryColor(color);
   };
   
@@ -593,44 +615,7 @@ function ThemeColorSettings() {
             <Text fontSize="xs" color={subLabelColor} mb={2}>
               {t("settings.appearanceSettings.customColor")}
             </Text>
-            <HStack spacing={3}>
-              <Box
-                position="relative"
-                w="40px"
-                h="40px"
-                borderRadius="lg"
-                overflow="hidden"
-                border="1px solid"
-                borderColor={cardBorder}
-                cursor="pointer"
-              >
-                <Box
-                  w="100%"
-                  h="100%"
-                  bg={config.primaryColor}
-                />
-                <Input
-                  type="color"
-                  value={config.primaryColor}
-                  onChange={handleColorPickerChange}
-                  position="absolute"
-                  top={0}
-                  left={0}
-                  w="100%"
-                  h="100%"
-                  opacity={0}
-                  cursor="pointer"
-                />
-              </Box>
-              <Input
-                value={customColorInput}
-                onChange={(e) => handleCustomColorChange(e.target.value)}
-                placeholder="#98DDD0"
-                size="sm"
-                width="120px"
-                borderRadius="lg"
-              />
-            </HStack>
+            <CustomColorPicker color={config.primaryColor} onChange={setPrimaryColor} />
           </Box>
           
           <HStack justify="flex-end">
@@ -666,6 +651,8 @@ function AppearanceSettings() {
     activePresetIndex,
     presetBackgrounds,
     setActivePresetIndex,
+    carouselEnabled,
+    setCarouselEnabled,
   } = useBackground();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
@@ -925,48 +912,65 @@ function AppearanceSettings() {
                 </HStack>
 
                 {backgroundMode === "preset" && (
-                  <HStack spacing={2} justify="flex-end">
-                    {presetBackgrounds.map((preset, index) => (
-                      <Box
-                        key={preset.id}
-                        position="relative"
-                        w="160px"
-                        h="90px"
-                        borderRadius="lg"
-                        overflow="hidden"
-                        border="2px solid"
-                        borderColor={index === activePresetIndex ? activeSlotBorder : emptySlotBorder}
-                        cursor="pointer"
-                        onClick={() => setActivePresetIndex(index)}
-                        transition="all 0.2s"
-                        _hover={{ borderColor: activeSlotBorder, transform: "scale(1.02)" }}
-                      >
-                        <img
-                          src={preset.path}
-                          alt={preset.name}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                        {index === activePresetIndex && (
-                          <Box
-                            position="absolute"
-                            bottom={1}
-                            left="50%"
-                            transform="translateX(-50%)"
-                            bg="blue.500"
-                            borderRadius="full"
-                            px={1.5}
-                            py={0.5}
-                          >
-                            <LuCheck size={10} color="white" />
-                          </Box>
-                        )}
+                  <>
+                    <HStack justify="space-between" w="full">
+                      <Box>
+                        <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                          {t("settings.appearanceSettings.carouselLabel")}
+                        </Text>
+                        <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                          {t("settings.appearanceSettings.carouselDesc")}
+                        </Text>
                       </Box>
-                    ))}
-                  </HStack>
+                      <ThemeSwitch
+                        size="md"
+                        isChecked={carouselEnabled}
+                        onChange={() => setCarouselEnabled(!carouselEnabled)}
+                      />
+                    </HStack>
+                    <HStack spacing={2} justify="flex-end">
+                      {presetBackgrounds.map((preset, index) => (
+                        <Box
+                          key={preset.id}
+                          position="relative"
+                          w="160px"
+                          h="90px"
+                          borderRadius="lg"
+                          overflow="hidden"
+                          border="2px solid"
+                          borderColor={index === activePresetIndex ? activeSlotBorder : emptySlotBorder}
+                          cursor="pointer"
+                          onClick={() => setActivePresetIndex(index)}
+                          transition="all 0.2s"
+                          _hover={{ borderColor: activeSlotBorder, transform: "scale(1.02)" }}
+                        >
+                          <img
+                            src={preset.path}
+                            alt={preset.name}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                          {index === activePresetIndex && (
+                            <Box
+                              position="absolute"
+                              bottom={1}
+                              left="50%"
+                              transform="translateX(-50%)"
+                              bg="blue.500"
+                              borderRadius="full"
+                              px={1.5}
+                              py={0.5}
+                            >
+                              <LuCheck size={10} color="white" />
+                            </Box>
+                          )}
+                        </Box>
+                      ))}
+                    </HStack>
+                  </>
                 )}
 
                 {backgroundMode === "image" && (
@@ -1330,12 +1334,28 @@ function NetworkSettings() {
   );
 }
 
+interface SponsorItem {
+  name: string;
+  amount: string;
+}
+
 function SponsorSettings() {
   const { t } = useTranslation();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#888888");
   const cardBorder = useColorModeValue("gray.200", "#333333");
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const [sponsors, setSponsors] = useState<SponsorItem[]>([]);
+  const [sponsorsLoading, setSponsorsLoading] = useState(true);
+  const [sponsorsError, setSponsorsError] = useState(false);
+
+  useEffect(() => {
+    invoke<{ update_time: string; list: SponsorItem[] }>("get_sponsors")
+      .then((data) => setSponsors(data.list))
+      .catch(() => setSponsorsError(true))
+      .finally(() => setSponsorsLoading(false));
+  }, []);
 
   return (
     <Box>
@@ -1413,6 +1433,53 @@ function SponsorSettings() {
       <Text fontSize="sm" color={subLabelColor} mt={6} textAlign="center">
         {t("settings.sponsorSettings.thankYou")}
       </Text>
+
+      <Box mt={8}>
+        <Text fontSize="lg" fontWeight="bold" mb={4} color={titleColor}>
+          {t("settings.sponsorSettings.sponsorList.title")}
+        </Text>
+        {sponsorsLoading ? (
+          <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
+            {t("settings.sponsorSettings.sponsorList.loading")}
+          </Text>
+        ) : sponsorsError ? (
+          <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
+            {t("settings.sponsorSettings.sponsorList.error")}
+          </Text>
+        ) : sponsors.length === 0 ? (
+          <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
+            {t("settings.sponsorSettings.sponsorList.empty")}
+          </Text>
+        ) : (
+          <Flex flexWrap="wrap" gap={4} justify="center">
+            {sponsors.map((sponsor, index) => (
+              <LiquidGlassCard
+                key={index}
+                p={5}
+                textAlign="center"
+                minW="140px"
+                flex="0 1 auto"
+              >
+                <Text fontSize="md" fontWeight="medium" color={labelColor} mb={1}>
+                  {sponsor.name}
+                </Text>
+                <Box
+                  display="inline-block"
+                  px={3}
+                  py={1}
+                  borderRadius="lg"
+                  bg={getActiveColor()}
+                  color={getContrastTextColor()}
+                  fontSize="sm"
+                  fontWeight="medium"
+                >
+                  {sponsor.amount}
+                </Box>
+              </LiquidGlassCard>
+            ))}
+          </Flex>
+        )}
+      </Box>
     </Box>
   );
 }
@@ -1429,7 +1496,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "3.1.6";
+  const currentVersion = "3.8.3";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
@@ -1753,6 +1820,29 @@ function AboutSettings() {
               <Text fontSize="sm" color={labelColor} fontWeight="medium" userSelect="all">
                 526045683
               </Text>
+            </HStack>
+          </HStack>
+          <Divider my={3} borderColor={dividerColor} />
+          <HStack justify="space-between">
+            <Text fontSize="sm" color={subLabelColor}>
+              {t("settings.aboutSettings.joinUs")}
+            </Text>
+            <HStack spacing={2}>
+              <Box
+                w="24px"
+                h="24px"
+                borderRadius="md"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                cursor="pointer"
+                transition="all 0.2s"
+                _hover={{ transform: "scale(1.1)", bg: "rgba(99, 102, 241, 0.1)" }}
+                onClick={() => handleOpenLink("https://team.nexbox.top")}
+                title={t("settings.aboutSettings.joinUs")}
+              >
+                <LuExternalLink size={16} />
+              </Box>
             </HStack>
           </HStack>
         </Box>

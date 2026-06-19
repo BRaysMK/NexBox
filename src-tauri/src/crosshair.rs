@@ -17,6 +17,7 @@ pub struct CrosshairSettings {
     pub gap: i32,
     pub dot_size: i32,
     pub opacity: u8,
+    pub monitor_index: i32,
 }
 
 impl Default for CrosshairSettings {
@@ -30,8 +31,19 @@ impl Default for CrosshairSettings {
             gap: 0,
             dot_size: 2,
             opacity: 255,
+            monitor_index: -1,
         }
     }
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct DisplayInfo {
+    pub index: usize,
+    pub name: String,
+    pub device_name: String,
+    pub is_primary: bool,
+    pub width: i32,
+    pub height: i32,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -45,6 +57,115 @@ static CURRENT_SETTINGS: Mutex<Option<CrosshairSettings>> = Mutex::new(None);
 fn get_settings() -> CrosshairSettings {
     let lock = CURRENT_SETTINGS.lock().unwrap();
     lock.as_ref().cloned().unwrap_or_default()
+}
+
+#[tauri::command]
+pub async fn get_crosshair_displays() -> Result<Vec<DisplayInfo>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Graphics::Gdi::{
+            EnumDisplayMonitors, GetMonitorInfoW,
+            HDC, HMONITOR, MONITORINFOEXW,
+        };
+
+        struct MonitorData {
+            displays: Vec<DisplayInfo>,
+        }
+
+        unsafe extern "system" fn monitor_enum_proc(
+            hmonitor: HMONITOR,
+            _hdc: HDC,
+            _rect: *mut windows_sys::Win32::Foundation::RECT,
+            lparam: isize,
+        ) -> i32 {
+            let data = &mut *(lparam as *mut MonitorData);
+            let mut info: MONITORINFOEXW = std::mem::zeroed();
+            info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+
+            if GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _) != 0 {
+                let device_name = String::from_utf16_lossy(
+                    &info.szDevice[..info.szDevice.iter().position(|&c| c == 0).unwrap_or(info.szDevice.len())],
+                );
+                let is_primary = (info.monitorInfo.dwFlags & 1) != 0;
+                let width = info.monitorInfo.rcMonitor.right - info.monitorInfo.rcMonitor.left;
+                let height = info.monitorInfo.rcMonitor.bottom - info.monitorInfo.rcMonitor.top;
+
+                let monitor_model = get_monitor_model_name(&device_name);
+                let name = if !monitor_model.is_empty() {
+                    format!("{} ({}x{})", monitor_model, width, height)
+                } else {
+                    format!("{} ({}x{})", device_name, width, height)
+                };
+
+                data.displays.push(DisplayInfo {
+                    index: data.displays.len(),
+                    name,
+                    device_name: device_name.clone(),
+                    is_primary,
+                    width,
+                    height,
+                });
+            }
+            1
+        }
+
+        let mut data = MonitorData {
+            displays: Vec::new(),
+        };
+
+        unsafe {
+            EnumDisplayMonitors(
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                Some(monitor_enum_proc),
+                &mut data as *mut _ as isize,
+            );
+        }
+
+        if data.displays.is_empty() {
+            data.displays.push(DisplayInfo {
+                index: 0,
+                name: "DISPLAY1 (Primary)".to_string(),
+                device_name: "DISPLAY1".to_string(),
+                is_primary: true,
+                width: 0,
+                height: 0,
+            });
+        }
+
+        Ok(data.displays)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("此功能仅支持 Windows 系统".to_string())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_monitor_model_name(device_name: &str) -> String {
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayDevicesW, DISPLAY_DEVICEW};
+    use std::mem;
+
+    unsafe {
+        let device_name_wide: Vec<u16> = device_name.encode_utf16().chain(std::iter::once(0)).collect();
+
+        let mut disp_device: DISPLAY_DEVICEW = mem::zeroed();
+        disp_device.cb = mem::size_of::<DISPLAY_DEVICEW>() as u32;
+
+        if EnumDisplayDevicesW(device_name_wide.as_ptr(), 0, &mut disp_device, 0) != 0 {
+            let len = disp_device.DeviceString.iter().position(|&c| c == 0).unwrap_or(disp_device.DeviceString.len());
+            if len > 0 {
+                let model = String::from_utf16_lossy(&disp_device.DeviceString[..len]);
+                let trimmed = model.trim();
+                if !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("Generic PnP Monitor") {
+                    return trimmed.to_string();
+                }
+                return model.trim().to_string();
+            }
+        }
+    }
+
+    String::new()
 }
 
 #[cfg(target_os = "windows")]
@@ -257,9 +378,83 @@ mod win32 {
         }
     }
 
+    unsafe fn get_monitor_bounds(monitor_index: i32) -> (i32, i32, i32, i32) {
+        if monitor_index < 0 {
+            return (
+                0,
+                0,
+                GetSystemMetrics(SM_CXSCREEN),
+                GetSystemMetrics(SM_CYSCREEN),
+            );
+        }
+
+        struct BoundsData {
+            target: i32,
+            current: i32,
+            left: i32,
+            top: i32,
+            right: i32,
+            bottom: i32,
+            found: bool,
+        }
+
+        let mut data = BoundsData {
+            target: monitor_index,
+            current: 0,
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            found: false,
+        };
+
+        unsafe extern "system" fn enum_proc(
+            hmonitor: HMONITOR,
+            _hdc: HDC,
+            _rect: *mut windows_sys::Win32::Foundation::RECT,
+            lparam: isize,
+        ) -> i32 {
+            let data = &mut *(lparam as *mut BoundsData);
+            if data.current == data.target {
+                let mut info: MONITORINFOEXW = std::mem::zeroed();
+                info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+                if GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _) != 0 {
+                    data.left = info.monitorInfo.rcMonitor.left;
+                    data.top = info.monitorInfo.rcMonitor.top;
+                    data.right = info.monitorInfo.rcMonitor.right;
+                    data.bottom = info.monitorInfo.rcMonitor.bottom;
+                    data.found = true;
+                }
+                0
+            } else {
+                data.current += 1;
+                1
+            }
+        }
+
+        EnumDisplayMonitors(
+            ptr::null_mut(),
+            ptr::null(),
+            Some(enum_proc),
+            &mut data as *mut _ as isize,
+        );
+
+        if data.found {
+            (data.left, data.top, data.right, data.bottom)
+        } else {
+            (
+                0,
+                0,
+                GetSystemMetrics(SM_CXSCREEN),
+                GetSystemMetrics(SM_CYSCREEN),
+            )
+        }
+    }
+
     unsafe fn render(hwnd: HWND, settings: &super::CrosshairSettings) {
-        let screen_width = GetSystemMetrics(SM_CXSCREEN);
-        let screen_height = GetSystemMetrics(SM_CYSCREEN);
+        let (mon_left, mon_top, mon_right, mon_bottom) = get_monitor_bounds(settings.monitor_index);
+        let screen_width = mon_right - mon_left;
+        let screen_height = mon_bottom - mon_top;
 
         let extent = settings.size + settings.gap + settings.thickness;
         let dib_size = ((extent * 2 + 16) as i32).max(64);
@@ -320,8 +515,8 @@ mod win32 {
 
         GdipDeleteGraphics(graphics);
 
-        let win_x = (screen_width - dib_size) / 2;
-        let win_y = (screen_height - dib_size) / 2;
+        let win_x = mon_left + (screen_width - dib_size) / 2;
+        let win_y = mon_top + (screen_height - dib_size) / 2;
 
         let ppt_dst = POINT { x: win_x, y: win_y };
         let psize = SIZE {

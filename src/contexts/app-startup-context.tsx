@@ -28,6 +28,18 @@ interface CustomOverlayItem {
   enabled: boolean;
 }
 
+interface CrosshairSettings {
+  enabled: boolean;
+  style: string;
+  size: number;
+  thickness: number;
+  color: string;
+  gap: number;
+  dot_size: number;
+  opacity: number;
+  monitor_index: number;
+}
+
 interface OverlaySettings {
   display_items: DisplayItems;
   custom_items: CustomOverlayItem[];
@@ -78,6 +90,9 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
     { id: "cpu_usage", label: "CPU占用", enabled: true },
     { id: "gpu_temp", label: "GPU温度", enabled: true },
     { id: "gpu_usage", label: "GPU占用", enabled: true },
+    { id: "gpu_fan_speed", label: "GPU风扇转速(仅NVIDIA)", enabled: false },
+    { id: "gpu_power", label: "GPU功耗(仅NVIDIA)", enabled: false },
+    { id: "gpu_clock", label: "GPU频率(仅NVIDIA)", enabled: false },
     { id: "memory_usage", label: "内存占用", enabled: true },
     { id: "game_ping", label: "游戏延迟", enabled: true },
     { id: "delta_password", label: "三角洲密码", enabled: true },
@@ -157,8 +172,13 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         // 处理旧格式（对象）到新格式（数组）的迁移
         let displayItems: DisplayItems;
         if (Array.isArray(savedSettings.display_items)) {
-          // 新格式：数组
-          displayItems = savedSettings.display_items;
+          // 新格式：数组，补充可能缺失的项
+          const defaultItems = DEFAULT_OVERLAY_SETTINGS.display_items;
+          const savedIds = new Set(savedSettings.display_items.map((i) => i.id));
+          displayItems = [
+            ...savedSettings.display_items,
+            ...defaultItems.filter((i) => !savedIds.has(i.id)),
+          ];
         } else {
           // 旧格式：对象，需要迁移
           needsMigration = true;
@@ -176,6 +196,9 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
             { id: "cpu_usage", label: "CPU占用", enabled: oldItems.cpu_usage ?? true },
             { id: "gpu_temp", label: "GPU温度", enabled: oldItems.gpu_temp ?? true },
             { id: "gpu_usage", label: "GPU占用", enabled: oldItems.gpu_usage ?? true },
+            { id: "gpu_fan_speed", label: "GPU风扇转速(仅NVIDIA)", enabled: false },
+            { id: "gpu_power", label: "GPU功耗(仅NVIDIA)", enabled: false },
+            { id: "gpu_clock", label: "GPU频率(仅NVIDIA)", enabled: false },
             { id: "memory_usage", label: "内存占用", enabled: oldItems.memory_usage ?? true },
             { id: "game_ping", label: "游戏延迟", enabled: oldItems.game_ping ?? true },
             { id: "delta_password", label: "三角洲密码", enabled: oldItems.delta_password ?? true },
@@ -258,6 +281,18 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loadCrosshairSettings = async () => {
+    try {
+      const saved = await store.get<CrosshairSettings>("crosshair-settings");
+      if (saved) {
+        saved.enabled = false;
+        await invoke("update_crosshair_settings", { settings: saved });
+      }
+    } catch (error) {
+      console.error("Failed to load crosshair settings:", error);
+    }
+  };
+
   const loadFilterHotkey = async () => {
     try {
       const saved = await store.get<string>("filter-hotkey");
@@ -317,6 +352,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         { name: "hardware-info", fn: loadHardwareInfo, weight: 4 },
         { name: "overlay-hotkey", fn: loadOverlayHotkey, weight: 1 },
         { name: "crosshair-hotkey", fn: loadCrosshairHotkey, weight: 1 },
+        { name: "crosshair-settings", fn: loadCrosshairSettings, weight: 1 },
         { name: "filter-hotkey", fn: loadFilterHotkey, weight: 1 },
       ];
 

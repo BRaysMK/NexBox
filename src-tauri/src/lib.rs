@@ -1,4 +1,5 @@
 mod announcement;
+mod auto_start;
 mod crosshair;
 mod delta_force;
 mod display_filter;
@@ -8,49 +9,32 @@ mod game_launcher;
 mod game_ping;
 mod gpu_rename;
 mod hardware;
+mod heart_rate;
 mod hotkey;
-mod music;
+mod network_optimize;
 mod optimization;
 mod overlay_panel;
 
 mod sensor;
 mod shader_cache;
+mod sponsor;
+mod startup_manager;
 mod storage_clean;
 mod thirdparty_tools;
 mod tray;
 mod utils;
-#[allow(dead_code)]
-mod mctier_modules;
 
-use tauri::{Emitter, Manager};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use mctier_modules::app_core::AppCore;
-use mctier_modules::tauri_commands::AppState;
+use tauri::Manager;
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // === MCTier: 初始化 AppCore ===
-    let runtime = tokio::runtime::Runtime::new().expect("无法创建 Tokio 运行时");
-    let app_core = runtime.block_on(async {
-        match AppCore::new().await {
-            Ok(core) => {
-                log::info!("[MCTier] 应用核心初始化成功");
-                if let Err(e) = core.start().await { log::error!("[MCTier] 应用启动失败: {}", e); }
-                core
-            }
-            Err(e) => { log::error!("[MCTier] 应用核心初始化失败: {}", e); panic!("无法初始化应用核心: {}", e); }
-        }
-    });
-    let app_state = AppState { core: Arc::new(Mutex::new(app_core)) };
-    // === MCTier 初始化结束 ===
-
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-                let _ = window.unminimize();
+                let _: () = window.show().unwrap_or(());
+                let _: () = window.set_focus().unwrap_or(());
+                let _: () = window.unminimize().unwrap_or(());
             }
         }))
         .plugin(tauri_plugin_shell::init())
@@ -75,7 +59,6 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .manage(app_state)
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -83,9 +66,37 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+            } else {
+                // Release 模式：日志写入文件，便于排查开机自启失败问题
+                // 日志路径：%LOCALAPPDATA%/NexBox/nexbox.log
+                let log_dir = dirs::data_local_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    .join("NexBox");
+                let _ = std::fs::create_dir_all(&log_dir);
+                let log_path = log_dir.join("nexbox.log");
+                if let Ok(log_file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&log_path)
+                {
+                    let _ = env_logger::Builder::from_env(
+                        env_logger::Env::default().default_filter_or("info"),
+                    )
+                    .target(env_logger::Target::Pipe(Box::new(log_file)))
+                    .try_init();
+                }
+                log::info!(
+                    "NexBox v{} 启动 | exe: {:?} | cwd: {:?}",
+                    env!("CARGO_PKG_VERSION"),
+                    std::env::current_exe().ok(),
+                    std::env::current_dir().ok(),
+                );
             }
             sensor::start_sensor_process(app);
             utils::sys_info::check_and_send_statistics(app);
+
+            // 预填显示器信息缓存，确保热键路径也能正确获取设备名
+            display_filter::init();
 
             match tray::init_tray(app.handle()) {
                 Ok(_) => log::info!("Tray initialized successfully"),
@@ -97,28 +108,19 @@ pub fn run() {
             let _ = hotkey::init_crosshair(app.handle(), "Shift+F9");
             let _ = hotkey::init_filter(app.handle(), "Shift+F8");
 
-            // === MCTier: 窗口初始化 ===
-            let app_handle = app.handle().clone();
-            if let Some(state) = app.try_state::<AppState>() {
-                let core = Arc::clone(&state.core);
-                
-                // 设置应用句柄到 AppCore
-                tauri::async_runtime::block_on(async move {
-                    core.lock().await.set_app_handle(app_handle).await;
-                    log::info!("[MCTier] 应用句柄已设置到 AppCore");
-                });
-            }
-            // === MCTier 初始化结束 ===
-
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
         announcement::get_announcements,
         announcement::get_important_announcements,
+        auto_start::set_nexbox_auto_start,
+        auto_start::check_nexbox_auto_start,
         hardware::get_hardware,
         hardware::get_cpu_load,
         hardware::get_gpu_status,
         hardware::get_disk_status,
+        hardware::is_nvidia_gpu,
+        hardware::get_os_version,
         downloader::download_file,
         downloader::open_installer,
         downloader::download_update,
@@ -139,6 +141,9 @@ pub fn run() {
         optimization::get_detailed_memory_status,
         optimization::clean_standby_memory,
         optimization::trim_system_working_set,
+        optimization::start_auto_clean,
+        optimization::stop_auto_clean,
+        optimization::get_auto_clean_config,
         optimization::boost_delta_force_priority,
         optimization::boost_delta_force_affinity,
         optimization::limit_ace_priority,
@@ -151,7 +156,181 @@ pub fn run() {
         optimization::import_power_plan,
         optimization::activate_power_plan,
         optimization::import_and_activate_power_plan,
+        optimization::enable_performance_tweaks,
+        optimization::disable_performance_tweaks,
+        optimization::remove_menu_delay,
+        optimization::restore_menu_delay,
+        optimization::disable_network_throttling,
+        optimization::enable_network_throttling,
+        optimization::disable_error_reporting,
+        optimization::enable_error_reporting,
+        optimization::disable_compatibility_assistant,
+        optimization::enable_compatibility_assistant,
+        optimization::disable_print_service,
+        optimization::enable_print_service,
+        optimization::disable_fax_service,
+        optimization::enable_fax_service,
+        optimization::disable_sticky_keys,
+        optimization::enable_sticky_keys,
+        optimization::disable_smart_screen,
+        optimization::enable_smart_screen,
+        optimization::disable_system_restore,
+        optimization::enable_system_restore,
+        optimization::disable_superfetch,
+        optimization::enable_superfetch,
+        optimization::disable_hibernate,
+        optimization::enable_hibernate,
+        optimization::disable_ntfs_timestamp,
+        optimization::enable_ntfs_timestamp,
+        optimization::disable_telemetry_tasks,
+        optimization::enable_telemetry_tasks,
+        optimization::disable_media_player_sharing,
+        optimization::enable_media_player_sharing,
+        optimization::disable_home_group,
+        optimization::enable_home_group,
+        optimization::disable_smb1,
+        optimization::enable_smb1,
+        optimization::disable_smb2,
+        optimization::enable_smb2,
+        optimization::disable_office_telemetry,
+        optimization::enable_office_telemetry,
+        optimization::disable_firefox_telemetry,
+        optimization::enable_firefox_telemetry,
+        optimization::disable_chrome_telemetry,
+        optimization::enable_chrome_telemetry,
+        optimization::disable_nvidia_telemetry,
+        optimization::enable_nvidia_telemetry,
+        optimization::disable_vs_telemetry,
+        optimization::enable_vs_telemetry,
+        optimization::batch_enable_tweaks,
+        optimization::disable_telemetry_services,
+        optimization::enable_telemetry_services,
+        optimization::disable_cortana,
+        optimization::enable_cortana,
+        optimization::disable_news_interests,
+        optimization::enable_news_interests,
+        optimization::disable_start_menu_ads,
+        optimization::enable_start_menu_ads,
+        optimization::disable_edge_telemetry,
+        optimization::enable_edge_telemetry,
+        optimization::disable_edge_discover_bar,
+        optimization::enable_edge_discover_bar,
+        optimization::optimize_process_count,
+        optimization::restore_process_count,
+        optimization::disable_store_search_app,
+        optimization::enable_store_search_app,
+        optimization::disable_store_promotions,
+        optimization::enable_store_promotions,
+        optimization::disable_store_auto_update,
+        optimization::enable_store_auto_update,
+        optimization::disable_spotlight_lock,
+        optimization::enable_spotlight_lock,
+        optimization::disable_my_people,
+        optimization::enable_my_people,
+        optimization::disable_tpm_check,
+        optimization::enable_tpm_check,
+        optimization::disable_sensor_services,
+        optimization::enable_sensor_services,
+        optimization::remove_cast_to_device,
+        optimization::add_cast_to_device,
+        optimization::disable_vbs,
+        optimization::enable_vbs,
+        optimization::disable_modern_standby,
+        optimization::enable_modern_standby,
+        optimization::enable_gaming_mode,
+        optimization::disable_gaming_mode,
+        optimization::disable_xbox_live,
+        optimization::enable_xbox_live,
+        optimization::disable_game_bar,
+        optimization::enable_game_bar,
+        optimization::disable_windows_ink,
+        optimization::enable_windows_ink,
+        optimization::disable_spelling_typing,
+        optimization::enable_spelling_typing,
+        optimization::disable_cloud_clipboard,
+        optimization::enable_cloud_clipboard,
+        optimization::disable_app_launch_tracking,
+        optimization::enable_app_launch_tracking,
+        optimization::disable_advertising_id,
+        optimization::enable_advertising_id,
+        optimization::disable_file_system_access,
+        optimization::enable_file_system_access,
+        optimization::disable_documents_access,
+        optimization::enable_documents_access,
+        optimization::disable_calendar_access,
+        optimization::enable_calendar_access,
+        optimization::disable_contacts_access,
+        optimization::enable_contacts_access,
+        optimization::disable_language_tracking,
+        optimization::enable_language_tracking,
+        optimization::disable_welcome_experience,
+        optimization::enable_welcome_experience,
+        optimization::disable_feedback_frequency,
+        optimization::enable_feedback_frequency,
+        optimization::disable_diagnostic_data,
+        optimization::enable_diagnostic_data,
+        optimization::disable_writing_habits,
+        optimization::enable_writing_habits,
+        optimization::disable_ceip,
+        optimization::enable_ceip,
+        optimization::disable_trk_wks,
+        optimization::enable_trk_wks,
+        optimization::disable_auto_maintenance,
+        optimization::enable_auto_maintenance,
+        optimization::enable_large_sys_cache,
+        optimization::disable_large_sys_cache,
+        optimization::disable_spectre_patch,
+        optimization::enable_spectre_patch,
+        optimization::disable_auto_debug,
+        optimization::enable_auto_debug,
+        optimization::disable_crash_dump,
+        optimization::enable_crash_dump,
+        optimization::disable_audit_log,
+        optimization::enable_audit_log,
+        optimization::disable_wfp_diag,
+        optimization::enable_wfp_diag,
+        optimization::disable_address_book_collect,
+        optimization::enable_address_book_collect,
+        optimization::disable_typing_collection,
+        optimization::enable_typing_collection,
+        optimization::disable_silent_app_install,
+        optimization::enable_silent_app_install,
+        optimization::disable_wifi_hotspots,
+        optimization::enable_wifi_hotspots,
+        optimization::disable_typing_insights,
+        optimization::enable_typing_insights,
+        optimization::disable_preinstalled_apps,
+        optimization::enable_preinstalled_apps,
+        optimization::disable_dotnet_telemetry,
+        optimization::enable_dotnet_telemetry,
+        optimization::disable_pwsh_telemetry,
+        optimization::enable_pwsh_telemetry,
+        optimization::disable_wifi_sense,
+        optimization::enable_wifi_sense,
+        optimization::disable_step_recorder,
+        optimization::enable_step_recorder,
+        optimization::batch_disable_tweaks,
+        optimization::check_all_tweak_states,
         optimization::delete_power_plan,
+        network_optimize::set_tcp_congestion,
+        network_optimize::restore_tcp_congestion,
+        network_optimize::set_tcp_chimney_off,
+        network_optimize::restore_tcp_chimney,
+        network_optimize::set_nagle_optimization,
+        network_optimize::restore_nagle_optimization,
+        network_optimize::set_adapter_power_saving_off,
+        network_optimize::restore_adapter_power_saving,
+        network_optimize::set_dns_servers,
+        network_optimize::restore_dns_servers,
+        network_optimize::check_network_tweak_states,
+        network_optimize::batch_network_enable,
+        network_optimize::batch_network_disable,
+        startup_manager::scan_startup_items,
+        startup_manager::delete_startup_item,
+        startup_manager::locate_startup_file,
+        startup_manager::find_startup_key_in_registry,
+        display_filter::get_displays,
+        display_filter::set_active_display,
         display_filter::get_filter_settings,
         display_filter::set_filter_settings,
         display_filter::enable_filter,
@@ -183,6 +362,15 @@ pub fn run() {
         overlay_panel::get_overlay_current_settings,
         overlay_panel::check_drag_mode_status,
         overlay_panel::reset_overlay_position,
+
+        heart_rate::scan_ble_devices,
+        heart_rate::connect_ble_device,
+        heart_rate::disconnect_ble_device,
+        heart_rate::get_heart_rate_data,
+        heart_rate::get_ble_connection_status,
+        heart_rate::start_advert_hr_listen,
+        heart_rate::stop_advert_hr_listen,
+
         game_ping::get_current_ping,
         hotkey::get_overlay_hotkey,
         hotkey::set_overlay_hotkey,
@@ -193,6 +381,7 @@ pub fn run() {
         crosshair::toggle_crosshair,
         crosshair::get_crosshair_status,
         crosshair::update_crosshair_settings,
+        crosshair::get_crosshair_displays,
 
         delta_force::get_delta_passwords,
         delta_force::get_weapon_codes,
@@ -207,11 +396,11 @@ pub fn run() {
         game_launcher::search_delta_force_launcher,
         game_launcher::get_default_delta_force_game,
         game_launcher::select_exe_file,
-        music::get_music_files,
         gpu_rename::get_gpu_info,
         gpu_rename::get_gpu_options,
         gpu_rename::apply_gpu_rename,
         gpu_rename::restore_gpu_name,
+            sponsor::get_sponsors,
             shader_cache::scan_shader_caches,
             shader_cache::clean_shader_cache,
             storage_clean::scan_storage_items,
@@ -225,107 +414,19 @@ pub fn run() {
             tray::get_dont_ask_again,
             tray::set_dont_ask_again,
             // === MCTier 命令 ===
-            mctier_modules::tauri_commands::create_lobby,
-            mctier_modules::tauri_commands::join_lobby,
-            mctier_modules::tauri_commands::leave_lobby,
-            mctier_modules::tauri_commands::force_exit_app,
-            mctier_modules::tauri_commands::toggle_mic,
-            mctier_modules::tauri_commands::mute_player,
-            mctier_modules::tauri_commands::mute_all,
-            mctier_modules::tauri_commands::get_config,
-            mctier_modules::tauri_commands::update_config,
-            mctier_modules::tauri_commands::save_opacity,
-            mctier_modules::tauri_commands::get_audio_devices,
-            mctier_modules::tauri_commands::get_app_state,
-            mctier_modules::tauri_commands::get_current_lobby,
-            mctier_modules::tauri_commands::get_players,
-            mctier_modules::tauri_commands::get_mic_status,
-            mctier_modules::tauri_commands::get_global_mute_status,
-            mctier_modules::tauri_commands::is_player_muted,
-            mctier_modules::tauri_commands::get_network_status,
-            mctier_modules::tauri_commands::get_virtual_ip,
-            mctier_modules::tauri_commands::set_always_on_top,
-            mctier_modules::tauri_commands::toggle_mini_mode,
-            mctier_modules::tauri_commands::set_window_opacity,
-            mctier_modules::tauri_commands::send_signaling_message,
-            mctier_modules::tauri_commands::broadcast_status_update,
-            mctier_modules::tauri_commands::send_heartbeat,
-            mctier_modules::tauri_commands::force_stop_easytier,
-            mctier_modules::tauri_commands::check_virtual_adapter,
-            mctier_modules::tauri_commands::check_firewall_rules,
-            mctier_modules::tauri_commands::ping_virtual_ip,
-            mctier_modules::tauri_commands::check_udp_port,
-            mctier_modules::tauri_commands::save_window_position,
-            mctier_modules::tauri_commands::exit_app,
-            mctier_modules::tauri_commands::add_player_domain,
-            mctier_modules::tauri_commands::remove_player_domain,
-            mctier_modules::tauri_commands::get_folder_name,
-            mctier_modules::tauri_commands::get_folder_info,
-            mctier_modules::tauri_commands::list_directory_files,
-            mctier_modules::tauri_commands::read_file_bytes,
-            mctier_modules::tauri_commands::write_file_bytes,
-            mctier_modules::tauri_commands::select_folder,
-            mctier_modules::tauri_commands::select_file,
-            mctier_modules::tauri_commands::select_save_location,
-            mctier_modules::tauri_commands::save_file,
-            mctier_modules::tauri_commands::save_chat_image,
-            mctier_modules::tauri_commands::read_file,
-            mctier_modules::tauri_commands::delete_file,
-            mctier_modules::tauri_commands::extract_zip,
-            mctier_modules::tauri_commands::open_file_location,
-            mctier_modules::tauri_commands::open_folder,
-            mctier_modules::tauri_commands::start_file_server,
-            mctier_modules::tauri_commands::stop_file_server,
-            mctier_modules::tauri_commands::check_file_server_status,
-            mctier_modules::tauri_commands::add_shared_folder,
-            mctier_modules::tauri_commands::remove_shared_folder,
-            mctier_modules::tauri_commands::get_local_shares,
-            mctier_modules::tauri_commands::cleanup_expired_shares,
-            mctier_modules::tauri_commands::get_remote_shares,
-            mctier_modules::tauri_commands::get_remote_files,
-            mctier_modules::tauri_commands::verify_share_password,
-            mctier_modules::tauri_commands::get_download_url,
-            mctier_modules::tauri_commands::diagnose_file_share_connection,
-            mctier_modules::tauri_commands::send_p2p_chat_message,
-            mctier_modules::tauri_commands::get_p2p_chat_messages,
-            mctier_modules::tauri_commands::clear_p2p_chat_messages,
-            mctier_modules::tauri_commands::open_screen_viewer_window,
-            mctier_modules::tauri_commands::open_log_folder,
-            mctier_modules::tauri_commands::open_log_file,
-            mctier_modules::tauri_commands::get_log_file_path,
-            mctier_modules::tauri_commands::save_settings,
-            mctier_modules::tauri_commands::get_settings,
-            mctier_modules::tauri_commands::set_auto_start,
-            mctier_modules::tauri_commands::check_auto_start,
-            mctier_modules::tauri_commands::reset_config_to_default,
-            mctier_modules::tauri_commands::save_voice_volume,
-            mctier_modules::tauri_commands::export_config,
-            mctier_modules::tauri_commands::import_config,
-            mctier_modules::tauri_commands::save_exit_node_advanced_config,
-            mctier_modules::tauri_commands::get_exit_node_advanced_config,
-            mctier_modules::easytier_advanced_commands::save_global_easytier_advanced_config,
-            mctier_modules::easytier_advanced_commands::get_global_easytier_advanced_config,
-            mctier_modules::easytier_advanced_commands::save_lobby_easytier_advanced_config,
-            mctier_modules::easytier_advanced_commands::get_lobby_easytier_advanced_config,
-            mctier_modules::easytier_advanced_commands::clear_lobby_easytier_advanced_config,
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
         match event {
-            tauri::RunEvent::ExitRequested { api, .. } => {
-                api.prevent_exit();
-                // 通知前端，由前端决定是否需要先退出联机服务再关闭
-                // 前端收到事件后执行清理，最后调用 force_exit_app
-                let _ = app_handle.emit("lobby-exit-requested", ());
-            }
             tauri::RunEvent::Exit => {
                 sensor::stop_sensor_process(app_handle);
                 hardware::cleanup_hardware_cache();
                 display_filter::cleanup();
                 overlay_panel::cleanup();
                 crosshair::cleanup();
+                heart_rate::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);
             }

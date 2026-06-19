@@ -359,6 +359,25 @@ fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<u32>, Optio
     dynamic_info
 }
 
+// 获取扩展GPU动态数据（风扇、功耗、时钟）- 仅NVIDIA
+fn get_gpu_extended_dynamic() -> Option<(Option<u32>, Option<u32>, Option<u32>, Option<u32>, Option<u32>)> {
+    use nvml_wrapper::Nvml;
+    use nvml_wrapper::enum_wrappers::device::Clock;
+
+    let nvml = Nvml::init().ok()?;
+    let device = nvml.device_by_index(0).ok()?;
+
+    let temperature = device
+        .temperature(nvml_wrapper::enum_wrappers::device::TemperatureSensor::Gpu)
+        .ok();
+    let usage = device.utilization_rates().ok().map(|u| u.gpu);
+    let fan_speed = device.fan_speed(0).ok();
+    let power_watts = device.power_usage().ok().map(|mw| mw / 1000);
+    let clock_mhz = device.clock_info(Clock::Graphics).ok();
+
+    Some((temperature, usage, fan_speed, power_watts, clock_mhz))
+}
+
 // 获取CPU的动态数据（占用）- 使用 sysinfo 库
 fn get_cpu_dynamic_info() -> Option<u16> {
     use sysinfo::CpuRefreshKind;
@@ -612,6 +631,15 @@ pub struct GpuStatus {
     pub usage: Option<u32>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct GpuExtendedInfo {
+    pub temperature: Option<u32>,
+    pub usage: Option<u32>,
+    pub fan_speed: Option<u32>,
+    pub power_watts: Option<u32>,
+    pub clock_mhz: Option<u32>,
+}
+
 #[tauri::command]
 pub async fn get_gpu_status(index: usize) -> Result<GpuStatus, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -703,12 +731,43 @@ pub fn get_overlay_cpu_usage() -> Option<u16> {
     get_cpu_dynamic_info()
 }
 
-pub fn get_overlay_gpu_info() -> (Option<u32>, Option<u32>) {
+pub fn get_overlay_gpu_extended_info() -> GpuExtendedInfo {
     let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
-    let gpu_static: &[GpuStaticInfo] = cache.as_ref().map(|c| c.gpu_static.as_slice()).unwrap_or(&[]);
-    let dynamic = get_gpu_dynamic_info(gpu_static);
+    let is_nvidia = cache
+        .as_ref()
+        .and_then(|c| c.gpu_static.first())
+        .map(|g| g.vendor == GpuVendor::NVIDIA)
+        .unwrap_or(false);
     drop(cache);
-    dynamic.first().cloned().unwrap_or((None, None))
+
+    if is_nvidia {
+        if let Some((temp, usage, fan_speed, power_watts, clock_mhz)) = get_gpu_extended_dynamic() {
+            return GpuExtendedInfo {
+                temperature: temp,
+                usage,
+                fan_speed,
+                power_watts,
+                clock_mhz,
+            };
+        }
+    }
+
+    GpuExtendedInfo::default()
+}
+
+#[tauri::command]
+pub fn is_nvidia_gpu() -> bool {
+    let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
+    cache
+        .as_ref()
+        .and_then(|c| c.gpu_static.first())
+        .map(|g| g.vendor == GpuVendor::NVIDIA)
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn get_os_version() -> Result<String, String> {
+    sysinfo::System::long_os_version().ok_or_else(|| "无法获取操作系统版本".to_string())
 }
 
 pub fn cleanup_hardware_cache() {

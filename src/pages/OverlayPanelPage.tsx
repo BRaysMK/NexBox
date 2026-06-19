@@ -31,6 +31,7 @@ import { CustomSelect } from "@/components/special/custom-select";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { DraggableDisplayItems, DisplayItem } from "@/components/DraggableDisplayItems";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { hexToRgba } from "@/lib/color-utils";
 
 interface DisplayItemConfig {
@@ -72,6 +73,9 @@ const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
   { id: "cpu_usage", label: "CPU占用", enabled: true },
   { id: "gpu_temp", label: "GPU温度", enabled: true },
   { id: "gpu_usage", label: "GPU占用", enabled: true },
+  { id: "gpu_fan_speed", label: "GPU风扇转速(仅NVIDIA)", enabled: false },
+  { id: "gpu_power", label: "GPU功耗(仅NVIDIA)", enabled: false },
+  { id: "gpu_clock", label: "GPU频率(仅NVIDIA)", enabled: false },
   { id: "memory_usage", label: "内存占用", enabled: true },
   { id: "delta_password", label: "三角洲密码", enabled: false },
   { id: "game_ping", label: "游戏延迟", enabled: false },
@@ -205,16 +209,7 @@ function CustomItemCard({ item, onUpdate, onRemove }: CustomItemCardProps) {
         </HStack>
         <HStack justify="space-between">
           <HStack spacing={2}>
-            <Input
-              type="color"
-              value={item.color}
-              onChange={(e) => onUpdate(item.id, "color", e.target.value)}
-              width="32px"
-              height="28px"
-              p={0}
-              border="none"
-              cursor="pointer"
-            />
+            <CustomColorPicker color={item.color} onChange={(c) => onUpdate(item.id, "color", c)} compact />
             <Text color={textColor} fontSize="xs">{item.color}</Text>
           </HStack>
           <Switch
@@ -251,6 +246,7 @@ export default function OverlayPanelPage() {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragMode, setIsDragMode] = useState(false);
+  const [isNvidia, setIsNvidia] = useState(true);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.600", "gray.400");
@@ -262,6 +258,7 @@ export default function OverlayPanelPage() {
     loadStatus();
     loadHardwareData(0);
     invoke("get_misans_font_path").catch(() => {});
+    invoke<boolean>("is_nvidia_gpu").then(setIsNvidia).catch(() => setIsNvidia(false));
   }, []);
 
   useEffect(() => {
@@ -607,6 +604,7 @@ export default function OverlayPanelPage() {
                 items={settings.display_items}
                 onReorder={reorderDisplayItems}
                 onToggle={updateDisplayItem}
+                disabledItems={isNvidia ? [] : ["gpu_fan_speed", "gpu_power", "gpu_clock"]}
               />
             </Box>
 

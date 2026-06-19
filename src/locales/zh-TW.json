@@ -1,4 +1,4 @@
-﻿{
+{
   "common": {
     "appName": "NexBox",
     "appFullName": "新境盒",
@@ -333,17 +333,7 @@
   "home": {
     "title": "歡迎使用新境盒",
     "welcome": "歡迎",
-    "customHtml": "自訂區域",
     "selectTools": "選擇快捷工具",
-    "edit": "編輯",
-    "reset": "重置",
-    "editHtml": "編輯HTML",
-    "code": "程式碼",
-    "preview": "預覽",
-    "htmlPlaceholder": "在此輸入HTML程式碼...",
-    "resetToDefault": "重置為預設",
-    "save": "儲存",
-    "pickImage": "選擇圖片",
     "todayPopularity": "今日人氣",
     "randomQuote": "隨機一言",
     "announcement": "公告",
@@ -393,7 +383,9 @@
     "network": "網路",
     "optimization": "優化",
     "builtinTools": "內建工具",
+    "thirdpartyTools": "第三方工具",
     "officialTools": "官方推薦",
+    "recommended": "推薦",
     "tools": {
       "assistantCrosshair": "輔助準心",
       "memreduct": "Memreduct",
@@ -408,7 +400,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
-    "mctierDesc": "Minecraft 伺服器效能檢測與排名工具",
+    "mctierDesc": "虛擬區域網路通用組網工具",
     "descriptions": {
       "assistantCrosshair": "遊戲畫面準心輔助工具",
       "memreduct": "記憶體清理工具",
@@ -881,9 +873,6 @@
         "de": "Deutsch"
       },
       "homepage": "首頁",
-      
-      "customHtmlLabel": "自訂區域",
-      "customHtmlDesc": "在首頁顯示可自訂HTML區域",
       "todayPopularityLabel": "今日人氣",
       "todayPopularityDesc": "在首頁顯示今日人氣隨機數",
       "announcementLabel": "公告",

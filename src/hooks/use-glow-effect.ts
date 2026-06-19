@@ -43,9 +43,6 @@ export function useGlowEffect(): GlowEffectResult {
 }
 
 export function getBorderGlowStyle(
-  mouseX: number,
-  mouseY: number,
-  isHovering: boolean,
   glowColor?: string,
   borderWidth: number = 1
 ): React.CSSProperties {
@@ -56,15 +53,10 @@ export function getBorderGlowStyle(
     inset: `-${borderWidth}px`,
     borderRadius: "inherit",
     padding: `${borderWidth}px`,
-    background: isHovering
-      ? `radial-gradient(circle at ${mouseX}% ${mouseY}%, ${color} 0%, transparent 50%)`
-      : "transparent",
+    background: color,
     WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
     WebkitMaskComposite: "xor",
     maskComposite: "exclude",
     pointerEvents: "none" as const,
-    transition: "opacity 0.2s ease",
-    opacity: isHovering ? 1 : 0,
-    willChange: "opacity",
   };
 }

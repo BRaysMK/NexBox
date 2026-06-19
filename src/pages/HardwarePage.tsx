@@ -398,12 +398,12 @@ export default function HardwarePage() {
     { name: t("hardware.driverVersion"), value: gpu.driver_version },
   ]);
 
-  const memoryDisplayInfos: DisplayInfo[][] = hardwareInfo.memory.map((mem) => [
-    { name: t("hardware.manufacturer"), value: mem.manufacturer },
-    { name: t("hardware.partNumber"), value: mem.part_number },
-    { name: t("hardware.capacity"), value: `${mem.capacity_gb.toFixed(0)} GB` },
-    { name: t("hardware.speed"), value: `${mem.speed_mhz} MHz` },
-  ]);
+  const totalCapacity = hardwareInfo.memory.reduce((sum, mem) => sum + mem.capacity_gb, 0);
+  const memoryDisplayInfo: DisplayInfo[] = [
+    { name: t("hardware.totalCapacity"), value: `${totalCapacity.toFixed(0)} GB` },
+    { name: t("hardware.speed"), value: hardwareInfo.memory.length > 0 ? `${hardwareInfo.memory[0].speed_mhz} MHz` : "--" },
+    { name: t("hardware.count"), value: `${hardwareInfo.memory.length}` },
+  ];
 
   const storageDisplayInfo: DisplayInfo[] = hardwareInfo.disk.map((disk, i) => ({
     name: `${t("hardware.storage")} ${i + 1}`,
@@ -514,20 +514,17 @@ export default function HardwarePage() {
               liquidGlassEnabled={liquidGlassEnabled}
             />
           ))}
-          {memoryDisplayInfos.map((memInfo, i) => (
-            <DetailCard
-              key={i}
-              title={t("hardware.ram")}
-              icon={Ram}
-              info={memInfo}
-              type="memory"
-              cardBg={cardBg}
-              borderColor={borderColor}
-              textColor={textColor}
-              subTextColor={subTextColor}
-              liquidGlassEnabled={liquidGlassEnabled}
-            />
-          ))}
+          <DetailCard
+            title={t("hardware.ram")}
+            icon={Ram}
+            info={memoryDisplayInfo}
+            type="memory"
+            cardBg={cardBg}
+            borderColor={borderColor}
+            textColor={textColor}
+            subTextColor={subTextColor}
+            liquidGlassEnabled={liquidGlassEnabled}
+          />
           <DetailCard
             title={t("hardware.motherboard")}
             icon={CircuitBoard}

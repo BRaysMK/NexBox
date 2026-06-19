@@ -23,6 +23,7 @@ import {
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { ThemeSwitch } from "@/components/special/theme-switch";
+import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
@@ -63,6 +64,15 @@ interface IccPresetInfo {
   id: string;
   name: string;
   description: string;
+}
+
+interface DisplayInfo {
+  index: number;
+  name: string;
+  device_name: string;
+  is_primary: boolean;
+  width: number;
+  height: number;
 }
 
 const presetIcons: Record<string, React.ElementType> = {
@@ -124,6 +134,9 @@ export default function DisplayFilterPage() {
   const [activeIccId, setActiveIccId] = useState<string | null>(null);
   const [deleteIccId, setDeleteIccId] = useState<string | null>(null);
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
+  const [displays, setDisplays] = useState<DisplayInfo[]>([]);
+  const [activeDisplayIndex, setActiveDisplayIndex] = useState<number>(0);
+  const activeDisplayIndexRef = useRef(0);
   
   const editValuesRef = useRef({
     temperature: 6500,
@@ -151,7 +164,7 @@ export default function DisplayFilterPage() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const result: FilterSettings = await invoke("get_filter_settings");
+      const result: FilterSettings = await invoke("get_filter_settings", { displayIndex: activeDisplayIndexRef.current });
       setSettings(result);
     } catch (error) {
       console.error("Failed to load filter settings:", error);
@@ -169,7 +182,7 @@ export default function DisplayFilterPage() {
 
   const loadCustomSettings = useCallback(async () => {
     try {
-      const result = await invoke<{ temperature: number; brightness: number; contrast: number; saturation: number }>("get_custom_filter_settings");
+      const result = await invoke<{ temperature: number; brightness: number; contrast: number; saturation: number }>("get_custom_filter_settings", { displayIndex: activeDisplayIndexRef.current });
       editValuesRef.current = {
         temperature: result.temperature,
         brightness: result.brightness,
@@ -199,12 +212,35 @@ export default function DisplayFilterPage() {
     }
   }, []);
 
+  const loadDisplays = useCallback(async () => {
+    try {
+      const result: DisplayInfo[] = await invoke("get_displays");
+      if (result.length > 0) {
+        setDisplays(result);
+        const idx = result[0].index;
+        setActiveDisplayIndex(idx);
+        activeDisplayIndexRef.current = idx;
+        await invoke("set_active_display", { displayIndex: idx });
+      } else {
+        setDisplays([{ index: 0, name: "DISPLAY1", device_name: "DISPLAY1", is_primary: true, width: 0, height: 0 }]);
+      }
+    } catch (error) {
+      console.error("Failed to load displays:", error);
+      setDisplays([{ index: 0, name: "DISPLAY1", device_name: "DISPLAY1", is_primary: true, width: 0, height: 0 }]);
+    }
+  }, []);
+
   useEffect(() => {
+    activeDisplayIndexRef.current = activeDisplayIndex;
+  }, [activeDisplayIndex]);
+
+  useEffect(() => {
+    loadDisplays();
     loadSettings();
     loadPresets();
     loadCustomSettings();
     loadIccPresets();
-  }, [loadSettings, loadPresets, loadCustomSettings, loadIccPresets]);
+  }, [loadDisplays, loadSettings, loadPresets, loadCustomSettings, loadIccPresets]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -258,7 +294,7 @@ export default function DisplayFilterPage() {
   const toggleFilter = async () => {
     setIsLoading(true);
     try {
-      const result: any = await invoke("toggle_filter");
+      const result: any = await invoke("toggle_filter", { displayIndex: activeDisplayIndex });
       if (result.success) {
         setSettings(prev => ({
           ...prev,
@@ -296,6 +332,7 @@ export default function DisplayFilterPage() {
     
     try {
       const result: any = await invoke("apply_preset", {
+        displayIndex: activeDisplayIndex,
         presetId: preset.id,
       });
       if (result.success) {
@@ -348,6 +385,7 @@ export default function DisplayFilterPage() {
       // 应用已保存的自定义滤镜设置
       try {
         const result: any = await invoke("set_filter_settings", {
+          displayIndex: activeDisplayIndex,
           temperature: savedCustom.temperature,
           brightness: savedCustom.brightness,
           contrast: savedCustom.contrast,
@@ -386,6 +424,7 @@ export default function DisplayFilterPage() {
     
     try {
       const result: any = await invoke("set_filter_settings", {
+        displayIndex: activeDisplayIndex,
         temperature: temp,
         brightness: brightness,
         contrast: contrast,
@@ -403,6 +442,7 @@ export default function DisplayFilterPage() {
         });
         
         await invoke("save_custom_filter_settings", {
+          displayIndex: activeDisplayIndex,
           temperature: temp,
           brightness: brightness,
           contrast: contrast,
@@ -445,7 +485,7 @@ export default function DisplayFilterPage() {
     setActivePresetId("normal");
     setActiveIccId(null);
     try {
-      const result: any = await invoke("apply_preset", { presetId: "normal" });
+      const result: any = await invoke("apply_preset", { displayIndex: activeDisplayIndex, presetId: "normal" });
       if (result.success) {
         setSettings({
           temperature: 6500,
@@ -531,7 +571,7 @@ export default function DisplayFilterPage() {
     setActivePresetId(""); // 取消内置预设选中状态
     setManualPresetChange(true);
     try {
-      const result: any = await invoke("apply_icc_preset", { id });
+      const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id });
       if (result.success) {
         setSettings((prev: FilterSettings) => ({
           ...prev,
@@ -605,6 +645,15 @@ export default function DisplayFilterPage() {
     const numValue = parseInt(value) || 0;
     editValuesRef.current[key] = numValue;
     setHasChanges(true);
+  };
+
+  const handleDisplayChange = async (value: string) => {
+    const idx = parseInt(value);
+    setActiveDisplayIndex(idx);
+    activeDisplayIndexRef.current = idx;
+    await invoke("set_active_display", { displayIndex: idx });
+    loadSettings();
+    loadCustomSettings();
   };
 
   const EditableItem = ({ 
@@ -699,7 +748,6 @@ export default function DisplayFilterPage() {
             onClick={() => navigate("/builtin-tools")}
             color={headingColor}
           />
-          <Palette size={28} color={headingColor} />
           <Heading size="lg" color={headingColor} fontWeight="700">
             {t("displayFilter.title")}
           </Heading>
@@ -747,6 +795,21 @@ export default function DisplayFilterPage() {
           </HStack>
         </HStack>
       </HStack>
+
+      {displays.length > 0 && (
+        <HStack w="full" spacing={3}>
+          <Monitor size={18} color={textColor} />
+          <CustomSelect
+            value={activeDisplayIndex.toString()}
+            onChange={handleDisplayChange}
+            options={displays.map((d) => ({
+              value: d.index.toString(),
+              label: `${d.name}${d.is_primary ? ` (${t("displayFilter.primary")})` : ""}`,
+            }))}
+            width="360px"
+          />
+        </HStack>
+      )}
 
       <VStack align="start" spacing={4} w="full">
         <Text color={textColor} fontSize="md" fontWeight="600">

@@ -65,11 +65,9 @@ export function LiquidGlassMenuItem({
           outlineOffset: "2px"
         }}
       >
-        {!isActive && (
-          <Box
-            style={getBorderGlowStyle(mouseX, mouseY, isHovering, glowColor)}
-          />
-        )}
+        <Box
+          style={getBorderGlowStyle(glowColor)}
+        />
         <HStack position="relative" zIndex={1}>
           {Icon && <Icon size={18} />}
           <Text fontSize="sm" fontWeight={isActive ? "semibold" : "normal"}>

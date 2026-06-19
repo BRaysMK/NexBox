@@ -98,7 +98,7 @@ export function TitleBar() {
         onMouseDown={handleMouseDown}
       >
         <Flex justify="space-between" align="center" h="full" pl={4} pr={4}>
-          <Box ml="72px" onMouseDown={(e) => e.stopPropagation()}>
+          <Box ml="112px" onMouseDown={(e) => e.stopPropagation()}>
             <GlobalSearch />
           </Box>
           <HStack spacing={1} h="40px" align="center">

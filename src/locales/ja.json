@@ -1,4 +1,4 @@
-﻿{
+{
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
@@ -333,17 +333,7 @@
   "home": {
     "title": "NexBoxへようこそ",
     "welcome": "ようこそ",
-    "customHtml": "カスタムウィジェット",
     "selectTools": "クイックツールを選択",
-    "edit": "編集",
-    "reset": "リセット",
-    "editHtml": "HTMLを編集",
-    "code": "コード",
-    "preview": "プレビュー",
-    "htmlPlaceholder": "ここにHTMLコードを入力...",
-    "resetToDefault": "デフォルトにリセット",
-    "save": "保存",
-    "pickImage": "画像を選択",
     "todayPopularity": "今日の人気",
     "randomQuote": "ランダム名言",
     "announcement": "お知らせ",
@@ -393,7 +383,9 @@
     "network": "ネットワーク",
     "optimization": "最適化",
     "builtinTools": "内蔵ツール",
+    "thirdpartyTools": "サードパーティツール",
     "officialTools": "公式おすすめ",
+    "recommended": "推奨",
     "tools": {
       "assistantCrosshair": "アシスタントクロスヘア",
       "memreduct": "Memreduct",
@@ -408,7 +400,7 @@
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner"
     },
-    "mctierDesc": "Minecraft サーバーパフォーマンステストとランキングツール",
+    "mctierDesc": "仮想LAN汎用ネットワーキングツール",
     "descriptions": {
       "assistantCrosshair": "ゲーム画面クロスヘアアシスタントツール",
       "memreduct": "メモリクリーニングツール",
@@ -881,9 +873,6 @@
         "de": "ドイツ語"
       },
       "homepage": "ホームページ",
-      
-      "customHtmlLabel": "カスタムエリア",
-      "customHtmlDesc": "ホームページにカスタマイズ可能なHTMLエリアを表示",
       "todayPopularityLabel": "今日の人気",
       "todayPopularityDesc": "ホームページに今日の人気ランダム番号を表示",
       "announcementLabel": "お知らせ",

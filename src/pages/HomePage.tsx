@@ -1,47 +1,50 @@
 import { Box, Text, Flex, useColorModeValue, HStack } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
-import CustomHtmlWidget from "@/components/CustomHtmlWidget";
 import GameLauncher from "@/components/GameLauncher";
 import { TodayPopularity, useTodayPopularityEnabled } from "@/components/TodayPopularity";
 import { AnnouncementCard, useAnnouncementEnabled } from "@/components/AnnouncementCard";
 import { RandomQuote, useRandomQuoteEnabled } from "@/components/RandomQuote";
 import { useState, useEffect } from "react";
+import HardwareModelCard from "@/components/HardwareModelCard";
 
 export default function HomePage() {
   const { t } = useTranslation();
   const textColor = useColorModeValue("gray.800", "#ffffff");
-  const [customHtmlEnabled, setCustomHtmlEnabled] = useState(true);
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
+  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const todayPopularityEnabled = useTodayPopularityEnabled();
   const announcementEnabled = useAnnouncementEnabled();
   const randomQuoteEnabled = useRandomQuoteEnabled();
 
   useEffect(() => {
-    const savedCustomHtml = localStorage.getItem("nexbox_custom_html_enabled");
-    if (savedCustomHtml !== null) {
-      setCustomHtmlEnabled(savedCustomHtml === "true");
-    }
-
     const savedGameLauncher = localStorage.getItem("nexbox_game_launcher_enabled");
     if (savedGameLauncher !== null) {
       setGameLauncherEnabled(savedGameLauncher === "true");
     }
 
-    const handleCustomHtmlChange = (e: CustomEvent) => {
-      setCustomHtmlEnabled(e.detail);
-    };
-
     const handleGameLauncherChange = (e: CustomEvent) => {
       setGameLauncherEnabled(e.detail);
     };
 
-    window.addEventListener("custom-html-setting-changed", handleCustomHtmlChange as EventListener);
     window.addEventListener("game-launcher-setting-changed", handleGameLauncherChange as EventListener);
     
     return () => {
-      window.removeEventListener("custom-html-setting-changed", handleCustomHtmlChange as EventListener);
       window.removeEventListener("game-launcher-setting-changed", handleGameLauncherChange as EventListener);
     };
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("nexbox_home_hardware_model_enabled");
+    if (saved !== null) {
+      setHomeHardwareModelEnabled(saved === "true");
+    }
+
+    const handler = (e: CustomEvent) => {
+      setHomeHardwareModelEnabled(e.detail);
+    };
+
+    window.addEventListener("home-hardware-model-setting-changed", handler as EventListener);
+    return () => window.removeEventListener("home-hardware-model-setting-changed", handler as EventListener);
   }, []);
 
   return (
@@ -61,13 +64,9 @@ export default function HomePage() {
         </Box>
       </Flex>
 
-      {customHtmlEnabled && (
-        <Box
-          position="absolute"
-          bottom={4}
-          left={4}
-        >
-          <CustomHtmlWidget />
+      {homeHardwareModelEnabled && (
+        <Box position="absolute" bottom={4} left={4}>
+          <HardwareModelCard />
         </Box>
       )}
 

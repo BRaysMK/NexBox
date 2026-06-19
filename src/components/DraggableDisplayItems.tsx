@@ -1,6 +1,6 @@
 import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast } from "@chakra-ui/react";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge } from "lucide-react";
+import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -29,12 +29,16 @@ interface DraggableDisplayItemsProps {
   items: DisplayItem[];
   onReorder: (items: DisplayItem[]) => void;
   onToggle: (id: string, enabled: boolean) => void;
+  disabledItems?: string[];
 }
 
 const ITEM_ICONS: Record<string, React.FC<{ size?: number }>> = {
   cpu_usage: Cpu,
   gpu_temp: Thermometer,
   gpu_usage: Activity,
+  gpu_fan_speed: Fan,
+  gpu_power: Zap,
+  gpu_clock: Clock,
   memory_usage: HardDrive,
   delta_password: Key,
   game_ping: Gauge,
@@ -45,10 +49,12 @@ function SortableItem({
   item,
   onToggle,
   enabledCount,
+  disabled,
 }: {
   item: DisplayItem;
   onToggle: (id: string, enabled: boolean) => void;
   enabledCount: number;
+  disabled?: boolean;
 }) {
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const iconColor = useColorModeValue("gray.500", "#999999");
@@ -118,6 +124,7 @@ function SortableItem({
         isChecked={item.enabled}
         onChange={(e) => handleToggle(e.target.checked)}
         size="sm"
+        isDisabled={disabled}
         sx={{
           '& .chakra-switch__track[data-checked]': {
             bg: getActiveColor(),
@@ -132,6 +139,7 @@ export function DraggableDisplayItems({
   items,
   onReorder,
   onToggle,
+  disabledItems = [],
 }: DraggableDisplayItemsProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -174,6 +182,7 @@ export function DraggableDisplayItems({
               item={item}
               onToggle={onToggle}
               enabledCount={enabledCount}
+              disabled={disabledItems.includes(item.id)}
             />
           ))}
         </Box>

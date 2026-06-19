@@ -2,6 +2,7 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
+use std::os::windows::process::CommandExt;
 
 use futures_util::StreamExt;
 use reqwest::Client;
@@ -75,8 +76,10 @@ pub async fn download_file(
 pub async fn open_installer(file_path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
         Command::new("cmd")
             .args(["/c", "start", "", &file_path])
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
@@ -103,16 +106,37 @@ pub async fn install_update(
 ) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd")
-            .args(["/c", "start", "", &file_path])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let file_path_wide: Vec<u16> = file_path
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let verb: Vec<u16> = "open\0".encode_utf16().collect();
+
+        // 使用 ShellExecuteW 直接启动安装包，避免 cmd 中介弹出终端窗口
+        let hinst = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                verb.as_ptr(),
+                file_path_wide.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+
+        // ShellExecuteW 返回值 <= 32 表示错误
+        if hinst as isize <= 32 {
+            return Err(format!("Failed to launch installer (error: {})", hinst as isize));
+        }
     }
-    
+
     std::thread::sleep(std::time::Duration::from_millis(500));
-    
+
     app_handle.exit(0);
-    
+
     Ok(())
 }
 

@@ -1,5 +1,5 @@
 import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Crosshair, Users } from "lucide-react";
+import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Crosshair } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -131,7 +131,7 @@ export function Sidebar() {
   const defaultBorderColor = useColorModeValue("rgba(200,200,200,0.3)", "rgba(51,51,51,0.5)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
   
-  const iconColor = useColorModeValue("rgba(107,114,128,0.8)", "rgba(156,163,175,0.7)");
+  const iconColor = useColorModeValue("rgba(0,0,0,0.75)", "rgba(255,255,255,0.8)");
 
   const activeBg = getActiveColor();
   const hoverBg = getHoverColor(true);
@@ -144,7 +144,6 @@ export function Sidebar() {
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },
     { path: "/tests", icon: Crosshair, ariaLabel: t("sidebar.tests") },
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
-    { path: "/lobby", icon: Users, ariaLabel: t("sidebar.lobby") },
     { path: "/delta-force", icon: null, customIcon: deltaForceIcon, ariaLabel: t("sidebar.deltaForce") },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
@@ -188,7 +187,6 @@ export function Sidebar() {
         bg={glassBgColor}
         border="1px solid"
         borderColor={glassBorderColor}
-        backdropFilter="blur(20px)"
       >
         {sidebarContent}
       </ChakraBox>
@@ -201,7 +199,6 @@ export function Sidebar() {
       bg={defaultBgColor}
       border="1px solid"
       borderColor={defaultBorderColor}
-      backdropFilter="blur(12px)"
     >
       {sidebarContent}
     </ChakraBox>

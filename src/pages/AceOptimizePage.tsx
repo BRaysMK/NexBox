@@ -51,12 +51,78 @@ function OptionRow({
   onApply: () => void;
 }) {
   const { t } = useTranslation();
-  const rowBg = useColorModeValue("gray.50", "#1a1a1a");
+  const { liquidGlassEnabled } = useBackground();
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const iconBg = useColorModeValue("white", "#222222");
+  const rowBg = useColorModeValue("gray.50", "#1a1a1a");
   const { getActiveColor } = useThemeColor();
+
+  const content = (
+    <HStack align="flex-start" spacing={4}>
+      <Box
+        w={10} h={10}
+        borderRadius="lg"
+        bg={iconBg}
+        border="1px solid"
+        borderColor={borderColor}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        flexShrink={0}
+        color={isApplied ? getActiveColor() : subTextColor}
+      >
+        {icon}
+      </Box>
+      <VStack align="flex-start" spacing={1} flex={1}>
+        <Text fontSize="sm" fontWeight="bold" color={textColor}>
+          {title}
+        </Text>
+        <Text fontSize="xs" color={subTextColor} lineHeight="short">
+          {description}
+        </Text>
+      </VStack>
+      <VStack align="flex-end" spacing={2} flexShrink={0}>
+        <Button
+          size="sm"
+          bg={isApplied ? getActiveColor() : undefined}
+          color={isApplied ? "white" : getActiveColor()}
+          borderColor={!isApplied ? getActiveColor() : undefined}
+          variant={!isApplied ? "outline" : undefined}
+          _hover={isApplied ? { bg: getActiveColor(), opacity: 0.9 } : undefined}
+          onClick={onApply}
+          isLoading={isLoading}
+          loadingText=""
+          px={4}
+          borderRadius="lg"
+          minW="72px"
+        >
+          {isApplied ? t("optimization.aceOptimize.applied") : t("optimization.aceOptimize.apply")}
+        </Button>
+        {gameRunning !== null && (
+          <Badge
+            colorScheme={gameRunning ? "green" : "gray"}
+            variant="subtle"
+            fontSize="2xs"
+            px={2}
+            py={0.5}
+            borderRadius="full"
+          >
+            {gameRunning ? t("optimization.aceOptimize.status.processRunning") : t("optimization.aceOptimize.status.processNotRunning")}
+          </Badge>
+        )}
+      </VStack>
+    </HStack>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <LiquidGlassCard p={4} _hover={{ borderColor: getActiveColor() }}>
+        {content}
+      </LiquidGlassCard>
+    );
+  }
 
   return (
     <Box
@@ -68,60 +134,7 @@ function OptionRow({
       transition="all 0.15s"
       _hover={{ borderColor: getActiveColor(), boxShadow: `0 0 0 1px ${hexToRgba(getActiveColor(), 0.3)}` }}
     >
-      <HStack align="flex-start" spacing={4}>
-        <Box
-          w={10} h={10}
-          borderRadius="lg"
-          bg={iconBg}
-          border="1px solid"
-          borderColor={borderColor}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          flexShrink={0}
-          color={isApplied ? getActiveColor() : subTextColor}
-        >
-          {icon}
-        </Box>
-        <VStack align="flex-start" spacing={1} flex={1}>
-          <Text fontSize="sm" fontWeight="bold" color={textColor}>
-            {title}
-          </Text>
-          <Text fontSize="xs" color={subTextColor} lineHeight="short">
-            {description}
-          </Text>
-        </VStack>
-        <VStack align="flex-end" spacing={2} flexShrink={0}>
-          <Button
-            size="sm"
-            bg={isApplied ? getActiveColor() : undefined}
-            color={isApplied ? "white" : getActiveColor()}
-            borderColor={!isApplied ? getActiveColor() : undefined}
-            variant={!isApplied ? "outline" : undefined}
-            _hover={isApplied ? { bg: getActiveColor(), opacity: 0.9 } : undefined}
-            onClick={onApply}
-            isLoading={isLoading}
-            loadingText=""
-            px={4}
-            borderRadius="lg"
-            minW="72px"
-          >
-            {isApplied ? t("optimization.aceOptimize.applied") : t("optimization.aceOptimize.apply")}
-          </Button>
-          {gameRunning !== null && (
-            <Badge
-              colorScheme={gameRunning ? "green" : "gray"}
-              variant="subtle"
-              fontSize="2xs"
-              px={2}
-              py={0.5}
-              borderRadius="full"
-            >
-              {gameRunning ? t("optimization.aceOptimize.status.processRunning") : t("optimization.aceOptimize.status.processNotRunning")}
-            </Badge>
-          )}
-        </VStack>
-      </HStack>
+      {content}
     </Box>
   );
 }
@@ -193,6 +206,7 @@ export default function AceOptimizePage() {
   const toast = useToast();
   const navigate = useNavigate();
 
+  const { liquidGlassEnabled } = useBackground();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const borderColorVal = useColorModeValue("gray.200", "#333333");
   const { getActiveColor } = useThemeColor();
@@ -365,41 +379,47 @@ export default function AceOptimizePage() {
         </SettingCard>
       </SimpleGrid>
 
-      <Box
-        bg={useColorModeValue("white", "#111111")}
-        borderRadius="xl"
-        p={5}
-        border="1px solid"
-        borderColor={borderColorVal}
-      >
-        <HStack justify="space-between">
-          <VStack align="flex-start" spacing={1}>
-            <HStack>
-              <RefreshCw size={16} color={getActiveColor()} />
-              <Text fontWeight="bold" fontSize="sm" color={headingColor}>
-                {t("optimization.aceOptimize.optimizeAll.title")}
+      {(() => {
+        const optimizeAllContent = (
+          <HStack justify="space-between">
+            <VStack align="flex-start" spacing={1}>
+              <HStack>
+                <RefreshCw size={16} color={getActiveColor()} />
+                <Text fontWeight="bold" fontSize="sm" color={headingColor}>
+                  {t("optimization.aceOptimize.optimizeAll.title")}
+                </Text>
+              </HStack>
+              <Text fontSize="xs" color="gray.500">
+                {t("optimization.aceOptimize.optimizeAll.description")}
               </Text>
-            </HStack>
-            <Text fontSize="xs" color="gray.500">
-              {t("optimization.aceOptimize.optimizeAll.description")}
-            </Text>
-          </VStack>
-          <Button
-            size="md"
-            bg={getActiveColor()}
-            color="white"
-            _hover={{ bg: getActiveColor(), opacity: 0.9 }}
-            onClick={applyAll}
-            isLoading={optimizeAllLoading}
-            loadingText={t("optimization.aceOptimize.optimizeAll.optimizing")}
-            px={6}
-            borderRadius="lg"
-            leftIcon={<Zap size={16} />}
-          >
-            {t("optimization.aceOptimize.optimizeAll.button")}
-          </Button>
-        </HStack>
-      </Box>
+            </VStack>
+            <Button
+              size="md"
+              bg={getActiveColor()}
+              color="white"
+              _hover={{ bg: getActiveColor(), opacity: 0.9 }}
+              onClick={applyAll}
+              isLoading={optimizeAllLoading}
+              loadingText={t("optimization.aceOptimize.optimizeAll.optimizing")}
+              px={6}
+              borderRadius="lg"
+              leftIcon={<Zap size={16} />}
+            >
+              {t("optimization.aceOptimize.optimizeAll.button")}
+            </Button>
+          </HStack>
+        );
+
+        if (liquidGlassEnabled) {
+          return <LiquidGlassCard p={5}>{optimizeAllContent}</LiquidGlassCard>;
+        }
+
+        return (
+          <Box bg={useColorModeValue("white", "#111111")} borderRadius="xl" p={5} border="1px solid" borderColor={borderColorVal}>
+            {optimizeAllContent}
+          </Box>
+        );
+      })()}
     </Box>
   );
 }

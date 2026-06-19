@@ -21,6 +21,9 @@ import ResolutionConverterPage from "./pages/ResolutionConverterPage";
 import ShaderCachePage from "./pages/ShaderCachePage";
 import PowerManagementPage from "./pages/PowerManagementPage";
 import StorageCleanPage from "./pages/StorageCleanPage";
+import StartupManagerPage from "./pages/StartupManagerPage";
+import SystemOptimizerPage from "./pages/SystemOptimizerPage";
+import NetworkOptimizerPage from "./pages/NetworkOptimizerPage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
 import TestsPage from "./pages/TestsPage";
 import EpicFreePage from "./pages/EpicFreePage";
@@ -32,9 +35,7 @@ import InhibitTestPage from "./pages/InhibitTestPage";
 import SchulteTestPage from "./pages/SchulteTestPage";
 import CpsTestPage from "./pages/CpsTestPage";
 import { useState, useEffect } from "react";
-import MCTierApp from "./mctier/App";
-import { initializeStore } from "./mctier/stores";
-import "@/mctier/App.css";
+
 import {
   Box,
   Modal,
@@ -64,7 +65,7 @@ import { MusicProvider } from "./contexts/music-context";
 import { MiniMusicPlayer } from "./components/MiniMusicPlayer";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "3.1.6";
+const CURRENT_VERSION = "3.8.3";
 
 function App() {
   const { t } = useTranslation();
@@ -110,10 +111,7 @@ function App() {
     return () => window.removeEventListener("page-transition-setting-changed", handler);
   }, []);
 
-  // 初始化 MCTier 状态管理（始终运行，不随页面卸载）
-  useEffect(() => {
-    initializeStore();
-  }, []);
+
 
   useEffect(() => {
     const checkUpdateOnStartup = async () => {
@@ -251,6 +249,9 @@ function App() {
               <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
               <Route path="/optimize/power-management" element={<AnimatedPage><PowerManagementPage /></AnimatedPage>} />
               <Route path="/optimize/storage-clean" element={<AnimatedPage><StorageCleanPage /></AnimatedPage>} />
+              <Route path="/optimize/startup-manager" element={<AnimatedPage><StartupManagerPage /></AnimatedPage>} />
+              <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
+            <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
         </Routes>
@@ -285,29 +286,14 @@ function App() {
             <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
             <Route path="/optimize/power-management" element={<AnimatedPage><PowerManagementPage /></AnimatedPage>} />
             <Route path="/optimize/storage-clean" element={<AnimatedPage><StorageCleanPage /></AnimatedPage>} />
+            <Route path="/optimize/startup-manager" element={<AnimatedPage><StartupManagerPage /></AnimatedPage>} />
+            <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
+            <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
       </Routes>
     )}
 
-      {/* MCTier App - 始终挂载，离开联机页面时不卸载 */}
-      <Box
-        className="mctier-page"
-        position="absolute"
-        top={0}
-        left={0}
-        right={0}
-        bottom={0}
-        padding="16px"
-        zIndex={location.pathname === '/lobby' ? 10 : -1}
-        opacity={location.pathname === '/lobby' ? 1 : 0}
-        pointerEvents={location.pathname === '/lobby' ? 'auto' : 'none'}
-        transition="opacity 0.2s"
-      >
-        <Box height="100%" borderRadius="12px" overflow="hidden">
-          <MCTierApp />
-        </Box>
-      </Box>
       </MainLayout>
 
       <Modal
