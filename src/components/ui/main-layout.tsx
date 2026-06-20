@@ -84,9 +84,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   useEffect(() => {
     let bgColorToUse = bgColor;
 
-    if (showImageBg || showPresetBg) {
-      bgColorToUse = "transparent";
-    } else if (showDynamicBg) {
+    if (showImageBg || showPresetBg || showDynamicBg) {
       bgColorToUse = "transparent";
     }
 
@@ -109,31 +107,43 @@ export function MainLayout({ children }: MainLayoutProps) {
       minHeight="100vh"
       bg="transparent"
     >
-      {/* 预设和图片背景的交叉淡化层 */}
-      {bgLayers.map((layer) => (
-        <Box
-          key={layer.id}
-          position="fixed"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          zIndex={-1}
-          bgImage={`url(${layer.url})`}
-          bgSize="cover"
-          bgPosition="center"
-          bgRepeat="no-repeat"
-          opacity={layer.fading ? 0 : 1}
-          transition={layer.fading ? "opacity 0.5s ease-in-out" : undefined}
-          animation={!layer.fading ? "bgFadeIn 0.5s ease-in-out" : undefined}
-          sx={{
-            "@keyframes bgFadeIn": {
-              from: { opacity: 0 },
-              to: { opacity: 1 },
-            },
-          }}
-        />
-      ))}
+      {/* 背景交叉淡化层：用 <img> 而非 CSS background-image，
+          原因：CSS value 有约 2MB 上限，大图 data URL 会被截断导致黑色 */}
+      <Box sx={{
+        "@keyframes bgFadeIn": {
+          from: { opacity: 0 },
+          to: { opacity: 1 },
+        },
+      }}>
+        {bgLayers.map((layer) => (
+          <Box
+            key={layer.id}
+            position="fixed"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            zIndex={-1}
+            opacity={layer.fading ? 0 : 1}
+            transition={layer.fading ? "opacity 0.5s ease-in-out" : undefined}
+            animation={!layer.fading ? "bgFadeIn 0.5s ease-in-out" : undefined}
+          >
+            <img
+              src={layer.url}
+              alt=""
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+                // GPU 合成层：避免背景图层重绘时影响悬浮框等覆盖层性能
+                willChange: "transform" as any,
+                transform: "translateZ(0)",
+              }}
+            />
+          </Box>
+        ))}
+      </Box>
       {showDynamicBg && (
         <Box
           position="fixed"

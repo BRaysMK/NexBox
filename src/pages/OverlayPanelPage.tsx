@@ -62,24 +62,44 @@ interface OverlaySettings {
 interface HardwareData {
   fps: number | null;
   cpu_usage: number | null;
+  cpu_temp: number | null;
+  cpu_clock: number | null;
+  cpu_voltage: number | null;
+  cpu_power: number | null;
   gpu_temp: number | null;
   gpu_usage: number | null;
+  gpu_fan_speed: number | null;
+  gpu_power: number | null;
+  gpu_clock: number | null;
+  gpu_voltage: number | null;
+  gpu_memory_clock: number | null;
   memory_usage: number | null;
+  ssd_temp: number | null;
   delta_password: string | null;
   game_ping: number | null;
+  gpu_vram_used: number | null;
+  gpu_vram_total: number | null;
 }
 
 const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
+  { id: "fps", label: "FPS", enabled: false },
+  { id: "cpu_temp", label: "CPU温度", enabled: false },
   { id: "cpu_usage", label: "CPU占用", enabled: true },
+  { id: "cpu_clock", label: "CPU频率", enabled: false },
+  { id: "cpu_voltage", label: "CPU电压", enabled: false },
+  { id: "cpu_power", label: "CPU功耗", enabled: false },
   { id: "gpu_temp", label: "GPU温度", enabled: true },
   { id: "gpu_usage", label: "GPU占用", enabled: true },
-  { id: "gpu_fan_speed", label: "GPU风扇转速(仅NVIDIA)", enabled: false },
-  { id: "gpu_power", label: "GPU功耗(仅NVIDIA)", enabled: false },
-  { id: "gpu_clock", label: "GPU频率(仅NVIDIA)", enabled: false },
+  { id: "gpu_fan_speed", label: "GPU风扇转速", enabled: false },
+  { id: "gpu_power", label: "GPU功耗", enabled: false },
+  { id: "gpu_clock", label: "GPU频率", enabled: false },
+  { id: "gpu_voltage", label: "GPU电压", enabled: false },
+  { id: "gpu_vram", label: "GPU显存占用", enabled: false },
+  { id: "gpu_memory_clock", label: "GPU显存频率", enabled: false },
   { id: "memory_usage", label: "内存占用", enabled: true },
-  { id: "delta_password", label: "三角洲密码", enabled: false },
+  { id: "ssd_temp", label: "硬盘温度", enabled: false },
   { id: "game_ping", label: "游戏延迟", enabled: false },
-  { id: "fps", label: "FPS", enabled: false },
+  { id: "delta_password", label: "三角洲密码", enabled: false },
 ];
 
 const DEFAULT_SETTINGS: OverlaySettings = {
@@ -237,11 +257,23 @@ export default function OverlayPanelPage() {
   const [hardwareData, setHardwareData] = useState<HardwareData>({
     fps: null,
     cpu_usage: null,
+    cpu_temp: null,
+    cpu_clock: null,
+    cpu_voltage: null,
+    cpu_power: null,
     gpu_temp: null,
     gpu_usage: null,
+    gpu_fan_speed: null,
+    gpu_power: null,
+    gpu_clock: null,
+    gpu_voltage: null,
+    gpu_memory_clock: null,
     memory_usage: null,
+    ssd_temp: null,
     delta_password: null,
     game_ping: null,
+    gpu_vram_used: null,
+    gpu_vram_total: null,
   });
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -300,11 +332,23 @@ export default function OverlayPanelPage() {
         return {
           fps: data.fps ?? prev.fps,
           cpu_usage: data.cpu_usage ?? prev.cpu_usage,
+          cpu_temp: data.cpu_temp ?? prev.cpu_temp,
+          cpu_clock: data.cpu_clock ?? prev.cpu_clock,
+          cpu_voltage: data.cpu_voltage ?? prev.cpu_voltage,
+          cpu_power: data.cpu_power ?? prev.cpu_power,
           gpu_temp: data.gpu_temp ?? prev.gpu_temp,
           gpu_usage: data.gpu_usage ?? prev.gpu_usage,
+          gpu_fan_speed: data.gpu_fan_speed ?? prev.gpu_fan_speed,
+          gpu_power: data.gpu_power ?? prev.gpu_power,
+          gpu_clock: data.gpu_clock ?? prev.gpu_clock,
+          gpu_voltage: data.gpu_voltage ?? prev.gpu_voltage,
+          gpu_memory_clock: data.gpu_memory_clock ?? prev.gpu_memory_clock,
           memory_usage: data.memory_usage ?? prev.memory_usage,
+          ssd_temp: data.ssd_temp ?? prev.ssd_temp,
           delta_password: data.delta_password ?? prev.delta_password,
           game_ping: data.game_ping ?? prev.game_ping,
+          gpu_vram_used: data.gpu_vram_used ?? prev.gpu_vram_used,
+          gpu_vram_total: data.gpu_vram_total ?? prev.gpu_vram_total,
         };
       });
     } catch (error) {
@@ -604,7 +648,7 @@ export default function OverlayPanelPage() {
                 items={settings.display_items}
                 onReorder={reorderDisplayItems}
                 onToggle={updateDisplayItem}
-                disabledItems={isNvidia ? [] : ["gpu_fan_speed", "gpu_power", "gpu_clock"]}
+                disabledItems={[]}
               />
             </Box>
 

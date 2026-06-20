@@ -39,7 +39,7 @@ pub struct GpuInfo {
     pub vendor: GpuVendor,
     pub memory_gb: f64,
     pub driver_version: String,
-    pub temperature: Option<u32>,
+    pub temperature: Option<f64>,
     pub usage: Option<u32>,
 }
 
@@ -199,7 +199,8 @@ fn get_nvidia_gpus_with_nvml() -> Result<Vec<GpuInfo>, HardwareError> {
 
         let temperature = device
             .temperature(nvml_wrapper::enum_wrappers::device::TemperatureSensor::Gpu)
-            .ok();
+            .ok()
+            .map(|t| if t > 200 { t as f64 / 10.0 } else { t as f64 });
         let utilization = device.utilization_rates().ok();
         let usage = utilization.map(|u| u.gpu);
 
@@ -254,7 +255,7 @@ fn get_nvidia_gpus_with_smi() -> Vec<GpuInfo> {
                     let name = parts[0].to_string();
                     let memory_mb: f64 = parts[1].parse().unwrap_or(0.0);
                     let memory_gb = memory_mb / 1024.0;
-                    let temperature: Option<u32> = parts[2].parse().ok();
+                    let temperature: Option<f64> = parts[2].parse().ok().map(|v: u32| v as f64);
                     let usage: Option<u32> = parts[3].parse().ok();
                     let driver_version = parts[4].to_string();
 
@@ -334,7 +335,7 @@ fn get_gpu_info() -> Vec<GpuInfo> {
 }
 
 // 只获取GPU的动态数据（温度、占用）
-fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<u32>, Option<u32>)> {
+fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<f64>, Option<u32>)> {
     let mut dynamic_info = Vec::new();
 
     // 尝试用NVML
@@ -357,25 +358,6 @@ fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<u32>, Optio
     }
 
     dynamic_info
-}
-
-// 获取扩展GPU动态数据（风扇、功耗、时钟）- 仅NVIDIA
-fn get_gpu_extended_dynamic() -> Option<(Option<u32>, Option<u32>, Option<u32>, Option<u32>, Option<u32>)> {
-    use nvml_wrapper::Nvml;
-    use nvml_wrapper::enum_wrappers::device::Clock;
-
-    let nvml = Nvml::init().ok()?;
-    let device = nvml.device_by_index(0).ok()?;
-
-    let temperature = device
-        .temperature(nvml_wrapper::enum_wrappers::device::TemperatureSensor::Gpu)
-        .ok();
-    let usage = device.utilization_rates().ok().map(|u| u.gpu);
-    let fan_speed = device.fan_speed(0).ok();
-    let power_watts = device.power_usage().ok().map(|mw| mw / 1000);
-    let clock_mhz = device.clock_info(Clock::Graphics).ok();
-
-    Some((temperature, usage, fan_speed, power_watts, clock_mhz))
 }
 
 // 获取CPU的动态数据（占用）- 使用 sysinfo 库
@@ -627,17 +609,8 @@ pub async fn get_cpu_load() -> Result<Option<u16>, String> {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GpuStatus {
-    pub temperature: Option<u32>,
+    pub temperature: Option<f64>,
     pub usage: Option<u32>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct GpuExtendedInfo {
-    pub temperature: Option<u32>,
-    pub usage: Option<u32>,
-    pub fan_speed: Option<u32>,
-    pub power_watts: Option<u32>,
-    pub clock_mhz: Option<u32>,
 }
 
 #[tauri::command]
@@ -724,35 +697,6 @@ pub async fn get_disk_status() -> Result<DiskInfo, String> {
         Ok(info) => Ok(info),
         Err(e) => Err(e.to_string()),
     }
-}
-
-// 清理硬件信息缓存
-pub fn get_overlay_cpu_usage() -> Option<u16> {
-    get_cpu_dynamic_info()
-}
-
-pub fn get_overlay_gpu_extended_info() -> GpuExtendedInfo {
-    let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
-    let is_nvidia = cache
-        .as_ref()
-        .and_then(|c| c.gpu_static.first())
-        .map(|g| g.vendor == GpuVendor::NVIDIA)
-        .unwrap_or(false);
-    drop(cache);
-
-    if is_nvidia {
-        if let Some((temp, usage, fan_speed, power_watts, clock_mhz)) = get_gpu_extended_dynamic() {
-            return GpuExtendedInfo {
-                temperature: temp,
-                usage,
-                fan_speed,
-                power_watts,
-                clock_mhz,
-            };
-        }
-    }
-
-    GpuExtendedInfo::default()
 }
 
 #[tauri::command]

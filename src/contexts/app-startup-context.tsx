@@ -46,6 +46,7 @@ interface OverlaySettings {
   opacity: number;
   style: string;
   font: string;
+  _version?: number;
   position_x?: number | null;
   position_y?: number | null;
 }
@@ -87,13 +88,21 @@ interface AppStartupContextType {
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   display_items: [
     { id: "fps", label: "FPS", enabled: true },
+    { id: "cpu_temp", label: "CPU温度", enabled: false },
     { id: "cpu_usage", label: "CPU占用", enabled: true },
+    { id: "cpu_clock", label: "CPU频率", enabled: false },
+    { id: "cpu_voltage", label: "CPU电压", enabled: false },
+    { id: "cpu_power", label: "CPU功耗", enabled: false },
     { id: "gpu_temp", label: "GPU温度", enabled: true },
     { id: "gpu_usage", label: "GPU占用", enabled: true },
-    { id: "gpu_fan_speed", label: "GPU风扇转速(仅NVIDIA)", enabled: false },
-    { id: "gpu_power", label: "GPU功耗(仅NVIDIA)", enabled: false },
-    { id: "gpu_clock", label: "GPU频率(仅NVIDIA)", enabled: false },
+    { id: "gpu_fan_speed", label: "GPU风扇转速", enabled: false },
+    { id: "gpu_power", label: "GPU功耗", enabled: false },
+    { id: "gpu_clock", label: "GPU频率", enabled: false },
+    { id: "gpu_voltage", label: "GPU电压", enabled: false },
+    { id: "gpu_vram", label: "GPU显存占用", enabled: false },
+    { id: "gpu_memory_clock", label: "GPU显存频率", enabled: false },
     { id: "memory_usage", label: "内存占用", enabled: true },
+    { id: "ssd_temp", label: "硬盘温度", enabled: false },
     { id: "game_ping", label: "游戏延迟", enabled: true },
     { id: "delta_password", label: "三角洲密码", enabled: true },
   ],
@@ -172,13 +181,26 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         // 处理旧格式（对象）到新格式（数组）的迁移
         let displayItems: DisplayItems;
         if (Array.isArray(savedSettings.display_items)) {
-          // 新格式：数组，补充可能缺失的项
-          const defaultItems = DEFAULT_OVERLAY_SETTINGS.display_items;
-          const savedIds = new Set(savedSettings.display_items.map((i) => i.id));
-          displayItems = [
-            ...savedSettings.display_items,
-            ...defaultItems.filter((i) => !savedIds.has(i.id)),
-          ];
+          // 新格式数组：检查版本，过旧则重置顺序和标签，保留启用状态
+          const currentVersion = 2;
+          const savedVersion = savedSettings._version ?? 1;
+          if (savedVersion < currentVersion) {
+            // 版本过旧：用默认项重建，只保留启用状态
+            const savedMap = new Map(savedSettings.display_items.map((i) => [i.id, i.enabled]));
+            displayItems = DEFAULT_OVERLAY_SETTINGS.display_items.map((d) => ({
+              ...d,
+              enabled: savedMap.has(d.id) ? savedMap.get(d.id)! : d.enabled,
+            }));
+            needsMigration = true;
+          } else {
+            // 最新版本，补充可能缺失的项
+            const defaultItems = DEFAULT_OVERLAY_SETTINGS.display_items;
+            const savedIds = new Set(savedSettings.display_items.map((i) => i.id));
+            displayItems = [
+              ...savedSettings.display_items,
+              ...defaultItems.filter((i) => !savedIds.has(i.id)),
+            ];
+          }
         } else {
           // 旧格式：对象，需要迁移
           needsMigration = true;
@@ -196,23 +218,30 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
             { id: "cpu_usage", label: "CPU占用", enabled: oldItems.cpu_usage ?? true },
             { id: "gpu_temp", label: "GPU温度", enabled: oldItems.gpu_temp ?? true },
             { id: "gpu_usage", label: "GPU占用", enabled: oldItems.gpu_usage ?? true },
-            { id: "gpu_fan_speed", label: "GPU风扇转速(仅NVIDIA)", enabled: false },
-            { id: "gpu_power", label: "GPU功耗(仅NVIDIA)", enabled: false },
-            { id: "gpu_clock", label: "GPU频率(仅NVIDIA)", enabled: false },
+            { id: "gpu_fan_speed", label: "GPU风扇转速", enabled: false },
+            { id: "gpu_power", label: "GPU功耗", enabled: false },
+            { id: "gpu_clock", label: "GPU频率", enabled: false },
+            { id: "gpu_vram", label: "GPU显存占用", enabled: false },
             { id: "memory_usage", label: "内存占用", enabled: oldItems.memory_usage ?? true },
             { id: "game_ping", label: "游戏延迟", enabled: oldItems.game_ping ?? true },
             { id: "delta_password", label: "三角洲密码", enabled: oldItems.delta_password ?? true },
           ];
         }
-        settingsToUse = {
-          ...DEFAULT_OVERLAY_SETTINGS,
-          ...savedSettings,
-          display_items: displayItems,
-        };
-        // 如果是旧格式，迁移后保存新格式到存储
         if (needsMigration) {
+          settingsToUse = {
+            ...DEFAULT_OVERLAY_SETTINGS,
+            ...savedSettings,
+            _version: 2,
+            display_items: displayItems,
+          };
           await store.set("overlay-settings", settingsToUse);
           await store.save();
+        } else {
+          settingsToUse = {
+            ...DEFAULT_OVERLAY_SETTINGS,
+            ...savedSettings,
+            display_items: displayItems,
+          };
         }
       } else {
         settingsToUse = DEFAULT_OVERLAY_SETTINGS;

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "3.8.3",
+  "version": "3.8.4",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
@@ -35,7 +35,8 @@
       "../nvidiaProfileInspector.exe.config",
       "../Reference.xml",
       "../power-plans/*",
-      "../MiSans-Medium.ttf"
+      "../MiSans-Medium.ttf",
+      "../monitor/bin/Release/net10.0/win-x64/publish/*"
     ],
     "icon": [
       "icons/32x32.png",
