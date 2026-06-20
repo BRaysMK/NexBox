@@ -6,7 +6,6 @@ import {
   Input,
   Portal,
   useColorModeValue,
-  useOutsideClick,
 } from "@chakra-ui/react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { isValidHexColor, hexToHsv, hsvToHex } from "@/lib/color-utils";
@@ -14,18 +13,25 @@ import { isValidHexColor, hexToHsv, hsvToHex } from "@/lib/color-utils";
 const SV_PANEL_W = 200;
 const SV_PANEL_H = 150;
 
+const PANEL_HEIGHT = 240;
+
 export function CustomColorPicker({ color, onChange, compact }: { color: string; onChange: (c: string) => void; compact?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
+  const panelContentRef = useRef<HTMLDivElement>(null);
   const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
   const svRef = useRef<HTMLDivElement>(null);
   const hueRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef<"sv" | "hue" | null>(null);
 
   const hsv = hexToHsv(color);
+  const hsvRef = useRef(hsv);
+  hsvRef.current = hsv;
   const hueValueRef = useRef(hsv.h);
   hueValueRef.current = hsv.h;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const panelBg = useColorModeValue("white", "#1a1a1a");
   const panelShadow = useColorModeValue("0 4px 20px rgba(0,0,0,0.15)", "0 4px 20px rgba(0,0,0,0.4)");
@@ -33,25 +39,44 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
 
   useEffect(() => { setHexInput(color); }, [color]);
 
-  useOutsideClick({ ref: panelRef, handler: () => setIsOpen(false) });
+  // Use a custom mousedown handler instead of useOutsideClick because
+  // the picker panel is rendered via Portal (outside panelRef in the DOM),
+  // so useOutsideClick's capturing-phase listener incorrectly treats panel
+  // interactions as "outside" clicks and closes the picker during drag.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = (e.composedPath?.()[0] ?? e.target) as Node | null;
+      if (!target) return;
+      if (panelRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      if (panelContentRef.current?.contains(target)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [isOpen]);
+
+  const calcPos = () => {
+    if (!triggerRef.current) return { top: 0, left: 0 };
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    if (spaceBelow >= PANEL_HEIGHT + 8 || spaceBelow >= spaceAbove) {
+      return { top: rect.bottom + 8, left: rect.left };
+    }
+    return { top: rect.top - PANEL_HEIGHT - 8, left: rect.left };
+  };
 
   const openPicker = () => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      setPopoverPos({ top: rect.bottom + 8, left: rect.left });
-    }
+    setPopoverPos(calcPos());
     setIsOpen(true);
   };
 
   // Follow trigger position on scroll/resize when open
   useEffect(() => {
     if (!isOpen || !triggerRef.current) return;
-    const updatePos = () => {
-      if (triggerRef.current) {
-        const rect = triggerRef.current.getBoundingClientRect();
-        setPopoverPos({ top: rect.bottom + 8, left: rect.left });
-      }
-    };
+    const updatePos = () => setPopoverPos(calcPos());
     window.addEventListener("scroll", updatePos, true);
     window.addEventListener("resize", updatePos);
     return () => {
@@ -84,6 +109,15 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
   };
 
   // Hue slider
+  const updateHueFromMouse = (e: { clientX: number }) => {
+    const rect = hueRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    let x = (e.clientX - rect.left) / rect.width;
+    x = Math.max(0, Math.min(1, x));
+    const newHex = hsvToHex(x * 360, hsvRef.current.s, hsvRef.current.v);
+    onChangeRef.current(newHex);
+  };
+
   const handleHueMouseDown = useCallback((e: React.MouseEvent) => {
     isDragging.current = "hue";
     updateHueFromMouse(e);
@@ -92,15 +126,6 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   }, []);
-
-  const updateHueFromMouse = (e: { clientX: number }) => {
-    const rect = hueRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    let x = (e.clientX - rect.left) / rect.width;
-    x = Math.max(0, Math.min(1, x));
-    const newHex = hsvToHex(x * 360, hsv.s, hsv.v);
-    onChange(newHex);
-  };
 
   const handleHexInputChange = (value: string) => {
     setHexInput(value);
@@ -145,6 +170,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
       {isOpen && (
         <Portal>
           <Box
+            ref={panelContentRef}
             position="fixed"
             top={`${popoverPos.top}px`}
             left={`${popoverPos.left}px`}

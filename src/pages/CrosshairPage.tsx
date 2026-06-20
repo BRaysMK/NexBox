@@ -422,7 +422,7 @@ export default function CrosshairPage() {
                   <Text color={textColor} fontSize="sm">{t("crosshair.size")}</Text>
                   <Text color={getActiveColor()} fontSize="sm" fontWeight="bold">{settings.size}</Text>
                 </HStack>
-                <Slider value={settings.size} min={10} max={100} step={1} onChange={(val) => updateSetting("size", val)}>
+                <Slider value={settings.size} min={1} max={100} step={1} onChange={(val) => updateSetting("size", val)}>
                   <SliderTrack bg={sliderBg}><SliderFilledTrack bg={getActiveColor()} /></SliderTrack>
                   <SliderThumb />
                 </Slider>
@@ -491,7 +491,7 @@ export default function CrosshairPage() {
                   </Box>
                   <VStack align="flex-start" spacing={0}>
                     <Text fontSize="xs" color={subTextColor} fontWeight="medium">{t("crosshair.preview")}</Text>
-                    <Text fontSize="2xs" color={subTextColor}>{t(`crosshair.styles.${settings.style.toLowerCase()}`)}</Text>
+                    <Text fontSize="2xs" color={subTextColor}>{t(STYLE_OPTIONS.find(s => s.id === settings.style)?.labelKey ?? "crosshair.styles.cross")}</Text>
                   </VStack>
                 </HStack>
                 <Button
