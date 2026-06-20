@@ -3,7 +3,7 @@
 
 #define MyAppName "NexBox"
 #define MyAppDisplayName "新境盒"
-#define MyAppVersion "3.9.3"
+#define MyAppVersion "3.9.4"
 #define MyAppPublisher "MuLiu"
 #define MyAppURL "https://www.nexbox.top/"
 #define MyAppExeName "nexbox.exe"
@@ -116,7 +116,7 @@ Source: "D:\NexBox\src-tauri\target\release\resources\*"; DestDir: "{app}\resour
 Source: "D:\NexBox\src-tauri\target\release\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "D:\NexBox\power-plans\*"; DestDir: "{app}\power-plans"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "D:\NexBox\PawnIO_setup.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "D:\NexBox\monitor\bin\Release\net10.0\win-x64\publish\*"; DestDir: "{app}\monitor"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "D:\NexBox\monitor\bin\Release\net48\*"; DestDir: "{app}\monitor"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
 [Icons]
 Name: "{autoprograms}\{#MyAppDisplayName}"; Filename: "{app}\{#MyAppExeName}"

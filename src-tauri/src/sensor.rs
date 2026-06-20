@@ -247,54 +247,98 @@ pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
 
 /// 查找 NexBoxMonitor.exe 路径
 fn find_monitor_exe() -> Option<std::path::PathBuf> {
-    // 1. 首先检查当前 exe 所在目录下的 monitor 路径（安装版）
-    if let Ok(exe_path) = std::env::current_exe() {
-        let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));
-        let monitor_path = exe_dir
-            .join("monitor")
-            .join("bin")
-            .join("Release")
-            .join("net10.0")
-            .join("win-x64")
-            .join("NexBoxMonitor.exe");
-        if monitor_path.exists() {
-            log::info!("找到 NexBoxMonitor: {}", monitor_path.display());
-            return Some(monitor_path);
+    // 获取 exe 所在目录作为基准
+    let exe_dir = std::env::current_exe()
+        .ok()?
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or(std::path::PathBuf::from("."));
+
+    let exe_name = "NexBoxMonitor.exe";
+
+    // 定义所有要探测的候选路径生成器
+    // 参数 base: 基准目录, sub: 子路径后缀
+    let candidates: Vec<std::path::PathBuf> = {
+        let mut list = Vec::new();
+        let suffixes = [
+            // 方案A: 安装版 — {app}/monitor/NexBoxMonitor.exe
+            // Inno Setup 把 publish/* 复制到 {app}/monitor/
+            "monitor",
+            // 方案B: 用户描述的路径 — {app}/NexBox/monitor/NexBoxMonitor.exe
+            "NexBox/monitor",
+            // 方案C: Tauri 资源目录
+            "resources/monitor",
+            // 方案D: 旧版开发者构建路径
+            "monitor/bin/Release/net48",
+            // 方案E: publish 输出
+            "monitor/bin/Release/net48",
+        ];
+        for suffix in &suffixes {
+            let p = exe_dir.join(suffix).join(exe_name);
+            list.push(p);
+        }
+        list
+    };
+
+    // 一次性检查所有候选路径
+    for path in &candidates {
+        if path.exists() {
+            log::info!("找到 NexBoxMonitor: {}", path.display());
+            return Some(path.clone());
         }
     }
 
-    // 2. 检查开发环境路径（cargo run 时）
-    let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("monitor")
-        .join("bin")
-        .join("Release")
-        .join("net10.0")
-        .join("win-x64")
-        .join("NexBoxMonitor.exe");
-    if dev_path.exists() {
-        log::info!("找到 NexBoxMonitor (dev): {}", dev_path.display());
-        return Some(dev_path);
+    // 方案F: 从 exe 目录向上回溯，查找项目根目录下的 monitor 构建产物
+    // 开发环境下 exe 位于 src-tauri/target/{debug,release}/nexbox.exe
+    let mut probe = exe_dir.clone();
+    for _ in 0..5 {
+        // 每层尝试: monitor/bin/Release/net48
+        let p1 = probe
+            .join("monitor")
+            .join("bin")
+            .join("Release")
+            .join("net48")
+            .join(exe_name);
+        if p1.exists() {
+            log::info!("找到 NexBoxMonitor (probe): {}", p1.display());
+            return Some(p1);
+        }
+        if !probe.pop() {
+            break;
+        }
     }
 
-    // 3. 检查 publish 目录
-    let publish_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("monitor")
-        .join("bin")
-        .join("Release")
-        .join("net10.0")
-        .join("win-x64")
-        .join("publish")
-        .join("NexBoxMonitor.exe");
-    if publish_path.exists() {
-        log::info!("找到 NexBoxMonitor (publish): {}", publish_path.display());
-        return Some(publish_path);
+    // 方案G: 通过 CARGO_MANIFEST_DIR 编译期路径（仅 debug 构建，纯备用）
+    #[cfg(debug_assertions)]
+    {
+        let base = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+        let dev_path = base
+            .join("monitor")
+            .join("bin")
+            .join("Release")
+            .join("net48")
+            .join(exe_name);
+        if dev_path.exists() {
+            log::info!("找到 NexBoxMonitor (dev): {}", dev_path.display());
+            return Some(dev_path);
+        }
+        let pub_path = base
+            .join("monitor")
+            .join("bin")
+            .join("Release")
+            .join("net48")
+            .join(exe_name);
+        if pub_path.exists() {
+            log::info!("找到 NexBoxMonitor (publish): {}", pub_path.display());
+            return Some(pub_path);
+        }
     }
 
-    log::warn!("未找到 NexBoxMonitor.exe");
+    log::warn!(
+        "未找到 NexBoxMonitor.exe (exe_dir: {}), 已尝试路径: {:?}",
+        exe_dir.display(),
+        candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()
+    );
     None
 }
 
