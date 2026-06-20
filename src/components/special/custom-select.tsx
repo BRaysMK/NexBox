@@ -2,6 +2,7 @@ import { Box, HStack, Text, useColorModeValue } from "@chakra-ui/react";
 import { LuChevronDown, LuCheck } from "react-icons/lu";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { LiquidGlassCard } from "./liquid-glass-card";
 
 interface CustomSelectProps {
   value: string;
@@ -26,8 +27,6 @@ export function CustomSelect({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const scrollTopRef = useRef(0);
   
-  const bgColor = useColorModeValue("gray.50", "#111111");
-  const borderColor = useColorModeValue("gray.300", "#333333");
   const textColor = useColorModeValue("gray.700", "#e0e0e0");
   const iconColor = useColorModeValue("gray.500", "#999999");
   const dropdownBg = useColorModeValue("white", "#111111");
@@ -134,17 +133,11 @@ export function CustomSelect({
   return (
     <>
       <Box ref={selectRef} w={width}>
-        <Box
-          bg={bgColor}
-          border="1px solid"
-          borderColor={borderColor}
-          borderRadius="lg"
+        <LiquidGlassCard
           px={3}
           py={1.5}
           cursor="pointer"
           onClick={toggleSelect}
-          _hover={{ borderColor: "blue.400" }}
-          transition="all 0.2s"
         >
           <HStack justify="space-between">
             <Text fontSize="sm" color={textColor}>
@@ -159,7 +152,7 @@ export function CustomSelect({
               }}
             />
           </HStack>
-        </Box>
+        </LiquidGlassCard>
       </Box>
 
       {isOpen && dropdownPos && createPortal(

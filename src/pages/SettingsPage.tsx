@@ -843,72 +843,54 @@ function AppearanceSettings() {
                 <Divider borderColor={cardBorder} />
 
                 <HStack spacing={2}>
-                  <Box
+                  <LiquidGlassCard
                     flex={1}
                     px={3}
                     py={2}
-                    borderRadius="lg"
-                    border="1px solid"
-                    borderColor={backgroundMode === "preset" ? activeSlotBorder : modeButtonInactiveBorder}
-                    bg={backgroundMode === "preset" ? modeButtonActiveBg : modeButtonInactiveBg}
                     cursor="pointer"
                     onClick={() => setBackgroundMode("preset")}
-                    transition="all 0.2s"
-                    _hover={{ borderColor: activeSlotBorder }}
                   >
                     <Text
                       fontSize="sm"
-                      color={backgroundMode === "preset" ? "white" : labelColor}
+                      color={backgroundMode === "preset" ? "black" : labelColor}
                       textAlign="center"
                       fontWeight="medium"
                     >
                       {t("settings.appearanceSettings.presetBackground")}
                     </Text>
-                  </Box>
-                  <Box
+                  </LiquidGlassCard>
+                  <LiquidGlassCard
                     flex={1}
                     px={3}
                     py={2}
-                    borderRadius="lg"
-                    border="1px solid"
-                    borderColor={backgroundMode === "image" ? activeSlotBorder : modeButtonInactiveBorder}
-                    bg={backgroundMode === "image" ? modeButtonActiveBg : modeButtonInactiveBg}
                     cursor="pointer"
                     onClick={() => setBackgroundMode("image")}
-                    transition="all 0.2s"
-                    _hover={{ borderColor: activeSlotBorder }}
                   >
                     <Text
                       fontSize="sm"
-                      color={backgroundMode === "image" ? "white" : labelColor}
+                      color={backgroundMode === "image" ? "black" : labelColor}
                       textAlign="center"
                       fontWeight="medium"
                     >
                       {t("settings.appearanceSettings.imageBackground")}
                     </Text>
-                  </Box>
-                  <Box
+                  </LiquidGlassCard>
+                  <LiquidGlassCard
                     flex={1}
                     px={3}
                     py={2}
-                    borderRadius="lg"
-                    border="1px solid"
-                    borderColor={backgroundMode === "dynamic" ? activeSlotBorder : modeButtonInactiveBorder}
-                    bg={backgroundMode === "dynamic" ? modeButtonActiveBg : modeButtonInactiveBg}
                     cursor="pointer"
                     onClick={() => setBackgroundMode("dynamic")}
-                    transition="all 0.2s"
-                    _hover={{ borderColor: activeSlotBorder }}
                   >
                     <Text
                       fontSize="sm"
-                      color={backgroundMode === "dynamic" ? "white" : labelColor}
+                      color={backgroundMode === "dynamic" ? "black" : labelColor}
                       textAlign="center"
                       fontWeight="medium"
                     >
                       {t("settings.appearanceSettings.dynamicBackground")}
                     </Text>
-                  </Box>
+                  </LiquidGlassCard>
                 </HStack>
 
                 {backgroundMode === "preset" && (
@@ -1857,13 +1839,7 @@ function AboutSettings() {
             <Text color={subLabelColor}>{t("settings.aboutSettings.loadingChangelog")}</Text>
           </Box>
         ) : currentRelease && currentRelease.body ? (
-          <Box
-            p={4}
-            borderRadius="lg"
-            bg={useColorModeValue("gray.50", "#1a1a1a")}
-            maxH="300px"
-            overflowY="auto"
-          >
+          <Box maxH="300px" overflowY="auto">
             <Text color={labelColor} fontSize="sm" whiteSpace="pre-wrap">
               {currentRelease.body}
             </Text>
