@@ -43,11 +43,6 @@ interface DiskInfo {
   usage_percent: number;
 }
 
-interface GpuStatus {
-  temperature: number | null;
-  usage: number | null;
-}
-
 function Sparkline({ data, color }: { data: number[]; color: string }) {
   if (data.length < 2) return null;
 
@@ -281,6 +276,7 @@ export default function HardwarePage() {
   const subTextColor = useColorModeValue("gray.500", "#888888");
 
   const [cpuLoad, setCpuLoad] = useState<number | null>(null);
+  const [cpuTemp, setCpuTemp] = useState<number | null>(null);
   const [gpuTemps, setGpuTemps] = useState<number[]>([]);
   const [gpuUsages, setGpuUsages] = useState<number[]>([]);
   const [memoryStatus, setMemoryStatus] = useState<MemoryStatus | null>(null);
@@ -301,11 +297,15 @@ export default function HardwarePage() {
       if (!isMounted.current || !hardwareInfo) return;
 
       try {
-        const cpuLoadResult = await invoke<number | null>("get_cpu_load");
+        const cpuStatus = await invoke<[number | null, number | null]>("get_lhm_cpu_status");
         if (!isMounted.current) return;
+        const [cpuLoadResult, cpuTempResult] = cpuStatus;
         if (cpuLoadResult !== null) {
           setCpuLoad(cpuLoadResult);
           setCpuSparkline((prev) => [...prev.slice(1), cpuLoadResult]);
+        }
+        if (cpuTempResult !== null) {
+          setCpuTemp(Math.round(cpuTempResult));
         }
 
         const memResult = await invoke<MemoryStatus>("get_memory_status");
@@ -322,18 +322,11 @@ export default function HardwarePage() {
           setStorageSparkline((prev) => [...prev.slice(1), Math.round(diskResult.usage_percent)]);
         }
 
-        const gpuTempsResult: number[] = [];
-        const gpuUsagesResult: number[] = [];
-
-        for (let i = 0; i < hardwareInfo.gpu.length; i++) {
-          if (!isMounted.current) return;
-          const gpuStatus = await invoke<GpuStatus>("get_gpu_status", { index: i });
-          if (!isMounted.current) return;
-          gpuTempsResult.push(gpuStatus.temperature ?? 0);
-          gpuUsagesResult.push(gpuStatus.usage ?? 0);
-        }
-
+        const gpuStatusList = await invoke<[number | null, number | null][]>("get_lhm_gpu_status");
         if (!isMounted.current) return;
+
+        const gpuTempsResult = gpuStatusList.map(([temp]) => temp ?? 0);
+        const gpuUsagesResult = gpuStatusList.map(([, usage]) => usage ?? 0);
 
         setGpuTemps(gpuTempsResult);
         setGpuUsages(gpuUsagesResult);
@@ -431,6 +424,7 @@ export default function HardwarePage() {
           <StatCard
             title="CPU"
             value={`${cpuLoad ?? "--"}%`}
+            subValue={cpuTemp !== null ? `${t("hardware.temperature")} ${Math.round(cpuTemp)}${t("hardware.temperatureUnit")}` : undefined}
             color="#3b82f6"
             sparklineData={cpuSparkline}
             icon={Cpu}
@@ -443,7 +437,7 @@ export default function HardwarePage() {
           <StatCard
             title="GPU"
             value={`${gpuUsage ?? "--"}%`}
-            subValue={gpuTemp !== null ? `${t("hardware.temperature")} ${gpuTemp}${t("hardware.temperatureUnit")}` : undefined}
+            subValue={gpuTemp !== null ? `${t("hardware.temperature")} ${Math.round(gpuTemp)}${t("hardware.temperatureUnit")}` : undefined}
             color="#22c55e"
             sparklineData={gpuSparkline}
             icon={Monitor}

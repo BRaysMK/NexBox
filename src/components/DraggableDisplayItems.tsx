@@ -1,6 +1,8 @@
-import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast } from "@chakra-ui/react";
+import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast, Button } from "@chakra-ui/react";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock } from "lucide-react";
+import { hexToRgba } from "@/lib/color-utils";
+import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock, Download } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   DndContext,
   closestCenter,
@@ -128,6 +130,37 @@ function SortableItem({
       <Text color={textColor} fontSize="sm" flex={1}>
         {item.label}
       </Text>
+      {item.id === "cpu_temp" && (
+        <Button
+          size="xs"
+          variant="outline"
+          color={getActiveColor()}
+          borderColor={getActiveColor()}
+          _hover={{ bg: hexToRgba(getActiveColor(), 0.1) }}
+          leftIcon={<Download size={12} />}
+          onClick={async () => {
+            try {
+              await invoke("run_pawnio_setup");
+              toast({
+                title: "安装程序已启动",
+                status: "success",
+                duration: 3000,
+                isClosable: true,
+              });
+            } catch (e) {
+              toast({
+                title: typeof e === "string" ? e : "启动失败",
+                status: "error",
+                duration: 3000,
+                isClosable: true,
+              });
+            }
+          }}
+          mr={1}
+        >
+          安装驱动
+        </Button>
+      )}
       <Switch
         isChecked={item.enabled}
         onChange={(e) => handleToggle(e.target.checked)}

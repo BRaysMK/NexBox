@@ -207,17 +207,6 @@ fn extract_all_avg(
 fn collect_hardware_data() -> OverlayHardwareData {
     let fps = crate::game_fps::get_cached_fps();
 
-    let memory_usage = {
-        use sysinfo::System;
-        let mut sys = System::new();
-        sys.refresh_memory();
-        if sys.total_memory() > 0 {
-            Some((sys.used_memory() as f64 / sys.total_memory() as f64) * 100.0)
-        } else {
-            None
-        }
-    };
-
     let delta_password = crate::delta_force::get_cached_delta_password();
 
     let game_ping = crate::game_ping::get_cached_ping();
@@ -226,7 +215,7 @@ fn collect_hardware_data() -> OverlayHardwareData {
     let heart_rate_device = crate::heart_rate::get_heart_rate_device_name();
 
     // 从 LHML (NexBoxMonitor) 获取硬件传感器数据
-    let (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, ssd_temp, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage) =
+    let (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage) =
         match crate::sensor::read_lhm_sensors() {
             Ok(response) => {
                 // CPU 占用 (Load 类型)
@@ -246,7 +235,7 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     &["Core (Tctl/Tdie)", "CPU Package", "Tctl", "Core"],
                     false,
                 ).unzip();
-                // CPU 频率 (AMD 平均频率，跳过 0 值)
+                // CPU 频率
                 let (cpu_clock, cpu_clock_name) = extract_sensor(
                     &response.sensors,
                     "Clock",
@@ -281,6 +270,15 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     &["Composite Temperature", "Temperature #1", "Temperature"],
                     true,
                 ).unzip();
+
+                // 内存占用 (从 LHML RAM 硬件获取)
+                let memory_usage = extract_sensor(
+                    &response.sensors,
+                    "Load",
+                    "RAM",
+                    &["Memory"],
+                    false,
+                ).map(|(v, _)| v);
 
                 // 调试：打印所有 CPU 和主板传感器
                 let cpu_sensors: Vec<_> = response.sensors.iter()
@@ -417,7 +415,7 @@ fn collect_hardware_data() -> OverlayHardwareData {
                 let gpu_voltage = gpu_voltage_result.as_ref().map(|(v, _)| *v);
 
                 log::info!(
-                    "LHML: CPU占用={:?}({}) CPU温度={:?}({}) CPU频率={:?}({}) CPU电压={:?}V CPU功耗={:?}W SSD温度={:?}({}) GPU温度={:?}({}) GPU占用={:?}({}) GPU风扇={:?}RPM GPU功耗={:?}({}) GPU频率={:?}({}) 显存={:?}/{:?}MB 显存频率={:?}MHz GPU电压={:?}V",
+                    "LHML: CPU占用={:?}({}) CPU温度={:?}({}) CPU频率={:?}({}) CPU电压={:?}V CPU功耗={:?}W SSD温度={:?}({}) 内存占用={:?}% GPU温度={:?}({}) GPU占用={:?}({}) GPU风扇={:?}RPM GPU功耗={:?}({}) GPU频率={:?}({}) 显存={:?}/{:?}MB 显存频率={:?}MHz GPU电压={:?}V",
                     cpu_usage,
                     cpu_usage_name.as_deref().unwrap_or("N/A"),
                     cpu_temp,
@@ -428,6 +426,7 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     cpu_power,
                     ssd_temp,
                     ssd_name.as_deref().unwrap_or("N/A"),
+                    memory_usage,
                     gpu_temp,
                     gpu_temp_name.as_deref().unwrap_or("N/A"),
                     gpu_usage,
@@ -443,11 +442,11 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     gpu_voltage,
                 );
 
-                (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, ssd_temp, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage)
+                (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage)
             }
             Err(e) => {
                 log::warn!("LHML 传感器读取失败: {e}");
-                (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
+                (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
             }
         };
 
@@ -833,7 +832,7 @@ mod win32 {
                     items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "gpu_temp" => {
-                    let val = data.gpu_temp.map(|v| format!("{:.0}度", v)).unwrap_or_else(|| "--度".to_string());
+                    let val = data.gpu_temp.map(|v| format!("{:.0}°C", v)).unwrap_or_else(|| "--°C".to_string());
                     items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "gpu_usage" => {
@@ -881,15 +880,15 @@ mod win32 {
                 }
                 "gpu_fan_speed" => {
                     let val = data.gpu_fan_speed.map(|v| format!("{}RPM", v)).unwrap_or_else(|| "--RPM".to_string());
-                    items.push(DisplayItem { label: "GPU风扇转速".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 "gpu_power" => {
                     let val = data.gpu_power.map(|v| format!("{}W", v)).unwrap_or_else(|| "--W".to_string());
-                    items.push(DisplayItem { label: "GPU功耗".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 "gpu_clock" => {
                     let val = data.gpu_clock.map(|v| format!("{}MHz", v)).unwrap_or_else(|| "--MHz".to_string());
-                    items.push(DisplayItem { label: "GPU频率".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 "gpu_vram" => {
                     let val = match (data.gpu_vram_used, data.gpu_vram_total) {
@@ -900,15 +899,15 @@ mod win32 {
                         }
                         _ => "--G/--G".to_string(),
                     };
-                    items.push(DisplayItem { label: "GPU显存占用".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 "gpu_memory_clock" => {
                     let val = data.gpu_memory_clock.map(|v| format!("{}MHz", v)).unwrap_or_else(|| "--MHz".to_string());
-                    items.push(DisplayItem { label: "GPU显存频率".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 "gpu_voltage" => {
                     let val = data.gpu_voltage.map(|v| format!("{:.3}V", v)).unwrap_or_else(|| "--V".to_string());
-                    items.push(DisplayItem { label: "GPU电压".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 "cpu_temp" => {
                     let val = data.cpu_temp.map(|v| format!("{:.0}°C", v)).unwrap_or_else(|| "--°C".to_string());
@@ -916,15 +915,15 @@ mod win32 {
                 }
                 "cpu_clock" => {
                     let val = data.cpu_clock.map(|v| format!("{}MHz", v)).unwrap_or_else(|| "--MHz".to_string());
-                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
+                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 "cpu_voltage" => {
                     let val = data.cpu_voltage.map(|v| format!("{:.3}V", v)).unwrap_or_else(|| "--V".to_string());
-                    items.push(DisplayItem { label: "CPU电压".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
+                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "cpu_power" => {
                     let val = data.cpu_power.map(|v| format!("{:.1}W", v)).unwrap_or_else(|| "--W".to_string());
-                    items.push(DisplayItem { label: "CPU功耗".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
+                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "ssd_temp" => {
                     let val = data.ssd_temp.map(|v| format!("{:.0}°C", v)).unwrap_or_else(|| "--°C".to_string());
@@ -1437,6 +1436,8 @@ mod win32 {
                 0
             }
             WM_TIMER => {
+                // 首个 tick (100ms) 后将定时器重置为 1s
+                SetTimer(hwnd, 1, 1000, None);
                 let data = super::collect_hardware_data();
                 *super::CURRENT_HARDWARE_DATA.lock().unwrap() = Some(data.clone());
                 let settings = super::get_or_init_settings();
@@ -1562,7 +1563,7 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
                     OVERLAY_HANDLE.store(hwnd, Ordering::SeqCst);
                     crate::game_fps::set_overlay_hwnd(hwnd as u64);
 
-                    let data = collect_hardware_data();
+                    let data = OverlayHardwareData::default();
                     *CURRENT_HARDWARE_DATA.lock().unwrap() = Some(data.clone());
 
                     if settings.style == "dynamic_island" {
@@ -1571,7 +1572,7 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
                         win32::draw_overlay_content(hwnd, &settings, &data);
                     }
 
-                    SetTimer(hwnd, 1, 1000, None);
+                    SetTimer(hwnd, 1, 100, None);
                     win32::install_topmost_guard();
 
                     let mut msg: MSG = std::mem::zeroed();
@@ -1919,6 +1920,30 @@ pub fn cleanup() {
         }
         win32::shutdown_gdiplus();
     }
+}
+
+#[tauri::command]
+pub async fn run_pawnio_setup() -> Result<String, String> {
+    let exe_dir = std::env::current_exe()
+        .map_err(|e| format!("获取程序路径失败: {}", e))?;
+    let parent_dir = exe_dir.parent().ok_or("无法获取父目录")?;
+
+    let candidates = [
+        parent_dir.join("PawnIO_setup.exe"),
+        parent_dir.join("_up_").join("PawnIO_setup.exe"),
+        parent_dir.join("resources").join("PawnIO_setup.exe"),
+    ];
+
+    for path in &candidates {
+        if path.exists() {
+            match std::process::Command::new(path).spawn() {
+                Ok(_) => return Ok("安装程序已启动".to_string()),
+                Err(e) => return Err(format!("启动安装程序失败: {}", e)),
+            }
+        }
+    }
+
+    Err("未找到 PawnIO_setup.exe，请确保已将其放在程序目录下".to_string())
 }
 
 #[tauri::command]

@@ -362,7 +362,11 @@ pub fn run() {
         overlay_panel::get_overlay_current_settings,
         overlay_panel::check_drag_mode_status,
         overlay_panel::reset_overlay_position,
+        overlay_panel::run_pawnio_setup,
 
+        sensor::get_lhm_cpu_load,
+        sensor::get_lhm_cpu_status,
+        sensor::get_lhm_gpu_status,
         heart_rate::scan_ble_devices,
         heart_rate::connect_ble_device,
         heart_rate::disconnect_ble_device,

@@ -124,6 +124,88 @@ pub fn stop_sensor_process(app: &AppHandle) {
     }
 }
 
+#[tauri::command]
+pub async fn get_lhm_cpu_load() -> Result<Option<u16>, String> {
+    match read_lhm_sensors() {
+        Ok(response) => {
+            for s in &response.sensors {
+                if s.hardware_type.eq_ignore_ascii_case("CPU")
+                    && s.sensor_type == "Load"
+                    && (s.name == "CPU Total" || s.name == "Total")
+                {
+                    return Ok(Some(s.value as u16));
+                }
+            }
+            Ok(None)
+        }
+        Err(e) => {
+            log::warn!("LHML CPU load 读取失败: {e}");
+            Ok(None)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_lhm_cpu_status() -> Result<(Option<u16>, Option<f64>), String> {
+    match read_lhm_sensors() {
+        Ok(response) => {
+            let mut load = None;
+            let mut temp = None;
+            for s in &response.sensors {
+                if s.hardware_type.eq_ignore_ascii_case("CPU") {
+                    if s.sensor_type == "Load" && (s.name == "CPU Total" || s.name == "Total") {
+                        load = Some(s.value as u16);
+                    }
+                    if s.sensor_type == "Temperature"
+                        && (s.name == "Core (Tctl/Tdie)" || s.name == "CPU Package" || s.name == "Tctl" || s.name == "Core")
+                    {
+                        temp = Some(s.value);
+                    }
+                }
+            }
+            Ok((load, temp))
+        }
+        Err(e) => {
+            log::warn!("LHML CPU status 读取失败: {e}");
+            Ok((None, None))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_lhm_gpu_status() -> Result<Vec<(Option<f64>, Option<u32>)>, String> {
+    match read_lhm_sensors() {
+        Ok(response) => {
+            let gpu_hardware_types: Vec<_> = {
+                let mut types: Vec<_> = response.sensors.iter()
+                    .filter(|s| s.hardware_type.to_lowercase().starts_with("gpu"))
+                    .map(|s| s.hardware_type.clone())
+                    .collect();
+                types.dedup();
+                types
+            };
+
+            let mut results = Vec::new();
+            for hw_type in &gpu_hardware_types {
+                let temp = response.sensors.iter()
+                    .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Temperature" && s.name == "GPU Core")
+                    .map(|s| s.value)
+                    .next();
+                let usage = response.sensors.iter()
+                    .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Load" && s.name == "GPU Core")
+                    .map(|s| s.value as u32)
+                    .next();
+                results.push((temp, usage));
+            }
+            Ok(results)
+        }
+        Err(e) => {
+            log::warn!("LHML GPU status 读取失败: {e}");
+            Ok(Vec::new())
+        }
+    }
+}
+
 /// 从 LHML 读取传感器数据（供 overlay_panel.rs 调用）
 pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
     let mut guard = SENSOR_BRIDGE
@@ -164,10 +246,16 @@ pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
 
 /// 查找 NexBoxMonitor.exe 路径
 fn find_monitor_exe() -> Option<std::path::PathBuf> {
-    // 1. 首先检查当前 exe 所在目录
+    // 1. 首先检查当前 exe 所在目录下的 monitor 路径（安装版）
     if let Ok(exe_path) = std::env::current_exe() {
         let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));
-        let monitor_path = exe_dir.join("NexBoxMonitor.exe");
+        let monitor_path = exe_dir
+            .join("monitor")
+            .join("bin")
+            .join("Release")
+            .join("net10.0")
+            .join("win-x64")
+            .join("NexBoxMonitor.exe");
         if monitor_path.exists() {
             log::info!("找到 NexBoxMonitor: {}", monitor_path.display());
             return Some(monitor_path);
@@ -215,11 +303,20 @@ fn spawn_sensor() -> std::io::Result<Option<SensorBridge>> {
         None => return Ok(None),
     };
 
-    let mut child = Command::new(&exe_path)
-        .stdin(Stdio::piped())
+    let mut cmd = Command::new(&exe_path);
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()?;
+        .stderr(Stdio::null());
+
+    // Windows 下隐藏控制台窗口
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = cmd.spawn()?;
 
     let stdin = child.stdin.take().expect("无法获取子进程 stdin");
     let stdout = child.stdout.take().expect("无法获取子进程 stdout");
