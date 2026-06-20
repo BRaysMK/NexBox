@@ -271,14 +271,21 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     true,
                 ).unzip();
 
-                // 内存占用 (从 LHML RAM 硬件获取)
+                // 内存占用 (从 LHML Memory 硬件获取)
                 let memory_usage = extract_sensor(
                     &response.sensors,
                     "Load",
-                    "RAM",
+                    "Memory",
                     &["Memory"],
                     false,
                 ).map(|(v, _)| v);
+
+                // 调试：打印所有 RAM 传感器
+                let memory_sensors: Vec<_> = response.sensors.iter()
+                    .filter(|s| s.hardware_type.eq_ignore_ascii_case("Memory"))
+                    .map(|s| format!("{}|{}|{}={}", s.hardware_type, s.sensor_type, s.name, s.value))
+                    .collect();
+                log::info!("LHML Memory sensors: {:?}", memory_sensors);
 
                 // 调试：打印所有 CPU 和主板传感器
                 let cpu_sensors: Vec<_> = response.sensors.iter()
