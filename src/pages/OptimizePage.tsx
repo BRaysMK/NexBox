@@ -18,11 +18,10 @@ import {
   Network,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useBackground } from "@/contexts/background-context";
 import { ViewGrid } from "@/components/special/view-grid";
 import { ViewList } from "@/components/special/view-list";
 import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
+import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import type { ViewItem } from "@/components/special/view-types";
 
 const tools: ViewItem[] = [
@@ -102,12 +101,9 @@ const tools: ViewItem[] = [
 
 export default function OptimizePage() {
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("grid");
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
 
   const content = (
     <VStack align="start" spacing={6}>
@@ -115,7 +111,9 @@ export default function OptimizePage() {
         <Heading size="lg" color={headingColor}>
           {t("optimization.pageTitle")}
         </Heading>
-        <LayoutToggle mode={layoutMode} onChange={setLayoutMode} />
+        <LiquidGlassCard display="inline-flex" p={1} boxShadow="sm">
+          <LayoutToggle mode={layoutMode} onChange={setLayoutMode} />
+        </LiquidGlassCard>
       </Flex>
       {layoutMode === "grid" ? (
         <ViewGrid tools={tools} />
@@ -125,31 +123,9 @@ export default function OptimizePage() {
     </VStack>
   );
 
-  if (liquidGlassEnabled) {
-    return (
-      <Box pt={8}>
-        <LiquidGlassCard w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
-          {content}
-        </LiquidGlassCard>
-      </Box>
-    );
-  }
-
   return (
     <Box pt={8}>
-      <Box
-        bg={cardBg}
-        borderRadius="xl"
-        borderWidth="1px"
-        borderColor={cardBorder}
-        w="full"
-        boxShadow="2xl"
-        overflow="hidden"
-        position="relative"
-        p={6}
-      >
-        {content}
-      </Box>
+      {content}
     </Box>
   );
 }

@@ -36,7 +36,7 @@ export function LiquidGlassCard({ children, className, ...props }: LiquidGlassCa
       borderRadius: "xl",
       border: "1px solid",
       borderColor: glassBorderColor,
-      backdropFilter: "blur(20px)",
+      backdropFilter: "blur(1px)",
       boxShadow: "sm",
       sx: {
         transform: "translateZ(0)",

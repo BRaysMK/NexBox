@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import deltaForceIcon from "@/assets/deltaforce.png";
 import epicGamesIcon from "@/assets/epic-games.png";
 import { useState, useEffect } from "react";
@@ -130,6 +131,7 @@ export function Sidebar() {
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const defaultBorderColor = useColorModeValue("rgba(200,200,200,0.3)", "rgba(51,51,51,0.5)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
+  const glowColor = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.5)");
   
   const iconColor = useColorModeValue("rgba(0,0,0,0.75)", "rgba(255,255,255,0.8)");
 
@@ -187,7 +189,9 @@ export function Sidebar() {
         bg={glassBgColor}
         border="1px solid"
         borderColor={glassBorderColor}
+        backdropFilter="blur(1px)"
       >
+        <ChakraBox style={getBorderGlowStyle(glowColor)} />
         {sidebarContent}
       </ChakraBox>
     );
@@ -198,7 +202,7 @@ export function Sidebar() {
       {...containerStyles}
       bg={defaultBgColor}
       border="1px solid"
-      borderColor={defaultBorderColor}
+      borderColor={glassBorderColor}
     >
       {sidebarContent}
     </ChakraBox>
