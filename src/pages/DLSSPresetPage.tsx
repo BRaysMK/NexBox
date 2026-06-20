@@ -200,28 +200,27 @@ function DLSSCard() {
           </Text>
           <Menu matchWidth>
             <MenuButton
-              as={Button}
-              rightIcon={<ChevronDown size={16} />}
-              bg={selectBg}
-              borderColor={borderColor}
-              borderWidth="1px"
-              borderRadius="lg"
-              size="sm"
+              as={Box}
+              bg="transparent"
+              p={0}
+              border="none"
               w="full"
-              textAlign="left"
-              fontWeight="normal"
-              _hover={{ bg: hoverBg }}
-              _active={{ bg: hoverBg }}
+              cursor="pointer"
             >
-              <HStack spacing={2}>
-                <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentPreset?.name}</Badge>
-                <Text fontSize="xs" color={subTextColor} noOfLines={1}>
-                  {currentPreset?.description}
-                </Text>
-                {currentPreset?.recommended && (
-                  <Badge colorScheme="green" fontSize="8px">推荐</Badge>
-                )}
-              </HStack>
+              <LiquidGlassCard px={3} py={1.5}>
+                <HStack justify="space-between">
+                  <HStack spacing={2}>
+                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentPreset?.name}</Badge>
+                    <Text fontSize="xs" color={subTextColor} noOfLines={1}>
+                      {currentPreset?.description}
+                    </Text>
+                    {currentPreset?.recommended && (
+                      <Badge colorScheme="green" fontSize="8px">推荐</Badge>
+                    )}
+                  </HStack>
+                  <ChevronDown size={16} />
+                </HStack>
+              </LiquidGlassCard>
             </MenuButton>
             <MenuList bg={menuListBg} borderColor={borderColor} maxH="300px" overflowY="auto">
               {dlssPresets.map(preset => (

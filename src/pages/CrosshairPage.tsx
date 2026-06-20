@@ -310,27 +310,26 @@ export default function CrosshairPage() {
           <SettingCard title={t("crosshair.monitor")}>
             <Menu matchWidth>
               <MenuButton
-                as={Button}
-                rightIcon={<ChevronDown size={16} />}
-                bg={inputBg}
-                borderColor={cardBorder}
-                borderWidth="1px"
-                borderRadius="lg"
-                size="sm"
+                as={Box}
+                bg="transparent"
+                p={0}
+                border="none"
                 w="full"
-                textAlign="left"
-                fontWeight="normal"
-                _hover={{ bg: hoverBg }}
-                _active={{ bg: hoverBg }}
+                cursor="pointer"
               >
-                <HStack spacing={2}>
-                  <Monitor size={14} />
-                  <Text fontSize="sm" color={textColor}>
-                    {settings.monitor_index === -1
-                      ? t("crosshair.primaryMonitor")
-                      : displays.find(d => d.index === settings.monitor_index)?.name || t("crosshair.primaryMonitor")}
-                  </Text>
-                </HStack>
+                <LiquidGlassCard px={3} py={1.5}>
+                  <HStack justify="space-between">
+                    <HStack spacing={2}>
+                      <Monitor size={14} />
+                      <Text fontSize="sm" color={textColor}>
+                        {settings.monitor_index === -1
+                          ? t("crosshair.primaryMonitor")
+                          : displays.find(d => d.index === settings.monitor_index)?.name || t("crosshair.primaryMonitor")}
+                      </Text>
+                    </HStack>
+                    <ChevronDown size={16} />
+                  </HStack>
+                </LiquidGlassCard>
               </MenuButton>
               <Portal>
                 <MenuList bg={menuListBg} borderColor={cardBorder} maxH="300px" overflowY="auto" zIndex={9999}>
@@ -367,23 +366,18 @@ export default function CrosshairPage() {
               {STYLE_OPTIONS.map((option) => {
                 const isActive = settings.style === option.id;
                 return (
-                  <Box
+                  <LiquidGlassCard
                     key={option.id}
-                    bg={isActive ? getActiveColor() : useColorModeValue("gray.100", "#222222")}
-                    color={isActive ? getContrastTextColor() : textColor}
-                    borderRadius="lg"
                     py={3}
                     textAlign="center"
                     cursor="pointer"
                     onClick={() => updateSetting("style", option.id)}
-                    _hover={{ bg: isActive ? getActiveColor() : useColorModeValue("gray.200", "#333333") }}
-                    transition="all 0.15s"
                   >
-                    <Text fontSize="xl" mb={0.5}>{option.icon}</Text>
-                    <Text fontSize="xs" fontWeight="medium">
+                    <Text fontSize="xl" mb={0.5} color={isActive ? getActiveColor() : textColor}>{option.icon}</Text>
+                    <Text fontSize="xs" fontWeight="medium" color={isActive ? getActiveColor() : textColor}>
                       {t(option.labelKey)}
                     </Text>
-                  </Box>
+                  </LiquidGlassCard>
                 );
               })}
             </SimpleGrid>

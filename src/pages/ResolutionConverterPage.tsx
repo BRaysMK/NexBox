@@ -64,8 +64,6 @@ function ResolutionCard({
   const { liquidGlassEnabled } = useBackground();
   const textColor = useColorModeValue("gray.700", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
-  const cardBg = useColorModeValue("white", "#111111");
-  const borderColor = useColorModeValue("gray.200", "#333333");
 
   const aspectRatioBox = useMemo(() => {
     const maxWidth = 120;
@@ -157,53 +155,28 @@ function ResolutionCard({
     </VStack>
   );
 
-  if (liquidGlassEnabled) {
-    return (
-      <LiquidGlassCard
-        p={6}
-        minH="220px"
-        border={isActive ? "2px solid" : "1px solid"}
-        borderColor={isActive ? color : "transparent"}
-        position="relative"
-        overflow="hidden"
-        transition="all 0.2s"
-      >
-        {isActive && (
-          <Box
-            position="absolute"
-            top={0}
-            left={0}
-            right={0}
-            h="3px"
-            bg={color}
-          />
-        )}
-        {cardContent}
-      </LiquidGlassCard>
-    );
-  }
-
   return (
-    <Box
-      bg={cardBg}
-      borderRadius="xl"
+    <LiquidGlassCard
       p={6}
       minH="220px"
-      border={isActive ? "2px solid" : "1px solid"}
-      borderColor={isActive ? color : borderColor}
       position="relative"
-      overflow="hidden"
       transition="all 0.2s"
       _hover={{
-        borderColor: color,
         transform: "translateY(-2px)",
       }}
     >
       {isActive && (
-        <Box position="absolute" top={0} left={0} right={0} h="3px" bg={color} />
+        <Box
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          h="3px"
+          bg={color}
+        />
       )}
       {cardContent}
-    </Box>
+    </LiquidGlassCard>
   );
 }
 
@@ -238,24 +211,15 @@ function ResolutionSelector({
       {options.map((option) => {
         const isActive = selected === option.type;
         return (
-          <Box
+          <LiquidGlassCard
             key={option.type}
-            bg={isActive ? activeBg : buttonBg}
-            color={isActive ? contrastText : textColor}
-            borderRadius="xl"
             p={4}
             cursor="pointer"
-            border="2px solid"
-            borderColor={isActive ? activeBg : "transparent"}
-            transition="all 0.2s"
             onClick={() => onSelect(option.type)}
             _hover={{
-              borderColor: activeBg,
-              bg: isActive ? activeBg : hexToRgba(primaryColor, 0.1),
               transform: "translateY(-2px)",
             }}
             position="relative"
-            overflow="hidden"
           >
             {isActive && (
               <Box
@@ -269,15 +233,15 @@ function ResolutionSelector({
               />
             )}
             <VStack spacing={1}>
-              <Monitor size={24} />
-              <Text fontSize="md" fontWeight="600">
+              <Monitor size={24} color={isActive ? activeBg : undefined} />
+              <Text fontSize="md" fontWeight="600" color={isActive ? activeBg : textColor}>
                 {option.label}
               </Text>
-              <Text fontSize="xs" color={isActive ? hexToRgba(contrastText, 0.7) : subTextColor}>
+              <Text fontSize="xs" color={isActive ? activeBg : subTextColor}>
                 {option.subLabel}
               </Text>
             </VStack>
-          </Box>
+          </LiquidGlassCard>
         );
       })}
     </SimpleGrid>

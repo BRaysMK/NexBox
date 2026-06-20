@@ -289,27 +289,38 @@ fn get_gpus_from_wmi() -> Vec<GpuInfo> {
     if let Ok(gpu_results) = run_powershell::<PsVideoController>(gpu_cmd) {
         for g in gpu_results {
             let name_lower = g.Name.to_lowercase();
-            let is_integrated = name_lower.contains("intel")
-                && (g.Name.contains("HD") || g.Name.contains("UHD") || g.Name.contains("Iris"));
+            let vendor = detect_gpu_vendor(&g.Name);
+            let memory_gb = g.AdapterRAM
+                .map(|ram| ram as f64 / (1024.0 * 1024.0 * 1024.0))
+                .unwrap_or(0.0);
 
-            if !is_integrated {
-                let vendor = detect_gpu_vendor(&g.Name);
-                let memory_gb = g.AdapterRAM
-                    .map(|ram| ram as f64 / (1024.0 * 1024.0 * 1024.0))
-                    .unwrap_or(0.0);
-                
-                log::info!("显卡(WMI): {}, 厂商: {:?}, 显存: {:.1}GB", 
+            // 过滤核显（Intel 集成显卡和 AMD APU）
+            let is_integrated = match vendor {
+                GpuVendor::Intel => !name_lower.contains("arc"),
+                GpuVendor::AMD => {
+                    name_lower.contains("radeon") && name_lower.contains("graphics")
+                        && !name_lower.contains("rx ")
+                }
+                _ => false,
+            };
+
+            if is_integrated {
+                log::info!("跳过核显(WMI): {}, 厂商: {:?}, 显存: {:.1}GB",
                           g.Name, vendor, memory_gb);
-                
-                gpus.push(GpuInfo {
-                    name: g.Name.clone(),
-                    vendor,
-                    memory_gb,
-                    driver_version: g.DriverVersion.unwrap_or_else(|| "未知".to_string()),
-                    temperature: None,
-                    usage: None,
-                });
+                continue;
             }
+
+            log::info!("显卡(WMI): {}, 厂商: {:?}, 显存: {:.1}GB", 
+                      g.Name, vendor, memory_gb);
+            
+            gpus.push(GpuInfo {
+                name: g.Name.clone(),
+                vendor,
+                memory_gb,
+                driver_version: g.DriverVersion.unwrap_or_else(|| "未知".to_string()),
+                temperature: None,
+                usage: None,
+            });
         }
     }
 

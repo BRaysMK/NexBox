@@ -187,6 +187,7 @@ pub async fn get_lhm_gpu_status() -> Result<Vec<(Option<f64>, Option<u32>)>, Str
 
             let mut results = Vec::new();
             for hw_type in &gpu_hardware_types {
+                if hw_type.eq_ignore_ascii_case("GpuIntel") { continue; }
                 let temp = response.sensors.iter()
                     .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Temperature" && s.name == "GPU Core")
                     .map(|s| s.value)
