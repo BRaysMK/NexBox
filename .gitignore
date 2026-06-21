@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Tauri / Rust
+src-tauri/target/
+
+# C#（传感器服务位于 tools/ 根目录，与 csproj 同级）
+tools/bin/
+tools/obj/
+
+# 本地生成的图标源（可选用仓库内其他资源重新执行 `npx tauri icon`）
+icon-src.png
+
+# 环境
+.env
+.env.local
+.env.*.local
+
+# 日志与编辑器
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build outputs
+Output/
+*.exe
+*.zip
+
+# Tauri
+src-tauri/src-tauri.zip
+
+# Temporary directories
+
+# Atom code
+.atomcode/
+
+# Trae AI documents
+.trae/
+
+# Third-party executables
+nvidiaProfileInspector.exe
+Reference.xml
+nvidiaProfileInspector.exe.config
+
+# Video directory
+video/
+
+# ChineseSimplified.isl (Inno Setup translation, already in nexbox.iss)
+ChineseSimplified.isl
+
+# README
+README.md
+
+# 排除的文件
+1.icc
+软件介绍.md
+社区滤镜A.icc
+原亮 冷色调.icc
+Delta Force.nip
+MCTier技术介绍.md

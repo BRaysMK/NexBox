@@ -1,0 +1,95 @@
+[package]
+name = "nexbox"
+version = "3.9.4"
+description = "NexBox - 为现代玩家打造的游戏工具箱"
+authors = ["MuLiu_SaMa"]
+license = "GPL-3.0"
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "nexbox_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.10", features = ["tray-icon", "devtools"] }
+tauri-plugin-log = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-store = "2"
+tauri-plugin-http = "2"
+tauri-plugin-os = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-global-shortcut = "2"
+wmi = "0.14"
+thiserror = "2"
+reqwest = { version = "0.11", features = ["stream", "json", "blocking"] }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+dirs = "5.0"
+nvml-wrapper = "0.10"
+sysinfo = "0.30"
+chrono = "0.4"
+env_logger = "0.11"
+regex = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+rand = "0.8"
+rfd = "0.15"
+urlencoding = "2.1"
+base64 = "0.22"
+bytes = "1"
+dashmap = "6"
+parking_lot = "0.12"
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+async-stream = "0.3"
+zip = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+btleplug = "0.12"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_GdiPlus",
+    "Win32_UI_Accessibility",
+    "Win32_UI_ColorSystem",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_LibraryLoader",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_Etw",
+    "Win32_System_Time",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+] }
+winreg = "0.52"
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Devices_Bluetooth",
+    "Devices_Bluetooth_Advertisement",
+    "Devices_Bluetooth_GenericAttributeProfile",
+    "Devices_Enumeration",
+    "Foundation",
+    "Foundation_Collections",
+    "Storage_Streams",
+] }
+
