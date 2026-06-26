@@ -469,11 +469,27 @@ function OfficialToolSection({
   // Official recommendation only shows when category is "all"
   if (activeCategory !== "all") return null;
 
-  const handleOpen = () => {
+  const handleOpenMCTier = () => {
     import("@tauri-apps/plugin-shell").then(({ open }) => {
       open("https://mctier.pmhs.top/");
     }).catch(() => {
       window.open("https://mctier.pmhs.top/", "_blank");
+    });
+  };
+
+  const handleOpenSjmcl = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://mc.sjtu.cn/sjmcl/");
+    }).catch(() => {
+      window.open("https://mc.sjtu.cn/sjmcl/", "_blank");
+    });
+  };
+
+  const handleOpenDdegame = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://www.ddegame.cn/");
+    }).catch(() => {
+      window.open("https://www.ddegame.cn/", "_blank");
     });
   };
 
@@ -496,7 +512,7 @@ function OfficialToolSection({
         }}
         gap={4}
       >
-        <LiquidGlassToolCard size={"md"} onClick={handleOpen}>
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenMCTier}>
           <VStack align={"start"} spacing={3}>
             <Flex
               h={12}
@@ -527,6 +543,78 @@ function OfficialToolSection({
               </HStack>
               <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
                 {t("tools.mctierDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenSjmcl}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("sjmcl") || ""}
+                alt={"SJMCL"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  SJMCL
+                </Text>
+                <Badge colorScheme={"blue"} fontSize={"xs"} variant={"subtle"}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.sjmclDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenDdegame}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("ddegame") || ""}
+                alt={"东东电竞"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  东东电竞
+                </Text>
+                <Badge colorScheme={"blue"} fontSize={"xs"} variant={"subtle"}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.ddegameDesc")}
               </Text>
             </Box>
           </VStack>

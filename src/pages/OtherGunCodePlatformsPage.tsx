@@ -11,6 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -42,19 +43,33 @@ export default function OtherGunCodePlatformsPage() {
     },
     {
       id: "anxu",
-      name: t("deltaForce.otherPlatforms.anxu.name", "暗墟改枪码"),
+      name: t("deltaForce.otherPlatforms.anxu.name", "ANXU改枪码"),
       url: "https://guns.anxu.cc/",
-      description: t("deltaForce.otherPlatforms.anxu.description", "暗墟改枪码平台"),
+      description: t("deltaForce.otherPlatforms.anxu.description", "ANXU改枪码平台"),
+    },
+    {
+      id: "aitags",
+      name: t("deltaForce.otherPlatforms.aitags.name", "主播改枪码"),
+      url: "https://g.aitags.cn/live",
+      description: t("deltaForce.otherPlatforms.aitags.description", "主播改枪码平台"),
+    },
+    {
+      id: "xiaotao",
+      name: t("deltaForce.otherPlatforms.xiaotao.name", "小涛查"),
+      url: "https://orzice.com/v/gun_gqm",
+      description: t("deltaForce.otherPlatforms.xiaotao.description", "小涛查改枪码平台"),
     },
   ];
 
-  const handleOpenLink = async (url: string) => {
-    try {
-      const { open } = await import("@tauri-apps/plugin-shell");
-      await open(url);
-    } catch (error) {
-      console.error("Failed to open link:", error);
-    }
+  const handleOpenLink = (platform: PlatformInfo) => {
+    new WebviewWindow(`${platform.id}-${Date.now()}`, {
+      url: platform.url,
+      title: platform.name,
+      width: 1200,
+      height: 800,
+      resizable: true,
+      center: true,
+    });
   };
 
   return (
@@ -100,7 +115,7 @@ export default function OtherGunCodePlatformsPage() {
                 borderColor={primaryColor}
                 _hover={{ bg: `${primaryColor}15` }}
                 leftIcon={<ExternalLink size={14} />}
-                onClick={() => handleOpenLink(platform.url)}
+                onClick={() => handleOpenLink(platform)}
                 alignSelf="flex-start"
               >
                 {t("deltaForce.openPlatform", "打开平台")}

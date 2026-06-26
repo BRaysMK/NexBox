@@ -421,6 +421,8 @@
       "msi-afterburner": "MSI Afterburner"
     },
     "mctierDesc": "仮想LAN汎用ネットワーキングツール",
+    "sjmclDesc": "上海交通大学が開発したサードパーティMinecraftランチャー",
+    "ddegameDesc": "ゲームはただのゲームではなく、生活に入り込み生活を変えることができる",
     "descriptions": {
       "assistantCrosshair": "ゲーム画面クロスヘアアシスタントツール",
       "memreduct": "メモリクリーニングツール",
@@ -668,14 +670,22 @@
     "viewMore": "もっと見る",
     "otherPlatforms": {
       "title": "その他の改槍コードプラットフォーム",
-      "description": "以下は他の改槍コードプラットフォームです。クリックしてブラウザで開きます。",
+      "description": "以下は他の改槍コードプラットフォームです。クリックして新しいウィンドウで開きます。",
       "maqt": {
         "name": "MaQT",
         "description": "MaQT 改槍コードプラットフォーム"
       },
       "anxu": {
-        "name": "AnXu Codes",
-        "description": "AnXu 改槍コードプラットフォーム"
+        "name": "ANXU Codes",
+        "description": "ANXU 改槍コードプラットフォーム"
+      },
+      "aitags": {
+        "name": "配信者コード",
+        "description": "配信者改槍コードプラットフォーム"
+      },
+      "xiaotao": {
+        "name": "XiaoTao",
+        "description": "XiaoTao 改槍コードプラットフォーム"
       }
     }
   },

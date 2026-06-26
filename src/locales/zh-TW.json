@@ -403,6 +403,8 @@
       "msi-afterburner": "MSI Afterburner"
     },
     "mctierDesc": "虛擬區域網路通用組網工具",
+    "sjmclDesc": "上海交通大學開發的第三方我的世界啟動器",
+    "ddegameDesc": "遊戲不僅僅是遊戲，遊戲可以走進生活改變生活",
     "descriptions": {
       "assistantCrosshair": "遊戲畫面準心輔助工具",
       "memreduct": "記憶體清理工具",
@@ -650,14 +652,22 @@
     "viewMore": "檢視更多",
     "otherPlatforms": {
       "title": "其他改槍碼平台",
-      "description": "以下是一些其他改槍碼平台，點擊可在瀏覽器中開啟",
+      "description": "以下是一些其他改槍碼平台，點擊在新視窗中開啟",
       "maqt": {
         "name": "碼槍堂",
         "description": "碼槍堂改槍碼平台"
       },
       "anxu": {
-        "name": "暗墟改槍碼",
-        "description": "暗墟改槍碼平台"
+        "name": "ANXU改槍碼",
+        "description": "ANXU改槍碼平台"
+      },
+      "aitags": {
+        "name": "主播改槍碼",
+        "description": "主播改槍碼平台"
+      },
+      "xiaotao": {
+        "name": "小濤查",
+        "description": "小濤查改槍碼平台"
       }
     }
   },

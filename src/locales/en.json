@@ -466,6 +466,8 @@
       "msi-afterburner": "MSI Afterburner"
     },
     "mctierDesc": "Virtual LAN universal networking tool",
+    "sjmclDesc": "Third-party Minecraft launcher developed by Shanghai Jiao Tong University",
+    "ddegameDesc": "Games are not just games, they can enter life and change life",
     "descriptions": {
       "assistantCrosshair": "Game screen crosshair assistant tool",
       "memreduct": "Memory cleaning tool",
@@ -732,14 +734,22 @@
     "viewMore": "View More",
     "otherPlatforms": {
       "title": "Other Gun Code Platforms",
-      "description": "Here are some other gun code platforms. Click to open in browser.",
+      "description": "Here are some other gun code platforms. Click to open in a new window.",
       "maqt": {
         "name": "MaQT",
         "description": "MaQT gun code platform"
       },
       "anxu": {
-        "name": "AnXu Codes",
-        "description": "AnXu gun code platform"
+        "name": "ANXU Codes",
+        "description": "ANXU gun code platform"
+      },
+      "aitags": {
+        "name": "Streamer Codes",
+        "description": "Streamer gun code platform"
+      },
+      "xiaotao": {
+        "name": "XiaoTao",
+        "description": "XiaoTao gun code platform"
       }
     }
   },

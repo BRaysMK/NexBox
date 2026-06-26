@@ -421,6 +421,8 @@
       "msi-afterburner": "MSI Afterburner"
     },
     "mctierDesc": "Outil de mise en réseau universel LAN virtuel",
+    "sjmclDesc": "Lanceur Minecraft tiers développé par l'Université Jiao Tong de Shanghai",
+    "ddegameDesc": "Les jeux ne sont pas que des jeux, ils peuvent entrer dans la vie et la changer",
     "descriptions": {
       "assistantCrosshair": "Outil d'assistance de réticule d'écran de jeu",
       "memreduct": "Outil de nettoyage de mémoire",
@@ -668,14 +670,22 @@
     "viewMore": "Voir plus",
     "otherPlatforms": {
       "title": "Autres plateformes de codes",
-      "description": "Voici d'autres plateformes de codes d'armes. Cliquez pour ouvrir dans le navigateur.",
+      "description": "Voici d'autres plateformes de codes d'armes. Cliquez pour ouvrir dans une nouvelle fenêtre.",
       "maqt": {
         "name": "MaQT",
         "description": "Plateforme de codes MaQT"
       },
       "anxu": {
-        "name": "AnXu Codes",
-        "description": "Plateforme de codes AnXu"
+        "name": "ANXU Codes",
+        "description": "Plateforme de codes ANXU"
+      },
+      "aitags": {
+        "name": "Codes Streamers",
+        "description": "Plateforme de codes streamers"
+      },
+      "xiaotao": {
+        "name": "XiaoTao",
+        "description": "Plateforme de codes XiaoTao"
       }
     }
   },

@@ -421,6 +421,8 @@
       "msi-afterburner": "MSI Afterburner"
     },
     "mctierDesc": "Universelles virtuelles LAN-Netzwerk-Tool",
+    "sjmclDesc": "Drittanbieter-Minecraft-Launcher, entwickelt von der Shanghai Jiao Tong Universität",
+    "ddegameDesc": "Spiele sind nicht nur Spiele, sie können ins Leben treten und es verändern",
     "descriptions": {
       "assistantCrosshair": "Fadenkreuz-Hilfswerkzeug für Spielbildschirme",
       "memreduct": "Speicherbereinigungs-Tool",
@@ -668,14 +670,22 @@
     "viewMore": "Mehr anzeigen",
     "otherPlatforms": {
       "title": "Andere Waffencode-Plattformen",
-      "description": "Hier sind einige andere Waffencode-Plattformen. Klicken zum Öffnen im Browser.",
+      "description": "Hier sind einige andere Waffencode-Plattformen. Klicken zum Öffnen in einem neuen Fenster.",
       "maqt": {
         "name": "MaQT",
         "description": "MaQT Waffencode-Plattform"
       },
       "anxu": {
-        "name": "AnXu Codes",
-        "description": "AnXu Waffencode-Plattform"
+        "name": "ANXU Codes",
+        "description": "ANXU Waffencode-Plattform"
+      },
+      "aitags": {
+        "name": "Streamer Codes",
+        "description": "Streamer Waffencode-Plattform"
+      },
+      "xiaotao": {
+        "name": "XiaoTao",
+        "description": "XiaoTao Waffencode-Plattform"
       }
     }
   },

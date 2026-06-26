@@ -31,7 +31,7 @@ function formatMemory(mb: number): string {
   return `${mb} MB`;
 }
 
-const store = new LazyStore("settings.json");
+const store = new LazyStore("auto-clean.json");
 
 export default function MemoryCleanupPage() {
   const { t } = useTranslation();
