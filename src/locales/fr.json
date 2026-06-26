@@ -660,7 +660,24 @@
     "submit": "Soumettre",
     "uploadSuccess": "Publication réussie",
     "uploadQueueHint": "Votre équipement a été mis en file d'attente pour examen et apparaîtra après approbation",
-    "uploadFailed": "Échec de la publication"
+    "uploadFailed": "Échec de la publication",
+    "otherPlatformsCard": {
+      "title": "Autres plateformes",
+      "description": "Découvrir plus de plateformes de codes"
+    },
+    "viewMore": "Voir plus",
+    "otherPlatforms": {
+      "title": "Autres plateformes de codes",
+      "description": "Voici d'autres plateformes de codes d'armes. Cliquez pour ouvrir dans le navigateur.",
+      "maqt": {
+        "name": "MaQT",
+        "description": "Plateforme de codes MaQT"
+      },
+      "anxu": {
+        "name": "AnXu Codes",
+        "description": "Plateforme de codes AnXu"
+      }
+    }
   },
   "dlssPreset": {
     "title": "Paramètres DLSS Delta Force",

@@ -31,7 +31,8 @@ import {
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { Search, Heart, Copy, Check, MapPin, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Heart, Copy, Check, MapPin, Plus, ChevronLeft, ChevronRight, Globe } from "lucide-react";
+import { Link } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { CustomSelect } from "@/components/special/custom-select";
@@ -221,6 +222,71 @@ function PasswordCard() {
   }
   return (
     <Box bg={useColorModeValue("white", "#111111")} borderRadius="xl" p={5} border="1px solid" borderColor={useColorModeValue("gray.200", "#333333")}>
+      {content}
+    </Box>
+  );
+}
+
+// ── OtherPlatformsCard ──
+function OtherPlatformsCard() {
+  const { t } = useTranslation();
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const subTextColor = useColorModeValue("#000000", "#888888");
+  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardHoverBg = useColorModeValue("gray.100", "#222222");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const { liquidGlassEnabled } = useBackground();
+  const textColor = useColorModeValue("#000000", "#e0e0e0");
+
+  const content = (
+    <VStack align="center" spacing={3} py={2}>
+      <Globe size={28} color={primaryColor} />
+      <Text fontWeight="semibold" fontSize="sm" color={textColor} textAlign="center">
+        {t("deltaForce.otherPlatformsCard.title", "其他改枪码平台")}
+      </Text>
+      <Text color={subTextColor} fontSize="xs" textAlign="center">
+        {t("deltaForce.otherPlatformsCard.description", "探索更多改枪码平台")}
+      </Text>
+      <Box
+        as="span"
+        fontSize="xs"
+        color={primaryColor}
+        fontWeight="medium"
+      >
+        {t("deltaForce.viewMore", "查看更多")} →
+      </Box>
+    </VStack>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <Link to="/delta-force/other-platforms" style={{ textDecoration: "none", display: "flex" }}>
+        <Box w="220px" flexShrink={0} cursor="pointer">
+          <LiquidGlassCard p={4} h="100%">
+            {content}
+          </LiquidGlassCard>
+        </Box>
+      </Link>
+    );
+  }
+
+  return (
+    <Box
+      w="220px"
+      flexShrink={0}
+      bg={cardBg}
+      borderRadius="xl"
+      p={4}
+      border="1px solid"
+      borderColor={borderColor}
+      cursor="pointer"
+      _hover={{ bg: cardHoverBg }}
+      transition="background-color 0.2s"
+      as={Link}
+      to="/delta-force/other-platforms"
+      textDecoration="none"
+    >
       {content}
     </Box>
   );
@@ -809,11 +875,15 @@ export default function DeltaForcePage() {
         {t("deltaForce.title")}
       </Heading>
 
-      <VStack align="stretch" spacing={6}>
-        <PasswordCard />
+      <HStack align="stretch" spacing={6} mb={6}>
+        <OtherPlatformsCard />
 
-        <GunLoadoutBrowser />
-      </VStack>
+        <Box flex={1}>
+          <PasswordCard />
+        </Box>
+      </HStack>
+
+      <GunLoadoutBrowser />
     </Box>
   );
 }

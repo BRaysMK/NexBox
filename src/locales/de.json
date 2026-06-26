@@ -660,7 +660,24 @@
     "submit": "Einreichen",
     "uploadSuccess": "Hochladen erfolgreich",
     "uploadQueueHint": "Ihre Ausrüstung wurde zur Überprüfung in die Warteschlange gestellt und erscheint nach Freigabe",
-    "uploadFailed": "Hochladen fehlgeschlagen"
+    "uploadFailed": "Hochladen fehlgeschlagen",
+    "otherPlatformsCard": {
+      "title": "Andere Plattformen",
+      "description": "Weitere Waffencode-Plattformen entdecken"
+    },
+    "viewMore": "Mehr anzeigen",
+    "otherPlatforms": {
+      "title": "Andere Waffencode-Plattformen",
+      "description": "Hier sind einige andere Waffencode-Plattformen. Klicken zum Öffnen im Browser.",
+      "maqt": {
+        "name": "MaQT",
+        "description": "MaQT Waffencode-Plattform"
+      },
+      "anxu": {
+        "name": "AnXu Codes",
+        "description": "AnXu Waffencode-Plattform"
+      }
+    }
   },
   "dlssPreset": {
     "title": "Delta Force DLSS-Einstellungen",

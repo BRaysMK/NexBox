@@ -14,6 +14,7 @@ import SettingsPage from "./pages/SettingsPage";
 import CrosshairPage from "./pages/CrosshairPage";
 import OverlayPanelPage from "./pages/OverlayPanelPage";
 import DeltaForcePage from "./pages/DeltaForcePage";
+import OtherGunCodePlatformsPage from "./pages/OtherGunCodePlatformsPage";
 import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
@@ -235,6 +236,7 @@ function App() {
               <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
               <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
               <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
+              <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
               <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
               <Route path="/tests" element={<AnimatedPage><TestsPage /></AnimatedPage>} />
               <Route path="/tests/reaction" element={<AnimatedPage><ReactionTestPage /></AnimatedPage>} />
@@ -272,6 +274,7 @@ function App() {
             <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
             <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
             <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
+            <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
             <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
             <Route path="/tests" element={<AnimatedPage><TestsPage /></AnimatedPage>} />
             <Route path="/tests/reaction" element={<AnimatedPage><ReactionTestPage /></AnimatedPage>} />

@@ -724,7 +724,24 @@
     "submit": "Submit",
     "uploadSuccess": "Upload successful",
     "uploadQueueHint": "Your loadout has been queued for review and will appear after approval",
-    "uploadFailed": "Upload failed"
+    "uploadFailed": "Upload failed",
+    "otherPlatformsCard": {
+      "title": "Other Platforms",
+      "description": "Explore more gun code platforms"
+    },
+    "viewMore": "View More",
+    "otherPlatforms": {
+      "title": "Other Gun Code Platforms",
+      "description": "Here are some other gun code platforms. Click to open in browser.",
+      "maqt": {
+        "name": "MaQT",
+        "description": "MaQT gun code platform"
+      },
+      "anxu": {
+        "name": "AnXu Codes",
+        "description": "AnXu gun code platform"
+      }
+    }
   },
   "dlssPreset": {
     "title": "Delta Force DLSS Settings",

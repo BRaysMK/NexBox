@@ -600,7 +600,24 @@
     "submit": "提交审核",
     "uploadSuccess": "上传成功",
     "uploadQueueHint": "你的改枪码已进入审核队列，通过后即可显示",
-    "uploadFailed": "上传失败"
+    "uploadFailed": "上传失败",
+    "otherPlatformsCard": {
+      "title": "其他改枪码平台",
+      "description": "探索更多改枪码平台"
+    },
+    "viewMore": "查看更多",
+    "otherPlatforms": {
+      "title": "其他改枪码平台",
+      "description": "以下是一些其他改枪码平台，点击可在浏览器中打开",
+      "maqt": {
+        "name": "码枪堂",
+        "description": "码枪堂改枪码平台"
+      },
+      "anxu": {
+        "name": "暗墟改枪码",
+        "description": "暗墟改枪码平台"
+      }
+    }
   },
   "dlssPreset": {
     "title": "三角洲DLSS设置",

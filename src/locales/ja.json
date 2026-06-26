@@ -660,7 +660,24 @@
     "submit": "送信",
     "uploadSuccess": "アップロード成功",
     "uploadQueueHint": "ロードアウトは審査キューに追加されました。承認後に表示されます",
-    "uploadFailed": "アップロード失敗"
+    "uploadFailed": "アップロード失敗",
+    "otherPlatformsCard": {
+      "title": "その他のプラットフォーム",
+      "description": "他の改槍コードプラットフォームを探索"
+    },
+    "viewMore": "もっと見る",
+    "otherPlatforms": {
+      "title": "その他の改槍コードプラットフォーム",
+      "description": "以下は他の改槍コードプラットフォームです。クリックしてブラウザで開きます。",
+      "maqt": {
+        "name": "MaQT",
+        "description": "MaQT 改槍コードプラットフォーム"
+      },
+      "anxu": {
+        "name": "AnXu Codes",
+        "description": "AnXu 改槍コードプラットフォーム"
+      }
+    }
   },
   "dlssPreset": {
     "title": "デルタフォースDLSS設定",

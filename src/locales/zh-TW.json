@@ -642,7 +642,24 @@
     "submit": "提交審核",
     "uploadSuccess": "上傳成功",
     "uploadQueueHint": "你的改槍碼已進入審核佇列，通過後即可顯示",
-    "uploadFailed": "上傳失敗"
+    "uploadFailed": "上傳失敗",
+    "otherPlatformsCard": {
+      "title": "其他改槍碼平台",
+      "description": "探索更多改槍碼平台"
+    },
+    "viewMore": "檢視更多",
+    "otherPlatforms": {
+      "title": "其他改槍碼平台",
+      "description": "以下是一些其他改槍碼平台，點擊可在瀏覽器中開啟",
+      "maqt": {
+        "name": "碼槍堂",
+        "description": "碼槍堂改槍碼平台"
+      },
+      "anxu": {
+        "name": "暗墟改槍碼",
+        "description": "暗墟改槍碼平台"
+      }
+    }
   },
   "dlssPreset": {
     "title": "三角洲DLSS設定",
