@@ -641,6 +641,8 @@
     "description": "在画面左下角显示 DLSS 标识",
     "enabled": "DLSS 指示器已启用",
     "disabled": "DLSS 指示器已关闭",
+    "enabling": "正在开启...",
+    "disabling": "正在关闭...",
     "note": "需要管理员权限，重启游戏后生效"
   },
   "dlssLock": {

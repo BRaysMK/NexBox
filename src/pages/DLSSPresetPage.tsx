@@ -411,16 +411,28 @@ function DLSSIndicatorCard() {
     <SectionCard title={t("dlssIndicator.title")} icon={<Eye size={18} />}>
       <HStack justify="space-between">
         <VStack align="start" spacing={0} flex={1}>
-          <Text fontSize="sm" color={subTextColor}>
-            {t("dlssIndicator.description")}
-          </Text>
-          <Text fontSize="xs" color={subTextColor}>
-            {t("dlssIndicator.note")}
-          </Text>
+          {isLoading ? (
+            <HStack spacing={2}>
+              <Spinner size="sm" color={themeConfig.primaryColor} />
+              <Text fontSize="sm" color={themeConfig.primaryColor} fontWeight="medium">
+                {isEnabled ? t("dlssIndicator.disabling") : t("dlssIndicator.enabling")}
+              </Text>
+            </HStack>
+          ) : (
+            <>
+              <Text fontSize="sm" color={subTextColor}>
+                {t("dlssIndicator.description")}
+              </Text>
+              <Text fontSize="xs" color={subTextColor}>
+                {t("dlssIndicator.note")}
+              </Text>
+            </>
+          )}
         </VStack>
         <Switch
           isChecked={isEnabled}
           onChange={handleToggle}
+          isDisabled={isLoading}
           sx={{
             "& .chakra-switch__track[data-checked]": {
               bg: themeConfig.primaryColor,

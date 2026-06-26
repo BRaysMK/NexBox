@@ -765,6 +765,8 @@
     "description": "Show DLSS badge in bottom-left corner of game screen",
     "enabled": "DLSS Indicator enabled",
     "disabled": "DLSS Indicator disabled",
+    "enabling": "Enabling...",
+    "disabling": "Disabling...",
     "note": "Requires admin privileges, restart game to take effect"
   },
   "dlssLock": {

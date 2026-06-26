@@ -701,6 +701,8 @@
     "description": "DLSS-Abzeichen in der unteren linken Ecke des Spiels anzeigen",
     "enabled": "DLSS Indikator aktiviert",
     "disabled": "DLSS Indikator deaktiviert",
+    "enabling": "Aktivierung...",
+    "disabling": "Deaktivierung...",
     "note": "Erfordert Administratorrechte, Spielneustart erforderlich"
   },
   "dlssLock": {

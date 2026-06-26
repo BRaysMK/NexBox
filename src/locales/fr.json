@@ -701,6 +701,8 @@
     "description": "Afficher le badge DLSS dans le coin inférieur gauche de l'écran de jeu",
     "enabled": "Indicateur DLSS activé",
     "disabled": "Indicateur DLSS désactivé",
+    "enabling": "Activation en cours...",
+    "disabling": "Désactivation en cours...",
     "note": "Nécessite des privilèges administrateur, redémarrer le jeu pour appliquer"
   },
   "dlssLock": {

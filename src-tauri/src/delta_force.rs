@@ -456,33 +456,30 @@ pub async fn toggle_dlss_indicator(enable: bool) -> Result<bool, String> {
 
     let script_path = temp_script.to_str().ok_or("路径编码错误")?;
 
-    let vbs_content = format!(
-        "Set objShell = CreateObject(\"Shell.Application\")\r\n\
-         objShell.ShellExecute \"powershell.exe\", \"-NoProfile -ExecutionPolicy Bypass -File \"\"{}\"\"\", \"\", \"runas\", 0",
-        script_path.replace('"', "\"\"")
+    let ps_command = format!(
+        "Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{}\"' -Verb RunAs -Wait -WindowStyle Hidden",
+        script_path.replace('\'', "''")
     );
 
-    let temp_vbs = temp_dir.join("dlss_indicator.vbs");
-    fs::write(&temp_vbs, &vbs_content)
-        .map_err(|e| format!("写入VBScript失败: {}", e))?;
-
-    let vbs_path = temp_vbs.to_str().ok_or("路径编码错误")?;
-
-    let output = Command::new("wscript.exe")
-        .arg(vbs_path)
+    let output = Command::new("powershell")
+        .args(["-WindowStyle", "Hidden", "-NoProfile", "-Command", &ps_command])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("执行失败: {}", e))?;
 
     let _ = fs::remove_file(&temp_script);
-    let _ = fs::remove_file(&temp_vbs);
 
-    if output.status.success() {
-        Ok(enable)
-    } else {
+    // 验证注册表值是否已更新（防止Start-Process返回成功但实际写入失败的情况）
+    let actual = get_dlss_indicator_registry_value();
+    if actual != enable {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("设置DLSS指示器失败(需要管理员权限): {}", stderr))
+        if stderr.to_lowercase().contains("cancel") || stderr.to_lowercase().contains("denied") {
+            return Err("管理员授权被取消，DLSS指示器设置未生效".to_string());
+        }
+        return Err("设置DLSS指示器失败: 注册表值未能更新，请确认已授予管理员权限".to_string());
     }
+
+    Ok(enable)
 }
 
 #[tauri::command]

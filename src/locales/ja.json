@@ -701,6 +701,8 @@
     "description": "ゲーム画面の左下にDLSSバッジを表示",
     "enabled": "DLSS インジケーターが有効になりました",
     "disabled": "DLSS インジケーターを無効にしました",
+    "enabling": "有効化中...",
+    "disabling": "無効化中...",
     "note": "管理者権限が必要です。変更を有効にするにはゲームを再起動してください"
   },
   "dlssLock": {
