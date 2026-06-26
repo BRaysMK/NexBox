@@ -418,7 +418,8 @@
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
-      "msi-afterburner": "MSI Afterburner"
+      "msi-afterburner": "MSI Afterburner",
+      "huorong": "火绒安全"
     },
     "mctierDesc": "Outil de mise en réseau universel LAN virtuel",
     "sjmclDesc": "Lanceur Minecraft tiers développé par l'Université Jiao Tong de Shanghai",
@@ -435,7 +436,8 @@
       "processLasso": "Outil d'optimisation des processus système",
       "process-lasso": "Outil d'optimisation des processus système",
       "fxsound": "Outil d'amélioration audio",
-      "msi-afterburner": "Outil d'overclocking et de surveillance GPU"
+      "msi-afterburner": "Outil d'overclocking et de surveillance GPU",
+      "huorong": "Protection terminale pure. Léger, silencieux, défense complète"
     },
     "status": {
       "available": "Disponible",
@@ -660,6 +662,8 @@
     "nicknamePlaceholder": "Entrez un pseudonyme (facultatif)",
     "cancel": "Annuler",
     "submit": "Soumettre",
+    "report": "Inutilisable ?",
+    "reported": "Signalé à l'admin",
     "uploadSuccess": "Publication réussie",
     "uploadQueueHint": "Votre équipement a été mis en file d'attente pour examen et apparaîtra après approbation",
     "uploadFailed": "Échec de la publication",
@@ -991,7 +995,10 @@
       "sidebarShowLabelNoText": "Icônes uniquement",
       "sidebarShowLabelWithText": "Icônes et texte",
       "pageTransitionLabel": "Animation de transition de page",
-      "pageTransitionDesc": "Désactiver pour supprimer les animations de transition"
+      "pageTransitionDesc": "Désactiver pour supprimer les animations de transition",
+      "pageTransitionSlide": "Glissement",
+      "pageTransitionFade": "Fondu",
+      "pageTransitionOff": "Désactivé"
     },
     "appearanceSettings": {
       "title": "Paramètres d'apparence",

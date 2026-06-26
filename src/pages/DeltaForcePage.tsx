@@ -31,7 +31,7 @@ import {
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { Search, Heart, Copy, Check, MapPin, Plus, ChevronLeft, ChevronRight, Globe } from "lucide-react";
+import { Search, Heart, Copy, Check, MapPin, Plus, ChevronLeft, ChevronRight, Globe, Flag } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
@@ -297,8 +297,10 @@ const LoadoutCard = memo(function LoadoutCard({
   item,
   isCopied,
   isLiked,
+  isReported,
   onCopy,
   onLike,
+  onReport,
   textColor,
   subTextColor,
   borderColor,
@@ -310,8 +312,10 @@ const LoadoutCard = memo(function LoadoutCard({
   item: LoadoutItem;
   isCopied: boolean;
   isLiked: boolean;
+  isReported: boolean;
   onCopy: (id: number, code: string) => void;
   onLike: (id: number) => void;
+  onReport: (id: number) => void;
   textColor: string;
   subTextColor: string;
   borderColor: string;
@@ -320,6 +324,7 @@ const LoadoutCard = memo(function LoadoutCard({
   liquidGlassEnabled: boolean;
   primaryColor: string;
 }) {
+  const { t } = useTranslation();
   const code = (
     <VStack align="stretch" spacing={3}>
       <HStack justify="space-between" align="flex-start">
@@ -378,6 +383,17 @@ const LoadoutCard = memo(function LoadoutCard({
           {item.author || "匿名"}
         </Text>
         <HStack spacing={1}>
+          <Button
+            size="xs"
+            variant="ghost"
+            color={isReported ? "green.400" : subTextColor}
+            onClick={() => onReport(item.id)}
+            leftIcon={<Flag size={12} />}
+            _hover={isReported ? {} : { color: "red.400" }}
+            isDisabled={isReported}
+          >
+            {isReported ? "已报告" : t("deltaForce.report", "无法使用？")}
+          </Button>
           <IconButton
             aria-label="Like"
             size="sm"
@@ -440,6 +456,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
+  const [reportedIds, setReportedIds] = useState<Set<number>>(new Set());
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -553,6 +570,23 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
       // silent
     }
   }, []);
+
+  // ── Report ──
+  const handleReport = useCallback(async (id: number) => {
+    if (reportedIds.has(id)) return;
+    try {
+      await apiPost(`/api/loadouts/${id}/report`);
+      setReportedIds((prev) => new Set(prev).add(id));
+      toast({
+        title: t("deltaForce.reported", "已报告管理员"),
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch {
+      // silent
+    }
+  }, [reportedIds, toast, t]);
 
   // ── Upload state ──
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -754,8 +788,10 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
               item={item}
               isCopied={copiedId === item.id}
               isLiked={likedIds.has(item.id)}
+              isReported={reportedIds.has(item.id)}
               onCopy={handleCopy}
               onLike={handleLike}
+              onReport={handleReport}
               textColor={textColor}
               subTextColor={subTextColor}
               borderColor={borderColor}

@@ -30,6 +30,7 @@ import {
   Battery,
   HardDrive,
   Settings2,
+  Shield,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -324,6 +325,7 @@ export const thirdPartyToolIcons: Record<string, ComponentType<{ size?: number; 
   "gamepp": Bot,
   "fxsound": Volume2,
   "process-lasso": Cpu,
+  "huorong": Shield,
 };
 
 export function getThirdPartyToolIcon(toolId: string): ComponentType<{ size?: number; strokeWidth?: number }> {

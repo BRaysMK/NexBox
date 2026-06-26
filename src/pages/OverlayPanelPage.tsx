@@ -100,6 +100,7 @@ const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
   { id: "ssd_temp", label: "硬盘温度", enabled: false },
   { id: "game_ping", label: "游戏延迟", enabled: false },
   { id: "delta_password", label: "三角洲密码", enabled: false },
+  // { id: "netease_lyric", label: "网易云歌词", enabled: false },
 ];
 
 const DEFAULT_SETTINGS: OverlaySettings = {

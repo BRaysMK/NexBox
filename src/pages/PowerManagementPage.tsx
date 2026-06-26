@@ -20,6 +20,7 @@ import {
   Divider,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
@@ -520,203 +521,205 @@ export default function PowerManagementPage() {
 
   const hasUnimported = builtinPlans.some((p) => !p.is_imported);
 
-  const pageVariants = {
-    initial: { opacity: 0, y: 10 },
-    in: { opacity: 1, y: 0 },
-    out: { opacity: 0, y: -10 },
-  };
+  const transitionMode = useTransitionMode();
 
-  const pageTransition = {
-    type: "tween" as const,
-    ease: "easeOut" as const,
-    duration: 0.25,
-  };
+  const content = (
+    <VStack align="stretch" spacing={6} pt={8}>
+      <HStack justifyContent="space-between" alignItems="center" w="full">
+        <Button
+          variant="ghost"
+          leftIcon={<ArrowLeft size={18} />}
+          onClick={() => navigate("/optimization")}
+          color={headingColor}
+        >
+          {t("tests.back") || "返回"}
+        </Button>
+        <Heading size="lg" color={headingColor} fontWeight="700">
+          {t("optimization.powerManagement.title")}
+        </Heading>
+        <Box w="100px" />
+      </HStack>
 
-  return (
-    <motion.div
-      initial="initial"
-      animate="in"
-      exit="out"
-      variants={pageVariants}
-      transition={pageTransition}
-    >
-      <VStack align="stretch" spacing={6} pt={8}>
-        <HStack justifyContent="space-between" alignItems="center" w="full">
-          <Button
-            variant="ghost"
-            leftIcon={<ArrowLeft size={18} />}
-            onClick={() => navigate("/optimization")}
-            color={headingColor}
-          >
-            {t("tests.back") || "返回"}
-          </Button>
-          <Heading size="lg" color={headingColor} fontWeight="700">
-            {t("optimization.powerManagement.title")}
-          </Heading>
-          <Box w="100px" />
-        </HStack>
-
-        {isLoading ? (
-          <Flex justify="center" py={10}>
-            <Spinner size="lg" color="#F6AD55" />
-          </Flex>
-        ) : (
-          <>
-            {activePlan && (
-              <LiquidGlassCard w="full" p={4}>
-                <HStack spacing={4}>
-                  <Box
-                    w={10}
-                    h={10}
-                    borderRadius="xl"
-                    bg="rgba(246,173,85,0.15)"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    color="#F6AD55"
-                    flexShrink={0}
-                  >
-                    <Battery size={22} />
-                  </Box>
-                  <VStack align="start" spacing={0} flex={1}>
-                    <Text fontSize="xs" color={subTextColor}>
-                      {t("optimization.powerManagement.currentPlan")}
-                    </Text>
-                    <Text fontSize="md" fontWeight="bold" color={headingColor}>
-                      {activePlan.name}
-                    </Text>
-                    <Text fontSize="xs" color={subTextColor} fontFamily="mono">
-                      {activePlan.guid}
-                    </Text>
-                  </VStack>
-                  <Badge
-                    borderRadius="full"
-                    px={3}
-                    py={1.5}
-                    fontSize="xs"
-                    fontWeight="bold"
-                    colorScheme="green"
-                    bg={useColorModeValue(
-                      "green.50",
-                      "rgba(72,187,120,0.1)"
-                    )}
-                  >
-                    <HStack spacing={1}>
-                      <CheckCircle size={12} />
-                      <Text>{t("optimization.powerManagement.active")}</Text>
-                    </HStack>
-                  </Badge>
-                </HStack>
-              </LiquidGlassCard>
-            )}
-
-            <HStack align="stretch" spacing={6} w="full">
-              {/* 左侧：系统电源计划 */}
-              <Box flex={1}>
-                <Box mb={3}>
-                  <Text fontWeight="600" color={headingColor} fontSize="md">
-                    {t("optimization.powerManagement.systemPlans") || "系统电源计划"}
-                  </Text>
+      {isLoading ? (
+        <Flex justify="center" py={10}>
+          <Spinner size="lg" color="#F6AD55" />
+        </Flex>
+      ) : (
+        <>
+          {activePlan && (
+            <LiquidGlassCard w="full" p={4}>
+              <HStack spacing={4}>
+                <Box
+                  w={10}
+                  h={10}
+                  borderRadius="xl"
+                  bg="rgba(246,173,85,0.15)"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  color="#F6AD55"
+                  flexShrink={0}
+                >
+                  <Battery size={22} />
                 </Box>
-                <VStack align="stretch" spacing={2} maxH="60vh" overflowY="auto">
-                  <AnimatePresence>
-                    {systemPlans.map((plan) => (
-                      <motion.div
-                        key={plan.guid}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <SystemPlanCard
-                          plan={plan}
-                          onActivate={() => handleActivate(plan.guid)}
-                          onDelete={() => handleDeleteClick(plan.guid, plan.name)}
-                          isOperating={operatingPlanId !== null && operatingPlanId === plan.guid}
-                        />
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </VStack>
-              </Box>
-
-              {/* 中间分隔线 */}
-              <Divider orientation="vertical" h="auto" />
-
-              {/* 右侧：内置电源计划 */}
-              <Box flex={1}>
-                <HStack justify="space-between" align="center" mb={3}>
-                  <Text fontWeight="600" color={headingColor} fontSize="md">
-                    {t("optimization.powerManagement.builtinPlans")}
+                <VStack align="start" spacing={0} flex={1}>
+                  <Text fontSize="xs" color={subTextColor}>
+                    {t("optimization.powerManagement.currentPlan")}
                   </Text>
-                  {hasUnimported && (
-                    <LiquidGlassButton
-                      size="sm"
-                      leftIcon={<Download size={14} />}
-                      onClick={handleImportAll}
-                      isLoading={isImportingAll}
-                      loadingText={t("optimization.powerManagement.importingAll")}
-                      colorScheme="orange"
-                    >
-                      {t("optimization.powerManagement.importAll")}
-                    </LiquidGlassButton>
-                  )}
-                </HStack>
-                <VStack align="stretch" spacing={2} maxH="60vh" overflowY="auto">
-                  <AnimatePresence>
-                    {builtinPlans.map((plan) => (
-                      <motion.div
-                        key={plan.id}
-                        initial={{ opacity: 0, x: 10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <BuiltinPlanCard
-                          plan={plan}
-                          onImport={() => handleImport(plan.id)}
-                          onImportAndActivate={() => handleImportAndActivate(plan.id)}
-                          isOperating={operatingPlanId !== null && (operatingPlanId === plan.id || (plan.guid && operatingPlanId === plan.guid))}
-                        />
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
+                  <Text fontSize="md" fontWeight="bold" color={headingColor}>
+                    {activePlan.name}
+                  </Text>
+                  <Text fontSize="xs" color={subTextColor} fontFamily="mono">
+                    {activePlan.guid}
+                  </Text>
                 </VStack>
-              </Box>
-            </HStack>
-
-            <HStack spacing={3} justify="start">
-              <LiquidGlassButton
-                leftIcon={<RefreshCw size={16} />}
-                onClick={loadData}
-                isLoading={isLoading}
-                variant="outline"
-                colorScheme="gray"
-              >
-                {t("optimization.powerManagement.refresh") ||
-                  t("shaderCache.scanButton")}
-              </LiquidGlassButton>
-            </HStack>
-
-            <Box
-              p={5}
-              borderRadius="xl"
-              border="1px solid"
-              borderColor={tipBorder}
-              bg={tipBg}
-            >
-              <HStack mb={3}>
-                <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
-                  {t("optimization.powerManagement.tipTitle")}
-                </Text>
+                <Badge
+                  borderRadius="full"
+                  px={3}
+                  py={1.5}
+                  fontSize="xs"
+                  fontWeight="bold"
+                  colorScheme="green"
+                  bg={useColorModeValue(
+                    "green.50",
+                    "rgba(72,187,120,0.1)"
+                  )}
+                >
+                  <HStack spacing={1}>
+                    <CheckCircle size={12} />
+                    <Text>{t("optimization.powerManagement.active")}</Text>
+                  </HStack>
+                </Badge>
               </HStack>
-              <VStack align="start" spacing={2} pl={1}>
-                <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-                  {t("optimization.powerManagement.tip")}
+            </LiquidGlassCard>
+          )}
+
+          <HStack align="stretch" spacing={6} w="full">
+            {/* 左侧：系统电源计划 */}
+            <Box flex={1}>
+              <Box mb={3}>
+                <Text fontWeight="600" color={headingColor} fontSize="md">
+                  {t("optimization.powerManagement.systemPlans") || "系统电源计划"}
                 </Text>
+              </Box>
+              <VStack align="stretch" spacing={2} maxH="60vh" overflowY="auto">
+                <AnimatePresence>
+                  {systemPlans.map((plan) => (
+                    <motion.div
+                      key={plan.guid}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <SystemPlanCard
+                        plan={plan}
+                        onActivate={() => handleActivate(plan.guid)}
+                        onDelete={() => handleDeleteClick(plan.guid, plan.name)}
+                        isOperating={operatingPlanId !== null && operatingPlanId === plan.guid}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </VStack>
             </Box>
-          </>
-        )}
-      </VStack>
+
+            {/* 中间分隔线 */}
+            <Divider orientation="vertical" h="auto" />
+
+            {/* 右侧：内置电源计划 */}
+            <Box flex={1}>
+              <HStack justify="space-between" align="center" mb={3}>
+                <Text fontWeight="600" color={headingColor} fontSize="md">
+                  {t("optimization.powerManagement.builtinPlans")}
+                </Text>
+                {hasUnimported && (
+                  <LiquidGlassButton
+                    size="sm"
+                    leftIcon={<Download size={14} />}
+                    onClick={handleImportAll}
+                    isLoading={isImportingAll}
+                    loadingText={t("optimization.powerManagement.importingAll")}
+                    colorScheme="orange"
+                  >
+                    {t("optimization.powerManagement.importAll")}
+                  </LiquidGlassButton>
+                )}
+              </HStack>
+              <VStack align="stretch" spacing={2} maxH="60vh" overflowY="auto">
+                <AnimatePresence>
+                  {builtinPlans.map((plan) => (
+                    <motion.div
+                      key={plan.id}
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <BuiltinPlanCard
+                        plan={plan}
+                        onImport={() => handleImport(plan.id)}
+                        onImportAndActivate={() => handleImportAndActivate(plan.id)}
+                        isOperating={operatingPlanId !== null && (operatingPlanId === plan.id || (plan.guid && operatingPlanId === plan.guid))}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </VStack>
+            </Box>
+          </HStack>
+
+          <HStack spacing={3} justify="start">
+            <LiquidGlassButton
+              leftIcon={<RefreshCw size={16} />}
+              onClick={loadData}
+              isLoading={isLoading}
+              variant="outline"
+              colorScheme="gray"
+            >
+              {t("optimization.powerManagement.refresh") ||
+                t("shaderCache.scanButton")}
+            </LiquidGlassButton>
+          </HStack>
+
+          <Box
+            p={5}
+            borderRadius="xl"
+            border="1px solid"
+            borderColor={tipBorder}
+            bg={tipBg}
+          >
+            <HStack mb={3}>
+              <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
+                {t("optimization.powerManagement.tipTitle")}
+              </Text>
+            </HStack>
+            <VStack align="start" spacing={2} pl={1}>
+              <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
+                {t("optimization.powerManagement.tip")}
+              </Text>
+            </VStack>
+          </Box>
+        </>
+      )}
+    </VStack>
+  );
+
+  return (
+    <>
+      {transitionMode !== "off" ? (
+        <motion.div
+          initial="initial"
+          animate="enter"
+          exit="exit"
+          variants={getVariants(transitionMode)}
+          transition={getTransitionConfig(transitionMode)}
+        >
+          {content}
+        </motion.div>
+      ) : (
+        <div>
+          {content}
+        </div>
+      )}
 
       <AlertDialog
         isOpen={isDeleteOpen}
@@ -746,6 +749,6 @@ export default function PowerManagementPage() {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
-    </motion.div>
+    </>
   );
 }

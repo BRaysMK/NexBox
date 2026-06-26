@@ -105,6 +105,7 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
     { id: "ssd_temp", label: "硬盘温度", enabled: false },
     { id: "game_ping", label: "游戏延迟", enabled: true },
     { id: "delta_password", label: "三角洲密码", enabled: true },
+    // { id: "netease_lyric", label: "网易云歌词", enabled: false },
   ],
   custom_items: [],
   opacity: 255,
@@ -182,7 +183,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         let displayItems: DisplayItems;
         if (Array.isArray(savedSettings.display_items)) {
           // 新格式数组：检查版本，过旧则重置顺序和标签，保留启用状态
-          const currentVersion = 2;
+          const currentVersion = 3;
           const savedVersion = savedSettings._version ?? 1;
           if (savedVersion < currentVersion) {
             // 版本过旧：用默认项重建，只保留启用状态
@@ -193,12 +194,12 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
             }));
             needsMigration = true;
           } else {
-            // 最新版本，补充可能缺失的项
+            // 最新版本，补充可能缺失的项，移除已废弃的项
             const defaultItems = DEFAULT_OVERLAY_SETTINGS.display_items;
-            const savedIds = new Set(savedSettings.display_items.map((i) => i.id));
+            const defaultIds = new Set(defaultItems.map((i) => i.id));
             displayItems = [
-              ...savedSettings.display_items,
-              ...defaultItems.filter((i) => !savedIds.has(i.id)),
+              ...savedSettings.display_items.filter((i) => defaultIds.has(i.id)),
+              ...defaultItems.filter((i) => !savedSettings.display_items.some((s) => s.id === i.id)),
             ];
           }
         } else {
@@ -231,7 +232,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
           settingsToUse = {
             ...DEFAULT_OVERLAY_SETTINGS,
             ...savedSettings,
-            _version: 2,
+            _version: 3,
             display_items: displayItems,
           };
           await store.set("overlay-settings", settingsToUse);

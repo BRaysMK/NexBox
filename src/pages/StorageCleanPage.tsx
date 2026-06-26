@@ -16,6 +16,7 @@ import {
   Icon,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
@@ -366,170 +367,168 @@ export default function StorageCleanPage() {
         .reduce((sum, item) => sum + item.size_bytes, 0)
     : 0;
 
-  const pageVariants = {
-    initial: { opacity: 0, y: 10 },
-    in: { opacity: 1, y: 0 },
-    out: { opacity: 0, y: -10 },
-  };
+  const transitionMode = useTransitionMode();
 
-  const pageTransition = {
-    type: "tween",
-    ease: "easeOut",
-    duration: 0.25,
-  };
+  const content = (
+    <VStack align="stretch" spacing={6} pt={8}>
+      <HStack justifyContent="space-between" alignItems="center" w="full">
+        <Button
+          variant="ghost"
+          leftIcon={<ArrowLeft size={18} />}
+          onClick={() => navigate("/optimization")}
+          color={headingColor}
+        >
+          {t("tests.back") || "返回"}
+        </Button>
+        <Heading size="lg" color={headingColor} fontWeight="700">
+          {t("storageClean.title")}
+        </Heading>
+        <Box w="100px" />
+      </HStack>
 
-  return (
-    <motion.div
-      initial="initial"
-      animate="in"
-      exit="out"
-      variants={pageVariants}
-      transition={pageTransition}
-    >
-      <VStack align="stretch" spacing={6} pt={8}>
-        <HStack justifyContent="space-between" alignItems="center" w="full">
-          <Button
-            variant="ghost"
-            leftIcon={<ArrowLeft size={18} />}
-            onClick={() => navigate("/optimization")}
-            color={headingColor}
-          >
-            {t("tests.back") || "返回"}
-          </Button>
-          <Heading size="lg" color={headingColor} fontWeight="700">
-            {t("storageClean.title")}
-          </Heading>
-          <Box w="100px" />
-        </HStack>
-
-        {scanResult && (
-          <Box
-            p={4}
-            borderRadius="xl"
-            border="1px solid"
-            borderColor={statsBorder}
-            bg={statsBg}
-          >
-            <SimpleGrid columns={3} spacing={4}>
-              <VStack align="center">
-                <Icon as={HardDrive} color={themeConfig.primaryColor} boxSize={6} />
-                <Text fontSize="sm" color={subTextColor}>
-                  {t("storageClean.totalScanned")}
-                </Text>
-                <Text fontSize="lg" fontWeight="bold" color={headingColor}>
-                  {formatSize(scanResult.total_size)}
-                </Text>
-              </VStack>
-              <VStack align="center">
-                <Icon as={Folder} color={themeConfig.primaryColor} boxSize={6} />
-                <Text fontSize="sm" color={subTextColor}>
-                  {t("storageClean.itemsFound")}
-                </Text>
-                <Text fontSize="lg" fontWeight="bold" color={headingColor}>
-                  {scanResult.total_items}
-                </Text>
-              </VStack>
-              <VStack align="center">
-                <Icon as={Trash2} color={themeConfig.primaryColor} boxSize={6} />
-                <Text fontSize="sm" color={subTextColor}>
-                  {t("storageClean.selectedSize")}
-                </Text>
-                <Text fontSize="lg" fontWeight="bold" color={headingColor}>
-                  {formatSize(selectedSize)}
-                </Text>
-              </VStack>
-            </SimpleGrid>
-          </Box>
-        )}
-
-        <HStack spacing={3} justify="space-between">
-          <HStack spacing={2}>
-            <Button size="sm" variant="outline" onClick={handleSelectAll}>
-              {t("storageClean.selectAll")}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={handleDeselectAll}>
-              {t("storageClean.deselectAll")}
-            </Button>
-          </HStack>
-        </HStack>
-
-        {isScanning ? (
-          <VStack py={8}>
-            <Spinner size="lg" color="teal.500" />
-            <Text color={subTextColor}>{t("storageClean.scanning")}</Text>
-          </VStack>
-        ) : (
-          scanResult && (
-            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
-              {scanResult.items.map((item) => (
-                <CleanItemCard
-                  key={item.id}
-                  item={item}
-                  isSelected={selectedItems.has(item.id)}
-                  onToggleSelect={() => handleToggleItem(item.id)}
-                  primaryColor={themeConfig.primaryColor}
-                />
-              ))}
-            </SimpleGrid>
-          )
-        )}
-
-        <HStack spacing={3} justify="start">
-          <LiquidGlassButton
-            leftIcon={isCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
-            onClick={handleClean}
-            isLoading={isCleaning}
-            loadingText={t("storageClean.cleaning")}
-            disabled={isScanning || selectedItems.size === 0}
-            bg={themeConfig.primaryColor}
-            color={getContrastTextColor()}
-            _hover={{
-              bg: themeConfig.primaryColor,
-              filter: "brightness(0.9)",
-            }}
-            _active={{
-              bg: themeConfig.primaryColor,
-              filter: "brightness(0.8)",
-            }}
-          >
-            {t("storageClean.cleanButton")}
-          </LiquidGlassButton>
-          <LiquidGlassButton
-            leftIcon={<RefreshCw size={16} />}
-            onClick={doScan}
-            isLoading={isScanning}
-            variant="outline"
-            colorScheme="gray"
-          >
-            {t("storageClean.scanButton")}
-          </LiquidGlassButton>
-        </HStack>
-
+      {scanResult && (
         <Box
-          p={5}
+          p={4}
           borderRadius="xl"
           border="1px solid"
-          borderColor={tipBorder}
-          bg={tipBg}
+          borderColor={statsBorder}
+          bg={statsBg}
         >
-          <HStack mb={3}>
-            <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
-              {t("storageClean.tip.title")}
-            </Text>
-          </HStack>
-          <VStack align="start" spacing={2} pl={1}>
-            <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-              {t("storageClean.tip.description")}
-            </Text>
-            <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-              {t("storageClean.tip.note1")}
-            </Text>
-            <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-              {t("storageClean.tip.note2")}
-            </Text>
-          </VStack>
+          <SimpleGrid columns={3} spacing={4}>
+            <VStack align="center">
+              <Icon as={HardDrive} color={themeConfig.primaryColor} boxSize={6} />
+              <Text fontSize="sm" color={subTextColor}>
+                {t("storageClean.totalScanned")}
+              </Text>
+              <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                {formatSize(scanResult.total_size)}
+              </Text>
+            </VStack>
+            <VStack align="center">
+              <Icon as={Folder} color={themeConfig.primaryColor} boxSize={6} />
+              <Text fontSize="sm" color={subTextColor}>
+                {t("storageClean.itemsFound")}
+              </Text>
+              <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                {scanResult.total_items}
+              </Text>
+            </VStack>
+            <VStack align="center">
+              <Icon as={Trash2} color={themeConfig.primaryColor} boxSize={6} />
+              <Text fontSize="sm" color={subTextColor}>
+                {t("storageClean.selectedSize")}
+              </Text>
+              <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                {formatSize(selectedSize)}
+              </Text>
+            </VStack>
+          </SimpleGrid>
         </Box>
-      </VStack>
+      )}
+
+      <HStack spacing={3} justify="space-between">
+        <HStack spacing={2}>
+          <Button size="sm" variant="outline" onClick={handleSelectAll}>
+            {t("storageClean.selectAll")}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={handleDeselectAll}>
+            {t("storageClean.deselectAll")}
+          </Button>
+        </HStack>
+      </HStack>
+
+      {isScanning ? (
+        <VStack py={8}>
+          <Spinner size="lg" color="teal.500" />
+          <Text color={subTextColor}>{t("storageClean.scanning")}</Text>
+        </VStack>
+      ) : (
+        scanResult && (
+          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+            {scanResult.items.map((item) => (
+              <CleanItemCard
+                key={item.id}
+                item={item}
+                isSelected={selectedItems.has(item.id)}
+                onToggleSelect={() => handleToggleItem(item.id)}
+                primaryColor={themeConfig.primaryColor}
+              />
+            ))}
+          </SimpleGrid>
+        )
+      )}
+
+      <HStack spacing={3} justify="start">
+        <LiquidGlassButton
+          leftIcon={isCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
+          onClick={handleClean}
+          isLoading={isCleaning}
+          loadingText={t("storageClean.cleaning")}
+          disabled={isScanning || selectedItems.size === 0}
+          bg={themeConfig.primaryColor}
+          color={getContrastTextColor()}
+          _hover={{
+            bg: themeConfig.primaryColor,
+            filter: "brightness(0.9)",
+          }}
+          _active={{
+            bg: themeConfig.primaryColor,
+            filter: "brightness(0.8)",
+          }}
+        >
+          {t("storageClean.cleanButton")}
+        </LiquidGlassButton>
+        <LiquidGlassButton
+          leftIcon={<RefreshCw size={16} />}
+          onClick={doScan}
+          isLoading={isScanning}
+          variant="outline"
+          colorScheme="gray"
+        >
+          {t("storageClean.scanButton")}
+        </LiquidGlassButton>
+      </HStack>
+
+      <Box
+        p={5}
+        borderRadius="xl"
+        border="1px solid"
+        borderColor={tipBorder}
+        bg={tipBg}
+      >
+        <HStack mb={3}>
+          <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
+            {t("storageClean.tip.title")}
+          </Text>
+        </HStack>
+        <VStack align="start" spacing={2} pl={1}>
+          <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
+            {t("storageClean.tip.description")}
+          </Text>
+          <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
+            {t("storageClean.tip.note1")}
+          </Text>
+          <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
+            {t("storageClean.tip.note2")}
+          </Text>
+        </VStack>
+      </Box>
+    </VStack>
+  );
+
+  return transitionMode !== "off" ? (
+    <motion.div
+      initial="initial"
+      animate="enter"
+      exit="exit"
+      variants={getVariants(transitionMode)}
+      transition={getTransitionConfig(transitionMode)}
+    >
+      {content}
     </motion.div>
+  ) : (
+    <div>
+      {content}
+    </div>
   );
 }

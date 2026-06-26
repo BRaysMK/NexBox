@@ -338,7 +338,8 @@
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
       "msi-afterburner": "MSI Afterburner",
-      "geek": "Geek"
+      "geek": "Geek",
+      "huorong": "火绒安全"
     },
     "mctierDesc": "虚拟局域网通用组网工具",
     "sjmclDesc": "上海交通大学开发的第三方我的世界启动器",
@@ -356,7 +357,8 @@
       "process-lasso": "系统进程优化工具",
       "fxsound": "音频增强工具",
       "msi-afterburner": "显卡超频监控工具",
-      "geek": "软件卸载清理工具"
+      "geek": "软件卸载清理工具",
+      "huorong": "畅享纯粹终端防护。轻快运行，静享守护，全面防御"
     },
     "status": {
       "available": "可用",
@@ -600,6 +602,8 @@
     "nicknamePlaceholder": "输入昵称（可选）",
     "cancel": "取消",
     "submit": "提交审核",
+    "report": "无法使用？",
+    "reported": "已报告管理员",
     "uploadSuccess": "上传成功",
     "uploadQueueHint": "你的改枪码已进入审核队列，通过后即可显示",
     "uploadFailed": "上传失败",
@@ -880,7 +884,10 @@
       "sidebarShowLabelNoText": "无字",
       "sidebarShowLabelWithText": "有字",
       "pageTransitionLabel": "页面切换动画",
-      "pageTransitionDesc": "关闭后页面切换将不再有过渡动画"
+      "pageTransitionDesc": "关闭后页面切换将不再有过渡动画",
+      "pageTransitionSlide": "滑动",
+      "pageTransitionFade": "淡化",
+      "pageTransitionOff": "关闭"
     },
     "appearanceSettings": {
       "title": "外观设置",

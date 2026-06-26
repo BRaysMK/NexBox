@@ -46,6 +46,7 @@ fn default_display_items() -> DisplayItems {
             DisplayItem { id: "ssd_temp".to_string(), label: "硬盘温度".to_string(), enabled: false },
             DisplayItem { id: "game_ping".to_string(), label: "游戏延迟".to_string(), enabled: true },
             DisplayItem { id: "delta_password".to_string(), label: "三角洲密码".to_string(), enabled: true },
+            DisplayItem { id: "netease_lyric".to_string(), label: "网易云歌词".to_string(), enabled: false },
         ]
 }
 
@@ -118,6 +119,9 @@ pub struct OverlayHardwareData {
     gpu_voltage: Option<f64>,
     cpu_power: Option<f64>,
     ssd_temp: Option<f64>,
+    netease_current_lyric: Option<String>,
+    netease_song_title: Option<String>,
+    netease_song_artist: Option<String>,
 }
 
 impl Default for OverlayHardwareData {
@@ -144,6 +148,9 @@ impl Default for OverlayHardwareData {
             gpu_voltage: None,
             cpu_power: None,
             ssd_temp: None,
+            netease_current_lyric: None,
+            netease_song_title: None,
+            netease_song_artist: None,
         }
     }
 }
@@ -204,6 +211,39 @@ fn extract_all_avg(
     }
 }
 
+fn collapse_whitespace(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn truncate_overlay_text(value: &str, max_chars: usize) -> String {
+    let trimmed = collapse_whitespace(value);
+    let char_count = trimmed.chars().count();
+    if char_count <= max_chars {
+        return trimmed;
+    }
+
+    let truncated: String = trimmed.chars().take(max_chars).collect();
+    format!("{truncated}...")
+}
+
+fn build_netease_song_text(title: Option<&str>, artist: Option<&str>) -> Option<String> {
+    let title = title
+        .map(collapse_whitespace)
+        .filter(|value| !value.is_empty());
+    let artist = artist
+        .map(collapse_whitespace)
+        .filter(|value| !value.is_empty());
+
+    match (title, artist) {
+        (Some(title), Some(artist)) => Some(format!("{title} - {artist}")),
+        (Some(title), None) => Some(title),
+        (None, Some(artist)) => Some(artist),
+        (None, None) => None,
+    }
+}
+
+static LAST_LHML_UPDATE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn collect_hardware_data() -> OverlayHardwareData {
     let fps = crate::game_fps::get_cached_fps();
 
@@ -211,11 +251,32 @@ fn collect_hardware_data() -> OverlayHardwareData {
 
     let game_ping = crate::game_ping::get_cached_ping();
 
+    let lyrics_enabled = get_or_init_settings()
+        .display_items
+        .iter()
+        .any(|item| item.id == "netease_lyric" && item.enabled);
+
     let heart_rate = crate::heart_rate::get_cached_heart_rate();
     let heart_rate_device = crate::heart_rate::get_heart_rate_device_name();
 
+    let current_time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+    let last_time = LAST_LHML_UPDATE.load(std::sync::atomic::Ordering::Relaxed);
+    
+    let use_cached_lhml = if current_time - last_time < 1000 {
+        true
+    } else {
+        LAST_LHML_UPDATE.store(current_time, std::sync::atomic::Ordering::Relaxed);
+        false
+    };
+
     // 从 LHML (NexBoxMonitor) 获取硬件传感器数据
     let (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage) =
+        if use_cached_lhml {
+            let prev = CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default();
+            (
+                prev.cpu_usage, prev.cpu_temp, prev.cpu_clock, prev.cpu_voltage, prev.cpu_power, prev.ssd_temp, prev.memory_usage, prev.gpu_temp, prev.gpu_usage, prev.gpu_fan_speed, prev.gpu_power, prev.gpu_clock, prev.gpu_vram_used, prev.gpu_vram_total, prev.gpu_memory_clock, prev.gpu_voltage
+            )
+        } else {
         match crate::sensor::read_lhm_sensors() {
             Ok(response) => {
                 // CPU 占用 (Load 类型)
@@ -455,7 +516,14 @@ fn collect_hardware_data() -> OverlayHardwareData {
                 log::warn!("LHML 传感器读取失败: {e}");
                 (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
             }
-        };
+        }
+    };
+
+    let netease_snapshot = if lyrics_enabled {
+        crate::netease_lyrics::collect_snapshot()
+    } else {
+        crate::netease_lyrics::Snapshot::default()
+    };
 
     let new_data = OverlayHardwareData {
         fps,
@@ -479,6 +547,9 @@ fn collect_hardware_data() -> OverlayHardwareData {
         gpu_voltage,
         cpu_power,
         ssd_temp,
+        netease_current_lyric: netease_snapshot.current_lyric,
+        netease_song_title: netease_snapshot.song_title,
+        netease_song_artist: netease_snapshot.song_artist,
     };
 
     let prev_data = CURRENT_HARDWARE_DATA.lock().unwrap().clone();
@@ -507,6 +578,9 @@ fn collect_hardware_data() -> OverlayHardwareData {
             gpu_voltage: new_data.gpu_voltage.or(prev.gpu_voltage),
             cpu_power: new_data.cpu_power.or(prev.cpu_power),
             ssd_temp: new_data.ssd_temp.or(prev.ssd_temp),
+            netease_current_lyric: new_data.netease_current_lyric,
+            netease_song_title: new_data.netease_song_title,
+            netease_song_artist: new_data.netease_song_artist,
         }
     } else {
         new_data
@@ -616,6 +690,7 @@ mod win32 {
         let normal_item_width = 130;
         // 默认密码项宽度（逻辑像素）
         let mut password_item_width = 220;
+        let mut lyric_item_width = 280;
 
         // 如果已启用密码显示，尝试基于当前缓存的密码测量实际宽度
         if settings.display_items.iter().any(|item| item.id == "delta_password" && item.enabled) {
@@ -645,6 +720,39 @@ mod win32 {
             }
         }
 
+        if settings.display_items.iter().any(|item| item.id == "netease_lyric" && item.enabled) {
+            if let Ok(lock) = super::CURRENT_HARDWARE_DATA.lock() {
+                if let Some(ref data) = *lock {
+                    let lyric_text = data
+                        .netease_current_lyric
+                        .clone()
+                        .or_else(|| super::build_netease_song_text(
+                            data.netease_song_title.as_deref(),
+                            data.netease_song_artist.as_deref(),
+                        ))
+                        .unwrap_or_else(|| "未检测到网易云播放".to_string());
+
+                    unsafe {
+                        let screen_dc = GetDC(ptr::null_mut());
+                        if !screen_dc.is_null() {
+                            let dpi_x = GetDeviceCaps(screen_dc, 88);
+                            let dpi_scale = dpi_x as f32 / 96.0;
+                            let hfont = create_compatible_font(dpi_scale, &settings.font);
+                            if !hfont.is_null() {
+                                let val_w = measure_text_width(screen_dc, hfont, &super::truncate_overlay_text(&lyric_text, 26));
+                                let est = (val_w + (34.0 * dpi_scale) as i32 + 24).clamp(220, 460);
+                                if est > lyric_item_width {
+                                    lyric_item_width = est;
+                                }
+                                DeleteObject(hfont as _);
+                            }
+                            ReleaseDC(ptr::null_mut(), screen_dc);
+                        }
+                    }
+                }
+            }
+        }
+
         let mut width = 0i32;
         let mut enabled_count = 0i32;
         for item in &settings.display_items {
@@ -652,6 +760,7 @@ mod win32 {
                 enabled_count += 1;
                 match item.id.as_str() {
                     "delta_password" => { width += password_item_width; }
+                    "netease_lyric" => { width += lyric_item_width; }
                     _ => { width += normal_item_width; }
                 }
             }
@@ -857,6 +966,21 @@ mod win32 {
                 "game_ping" => {
                     let val = data.game_ping.map(|v| format!("{}ms", v)).unwrap_or_else(|| "--ms".to_string());
                     items.push(DisplayItem { label: "PING".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
+                }
+                "netease_lyric" => {
+                    let val = data
+                        .netease_current_lyric
+                        .clone()
+                        .map(|text| super::truncate_overlay_text(&text, 26))
+                        .or_else(|| {
+                            super::build_netease_song_text(
+                                data.netease_song_title.as_deref(),
+                                data.netease_song_artist.as_deref(),
+                            )
+                            .map(|text| super::truncate_overlay_text(&text, 28))
+                        })
+                        .unwrap_or_else(|| "未检测到网易云播放".to_string());
+                    items.push(DisplayItem { label: "♪".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x00D7F5FFu32) });
                 }
                 "fps" => {
                     let (val, color) = match data.fps {
@@ -1443,8 +1567,8 @@ mod win32 {
                 0
             }
             WM_TIMER => {
-                // 首个 tick (100ms) 后将定时器重置为 1s
-                SetTimer(hwnd, 1, 1000, None);
+                // 定时器重置为 100ms 刷新以保证歌词等数据同步的实时性
+                SetTimer(hwnd, 1, 100, None);
                 let data = super::collect_hardware_data();
                 *super::CURRENT_HARDWARE_DATA.lock().unwrap() = Some(data.clone());
                 let settings = super::get_or_init_settings();
@@ -1561,8 +1685,15 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
     }
 
     thread::spawn(move || {
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+
         crate::game_ping::start_ping_thread();
         crate::game_fps::start_fps_monitor();
+
+        let com_initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).is_ok() };
+        if !com_initialized {
+            log::warn!("悬浮框线程初始化 COM 失败，网易云歌词功能可能不可用");
+        }
 
         unsafe {
             match win32::create_overlay_window(&settings) {
@@ -1608,6 +1739,12 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
                     log::error!("创建悬浮框窗口失败: {}", e);
                     OVERLAY_ACTIVE.store(false, Ordering::SeqCst);
                 }
+            }
+        }
+
+        if com_initialized {
+            unsafe {
+                CoUninitialize();
             }
         }
     });

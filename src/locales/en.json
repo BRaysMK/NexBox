@@ -463,7 +463,8 @@
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
-      "msi-afterburner": "MSI Afterburner"
+      "msi-afterburner": "MSI Afterburner",
+      "huorong": "火绒安全"
     },
     "mctierDesc": "Virtual LAN universal networking tool",
     "sjmclDesc": "Third-party Minecraft launcher developed by Shanghai Jiao Tong University",
@@ -480,7 +481,8 @@
       "processLasso": "System process optimization tool",
       "process-lasso": "System process optimization tool",
       "fxsound": "Audio enhancement tool",
-      "msi-afterburner": "GPU overclocking and monitoring tool"
+      "msi-afterburner": "GPU overclocking and monitoring tool",
+      "huorong": "Pure endpoint protection. Lightweight, quiet, comprehensive defense"
     },
     "status": {
       "available": "Available",
@@ -724,6 +726,8 @@
     "nicknamePlaceholder": "Enter nickname (optional)",
     "cancel": "Cancel",
     "submit": "Submit",
+    "report": "Broken?",
+    "reported": "Reported to admin",
     "uploadSuccess": "Upload successful",
     "uploadQueueHint": "Your loadout has been queued for review and will appear after approval",
     "uploadFailed": "Upload failed",
@@ -1004,7 +1008,10 @@
       "sidebarShowLabelNoText": "Icons Only",
       "sidebarShowLabelWithText": "Icons & Text",
       "pageTransitionLabel": "Page Transition Animation",
-      "pageTransitionDesc": "Disable to turn off page transition animations"
+      "pageTransitionDesc": "Disable to turn off page transition animations",
+      "pageTransitionSlide": "Slide",
+      "pageTransitionFade": "Fade",
+      "pageTransitionOff": "Off"
     },
     "appearanceSettings": {
       "title": "Appearance Settings",

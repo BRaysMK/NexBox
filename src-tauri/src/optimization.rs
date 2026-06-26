@@ -65,6 +65,24 @@ fn enable_process_efficiency_mode(pid: u32) -> bool {
     }
 }
 
+fn set_process_low_priority(pid: u32) -> bool {
+    unsafe {
+        let handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+
+        let ok = if SetPriorityClass(handle, IDLE_PRIORITY_CLASS) == 0 {
+            false
+        } else {
+            true
+        };
+
+        CloseHandle(handle);
+        ok
+    }
+}
+
 fn run_bcdedit_admin(args: &str) -> Result<String, String> {
     let ps_script = format!(
         "Start-Process bcdedit -ArgumentList '{}' -Verb RunAs -Wait -WindowStyle Hidden",
@@ -1326,44 +1344,31 @@ pub async fn limit_ace_priority() -> Result<AcePartialResult, String> {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let ps_script = r#"
-        $count = 0
-        $processNames = @("ACE-Tray", "SGuard64", "SGuardSvc64")
-        foreach ($name in $processNames) {
-            $processes = Get-Process -Name $name -ErrorAction SilentlyContinue
-            if ($processes) {
-                foreach ($proc in $processes) {
-                    try {
-                        $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Low
-                        $count++
-                    } catch {}
-                }
+    let process_names = ["ACE-Tray.exe", "SGuard64.exe", "SGuardSvc64.exe"];
+    let mut count = 0u32;
+
+    let mut system = System::new();
+    system.refresh_processes();
+
+    for (_, process) in system.processes() {
+        let name = process.name().to_string();
+        let name_lower = name.to_lowercase();
+        if process_names.iter().any(|n| n.to_lowercase() == name_lower) {
+            if set_process_low_priority(process.pid().as_u32()) {
+                count += 1;
             }
         }
-        Write-Host "LIMITED:$count"
-        if ($count -gt 0) { exit 0 } else { exit 1 }
-    "#;
-
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let count: u32 = stdout.lines()
-                .find_map(|l| l.strip_prefix("LIMITED:"))
-                .and_then(|s| s.trim().parse().ok())
-                .unwrap_or(0);
-            Ok(AcePartialResult {
-                success: count > 0,
-                message: if count > 0 { format!("已限制 {} 个 ACE 进程优先级", count) } else { "未找到运行中的 ACE 进程".to_string() },
-                count,
-            })
-        }
-        Err(e) => Err(format!("限制 ACE 进程优先级失败: {}", e)),
     }
+
+    Ok(AcePartialResult {
+        success: count > 0,
+        message: if count > 0 {
+            format!("已限制 {} 个 ACE 进程优先级", count)
+        } else {
+            "未找到运行中的 ACE 进程".to_string()
+        },
+        count,
+    })
 }
 
 #[tauri::command]

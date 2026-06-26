@@ -418,7 +418,8 @@
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
-      "msi-afterburner": "MSI Afterburner"
+      "msi-afterburner": "MSI Afterburner",
+      "huorong": "火绒安全"
     },
     "mctierDesc": "仮想LAN汎用ネットワーキングツール",
     "sjmclDesc": "上海交通大学が開発したサードパーティMinecraftランチャー",
@@ -435,7 +436,8 @@
       "processLasso": "システムプロセス最適化ツール",
       "process-lasso": "システムプロセス最適化ツール",
       "fxsound": "オーディオ強化ツール",
-      "msi-afterburner": "GPUオーバークロック監視ツール"
+      "msi-afterburner": "GPUオーバークロック監視ツール",
+      "huorong": "純粋なエンドポイント保護。軽快な動作、静かな守り、包括的な防御"
     },
     "status": {
       "available": "利用可能",
@@ -660,6 +662,8 @@
     "nicknamePlaceholder": "ニックネームを入力（任意）",
     "cancel": "キャンセル",
     "submit": "送信",
+    "report": "使用不可？",
+    "reported": "管理者に報告済み",
     "uploadSuccess": "アップロード成功",
     "uploadQueueHint": "ロードアウトは審査キューに追加されました。承認後に表示されます",
     "uploadFailed": "アップロード失敗",
@@ -991,7 +995,10 @@
       "sidebarShowLabelNoText": "アイコンのみ",
       "sidebarShowLabelWithText": "アイコン＆テキスト",
       "pageTransitionLabel": "ページ遷移アニメーション",
-      "pageTransitionDesc": "無効にするとページ遷移アニメーションがオフになります"
+      "pageTransitionDesc": "無効にするとページ遷移アニメーションがオフになります",
+      "pageTransitionSlide": "スライド",
+      "pageTransitionFade": "フェード",
+      "pageTransitionOff": "オフ"
     },
     "appearanceSettings": {
       "title": "外観設定",

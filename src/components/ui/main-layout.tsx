@@ -27,9 +27,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const showPresetBg = backgroundMode === "preset" && activePreset;
   const videoSrc = useMemo(() => {
     if (!dynamicBgVideo) return null;
-    const url = convertFileSrc(dynamicBgVideo);
-    console.log("动态背景路径:", dynamicBgVideo, "→ URL:", url);
-    return url;
+    return convertFileSrc(dynamicBgVideo);
   }, [dynamicBgVideo]);
 
   // 背景交叉淡化
@@ -67,26 +65,13 @@ export function MainLayout({ children }: MainLayoutProps) {
     return () => clearTimeout(timer);
   }, [showPresetBg, activePresetIndex, showImageBg, activeBgIndex, activeImage, activePreset]);
 
-  // 预加载视频：当 dynamicBgVideo 变化时，提前创建 link 预加载
   useEffect(() => {
     if (!dynamicBgVideo) {
       setVideoReady(false);
-      return;
-    }
-
-    setVideoReady(false);
-
-    // 添加 <link rel="preload"> 提示浏览器提前下载视频
-    const link = document.createElement("link");
-    link.rel = "preload";
-    link.as = "video";
-    link.href = videoSrc!;
-    document.head.appendChild(link);
-
-    return () => {
-      document.head.removeChild(link);
+    } else {
+      setVideoReady(false);
     };
-  }, [dynamicBgVideo, videoSrc]);
+  }, [dynamicBgVideo]);
 
   useEffect(() => {
     let bgColorToUse = bgColor;

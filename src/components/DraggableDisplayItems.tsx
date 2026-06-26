@@ -1,7 +1,7 @@
 import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast, Button } from "@chakra-ui/react";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock, Download } from "lucide-react";
+import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock, Download, Music4 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   DndContext,
@@ -53,6 +53,7 @@ const ITEM_ICONS: Record<string, React.FC<{ size?: number }>> = {
   delta_password: Key,
   game_ping: Gauge,
   fps: Activity,
+  netease_lyric: Music4,
 };
 
 function SortableItem({

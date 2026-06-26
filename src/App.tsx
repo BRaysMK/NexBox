@@ -1,7 +1,7 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { MainLayout } from "./components/ui/main-layout";
-import { AnimatedPage } from "./components/ui/animated-page";
+import { AnimatedPage, type TransitionMode, readTransitionMode } from "./components/ui/animated-page";
 import HomePage from "./pages/HomePage";
 import HardwarePage from "./pages/HardwarePage";
 import ToolsPage from "./pages/ToolsPage";
@@ -79,7 +79,7 @@ function App() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
   const [downloadedFilePath, setDownloadedFilePath] = useState<string>("");
-  const [pageTransitionEnabled, setPageTransitionEnabled] = useState(true);
+  const [pageTransitionMode, setPageTransitionMode] = useState<TransitionMode>("fade");
 
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#888888");
@@ -96,17 +96,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem("nexbox_page_transition_enabled");
-    if (stored !== null) {
-      setPageTransitionEnabled(stored === "true");
-    }
+    setPageTransitionMode(readTransitionMode());
 
-    const handler = () => {
-      const updated = localStorage.getItem("nexbox_page_transition_enabled");
-      if (updated !== null) {
-        setPageTransitionEnabled(updated === "true");
-      }
-    };
+    const handler = () => setPageTransitionMode(readTransitionMode());
 
     window.addEventListener("page-transition-setting-changed", handler);
     return () => window.removeEventListener("page-transition-setting-changed", handler);
@@ -219,7 +211,7 @@ function App() {
         {!isStartupComplete && <SplashScreen />}
         {/* <MiniMusicPlayer /> */}
         <MainLayout>
-        {pageTransitionEnabled ? (
+        {pageTransitionMode !== "off" ? (
           <AnimatePresence mode="wait">
             <Routes location={location} key={location.pathname}>
               <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />

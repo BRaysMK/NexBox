@@ -400,7 +400,8 @@
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
-      "msi-afterburner": "MSI Afterburner"
+      "msi-afterburner": "MSI Afterburner",
+      "huorong": "火绒安全"
     },
     "mctierDesc": "虛擬區域網路通用組網工具",
     "sjmclDesc": "上海交通大學開發的第三方我的世界啟動器",
@@ -417,7 +418,8 @@
       "processLasso": "系統程序優化工具",
       "process-lasso": "系統程序優化工具",
       "fxsound": "音訊增強工具",
-      "msi-afterburner": "顯示卡超頻監控工具"
+      "msi-afterburner": "顯示卡超頻監控工具",
+      "huorong": "暢享純粹終端防護。輕快運行，靜享守護，全面防禦"
     },
     "status": {
       "available": "可用",
@@ -642,6 +644,8 @@
     "nicknamePlaceholder": "輸入暱稱（可選）",
     "cancel": "取消",
     "submit": "提交審核",
+    "report": "無法使用？",
+    "reported": "已報告管理員",
     "uploadSuccess": "上傳成功",
     "uploadQueueHint": "你的改槍碼已進入審核佇列，通過後即可顯示",
     "uploadFailed": "上傳失敗",
@@ -973,7 +977,10 @@
       "sidebarShowLabelNoText": "無字",
       "sidebarShowLabelWithText": "有字",
       "pageTransitionLabel": "頁面切換動畫",
-      "pageTransitionDesc": "關閉後頁面切換將不再有過渡動畫"
+      "pageTransitionDesc": "關閉後頁面切換將不再有過渡動畫",
+      "pageTransitionSlide": "滑動",
+      "pageTransitionFade": "淡化",
+      "pageTransitionOff": "關閉"
     },
     "appearanceSettings": {
       "title": "外觀設定",

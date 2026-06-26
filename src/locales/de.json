@@ -418,7 +418,8 @@
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
-      "msi-afterburner": "MSI Afterburner"
+      "msi-afterburner": "MSI Afterburner",
+      "huorong": "火绒安全"
     },
     "mctierDesc": "Universelles virtuelles LAN-Netzwerk-Tool",
     "sjmclDesc": "Drittanbieter-Minecraft-Launcher, entwickelt von der Shanghai Jiao Tong Universität",
@@ -435,7 +436,8 @@
       "processLasso": "Systemprozess-Optimierungstool",
       "process-lasso": "Systemprozess-Optimierungstool",
       "fxsound": "Audioverbesserungstool",
-      "msi-afterburner": "GPU-Übertaktungs- und Überwachungstool"
+      "msi-afterburner": "GPU-Übertaktungs- und Überwachungstool",
+      "huorong": "Reiner Endpunktschutz. Leicht, leise, umfassende Verteidigung"
     },
     "status": {
       "available": "Verfügbar",
@@ -660,6 +662,8 @@
     "nicknamePlaceholder": "Spitznamen eingeben (optional)",
     "cancel": "Abbrechen",
     "submit": "Einreichen",
+    "report": "Defekt?",
+    "reported": "Admin gemeldet",
     "uploadSuccess": "Hochladen erfolgreich",
     "uploadQueueHint": "Ihre Ausrüstung wurde zur Überprüfung in die Warteschlange gestellt und erscheint nach Freigabe",
     "uploadFailed": "Hochladen fehlgeschlagen",
@@ -991,7 +995,10 @@
       "sidebarShowLabelNoText": "Nur Symbole",
       "sidebarShowLabelWithText": "Symbole & Text",
       "pageTransitionLabel": "Seitenübergangsanimation",
-      "pageTransitionDesc": "Deaktivieren, um Seitenübergangsanimationen auszuschalten"
+      "pageTransitionDesc": "Deaktivieren, um Seitenübergangsanimationen auszuschalten",
+      "pageTransitionSlide": "Schieben",
+      "pageTransitionFade": "Einblenden",
+      "pageTransitionOff": "Aus"
     },
     "appearanceSettings": {
       "title": "Darstellungseinstellungen",

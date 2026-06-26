@@ -1,17 +1,22 @@
 "use client";
 
-import { Box, useColorModeValue } from "@chakra-ui/react";
+import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { useMemo } from "react";
 
-interface LiquidGlassCardProps {
+interface LiquidGlassCardProps extends BoxProps {
   children: React.ReactNode;
   className?: string;
-  [key: string]: any;
+  isDashed?: boolean;
 }
 
-export function LiquidGlassCard({ children, className, ...props }: LiquidGlassCardProps) {
+export function LiquidGlassCard({
+  children,
+  className,
+  isDashed = false,
+  ...props
+}: LiquidGlassCardProps) {
   const { liquidGlassEnabled } = useBackground();
   
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
@@ -25,7 +30,7 @@ export function LiquidGlassCard({ children, className, ...props }: LiquidGlassCa
       return {
         bg: defaultBg,
         borderRadius: "xl",
-        border: "1px solid",
+        border: isDashed ? "1px dashed" : "1px solid",
         borderColor: defaultBorder,
         boxShadow: "sm",
       };
@@ -34,7 +39,7 @@ export function LiquidGlassCard({ children, className, ...props }: LiquidGlassCa
     return {
       bg: glassBgColor,
       borderRadius: "xl",
-      border: "1px solid",
+        border: isDashed ? "1px dashed" : "1px solid",
       borderColor: glassBorderColor,
       backdropFilter: "blur(1px)",
       boxShadow: "sm",
@@ -45,7 +50,7 @@ export function LiquidGlassCard({ children, className, ...props }: LiquidGlassCa
         backfaceVisibility: "hidden",
       },
     };
-  }, [liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder]);
+  }, [liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder, isDashed]);
 
   if (!liquidGlassEnabled) {
     return (

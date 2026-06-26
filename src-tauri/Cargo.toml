@@ -60,6 +60,11 @@ tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
 btleplug = "0.12"
 
+# 网易云 EAPI 加密
+md-5 = "0.10"
+aes = "0.8"
+cipher = "0.4"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
@@ -81,7 +86,9 @@ winreg = "0.52"
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
+    "Win32_System_Com",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Accessibility",
     "Win32_Security",
     "Win32_System_Threading",
     "Devices_Bluetooth",
@@ -90,6 +97,7 @@ windows = { version = "0.58", features = [
     "Devices_Enumeration",
     "Foundation",
     "Foundation_Collections",
+    "Media_Control",
     "Storage_Streams",
+    "UI_UIAutomation",
 ] }
-

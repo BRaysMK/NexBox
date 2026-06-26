@@ -1,17 +1,16 @@
 "use client";
 
-import { Box, useColorModeValue } from "@chakra-ui/react";
+import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { useGlowEffect, getBorderGlowStyle } from "@/hooks/use-glow-effect";
 
-interface LiquidGlassToolCardProps {
+interface LiquidGlassToolCardProps extends BoxProps {
   children: React.ReactNode;
   onClick?: () => void;
   cursor?: string;
   isDashed?: boolean;
   className?: string;
   size?: "sm" | "md" | "lg";
-  [key: string]: any;
 }
 
 export function LiquidGlassToolCard({ 

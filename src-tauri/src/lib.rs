@@ -11,7 +11,9 @@ mod gpu_rename;
 mod hardware;
 mod heart_rate;
 mod hotkey;
+mod music;
 mod network_optimize;
+mod netease_lyrics;
 mod optimization;
 mod overlay_panel;
 
@@ -122,6 +124,7 @@ pub fn run() {
         hardware::get_disk_status,
         hardware::is_nvidia_gpu,
         hardware::get_os_version,
+        music::get_music_files,
         downloader::download_file,
         downloader::open_installer,
         downloader::download_update,

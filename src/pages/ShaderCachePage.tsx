@@ -13,6 +13,7 @@ import {
   Divider,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
@@ -357,120 +358,118 @@ export default function ShaderCachePage() {
     await doScan();
   };
 
-  const pageVariants = {
-    initial: { opacity: 0, y: 10 },
-    in: { opacity: 1, y: 0 },
-    out: { opacity: 0, y: -10 },
-  };
+  const transitionMode = useTransitionMode();
 
-  const pageTransition = {
-    type: "tween",
-    ease: "easeOut",
-    duration: 0.25,
-  };
+  const content = (
+    <VStack align="stretch" spacing={6} pt={8}>
+      <HStack justifyContent="space-between" alignItems="center" w="full">
+        <Button
+          variant="ghost"
+          leftIcon={<ArrowLeft size={18} />}
+          onClick={() => navigate("/optimization")}
+          color={headingColor}
+        >
+          {t("tests.back") || "返回"}
+        </Button>
+        <Heading size="lg" color={headingColor} fontWeight="700">
+          {t("shaderCache.title")}
+        </Heading>
+        <Box w="100px" />
+      </HStack>
 
-  return (
+      <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={5}>
+        <VendorCard
+          vendorKey="nvidia"
+          result={scanResult?.nvidia ?? null}
+          isSelected={selectedVendors.has("nvidia")}
+          isExpanded={expandedVendor === "nvidia"}
+          onToggleSelect={() => handleToggleVendor("nvidia")}
+          onToggleExpand={() =>
+            setExpandedVendor((prev) =>
+              prev === "nvidia" ? null : "nvidia"
+            )
+          }
+        />
+        <VendorCard
+          vendorKey="amd"
+          result={scanResult?.amd ?? null}
+          isSelected={selectedVendors.has("amd")}
+          isExpanded={expandedVendor === "amd"}
+          onToggleSelect={() => handleToggleVendor("amd")}
+          onToggleExpand={() =>
+            setExpandedVendor((prev) =>
+              prev === "amd" ? null : "amd"
+            )
+          }
+        />
+      </Grid>
+
+      <HStack spacing={3} justify="start">
+        <LiquidGlassButton
+          leftIcon={isCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
+          onClick={handleClean}
+          isLoading={isCleaning}
+          loadingText={t("shaderCache.cleaning")}
+          disabled={isScanning || selectedVendors.size === 0}
+          colorScheme="red"
+        >
+          {t("shaderCache.cleanButton")}
+        </LiquidGlassButton>
+        <LiquidGlassButton
+          leftIcon={<RefreshCw size={16} />}
+          onClick={doScan}
+          isLoading={isScanning}
+          variant="outline"
+          colorScheme="gray"
+        >
+          {t("shaderCache.scanButton")}
+        </LiquidGlassButton>
+      </HStack>
+
+      <Box
+        p={5}
+        borderRadius="xl"
+        border="1px solid"
+        borderColor={tipBorder}
+        bg={tipBg}
+      >
+        <HStack mb={3}>
+          <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
+            {t("shaderCache.officialTip.title")}
+          </Text>
+        </HStack>
+        <VStack align="start" spacing={2} pl={1}>
+          <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
+            {t("shaderCache.officialTip.description")}
+          </Text>
+          <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
+            {t("shaderCache.officialTip.step1")}
+          </Text>
+          <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
+            {t("shaderCache.officialTip.step2")}
+          </Text>
+          <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
+            {t("shaderCache.officialTip.step3")}
+          </Text>
+        </VStack>
+      </Box>
+    </VStack>
+  );
+
+  return transitionMode !== "off" ? (
     <motion.div
       initial="initial"
-      animate="in"
-      exit="out"
-      variants={pageVariants}
-      transition={pageTransition}
+      animate="enter"
+      exit="exit"
+      variants={getVariants(transitionMode)}
+      transition={getTransitionConfig(transitionMode)}
     >
-      <VStack align="stretch" spacing={6} pt={8}>
-        <HStack justifyContent="space-between" alignItems="center" w="full">
-          <Button
-            variant="ghost"
-            leftIcon={<ArrowLeft size={18} />}
-            onClick={() => navigate("/optimization")}
-            color={headingColor}
-          >
-            {t("tests.back") || "返回"}
-          </Button>
-          <Heading size="lg" color={headingColor} fontWeight="700">
-            {t("shaderCache.title")}
-          </Heading>
-          <Box w="100px" />
-        </HStack>
-
-        <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={5}>
-          <VendorCard
-            vendorKey="nvidia"
-            result={scanResult?.nvidia ?? null}
-            isSelected={selectedVendors.has("nvidia")}
-            isExpanded={expandedVendor === "nvidia"}
-            onToggleSelect={() => handleToggleVendor("nvidia")}
-            onToggleExpand={() =>
-              setExpandedVendor((prev) =>
-                prev === "nvidia" ? null : "nvidia"
-              )
-            }
-          />
-          <VendorCard
-            vendorKey="amd"
-            result={scanResult?.amd ?? null}
-            isSelected={selectedVendors.has("amd")}
-            isExpanded={expandedVendor === "amd"}
-            onToggleSelect={() => handleToggleVendor("amd")}
-            onToggleExpand={() =>
-              setExpandedVendor((prev) =>
-                prev === "amd" ? null : "amd"
-              )
-            }
-          />
-        </Grid>
-
-        <HStack spacing={3} justify="start">
-          <LiquidGlassButton
-            leftIcon={isCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
-            onClick={handleClean}
-            isLoading={isCleaning}
-            loadingText={t("shaderCache.cleaning")}
-            disabled={isScanning || selectedVendors.size === 0}
-            colorScheme="red"
-          >
-            {t("shaderCache.cleanButton")}
-          </LiquidGlassButton>
-          <LiquidGlassButton
-            leftIcon={<RefreshCw size={16} />}
-            onClick={doScan}
-            isLoading={isScanning}
-            variant="outline"
-            colorScheme="gray"
-          >
-            {t("shaderCache.scanButton")}
-          </LiquidGlassButton>
-        </HStack>
-
-        <Box
-          p={5}
-          borderRadius="xl"
-          border="1px solid"
-          borderColor={tipBorder}
-          bg={tipBg}
-        >
-          <HStack mb={3}>
-            <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
-              {t("shaderCache.officialTip.title")}
-            </Text>
-          </HStack>
-          <VStack align="start" spacing={2} pl={1}>
-            <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-              {t("shaderCache.officialTip.description")}
-            </Text>
-            <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-              {t("shaderCache.officialTip.step1")}
-            </Text>
-            <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-              {t("shaderCache.officialTip.step2")}
-            </Text>
-            <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-              {t("shaderCache.officialTip.step3")}
-            </Text>
-          </VStack>
-        </Box>
-      </VStack>
+      {content}
     </motion.div>
+  ) : (
+    <div>
+      {content}
+    </div>
   );
 }
 

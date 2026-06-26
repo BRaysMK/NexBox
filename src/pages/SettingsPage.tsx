@@ -22,6 +22,7 @@ import {
   useToast,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 
 import {
   LuMonitor,
@@ -46,7 +47,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { PRESET_COLORS } from "@/lib/color-utils";
+import { PRESET_COLORS, hexToRgba } from "@/lib/color-utils";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { fetchLatestRelease, compareVersions, fetchReleaseByTag, type GiteeRelease } from "@/lib/update-checker";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -70,6 +71,8 @@ const settingItems = [
 
 function GeneralSettings() {
   const { t, i18n } = useTranslation();
+  const { config, getContrastTextColor } = useThemeColor();
+  const { liquidGlassEnabled } = useBackground();
   const [language, setLanguage] = useState(i18n.language || "zh");
   const [todayPopularityEnabled, setTodayPopularityEnabled] = useState(true);
   const [announcementEnabled, setAnnouncementEnabled] = useState(true);
@@ -81,13 +84,59 @@ function GeneralSettings() {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
   });
   const [sidebarShowLabel, setSidebarShowLabel] = useState(false);
-  const [pageTransitionEnabled, setPageTransitionEnabled] = useState(true);
+  const [pageTransitionMode, setPageTransitionMode] = useState<"slide" | "fade" | "off">("fade");
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#888888");
   const cardBorder = useColorModeValue("gray.200", "#333333");
+  const splashLogoHoverBorder = useColorModeValue("blue.400", "blue.300");
+  const segmentedControlBg = useColorModeValue(
+    liquidGlassEnabled ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.78)",
+    liquidGlassEnabled ? "rgba(18,18,18,0.34)" : "rgba(18,18,18,0.58)"
+  );
+  const segmentedControlBorder = useColorModeValue(
+    liquidGlassEnabled ? "rgba(255,255,255,0.34)" : "rgba(255,255,255,0.72)",
+    liquidGlassEnabled ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.08)"
+  );
+  const segmentedControlHoverBg = useColorModeValue(
+    liquidGlassEnabled ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.96)",
+    liquidGlassEnabled ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.08)"
+  );
+  const segmentedControlShadow = useColorModeValue(
+    liquidGlassEnabled ? "0 16px 34px rgba(15, 23, 42, 0.14)" : "0 10px 30px rgba(15, 23, 42, 0.08)",
+    liquidGlassEnabled ? "0 18px 38px rgba(0, 0, 0, 0.28)" : "0 12px 30px rgba(0, 0, 0, 0.24)"
+  );
+  const segmentedActiveBg = useColorModeValue(
+    `linear-gradient(135deg, ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.26 : 0.2)} 0%, ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.42 : 0.34)} 100%)`,
+    `linear-gradient(135deg, ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.38 : 0.32)} 0%, ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.24 : 0.18)} 100%)`
+  );
+  const segmentedActiveBorder = useColorModeValue(
+    hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.34 : 0.28),
+    hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.5 : 0.42)
+  );
+  const segmentedActiveShadow = useColorModeValue(
+    `0 10px 24px ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.22 : 0.18)}`,
+    `0 12px 28px ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.3 : 0.24)}`
+  );
+  const segmentedActiveOverlayGradient = useColorModeValue(
+    liquidGlassEnabled
+      ? "linear(to-b, rgba(255,255,255,0.5), rgba(255,255,255,0.12))"
+      : "linear(to-b, rgba(255,255,255,0.42), rgba(255,255,255,0.08))",
+    liquidGlassEnabled
+      ? "linear(to-b, rgba(255,255,255,0.22), rgba(255,255,255,0.03))"
+      : "linear(to-b, rgba(255,255,255,0.16), rgba(255,255,255,0.02))"
+  );
+  const segmentedContainerGlow = useColorModeValue(
+    hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.14 : 0.08),
+    hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.18 : 0.1)
+  );
+  const segmentedGlassSheen = useColorModeValue(
+    "linear-gradient(135deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.08) 52%, rgba(255,255,255,0.02) 100%)",
+    "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 52%, rgba(255,255,255,0.01) 100%)"
+  );
+  const segmentedActiveText = getContrastTextColor();
 
   useEffect(() => {
     const savedLang = i18n.language || "zh";
@@ -133,9 +182,17 @@ function GeneralSettings() {
       setSidebarShowLabel(savedSidebarShowLabel === "true");
     }
 
-    const savedPageTransition = localStorage.getItem("nexbox_page_transition_enabled");
-    if (savedPageTransition !== null) {
-      setPageTransitionEnabled(savedPageTransition === "true");
+    const mode = localStorage.getItem("nexbox_page_transition") as "slide" | "fade" | "off" | null;
+    if (mode && ["slide", "fade", "off"].includes(mode)) {
+      setPageTransitionMode(mode);
+    } else {
+      const oldVal = localStorage.getItem("nexbox_page_transition_enabled");
+      if (oldVal !== null) {
+        const newMode = oldVal === "true" ? "slide" : "off";
+        setPageTransitionMode(newMode);
+        localStorage.setItem("nexbox_page_transition", newMode);
+        localStorage.removeItem("nexbox_page_transition_enabled");
+      }
     }
 
     invoke<boolean>("check_nexbox_auto_start")
@@ -224,11 +281,10 @@ function GeneralSettings() {
       .catch(() => {});
   };
 
-  const handlePageTransitionToggle = () => {
-    const newValue = !pageTransitionEnabled;
-    setPageTransitionEnabled(newValue);
-    localStorage.setItem("nexbox_page_transition_enabled", String(newValue));
-    window.dispatchEvent(new CustomEvent("page-transition-setting-changed", { detail: newValue }));
+  const handlePageTransitionChange = (newMode: "slide" | "fade" | "off") => {
+    setPageTransitionMode(newMode);
+    localStorage.setItem("nexbox_page_transition", newMode);
+    window.dispatchEvent(new CustomEvent("page-transition-setting-changed", { detail: newMode }));
   };
 
   return (
@@ -440,7 +496,7 @@ function GeneralSettings() {
                   const input = document.getElementById("splash-logo-upload") as HTMLInputElement;
                   input?.click();
                 }}
-                _hover={{ borderColor: useColorModeValue("blue.400", "blue.300") }}
+                _hover={{ borderColor: splashLogoHoverBorder }}
                 transition="all 0.2s"
                 flexShrink={0}
               >
@@ -461,11 +517,86 @@ function GeneralSettings() {
                   {t("settings.generalSettings.pageTransitionDesc")}
                 </Text>
               </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={pageTransitionEnabled}
-                onChange={handlePageTransitionToggle}
-              />
+              <HStack
+                spacing={1}
+                p={1}
+                borderRadius="xl"
+                border="1px solid"
+                borderColor={segmentedControlBorder}
+                bg={segmentedControlBg}
+                boxShadow={segmentedControlShadow}
+                backdropFilter={liquidGlassEnabled ? "blur(18px) saturate(160%)" : "blur(14px)"}
+                position="relative"
+                overflow="hidden"
+              >
+                {liquidGlassEnabled && (
+                  <Box
+                    position="absolute"
+                    inset="0"
+                    pointerEvents="none"
+                    bgGradient={segmentedGlassSheen}
+                    opacity={0.9}
+                  />
+                )}
+                <Box
+                  position="absolute"
+                  inset="0"
+                  pointerEvents="none"
+                  borderRadius="inherit"
+                  boxShadow={`inset 0 1px 0 rgba(255,255,255,0.28), inset 0 0 0 1px ${segmentedContainerGlow}`}
+                  opacity={liquidGlassEnabled ? 1 : 0.72}
+                />
+                {(["slide", "fade", "off"] as const).map((mode) => (
+                  <Box
+                    key={mode}
+                    as="button"
+                    type="button"
+                    minW="74px"
+                    px={3.5}
+                    py={2}
+                    borderRadius="lg"
+                    border="1px solid"
+                    borderColor={pageTransitionMode === mode ? segmentedActiveBorder : "transparent"}
+                    bg={pageTransitionMode === mode ? segmentedActiveBg : "transparent"}
+                    color={pageTransitionMode === mode ? segmentedActiveText : subLabelColor}
+                    fontSize="sm"
+                    fontWeight={pageTransitionMode === mode ? "semibold" : "medium"}
+                    letterSpacing="0.01em"
+                    boxShadow={pageTransitionMode === mode ? segmentedActiveShadow : "none"}
+                    position="relative"
+                    transition="color 0.16s ease, transform 0.16s ease"
+                    transform={pageTransitionMode === mode ? "translateY(-1px)" : "translateY(0)"}
+                    _hover={{
+                      bg: pageTransitionMode === mode ? segmentedActiveBg : segmentedControlHoverBg,
+                      color: pageTransitionMode === mode ? segmentedActiveText : labelColor,
+                    }}
+                    _active={{
+                      transform: pageTransitionMode === mode ? "translateY(0)" : "scale(0.98)",
+                    }}
+                    _focusVisible={{
+                      outline: "none",
+                      boxShadow: `0 0 0 3px ${hexToRgba(config.primaryColor, 0.24)}`,
+                    }}
+                    aria-pressed={pageTransitionMode === mode}
+                    onClick={() => handlePageTransitionChange(mode)}
+                  >
+                    <Box
+                      position="absolute"
+                      inset="1px"
+                      borderRadius="inherit"
+                      opacity={pageTransitionMode === mode ? 1 : 0}
+                      transition="none"
+                      pointerEvents="none"
+                      bgGradient={segmentedActiveOverlayGradient}
+                    />
+                    <Text position="relative" zIndex={1}>
+                      {mode === "slide" ? t("settings.generalSettings.pageTransitionSlide", "滑动") :
+                       mode === "fade" ? t("settings.generalSettings.pageTransitionFade", "淡化") :
+                       t("settings.generalSettings.pageTransitionOff", "关闭")}
+                    </Text>
+                  </Box>
+                ))}
+              </HStack>
             </HStack>
           </VStack>
           <input
@@ -2059,28 +2190,9 @@ function HotkeySettings() {
 
 export default function SettingsPage() {
   const [activeItem, setActiveItem] = useState("general");
-  const [pageTransitionEnabled, setPageTransitionEnabled] = useState(true);
   const { t } = useTranslation();
   const { config } = useThemeColor();
-
-  useEffect(() => {
-    const stored = localStorage.getItem("nexbox_page_transition_enabled");
-    if (stored !== null) {
-      setPageTransitionEnabled(stored === "true");
-    }
-  }, []);
-
-  const pageVariants = {
-    initial: { opacity: 0, x: 20 },
-    in: { opacity: 1, x: 0 },
-    out: { opacity: 0, x: -20 },
-  };
-
-  const pageTransition = {
-    type: "tween",
-    ease: "anticipate",
-    duration: 0.3,
-  };
+  const transitionMode = useTransitionMode();
 
   return (
     <Flex gap={6} pt={8}>
@@ -2106,14 +2218,14 @@ export default function SettingsPage() {
 
       <Box flex={1}>
         <AnimatePresence mode="wait">
-          {pageTransitionEnabled ? (
+          {transitionMode !== "off" ? (
             <motion.div
               key={activeItem}
               initial="initial"
-              animate="in"
-              exit="out"
-              variants={pageVariants}
-              transition={pageTransition}
+              animate="enter"
+              exit="exit"
+              variants={getVariants(transitionMode)}
+              transition={getTransitionConfig(transitionMode)}
               style={{ position: 'relative', zIndex: 1 }}
             >
               {activeItem === "general" && <GeneralSettings />}

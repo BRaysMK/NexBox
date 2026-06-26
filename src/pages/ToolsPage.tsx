@@ -15,6 +15,7 @@
   Tooltip,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { LiquidGlassToolCard } from "@/components/special/liquid-glass-tool-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -34,6 +35,7 @@ import {
   Plus,
   X,
   ExternalLink,
+  Shield,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
@@ -208,6 +210,8 @@ function ThirdPartyToolCard({
         return Monitor;
       case "geek":
         return Trash2;
+      case "huorong":
+        return Shield;
       default:
         return Wrench;
     }
@@ -737,18 +741,7 @@ export default function ToolsPage() {
   const categoryLabels = getCategoryLabels(t);
 
   const builtinTools = tools.filter((tool) => tool.type === "builtin");
-
-  const pageVariants = {
-    initial: { opacity: 0, y: 10 },
-    in: { opacity: 1, y: 0 },
-    out: { opacity: 0, y: -10 },
-  };
-
-  const pageTransition = {
-    type: "tween",
-    ease: "easeOut",
-    duration: 0.25,
-  };
+  const transitionMode = useTransitionMode();
 
   return (
     <Flex gap={6} pt={8}>
@@ -804,33 +797,55 @@ export default function ToolsPage() {
         }}
       >
         <AnimatePresence mode="wait">
-          <motion.div
-            key={activeCategory}
-            initial="initial"
-            animate="in"
-            exit="out"
-            variants={pageVariants}
-            transition={pageTransition}
-            style={{ position: 'relative', zIndex: 1 }}
-          >
-            <Heading size="lg" color={headingColor} mb={6}>
-              {t("tools.title")}
-            </Heading>
+          {transitionMode !== "off" ? (
+            <motion.div
+              key={activeCategory}
+              initial="initial"
+              animate="enter"
+              exit="exit"
+              variants={getVariants(transitionMode)}
+              transition={getTransitionConfig(transitionMode)}
+              style={{ position: 'relative', zIndex: 1 }}
+            >
+              <Heading size="lg" color={headingColor} mb={6}>
+                {t("tools.title")}
+              </Heading>
 
-            <OfficialToolSection activeCategory={activeCategory} />
+              <OfficialToolSection activeCategory={activeCategory} />
 
-            <ToolSection
-              title={t("tools.builtinTools")}
-              tools={builtinTools}
-              activeCategory={activeCategory}
-              categoryLabels={categoryLabels}
-            />
-            <ThirdPartyToolSection
-              title={t("tools.thirdpartyTools")}
-              activeCategory={activeCategory}
-              categoryLabels={categoryLabels}
-            />
-          </motion.div>
+              <ToolSection
+                title={t("tools.builtinTools")}
+                tools={builtinTools}
+                activeCategory={activeCategory}
+                categoryLabels={categoryLabels}
+              />
+              <ThirdPartyToolSection
+                title={t("tools.thirdpartyTools")}
+                activeCategory={activeCategory}
+                categoryLabels={categoryLabels}
+              />
+            </motion.div>
+          ) : (
+            <div key={activeCategory} style={{ position: 'relative', zIndex: 1 }}>
+              <Heading size="lg" color={headingColor} mb={6}>
+                {t("tools.title")}
+              </Heading>
+
+              <OfficialToolSection activeCategory={activeCategory} />
+
+              <ToolSection
+                title={t("tools.builtinTools")}
+                tools={builtinTools}
+                activeCategory={activeCategory}
+                categoryLabels={categoryLabels}
+              />
+              <ThirdPartyToolSection
+                title={t("tools.thirdpartyTools")}
+                activeCategory={activeCategory}
+                categoryLabels={categoryLabels}
+              />
+            </div>
+          )}
         </AnimatePresence>
       </Box>
     </Flex>
