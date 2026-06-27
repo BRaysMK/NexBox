@@ -48,7 +48,8 @@
         "resolutionConverter": "解像度変換",
         "dlssPreset": "デルタフォースDLSS設定",
         "epicFree": "Epic 無料ゲーム",
-        "dynamicIsland": "ダイナミックアイランド"
+        "dynamicIsland": "ダイナミックアイランド",
+        "screenRecord": "画面録画"
     },
   "optimization": {
     "pageTitle": "最適化",
@@ -767,7 +768,8 @@
     "resolutionConverterDesc": "様々な解像度で画面アスペクト比を変換",
     "shaderCacheDesc": "NVIDIA/AMDのシェーダーキャッシュをクリーンアップしてディスクスペースを解放",
     "dlssPresetDesc": "DLSSモデルプリセットを切り替えてゲームグラフィックを最適化",
-        "dynamicIslandDesc": "画面上部に表示されるフローティングアイランド、ネット速度/ハードウェア/音楽/通知を表示"
+        "dynamicIslandDesc": "画面上部に表示されるフローティングアイランド、ネット速度/ハードウェア/音楽/通知を表示",
+        "screenRecordDesc": "画面またはウィンドウを録画、解像度とフレームレート調整可能"
     },
   "gpuRename": {
     "title": "GPU名前変更",
@@ -1157,6 +1159,37 @@
     "filterToggle": "フィルター切替",
     "filterToggleDesc": "ショートカットでフィルターを有効/無効",
     "saved": "ホットキーを保存しました"
+  },
+  "screenRecord": {
+    "title": "画面録画",
+    "mode": "録画モード",
+    "mode.fullscreen": "全画面",
+    "mode.window": "ウィンドウ",
+    "targetDisplay": "対象ディスプレイ",
+    "targetWindow": "対象ウィンドウ",
+    "noWindow": "ウィンドウ未選択",
+    "resolution": "解像度",
+    "resolution.original": "オリジナル",
+    "fps": "フレームレート",
+    "format": "出力形式",
+    "quality": "画質",
+    "savePath": "保存場所",
+    "browse": "参照...",
+    "startRecording": "録画開始",
+    "pauseRecording": "一時停止",
+    "resumeRecording": "再開",
+    "stopRecording": "停止",
+    "recording": "録画中...",
+    "paused": "一時停止中",
+    "duration": "録画時間",
+    "fileSize": "ファイルサイズ",
+    "currentFps": "現在のFPS",
+    "saveSuccess": "録画が完了しました：",
+    "saveFailed": "録画の保存に失敗しました",
+    "noDisplays": "ディスプレイが見つかりません",
+    "selectWindow": "ウィンドウを選択してください",
+    "captureCursor": "カーソルをキャプチャ",
+    "primaryMonitor": "プライマリモニター"
   }
 }
 

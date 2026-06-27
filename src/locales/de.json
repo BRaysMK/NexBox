@@ -48,7 +48,8 @@
         "resolutionConverter": "Auflösungskonverter",
         "dlssPreset": "Delta Force DLSS-Einstellungen",
         "epicFree": "Epic Gratis-Spiele",
-        "dynamicIsland": "Dynamic Island"
+        "dynamicIsland": "Dynamic Island",
+        "screenRecord": "Bildschirmaufnahme"
     },
   "optimization": {
     "pageTitle": "Optimieren",
@@ -767,7 +768,8 @@
     "resolutionConverterDesc": "Seitenverhältnisse für verschiedene Auflösungen umrechnen",
     "shaderCacheDesc": "NVIDIA/AMD Shader-Cache bereinigen, um Speicherplatz freizugeben",
     "dlssPresetDesc": "DLSS-Modell-Voreinstellungen wechseln, um Spielgrafiken zu optimieren",
-        "dynamicIslandDesc": "Schwebende Insel oben auf dem Bildschirm, zeigt Netzwerkgeschwindigkeit/Hardware/Musik/Benachrichtigungen"
+        "dynamicIslandDesc": "Schwebende Insel oben auf dem Bildschirm, zeigt Netzwerkgeschwindigkeit/Hardware/Musik/Benachrichtigungen",
+        "screenRecordDesc": "Bildschirm oder Fenster aufnehmen mit einstellbarer Auflösung & Bildrate"
     },
   "gpuRename": {
     "title": "GPU-Umbenennung",
@@ -1156,6 +1158,37 @@
     "filterToggle": "Filter umschalten",
     "filterToggleDesc": "Tastenkürzel zum Ein- und Ausschalten des Anzeigefilters",
     "saved": "Tastenkürzel gespeichert"
+  },
+  "screenRecord": {
+    "title": "Bildschirmaufnahme",
+    "mode": "Aufnahmemodus",
+    "mode.fullscreen": "Vollbild",
+    "mode.window": "Fenster",
+    "targetDisplay": "Zieldisplay",
+    "targetWindow": "Zielfenster",
+    "noWindow": "Kein Fenster ausgewählt",
+    "resolution": "Auflösung",
+    "resolution.original": "Original",
+    "fps": "Bildrate",
+    "format": "Ausgabeformat",
+    "quality": "Qualität",
+    "savePath": "Speicherort",
+    "browse": "Durchsuchen...",
+    "startRecording": "Aufnahme starten",
+    "pauseRecording": "Pause",
+    "resumeRecording": "Fortsetzen",
+    "stopRecording": "Stopp",
+    "recording": "Aufnahme läuft...",
+    "paused": "Pausiert",
+    "duration": "Dauer",
+    "fileSize": "Dateigröße",
+    "currentFps": "Aktuelle FPS",
+    "saveSuccess": "Aufnahme gespeichert unter:",
+    "saveFailed": "Speichern fehlgeschlagen",
+    "noDisplays": "Keine Displays gefunden",
+    "selectWindow": "Bitte wählen Sie ein Fenster",
+    "captureCursor": "Mauszeiger aufnehmen",
+    "primaryMonitor": "Primärer Monitor"
   }
 }
 

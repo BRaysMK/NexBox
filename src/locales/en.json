@@ -49,7 +49,8 @@
     "gpuRename": "GPU Rename",
     "dlssPreset": "Delta Force DLSS Settings",
     "epicFree": "Epic Free Games",
-    "dynamicIsland": "Dynamic Island"
+    "dynamicIsland": "Dynamic Island",
+    "screenRecord": "Screen Record"
   },
   "optimization": {
     "pageTitle": "Optimize",
@@ -848,7 +849,8 @@
     "resolutionConverterDesc": "Convert aspect ratios at different resolutions",
     "shaderCacheDesc": "Clean up NVIDIA/AMD shader cache to free disk space",
     "dlssPresetDesc": "Switch DLSS model presets to optimize game graphics",
-    "dynamicIslandDesc": "Floating island on screen, showing network speed/hardware/music/notifications"
+    "dynamicIslandDesc": "Floating island on screen, showing network speed/hardware/music/notifications",
+    "screenRecordDesc": "Record screen or window with adjustable resolution & frame rate"
   },
   "gpuRename": {
     "title": "GPU Rename",
@@ -1412,6 +1414,37 @@
     "islandToggle": "Toggle Dynamic Island",
     "islandToggleDesc": "Use shortcut to show or hide the Dynamic Island",
     "saved": "Hotkey saved"
+  },
+  "screenRecord": {
+    "title": "Screen Recording",
+    "mode": "Recording Mode",
+    "mode.fullscreen": "Full Screen",
+    "mode.window": "Window",
+    "targetDisplay": "Target Display",
+    "targetWindow": "Target Window",
+    "noWindow": "No window selected",
+    "resolution": "Resolution",
+    "resolution.original": "Original",
+    "fps": "Frame Rate",
+    "format": "Output Format",
+    "quality": "Quality",
+    "savePath": "Save Location",
+    "browse": "Browse...",
+    "startRecording": "Start Recording",
+    "pauseRecording": "Pause Recording",
+    "resumeRecording": "Resume Recording",
+    "stopRecording": "Stop Recording",
+    "recording": "Recording...",
+    "paused": "Paused",
+    "duration": "Duration",
+    "fileSize": "File Size",
+    "currentFps": "Current FPS",
+    "saveSuccess": "Recording saved to:",
+    "saveFailed": "Recording save failed",
+    "noDisplays": "No displays found",
+    "selectWindow": "Please select a window",
+    "captureCursor": "Capture Cursor",
+    "primaryMonitor": "Primary Monitor"
   }
 }
 

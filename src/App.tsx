@@ -12,6 +12,7 @@ import AceOptimizePage from "./pages/AceOptimizePage";
 import DisplayFilterPage from "./pages/DisplayFilterPage";
 import SettingsPage from "./pages/SettingsPage";
 import CrosshairPage from "./pages/CrosshairPage";
+import ScreenRecordPage from "./pages/ScreenRecordPage";
 import OverlayPanelPage from "./pages/OverlayPanelPage";
 import DeltaForcePage from "./pages/DeltaForcePage";
 import OtherGunCodePlatformsPage from "./pages/OtherGunCodePlatformsPage";
@@ -234,6 +235,7 @@ function App() {
               <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
               <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
               <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
+              <Route path="/screen-record" element={<AnimatedPage><ScreenRecordPage /></AnimatedPage>} />
               <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
               <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
               <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />

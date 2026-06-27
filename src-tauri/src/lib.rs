@@ -17,6 +17,7 @@ mod network_optimize;
 mod netease_lyrics;
 mod optimization;
 mod overlay_panel;
+mod screen_record;
 
 mod sensor;
 mod shader_cache;
@@ -499,6 +500,16 @@ pub fn run() {
             island::force_window_topmost,
             island::is_widget_visible,
             // === MCTier 命令 ===
+            // === 屏幕录制命令 ===
+            screen_record::enumerate_screen_record_displays,
+            screen_record::enumerate_screen_record_windows,
+            screen_record::start_screen_recording,
+            screen_record::pause_screen_recording,
+            screen_record::resume_screen_recording,
+            screen_record::stop_screen_recording,
+            screen_record::get_screen_recording_status,
+            screen_record::get_recordings_folder,
+            screen_record::pick_recording_save_path,
 
     ])
         .build(tauri::generate_context!())
@@ -512,6 +523,7 @@ pub fn run() {
                 display_filter::cleanup();
                 overlay_panel::cleanup();
                 crosshair::cleanup();
+                screen_record::cleanup();
                 heart_rate::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);

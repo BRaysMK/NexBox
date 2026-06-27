@@ -50,7 +50,8 @@
     "resolutionConverter": "分辨率换算",
     "dlssPreset": "三角洲DLSS设置",
     "epicFree": "喜加一",
-    "dynamicIsland": "灵动岛"
+    "dynamicIsland": "灵动岛",
+    "screenRecord": "屏幕录制"
   },
   "optimization": {
     "pageTitle": "优化",
@@ -707,7 +708,8 @@
     "resolutionConverterDesc": "换算不同分辨率下的画面比例",
     "shaderCacheDesc": "清理 NVIDIA/AMD 着色器缓存释放磁盘空间",
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
-    "dynamicIslandDesc": "屏幕顶部灵动岛，显示网速/硬件/音乐/通知"
+    "dynamicIslandDesc": "屏幕顶部灵动岛，显示网速/硬件/音乐/通知",
+    "screenRecordDesc": "录制屏幕或窗口，支持分辨率与帧率调节"
   },
   "gpuRename": {
     "title": "显卡改写",
@@ -1419,6 +1421,37 @@
     "islandToggle": "切换灵动岛",
     "islandToggleDesc": "使用快捷键显示或隐藏灵动岛",
     "saved": "快捷键已保存"
+  },
+  "screenRecord": {
+    "title": "屏幕录制",
+    "mode": "录制模式",
+    "mode.fullscreen": "全屏录制",
+    "mode.window": "窗口录制",
+    "targetDisplay": "目标显示器",
+    "targetWindow": "目标窗口",
+    "noWindow": "未选择窗口",
+    "resolution": "分辨率",
+    "resolution.original": "原始分辨率",
+    "fps": "帧率",
+    "format": "输出格式",
+    "quality": "画质",
+    "savePath": "保存位置",
+    "browse": "浏览...",
+    "startRecording": "开始录制",
+    "pauseRecording": "暂停录制",
+    "resumeRecording": "继续录制",
+    "stopRecording": "停止录制",
+    "recording": "录制中...",
+    "paused": "已暂停",
+    "duration": "录制时长",
+    "fileSize": "文件大小",
+    "currentFps": "实时帧率",
+    "saveSuccess": "录制完成，文件已保存至：",
+    "saveFailed": "录制保存失败",
+    "noDisplays": "未检测到显示器",
+    "selectWindow": "请选择一个窗口",
+    "captureCursor": "捕获鼠标光标",
+    "primaryMonitor": "主显示器"
   }
 }
 

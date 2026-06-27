@@ -31,6 +31,7 @@ import {
   HardDrive,
   Settings2,
   Shield,
+  Video,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { IslandIcon } from "@/components/special/island-icon";
@@ -185,6 +186,14 @@ export const searchIndex: SearchItem[] = [
       icon: Zap,
       category: "builtin-tool",
       keywords: ["dlss", "预设", "preset", "三角洲", "delta", "force", "nvidia", "模型"],
+    },
+    {
+      id: "screen-record",
+      nameKey: "sidebar.screenRecord",
+      path: "/screen-record",
+      icon: Video,
+      category: "builtin-tool",
+      keywords: ["录屏", "录制", "屏幕", "视频", "record", "screen", "capture", "video", "录像"],
     },
     {
     id: "dynamic-island",

@@ -48,7 +48,8 @@
         "resolutionConverter": "Convertisseur de résolution",
         "dlssPreset": "Paramètres DLSS Delta Force",
         "epicFree": "Jeux gratuits Epic",
-        "dynamicIsland": "Dynamic Island"
+        "dynamicIsland": "Dynamic Island",
+        "screenRecord": "Enregistrement d'écran"
     },
   "optimization": {
     "pageTitle": "Optimiser",
@@ -767,7 +768,8 @@
     "resolutionConverterDesc": "Convertir les proportions d'image pour différentes résolutions",
     "shaderCacheDesc": "Nettoyer le cache des shaders NVIDIA/AMD pour libérer de l'espace disque",
     "dlssPresetDesc": "Changer les préréglages de modèle DLSS pour optimiser les graphismes du jeu",
-        "dynamicIslandDesc": "Île flottante en haut de l'écran, affiche la vitesse réseau/le matériel/la musique/les notifications"
+        "dynamicIslandDesc": "Île flottante en haut de l'écran, affiche la vitesse réseau/le matériel/la musique/les notifications",
+        "screenRecordDesc": "Enregistrer l'écran ou une fenêtre avec résolution et FPS réglables"
     },
   "gpuRename": {
     "title": "Renommage GPU",
@@ -1157,6 +1159,37 @@
     "filterToggle": "Activer/Désactiver le filtre",
     "filterToggleDesc": "Utiliser un raccourci pour activer ou désactiver le filtre d'affichage",
     "saved": "Raccourci enregistré"
+  },
+  "screenRecord": {
+    "title": "Enregistrement d'écran",
+    "mode": "Mode d'enregistrement",
+    "mode.fullscreen": "Plein écran",
+    "mode.window": "Fenêtre",
+    "targetDisplay": "Écran cible",
+    "targetWindow": "Fenêtre cible",
+    "noWindow": "Aucune fenêtre sélectionnée",
+    "resolution": "Résolution",
+    "resolution.original": "Originale",
+    "fps": "Images par seconde",
+    "format": "Format de sortie",
+    "quality": "Qualité",
+    "savePath": "Emplacement",
+    "browse": "Parcourir...",
+    "startRecording": "Démarrer",
+    "pauseRecording": "Pause",
+    "resumeRecording": "Reprendre",
+    "stopRecording": "Arrêter",
+    "recording": "Enregistrement...",
+    "paused": "En pause",
+    "duration": "Durée",
+    "fileSize": "Taille du fichier",
+    "currentFps": "FPS actuel",
+    "saveSuccess": "Enregistrement sauvegardé dans :",
+    "saveFailed": "Échec de l'enregistrement",
+    "noDisplays": "Aucun écran détecté",
+    "selectWindow": "Veuillez sélectionner une fenêtre",
+    "captureCursor": "Capturer le curseur",
+    "primaryMonitor": "Écran principal"
   }
 }
 

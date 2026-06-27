@@ -13,6 +13,7 @@ import {
   Cpu,
   Monitor,
   Zap,
+  Video,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
@@ -79,6 +80,14 @@ const tools: ViewItem[] = [
     descriptionKey: "builtinTools.dynamicIslandDesc",
     color: "#E91E63",
   },
+  // {
+  //   id: "screen-record",
+  //   path: "/screen-record",
+  //   icon: Video,
+  //   titleKey: "sidebar.screenRecord",
+  //   descriptionKey: "builtinTools.screenRecordDesc",
+  //   color: "#E74C3C",
+  // },
   // {
   //   id: "activation",
   //   path: "/activation",
