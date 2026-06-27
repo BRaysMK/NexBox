@@ -1,0 +1,764 @@
+================================================================================
+MAS脚本同步报告 - v3.9 -> v3.10
+================================================================================
+生成时间: 2026-01-31 22:51:47
+
+统计信息:
+----------------------------------------
+v3.9英文版行数: 19268
+v3.10英文版行数: 19223
+英文版行数变化: -45
+v3.9中文版行数: 19268
+v3.10中文版行数: 19223
+中文版行数变化: -45
+与英文v3.10行数差异: +0
+检测到的变更数: 83
+成功应用的变更数: 83
+
+变更总览:
+----------------------------------------
+replace: 9 处
+delete: 71 处
+insert: 3 处
+总计: 83 处变更
+
+应用日志:
+----------------------------------------
+✓ 变更 1: 替换行 1-2 (2 -> 2 行)
+✓ 变更 2: 替换行 8-8 (1 -> 1 行)
+✓ 变更 3: 替换行 15-16 (2 -> 1 行)
+✓ 变更 4: 替换行 69-71 (3 -> 3 行)
+✓ 变更 5: 删除行 242-242 (1 行)
+✓ 变更 6: 删除行 251-251 (1 行)
+✓ 变更 7: 删除行 261-261 (1 行)
+✓ 变更 8: 删除行 272-272 (1 行)
+✓ 变更 9: 删除行 292-292 (1 行)
+✓ 变更 10: 删除行 677-677 (1 行)
+✓ 变更 11: 删除行 714-714 (1 行)
+✓ 变更 12: 删除行 760-760 (1 行)
+✓ 变更 13: 删除行 960-960 (1 行)
+✓ 变更 14: 删除行 1031-1031 (1 行)
+✓ 变更 15: 删除行 1046-1046 (1 行)
+✓ 变更 16: 删除行 1053-1053 (1 行)
+✓ 变更 17: 删除行 1071-1071 (1 行)
+✓ 变更 18: 删除行 1075-1075 (1 行)
+✓ 变更 19: 删除行 1085-1085 (1 行)
+✓ 变更 20: 删除行 1099-1099 (1 行)
+✓ 变更 21: 删除行 1310-1310 (1 行)
+✓ 变更 22: 删除行 1451-1451 (1 行)
+✓ 变更 23: 删除行 1532-1532 (1 行)
+✓ 变更 24: 删除行 1559-1559 (1 行)
+✓ 变更 25: 删除行 1574-1574 (1 行)
+✓ 变更 26: 删除行 1588-1588 (1 行)
+✓ 变更 27: 删除行 1606-1606 (1 行)
+✓ 变更 28: 删除行 1614-1614 (1 行)
+✓ 变更 29: 删除行 1699-1699 (1 行)
+✓ 变更 30: 删除行 1739-1739 (1 行)
+✓ 变更 31: 删除行 1770-1770 (1 行)
+✓ 变更 32: 删除行 1784-1784 (1 行)
+✓ 变更 33: 删除行 1804-1804 (1 行)
+✓ 变更 34: 删除行 1834-1834 (1 行)
+✓ 变更 35: 删除行 1878-1878 (1 行)
+✓ 变更 36: 删除行 1899-1899 (1 行)
+✓ 变更 37: 删除行 1911-1911 (1 行)
+✓ 变更 38: 删除行 1926-1926 (1 行)
+✓ 变更 39: 删除行 1937-1937 (1 行)
+✓ 变更 40: 删除行 1951-1951 (1 行)
+✓ 变更 41: 删除行 1980-1980 (1 行)
+✓ 变更 42: 删除行 1989-1989 (1 行)
+✓ 变更 43: 删除行 2006-2006 (1 行)
+✓ 变更 44: 删除行 2023-2023 (1 行)
+✓ 变更 45: 在行 2060 后插入 7 行
+✓ 变更 46: 删除行 2113-2113 (1 行)
+✓ 变更 47: 删除行 2147-2147 (1 行)
+✓ 变更 48: 删除行 2527-2527 (1 行)
+✓ 变更 49: 删除行 2542-2542 (1 行)
+✓ 变更 50: 替换行 2642-2646 (5 -> 3 行)
+✓ 变更 51: 在行 2666 后插入 20 行
+✓ 变更 52: 删除行 2859-2859 (1 行)
+✓ 变更 53: 删除行 3704-3704 (1 行)
+✓ 变更 54: 删除行 4526-4526 (1 行)
+✓ 变更 55: 删除行 4539-4539 (1 行)
+✓ 变更 56: 删除行 4552-4552 (1 行)
+✓ 变更 57: 在行 5063 后插入 3 行
+✓ 变更 58: 替换行 5121-5121 (1 -> 1 行)
+✓ 变更 59: 替换行 5239-5241 (3 -> 3 行)
+✓ 变更 60: 删除行 12197-12197 (1 行)
+✓ 变更 61: 替换行 12478-12480 (3 -> 3 行)
+✓ 变更 62: 删除行 12959-12959 (1 行)
+✓ 变更 63: 替换行 13036-13037 (2 -> 1 行)
+✓ 变更 64: 删除行 13645-13645 (1 行)
+✓ 变更 65: 删除行 16784-16784 (1 行)
+✓ 变更 66: 删除行 17205-17205 (1 行)
+✓ 变更 67: 删除行 17207-17207 (1 行)
+✓ 变更 68: 删除行 17239-17239 (1 行)
+✓ 变更 69: 删除行 17260-17260 (1 行)
+✓ 变更 70: 删除行 17424-17424 (1 行)
+✓ 变更 71: 删除行 17478-17478 (1 行)
+✓ 变更 72: 删除行 17558-17558 (1 行)
+✓ 变更 73: 删除行 18092-18092 (1 行)
+✓ 变更 74: 删除行 18111-18111 (1 行)
+✓ 变更 75: 删除行 18127-18127 (1 行)
+✓ 变更 76: 删除行 18149-18149 (1 行)
+✓ 变更 77: 删除行 18161-18161 (1 行)
+✓ 变更 78: 删除行 18174-18174 (1 行)
+✓ 变更 79: 删除行 18280-18280 (1 行)
+✓ 变更 80: 删除行 18344-18344 (1 行)
+✓ 变更 81: 删除行 18496-18496 (1 行)
+✓ 变更 82: 删除行 18862-18862 (1 行)
+✓ 变更 83: 删除行 18899-18899 (1 行)
+
+详细变更记录:
+----------------------------------------
+
+变更 1:
+  类型: replace
+  位置: 行 1-2 -> 1-2
+  删除: 2 行
+  添加: 2 行
+  删除内容:
+    - @::sfh437frandom
+    - @set masver=3.9
+  添加内容:
+    + @::22b1randomda521random7f94randomea5random8b55randoma71random85berandom90b7e
+    + @set masver=3.10
+
+变更 2:
+  类型: replace
+  位置: 行 8-8 -> 8-8
+  删除: 1 行
+  添加: 1 行
+  删除内容:
+    - ::  For command line switches, check mass{}grave{dot}dev/command_line_switches
+  添加内容:
+    + ::  For command line switches, check m{}assgrave{dot}dev/command_line_switches
+
+变更 3:
+  类型: replace
+  位置: 行 15-16 -> 15-15
+  删除: 2 行
+  添加: 1 行
+  删除内容:
+    - ::   Homepage: mass{}grave{dot}dev
+    - ::      Email: mas.help@outlook.com
+  添加内容:
+    + ::   Homepage: m{}assgrave{dot}dev
+
+变更 4:
+  类型: replace
+  位置: 行 70-72 -> 69-71
+  删除: 3 行
+  添加: 3 行
+  删除内容:
+    - set "mas=ht%blank%tps%blank%://mass%blank%grave.dev/"
+    - set "github=ht%blank%tps%blank%://github.com/massgra%blank%vel/Micro%blank%soft-Acti%blank%vation-Scripts"
+    - set "selfgit=ht%blank%tps%blank%://git.acti%blank%vated.win/massg%blank%rave/Micr%blank%osoft-Act%blank%ivation-Scripts"
+  添加内容:
+    + set "mas=ht%blank%tps%blank%://m%blank%ass%blank%grave.dev/"
+    + set "github=ht%blank%tps%blank%://github.com/m%blank%assgra%blank%vel/Micro%blank%soft-Acti%blank%vation-Scripts"
+    + set "selfgit=ht%blank%tps%blank%://git.acti%blank%vated.win/Micr%blank%osoft-Act%blank%ivation-Scripts"
+
+变更 5:
+  类型: delete
+  位置: 行 243-243
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 6:
+  类型: delete
+  位置: 行 253-253
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 7:
+  类型: delete
+  位置: 行 264-264
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 8:
+  类型: delete
+  位置: 行 276-276
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 9:
+  类型: delete
+  位置: 行 297-297
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 10:
+  类型: delete
+  位置: 行 683-683
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 11:
+  类型: delete
+  位置: 行 721-721
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 12:
+  类型: delete
+  位置: 行 768-768
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 13:
+  类型: delete
+  位置: 行 969-969
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 14:
+  类型: delete
+  位置: 行 1041-1041
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 15:
+  类型: delete
+  位置: 行 1057-1057
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 16:
+  类型: delete
+  位置: 行 1065-1065
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 17:
+  类型: delete
+  位置: 行 1084-1084
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 18:
+  类型: delete
+  位置: 行 1089-1089
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 19:
+  类型: delete
+  位置: 行 1100-1100
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 20:
+  类型: delete
+  位置: 行 1115-1115
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 21:
+  类型: delete
+  位置: 行 1327-1327
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 22:
+  类型: delete
+  位置: 行 1469-1469
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 23:
+  类型: delete
+  位置: 行 1551-1551
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 24:
+  类型: delete
+  位置: 行 1579-1579
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 25:
+  类型: delete
+  位置: 行 1595-1595
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 26:
+  类型: delete
+  位置: 行 1610-1610
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 27:
+  类型: delete
+  位置: 行 1629-1629
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 28:
+  类型: delete
+  位置: 行 1638-1638
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 29:
+  类型: delete
+  位置: 行 1724-1724
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 30:
+  类型: delete
+  位置: 行 1765-1765
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 31:
+  类型: delete
+  位置: 行 1797-1797
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 32:
+  类型: delete
+  位置: 行 1812-1812
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 33:
+  类型: delete
+  位置: 行 1833-1833
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 34:
+  类型: delete
+  位置: 行 1864-1864
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 35:
+  类型: delete
+  位置: 行 1909-1909
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 36:
+  类型: delete
+  位置: 行 1931-1931
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 37:
+  类型: delete
+  位置: 行 1944-1944
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 38:
+  类型: delete
+  位置: 行 1960-1960
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 39:
+  类型: delete
+  位置: 行 1972-1972
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 40:
+  类型: delete
+  位置: 行 1987-1987
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 41:
+  类型: delete
+  位置: 行 2017-2017
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 42:
+  类型: delete
+  位置: 行 2027-2027
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 43:
+  类型: delete
+  位置: 行 2045-2045
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 44:
+  类型: delete
+  位置: 行 2063-2063
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 45:
+  类型: insert
+  位置: 在行 2101 后插入
+  添加: 7 行
+  添加内容:
+    + if not defined showfix (
+    + set fixes=%fixes% %mas%in-place_repair_upgrade
+    + call :dk_color2 %Blue% "Check this webpage for help - " %_Yellow% " %mas%in-place_repair_upgrade"
+    + echo:
+    + )
+    + set error=1
+    + set showfix=1
+
+变更 46:
+  类型: delete
+  位置: 行 2147-2147
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 47:
+  类型: delete
+  位置: 行 2182-2182
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 48:
+  类型: delete
+  位置: 行 2563-2563
+  删除: 1 行
+  删除内容:
+    - if exist "%SysPath%\spp\store_test\" mode 140, 32
+
+变更 49:
+  类型: delete
+  位置: 行 2579-2579
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 50:
+  类型: replace
+  位置: 行 2680-2684 -> 2642-2644
+  删除: 5 行
+  添加: 3 行
+  删除内容:
+    - echo You only have the Office Dashboard app installed. You need to install the full version of Office.
+    - )
+    - echo:
+    - call :dk_color %Blue% "Download and install Office from the below URL and then try again."
+    - echo:
+  添加内容:
+    + echo You only have the Office Dashboard app installed; you need to install the full version of Office.
+    + )
+    + call :dk_color %Blue% "Download and install Office from the URL below, then try again."
+
+变更 51:
+  类型: insert
+  位置: 在行 2706 后插入
+  添加: 20 行
+  添加内容:
+    + )
+    + 
+    + ::========================================================================================================================================
+    + 
+    + :: Check Smart App Control
+    + 
+    + set "sacstate="
+    + if %winbuild% GEQ 22621 (
+    + for /f "tokens=3" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy" /v VerifiedAndReputablePolicyState %nul6%') do set "sacstate=%%a"
+    + )
+    ... (还有 10 行)
+
+变更 52:
+  类型: delete
+  位置: 行 2879-2879
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 53:
+  类型: delete
+  位置: 行 3725-3725
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 54:
+  类型: delete
+  位置: 行 4548-4548
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 55:
+  类型: delete
+  位置: 行 4562-4562
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 56:
+  类型: delete
+  位置: 行 4576-4576
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 57:
+  类型: insert
+  位置: 在行 5088 后插入
+  添加: 3 行
+  添加内容:
+    + REM WindowsServer2016
+    + 91bcac0a-d7d3-4d2b-bd0c-72fed675f01b_Server-ESU-Year3[1-3y]_-ServerDatacenter-ServerDatacenterCore-ServerDatacenterV-ServerDatacenterVCore-ServerStandard-ServerStandardCore-ServerStandardV-ServerStandardVCore-
+    + 4cd0ab30-73a4-4dde-972c-512f05be31df_Server-ESU-Year6[4-6y]_-ServerDatacenter-ServerDatacenterCore-ServerDatacenterV-ServerDatacenterVCore-ServerStandard-ServerStandardCore-ServerStandardV-ServerStandardVCore-
+
+变更 58:
+  类型: replace
+  位置: 行 5143-5143 -> 5121-5121
+  删除: 1 行
+  添加: 1 行
+  删除内容:
+    - if %winbuild% GTR 7602 if %winbuild% LSS 10240 if defined isServer set esuavail=1
+  添加内容:
+    + if %winbuild% GTR 7602 if %winbuild% LSS 14393 if defined isServer set esuavail=1
+
+变更 59:
+  类型: replace
+  位置: 行 5261-5263 -> 5239-5241
+  删除: 3 行
+  添加: 3 行
+  删除内容:
+    - echo You only have the Office Dashboard app installed. You need to install the full version of Office.
+    - )
+    - call :dk_color %Blue% "Download and install Office from below URL and try again."
+  添加内容:
+    + echo You only have the Office Dashboard app installed; you need to install the full version of Office.
+    + )
+    + call :dk_color %Blue% "Download and install Office from the URL below, then try again."
+
+变更 60:
+  类型: delete
+  位置: 行 12219-12219
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 61:
+  类型: replace
+  位置: 行 12501-12503 -> 12478-12480
+  删除: 3 行
+  添加: 3 行
+  删除内容:
+    - echo You only have the Office Dashboard app installed. You need to install the full version of Office.
+    - )
+    - call :dk_color %Blue% "Download and install Office from below URL and try again."
+  添加内容:
+    + echo You only have the Office Dashboard app installed; you need to install the full version of Office.
+    + )
+    + call :dk_color %Blue% "Download and install Office from the URL below, then try again."
+
+变更 62:
+  类型: delete
+  位置: 行 12982-12982
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 63:
+  类型: replace
+  位置: 行 13060-13061 -> 13036-13036
+  删除: 2 行
+  添加: 1 行
+  删除内容:
+    - ::   Homepage: mass{}grave{dot}dev
+    - ::      Email: mas.help@outlook.com
+  添加内容:
+    + ::   Homepage: m{}assgrave{dot}dev
+
+变更 64:
+  类型: delete
+  位置: 行 13670-13670
+  删除: 1 行
+  删除内容:
+    - echo      Email: mas.help@outlook.com
+
+变更 65:
+  类型: delete
+  位置: 行 16810-16810
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 66:
+  类型: delete
+  位置: 行 17232-17232
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 67:
+  类型: delete
+  位置: 行 17235-17235
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 68:
+  类型: delete
+  位置: 行 17268-17268
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 69:
+  类型: delete
+  位置: 行 17290-17290
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 70:
+  类型: delete
+  位置: 行 17455-17455
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 71:
+  类型: delete
+  位置: 行 17510-17510
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 72:
+  类型: delete
+  位置: 行 17591-17591
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 73:
+  类型: delete
+  位置: 行 18126-18126
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 74:
+  类型: delete
+  位置: 行 18146-18146
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 75:
+  类型: delete
+  位置: 行 18163-18163
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 76:
+  类型: delete
+  位置: 行 18186-18186
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 77:
+  类型: delete
+  位置: 行 18199-18199
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 78:
+  类型: delete
+  位置: 行 18213-18213
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 79:
+  类型: delete
+  位置: 行 18320-18320
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 80:
+  类型: delete
+  位置: 行 18385-18385
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 81:
+  类型: delete
+  位置: 行 18538-18538
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 82:
+  类型: delete
+  位置: 行 18905-18905
+  删除: 1 行
+  删除内容:
+    - echo:
+
+变更 83:
+  类型: delete
+  位置: 行 18943-18943
+  删除: 1 行
+  删除内容:
+    - echo:
+
+================================================================================
+报告结束
+================================================================================

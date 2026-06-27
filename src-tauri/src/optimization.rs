@@ -5106,3 +5106,54 @@ pub async fn delete_power_plan(guid: String) -> Result<PowerPlanOperationResult,
         Err(e) => Err(format!("执行删除命令失败: {}", e)),
     }
 }
+
+#[derive(serde::Serialize)]
+pub struct PeripheralStatus {
+    pub mouse_value: Option<i32>,
+    pub keyboard_value: Option<i32>,
+}
+
+#[tauri::command]
+pub async fn get_peripheral_status() -> Result<PeripheralStatus, String> {
+    let script = r#"
+$ErrorActionPreference = 'SilentlyContinue'
+$mouse = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' -Name 'Win32PrioritySeparation' -ErrorAction SilentlyContinue
+$keyboard = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters' -Name 'KeyboardDataQueueSize' -ErrorAction SilentlyContinue
+if ($mouse -ne $null) { Write-Output "MOUSE:$($mouse.Win32PrioritySeparation)" } else { Write-Output "MOUSE:null" }
+if ($keyboard -ne $null) { Write-Output "KEYBOARD:$($keyboard.KeyboardDataQueueSize)" } else { Write-Output "KEYBOARD:null" }
+"#;
+    let result = run_ps_script(script)?;
+    let stdout = String::from_utf8_lossy(&result.stdout).to_string();
+    let mut mouse_value: Option<i32> = None;
+    let mut keyboard_value: Option<i32> = None;
+    for line in stdout.lines() {
+        let line = line.trim();
+        if let Some(val) = line.strip_prefix("MOUSE:") {
+            mouse_value = if val == "null" { None } else { val.trim().parse().ok() };
+        } else if let Some(val) = line.strip_prefix("KEYBOARD:") {
+            keyboard_value = if val == "null" { None } else { val.trim().parse().ok() };
+        }
+    }
+    Ok(PeripheralStatus { mouse_value, keyboard_value })
+}
+
+#[tauri::command]
+pub async fn set_peripheral_settings(mouse_value: u32, keyboard_value: u32) -> Result<PerfTweakResult, String> {
+    let script = format!(r#"
+$ErrorActionPreference = 'SilentlyContinue'
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' -Name 'Win32PrioritySeparation' -Value {mouse} -Type DWord -Force -ErrorAction SilentlyContinue
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters' -Name 'KeyboardDataQueueSize' -Value {keyboard} -Type DWord -Force -ErrorAction SilentlyContinue
+Write-Output 'OK'
+"#, mouse = mouse_value, keyboard = keyboard_value);
+    run_simple_feature(&script)
+}
+
+#[tauri::command]
+pub async fn reset_peripheral_settings() -> Result<PerfTweakResult, String> {
+    run_simple_feature(r#"
+$ErrorActionPreference = 'SilentlyContinue'
+Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' -Name 'Win32PrioritySeparation' -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters' -Name 'KeyboardDataQueueSize' -ErrorAction SilentlyContinue
+Write-Output 'OK'
+"#)
+}

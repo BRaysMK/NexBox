@@ -239,6 +239,23 @@
       "optimizing": "Applying...",
       "operationError": "Operation failed"
     },
+    "peripheralOptimize": {
+      "pageTitle": "Peripheral Optimization",
+      "pageDesc": "Optimize mouse and keyboard registry parameters to reduce input lag",
+      "mouseSection": "Mouse Registry Optimization",
+      "mouseDesc": "Set Win32PrioritySeparation decimal value",
+      "keyboardSection": "Keyboard Registry Optimization",
+      "keyboardDesc": "Set KeyboardDataQueueSize decimal value",
+      "apply": "Apply to Registry",
+      "applying": "Applying...",
+      "success": "Registry optimization applied",
+      "error": "Optimization failed",
+      "revert": "Restore Default",
+      "reverting": "Restoring...",
+      "revertSuccess": "Restored to system defaults",
+      "currentValue": "Current",
+      "lowerIsBetter": "Lower is better"
+    },
     "memoryLimit": {
       "title": "Memory Limit",
       "description": "Limit system available memory to optimize gaming performance",
@@ -469,6 +486,7 @@
     "mctierDesc": "Virtual LAN universal networking tool",
     "sjmclDesc": "Third-party Minecraft launcher developed by Shanghai Jiao Tong University",
     "ddegameDesc": "Games are not just games, they can enter life and change life",
+    "huorongDesc": "Pure endpoint protection. Lightweight, quiet, comprehensive defense",
     "descriptions": {
       "assistantCrosshair": "Game screen crosshair assistant tool",
       "memreduct": "Memory cleaning tool",
@@ -828,7 +846,40 @@
     "gpuRenameDesc": "Modify GPU name to optimize gaming performance",
     "resolutionConverterDesc": "Convert aspect ratios at different resolutions",
     "shaderCacheDesc": "Clean up NVIDIA/AMD shader cache to free disk space",
-    "dlssPresetDesc": "Switch DLSS model presets to optimize game graphics"
+    "dlssPresetDesc": "Switch DLSS model presets to optimize game graphics",
+    "activationDesc": "Activate Windows system (HWID / KMS / TSforge)"
+  },
+  "activation": {
+    "pageTitle": "Windows Activation",
+    "currentStatus": "Current System Status",
+    "checking": "Checking activation status...",
+    "activated": "Windows is activated ✓",
+    "notActivated": "Windows is not activated ✗",
+    "unableToCheck": "Unable to check activation status",
+    "refresh": "Refresh Status",
+    "selectMethod": "Select Activation Method",
+    "methods": {
+      "hwid": {
+        "title": "HWID Permanent Activation",
+        "desc": "Windows 10/11 digital license, permanent, requires internet"
+      },
+      "kms": {
+        "title": "Online KMS Activation",
+        "desc": "180-day renewal, supports all Windows versions, requires internet"
+      },
+      "tsforge": {
+        "title": "TSforge Permanent Activation",
+        "desc": "New permanent activation method, supports offline"
+      }
+    },
+    "licenseStatus": "License Status",
+    "startActivation": "Start Activation",
+    "activating": "Activating...",
+    "activationSuccess": "Activation completed",
+    "activationFailed": "Activation failed",
+    "outputLog": "Output Log",
+    "waitingForOutput": "Waiting for output...",
+    "adminRequired": "Administrator privileges are required for activation"
   },
   "gpuRename": {
     "title": "GPU Rename",

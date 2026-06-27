@@ -131,17 +131,6 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             website_url: Some("https://geekuninstaller.com/".to_string()),
             check_executable: None,
         },
-        ThirdPartyTool {
-            id: "huorong".to_string(),
-            name: "火绒安全".to_string(),
-            description: "畅享纯粹终端防护。轻快运行，静享守护，全面防御".to_string(),
-            category: "assistant".to_string(),
-            tool_type: "install".to_string(),
-            download_url: String::new(),
-            file_name: String::new(),
-            website_url: Some("https://www.huorong.cn/".to_string()),
-            check_executable: Some("HipsMain.exe".to_string()),
-        },
     ]
 }
 

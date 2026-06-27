@@ -1,3 +1,4 @@
+mod activation;
 mod announcement;
 mod auto_start;
 mod crosshair;
@@ -316,6 +317,9 @@ pub fn run() {
         optimization::batch_disable_tweaks,
         optimization::check_all_tweak_states,
         optimization::delete_power_plan,
+        optimization::get_peripheral_status,
+        optimization::set_peripheral_settings,
+        optimization::reset_peripheral_settings,
         network_optimize::set_tcp_congestion,
         network_optimize::restore_tcp_congestion,
         network_optimize::set_tcp_chimney_off,
@@ -424,6 +428,8 @@ pub fn run() {
             tray::get_dont_ask_again,
             tray::set_dont_ask_again,
             // === MCTier 命令 ===
+        activation::check_windows_activation,
+        activation::run_windows_activation,
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

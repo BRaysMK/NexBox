@@ -210,8 +210,6 @@ function ThirdPartyToolCard({
         return Monitor;
       case "geek":
         return Trash2;
-      case "huorong":
-        return Shield;
       default:
         return Wrench;
     }
@@ -497,6 +495,14 @@ function OfficialToolSection({
     });
   };
 
+  const handleOpenHuorong = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://www.huorong.cn/");
+    }).catch(() => {
+      window.open("https://www.huorong.cn/", "_blank");
+    });
+  };
+
   return (
     <Box mb={8}>
       <HStack mb={4} spacing={3}>
@@ -619,6 +625,42 @@ function OfficialToolSection({
               </HStack>
               <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
                 {t("tools.ddegameDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenHuorong}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("huorong") || ""}
+                alt={"火绒安全"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<Shield size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  火绒安全
+                </Text>
+                <Badge colorScheme={"blue"} fontSize={"xs"} variant={"subtle"}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.huorongDesc")}
               </Text>
             </Box>
           </VStack>

@@ -16,6 +16,7 @@ import {
   List,
   Settings2,
   Network,
+  MousePointer2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
@@ -96,6 +97,14 @@ const tools: ViewItem[] = [
     titleKey: "networkOptimize.pageTitle",
     descriptionKey: "networkOptimize.pageDesc",
     color: "#38A169",
+  },
+  {
+    id: "peripheral-optimize",
+    path: "/optimize/peripheral-optimize",
+    icon: MousePointer2,
+    titleKey: "peripheralOptimize.pageTitle",
+    descriptionKey: "peripheralOptimize.pageDesc",
+    color: "#E53E3E",
   },
 ];
 

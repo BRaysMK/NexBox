@@ -13,6 +13,7 @@ import {
   Cpu,
   Monitor,
   Zap,
+  ShieldCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
@@ -70,6 +71,14 @@ const tools: ViewItem[] = [
     descriptionKey: "builtinTools.dlssPresetDesc",
     color: "#76B900",
   },
+  // {
+  //   id: "activation",
+  //   path: "/activation",
+  //   icon: ShieldCheck,
+  //   titleKey: "activation.pageTitle",
+  //   descriptionKey: "builtinTools.activationDesc",
+  //   color: "#3182CE",
+  // },
 ];
 
 export default function BuiltinToolsPage() {

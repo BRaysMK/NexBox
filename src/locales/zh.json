@@ -344,6 +344,7 @@
     "mctierDesc": "虚拟局域网通用组网工具",
     "sjmclDesc": "上海交通大学开发的第三方我的世界启动器",
     "ddegameDesc": "游戏不仅仅是游戏，游戏可以走进生活改变生活",
+    "huorongDesc": "畅享纯粹终端防护。轻快运行，静享守护，全面防御",
     "descriptions": {
       "assistantCrosshair": "游戏屏幕准心辅助工具",
       "memreduct": "内存清理工具",
@@ -704,7 +705,8 @@
     "gpuRenameDesc": "改写显卡名称以优化游戏性能",
     "resolutionConverterDesc": "换算不同分辨率下的画面比例",
     "shaderCacheDesc": "清理 NVIDIA/AMD 着色器缓存释放磁盘空间",
-    "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质"
+    "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
+    "activationDesc": "激活 Windows 系统（HWID / KMS / TSforge）"
   },
   "gpuRename": {
     "title": "显卡改写",
@@ -1234,6 +1236,55 @@
     "reverted": "已取消优化",
     "optimizing": "执行中...",
     "operationError": "操作执行失败"
+  },
+  "peripheralOptimize": {
+    "pageTitle": "外设优化",
+    "pageDesc": "优化鼠标和键盘注册表参数，降低输入延迟",
+    "mouseSection": "鼠标注册表优化",
+    "mouseDesc": "按需设置 Win32PrioritySeparation 的十进制数值",
+    "keyboardSection": "键盘注册表优化",
+    "keyboardDesc": "按需设置 KeyboardDataQueueSize 的十进制数值",
+    "apply": "应用到注册表",
+    "applying": "正在应用...",
+    "success": "注册表优化已应用",
+    "error": "优化失败",
+    "revert": "恢复默认",
+    "reverting": "正在恢复...",
+    "revertSuccess": "已恢复为系统默认值",
+    "currentValue": "当前值",
+    "lowerIsBetter": "越低越好"
+  },
+  "activation": {
+    "pageTitle": "Windows 激活",
+    "currentStatus": "当前系统状态",
+    "checking": "正在检查激活状态...",
+    "activated": "Windows 已激活 ✓",
+    "notActivated": "Windows 未激活 ✗",
+    "unableToCheck": "无法检查激活状态",
+    "refresh": "刷新状态",
+    "selectMethod": "选择激活方式",
+    "methods": {
+      "hwid": {
+        "title": "HWID 永久激活",
+        "desc": "Windows 10/11 数字许可证，永久激活，需联网"
+      },
+      "kms": {
+        "title": "Online KMS 激活",
+        "desc": "180天续期，支持所有 Windows 版本，需联网"
+      },
+      "tsforge": {
+        "title": "TSforge 永久激活",
+        "desc": "新版永久激活方式，支持离线激活"
+      }
+    },
+    "licenseStatus": "授权状态",
+    "startActivation": "开始激活",
+    "activating": "激活中...",
+    "activationSuccess": "激活操作已完成",
+    "activationFailed": "激活失败",
+    "outputLog": "执行日志",
+    "waitingForOutput": "等待输出...",
+    "adminRequired": "需要管理员权限才能执行激活操作"
   },
   "shaderCache": {
     "title": "着色器缓存清理",

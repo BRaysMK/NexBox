@@ -31,6 +31,7 @@ import {
   HardDrive,
   Settings2,
   Shield,
+  ShieldCheck,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -168,6 +169,14 @@ export const searchIndex: SearchItem[] = [
     icon: Cpu,
     category: "builtin-tool",
     keywords: ["显卡", "改写", "gpu", "rename", "伪装"],
+  },
+  {
+    id: "activation",
+    nameKey: "activation.pageTitle",
+    path: "/activation",
+    icon: ShieldCheck,
+    category: "builtin-tool",
+    keywords: ["激活", "windows", "正版", "系统激活", "hwid", "kms", "tsforge", "数字许可证", "activation"],
   },
   {
     id: "resolution-converter",
@@ -313,6 +322,14 @@ export const searchIndex: SearchItem[] = [
     category: "optimization",
     keywords: ["网络优化", "network", "dns", "tcp", "延迟", "网速", "域名", "解析"],
   },
+  {
+    id: "peripheral-optimize",
+    nameKey: "peripheralOptimize.pageTitle",
+    path: "/optimize/peripheral-optimize",
+    icon: MousePointer2,
+    category: "optimization",
+    keywords: ["外设", "鼠标", "键盘", "peripheral", "mouse", "keyboard", "注册表", "优化", "输入延迟", "Win32PrioritySeparation", "KeyboardDataQueueSize"],
+  },
 ];
 
 export const thirdPartyToolIcons: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {
@@ -325,7 +342,6 @@ export const thirdPartyToolIcons: Record<string, ComponentType<{ size?: number; 
   "gamepp": Bot,
   "fxsound": Volume2,
   "process-lasso": Cpu,
-  "huorong": Shield,
 };
 
 export function getThirdPartyToolIcon(toolId: string): ComponentType<{ size?: number; strokeWidth?: number }> {
