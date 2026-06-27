@@ -31,9 +31,9 @@ import {
   HardDrive,
   Settings2,
   Shield,
-  Smartphone,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import { IslandIcon } from "@/components/special/island-icon";
 
 export type SearchCategory = "page" | "builtin-tool" | "test" | "optimization" | "thirdparty-tool";
 
@@ -190,7 +190,7 @@ export const searchIndex: SearchItem[] = [
     id: "dynamic-island",
     nameKey: "sidebar.dynamicIsland",
     path: "/dynamic-island",
-    icon: Smartphone,
+    icon: IslandIcon,
     category: "builtin-tool",
     keywords: ["灵动岛", "dynamic", "island", "悬浮", "网速", "监控", "音乐", "通知", "widget"],
   },

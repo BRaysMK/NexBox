@@ -1408,6 +1408,9 @@
     "filter": "Filter",
     "filterToggle": "Toggle Display Filter",
     "filterToggleDesc": "Use shortcut to enable or disable the display filter",
+    "island": "Dynamic Island",
+    "islandToggle": "Toggle Dynamic Island",
+    "islandToggleDesc": "Use shortcut to show or hide the Dynamic Island",
     "saved": "Hotkey saved"
   }
 }

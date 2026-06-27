@@ -13,13 +13,13 @@ import {
   Cpu,
   Monitor,
   Zap,
-  Smartphone,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
 import { ViewList } from "@/components/special/view-list";
 import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { IslandIcon } from "@/components/special/island-icon";
 import type { ViewItem } from "@/components/special/view-types";
 
 const tools: ViewItem[] = [
@@ -74,7 +74,7 @@ const tools: ViewItem[] = [
   {
     id: "dynamic-island",
     path: "/dynamic-island",
-    icon: Smartphone,
+    icon: IslandIcon,
     titleKey: "sidebar.dynamicIsland",
     descriptionKey: "builtinTools.dynamicIslandDesc",
     color: "#E91E63",

@@ -21,11 +21,22 @@ pub async fn launch_game(game_path: String) -> Result<(), String> {
         return Err(format!("游戏路径不存在: {}", game_path));
     }
 
-    Command::new("cmd")
-        .args(["/c", "start", "", &game_path])
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
-        .map_err(|e| format!("启动游戏失败: {}", e))?;
+    let path_lower = game_path.to_lowercase();
+
+    // .exe: 直接启动，跳过 cmd.exe 中间层，大幅减少等待时间
+    if path_lower.ends_with(".exe") {
+        Command::new(&game_path)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("启动游戏失败: {}", e))?;
+    } else {
+        // 非 .exe（如 steam://、文件夹等），通过 cmd /c start 间接启动
+        Command::new("cmd")
+            .args(["/c", "start", "", &game_path])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("启动失败: {}", e))?;
+    }
 
     Ok(())
 }
@@ -86,29 +97,11 @@ pub async fn get_default_delta_force_game() -> Option<GameShortcut> {
 
 #[tauri::command]
 pub async fn select_exe_file() -> Option<String> {
-    let ps_script = r#"
-        Add-Type -AssemblyName System.Windows.Forms
-        $dialog = New-Object System.Windows.Forms.OpenFileDialog
-        $dialog.Filter = "Executable Files (*.exe)|*.exe|All Files (*.*)|*.*"
-        $dialog.Title = "Select Game Executable"
-        $dialog.TopMost = $true
-        if ($dialog.ShowDialog() -eq 'OK') {
-            $dialog.FileName
-        }
-    "#;
+    let file = rfd::FileDialog::new()
+        .set_title("选择游戏可执行文件")
+        .add_filter("可执行文件", &["exe"])
+        .add_filter("所有文件", &["*"])
+        .pick_file();
 
-    if let Ok(output) = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-    {
-        if output.status.success() {
-            let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !result.is_empty() {
-                return Some(result);
-            }
-        }
-    }
-
-    None
+    file.map(|f| f.to_string_lossy().to_string())
 }

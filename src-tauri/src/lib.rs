@@ -56,6 +56,8 @@ pub fn run() {
                             let _ = crosshair::toggle_crosshair_sync(app);
                         } else if shortcut.id() == hotkey::get_filter_shortcut_id() {
                             let _ = display_filter::toggle_filter_sync(app);
+                        } else if shortcut.id() == hotkey::get_island_shortcut_id() {
+                            let _ = island::toggle_island(app);
                         }
                     }
                 })
@@ -166,6 +168,7 @@ pub fn run() {
             let _ = hotkey::init_overlay(app.handle(), "Shift+F10");
             let _ = hotkey::init_crosshair(app.handle(), "Shift+F9");
             let _ = hotkey::init_filter(app.handle(), "Shift+F8");
+            let _ = hotkey::init_island(app.handle(), "Shift+F11");
 
             Ok(())
         })
@@ -445,6 +448,8 @@ pub fn run() {
         hotkey::set_crosshair_hotkey,
         hotkey::get_filter_hotkey,
         hotkey::set_filter_hotkey,
+        hotkey::get_island_hotkey,
+        hotkey::set_island_hotkey,
         crosshair::toggle_crosshair,
         crosshair::get_crosshair_status,
         crosshair::update_crosshair_settings,

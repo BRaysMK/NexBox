@@ -28,7 +28,15 @@ const getAppIcon = (appName: string): string => {
   if (name.includes("wechat") || name.includes("微信") || name.includes("weixin") || name.includes("wx")) return "/icons/wechat.png";
   if (name.includes("mail") || name.includes("outlook") || name.includes("邮件")) return "/icons/mail.png";
   if (name.includes("alipay") || name.includes("支付宝")) return "/icons/alipay.jpg";
-  return "/icons/qq.png"; // fallback
+  // ── 常见应用（浏览器/游戏/社交/笔记等）──
+  if (name.includes("chrome") || name.includes("google")) return "/icons/browser.svg";
+  if (name.includes("edge") || name.includes("bing")) return "/icons/browser.svg";
+  if (name.includes("steam") || name.includes("epic")) return "/icons/game.svg";
+  if (name.includes("discord") || name.includes("telegram")) return "/icons/chat.svg";
+  if (name.includes("onenote") || name.includes("notion") || name.includes("evernote") || name.includes("笔记")) return "/icons/note.svg";
+  if (name.includes("bilibili") || name.includes("哔哩哔哩")) return "/icons/bilibili.svg";
+  // 未知应用 → 使用默认中性图标（不再是 QQ 图标！）
+  return "/logo/NexBoxW.png";
 };
 
 // ─── Spring Animation ────────────────────────────────────────────
@@ -95,6 +103,9 @@ export default function WidgetIslandPage() {
   const [gpu, setGpu] = useState("0%");
   const [mem, setMem] = useState("0%");
 
+  // Beijing Time
+  const [beijingTime, setBeijingTime] = useState("--:--:--");
+
   // Music
   const [isPlaying, setIsPlaying] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
@@ -102,14 +113,12 @@ export default function WidgetIslandPage() {
   const [coverUrl, setCoverUrl] = useState("");
   const isClickingToggle = useRef(false);
   const coverCache = useRef<Map<string, string>>(new Map());
-  const hideTimer = useRef<number | null>(null);
   const musicBoxKey = useRef(0);
 
   // Notification
   const [isMsgActive, setIsMsgActive] = useState(false);
   const [msgTitle, setMsgTitle] = useState("");
   const [msgBody, setMsgBody] = useState("");
-  const [msgAumid, setMsgAumid] = useState("");
   const [msgIcon, setMsgIcon] = useState("");
   const msgTimer = useRef<number | null>(null);
   const isMsgActiveRef = useRef(false);
@@ -312,7 +321,6 @@ export default function WidgetIslandPage() {
           const res = await invoke<ToastData | null>("fetch_latest_notification");
           if (res) {
             setMsgTitle(res.app_name);
-            setMsgAumid(res.aumid);
             setMsgBody(res.title + (res.body ? ": " + res.body : ""));
             setMsgIcon(getAppIcon(res.app_name));
             if (!isMsgActiveRef.current) {
@@ -339,19 +347,8 @@ export default function WidgetIslandPage() {
     return () => {
       if (speedTimer.current) clearInterval(speedTimer.current);
       if (pingTimer.current) clearInterval(pingTimer.current);
-      if (hideTimer.current) clearTimeout(hideTimer.current);
     };
   }, [isPinned, isVisible, isMenuOpen, showMusic, showHardware, msgEnabled, fetchSpeed, syncMusic, fetchHardware, checkLatency]);
-
-  // ─── Effects ─────────────────────────────────────────────────
-  // Hide timer for music controls
-  const startHideTimer = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = window.setTimeout(() => setShowInfo(true), 800);
-  }, []);
-  const stopHideTimer = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-  }, []);
 
   // Track window position after move
   useEffect(() => {
@@ -361,27 +358,30 @@ export default function WidgetIslandPage() {
     }).catch(() => {});
   }, []);
 
+  // Beijing Time updater (UTC+8)
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      const beijing = new Date(now.getTime() + 8 * 3600000);
+      const h = String(beijing.getUTCHours()).padStart(2, "0");
+      const m = String(beijing.getUTCMinutes()).padStart(2, "0");
+      const s = String(beijing.getUTCSeconds()).padStart(2, "0");
+      setBeijingTime(`${h}:${m}:${s}`);
+    };
+    update();
+    const id = window.setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
+
   // Initialization
   useEffect(() => {
+    let unlistenFns: Array<() => void> = [];
+    let isCancelled = false;
+
     const init = async () => {
-      // Check if island was enabled before showing
-      const wasVisible = localStorage.getItem("nsd_island_visible") === "true";
-      if (!wasVisible) {
-        return; // Stay hidden, the settings page will show via event
-      }
-
-      // Position
-      if (isPinned) {
-        await snapToBottomLeft();
-      } else {
-        await adjustPosition();
-      }
-      await getCurrentWindow().show();
-      setIsVisible(true);
-
-      // Event listeners
-      const unlistens: Array<() => void> = [];
-
+      // ─── Event listeners ────────────────────────────────
+      // MUST be registered BEFORE the visibility check so that the settings page
+      // can always communicate with the widget, even on first launch.
       const u1 = await listen<{ enabled: boolean }>("control-music-ctl", (evt) => {
         setShowMusic(evt.payload.enabled);
         if (evt.payload.enabled) {
@@ -389,9 +389,8 @@ export default function WidgetIslandPage() {
             setGlowBorder(true);
             localStorage.setItem("nsd_glow_border", "true");
           }
-          setShowInfo(false);
+          setShowInfo(true);
           musicBoxKey.current++;
-          stopHideTimer();
         }
       });
 
@@ -426,16 +425,38 @@ export default function WidgetIslandPage() {
         }
       });
 
-      unlistens.push(u1, u2, u3, u4, u5, u6);
+      unlistenFns = [u1, u2, u3, u4, u5, u6];
+
+      if (isCancelled) {
+        unlistenFns.forEach((fn) => fn());
+        return;
+      }
+
+      // Check if island was enabled before showing
+      const wasVisible = localStorage.getItem("nsd_island_visible") === "true";
+      if (!wasVisible) {
+        return; // Stay hidden, the settings page will show via event
+      }
+
+      // Position
+      if (isPinned) {
+        await snapToBottomLeft();
+      } else {
+        await adjustPosition();
+      }
+      await getCurrentWindow().show();
+      setIsVisible(true);
 
       fetchSpeed();
       checkLatency();
-
-      return () => unlistens.forEach((fn) => fn());
     };
 
-    const cleanup = init();
-    return () => { cleanup.then((fn) => fn?.()); };
+    init();
+
+    return () => {
+      isCancelled = true;
+      unlistenFns.forEach((fn) => fn());
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Callbacks for music ────────────────────────────────────
@@ -502,15 +523,6 @@ export default function WidgetIslandPage() {
     }
   }, [isPinned, glowBorder, adjustPosition]);
 
-  // ─── Notification click ─────────────────────────────────────
-  const handleMsgClick = useCallback(async () => {
-    if (msgAumid || msgTitle) {
-      await invoke("open_app_by_aumid", { aumid: msgAumid, appName: msgTitle });
-      setIsMsgActive(false);
-      animateIslandSize(260, 42);
-      if (msgTimer.current) clearTimeout(msgTimer.current);
-    }
-  }, [msgAumid, msgTitle, animateIslandSize]);
 
   // ─── Animation ───────────────────────────────────────────────
   const [animScale, setAnimScale] = useState(0);
@@ -610,11 +622,10 @@ export default function WidgetIslandPage() {
           {isMsgActive && (
             <div
               className="msg-box"
-              onClick={handleMsgClick}
               style={{
                 position: "absolute", left: 0, top: 0, width: "100%", height: "100%",
                 display: "flex", alignItems: "center", padding: "0 45px 0 0", gap: 12,
-                cursor: "pointer", zIndex: 10,
+                zIndex: 10,
               }}
             >
               <img src={msgIcon} alt="" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover" }} />
@@ -652,8 +663,8 @@ export default function WidgetIslandPage() {
                 position: "absolute", left: 0, top: 0, width: "100%", height: "100%",
                 display: "flex", alignItems: "center",
               }}
-              onMouseEnter={() => { stopHideTimer(); setShowInfo(false); }}
-              onMouseLeave={() => startHideTimer()}
+              onMouseEnter={() => setShowInfo(false)}
+              onMouseLeave={() => setShowInfo(true)}
             >
               {/* Album Cover */}
               <div
@@ -709,29 +720,32 @@ export default function WidgetIslandPage() {
             </div>
           )}
 
-          {/* Speed */}
+          {/* Beijing Time */}
           {!showMusic && !showHardware && !isMsgActive && (
             <div
               style={{
                 position: "absolute", left: 0, top: 0, width: "100%", height: "100%",
-                display: "flex", alignItems: "center", gap: 10,
+                display: "flex", alignItems: "center", justifyContent: "center",
               }}
             >
-              <SpeedItem label="↑" value={upload} high={highUpload} textColor={textColor} />
-              <SpeedItem label="↓" value={download} high={highDownload} textColor={textColor} />
+              <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: "0.5px", fontVariantNumeric: "tabular-nums", opacity: 0.95 }}>
+                {beijingTime}
+              </span>
             </div>
           )}
         </div>
 
         {/* Status Dot */}
-        <div
-          style={{
-            width: 6, height: 6, borderRadius: "50%", flexShrink: 0, marginLeft: 4,
-            backgroundColor: netStatus === "good" ? "#34C759" : netStatus === "warning" ? "#FFCC00" : "#FF3B30",
-            boxShadow: netStatus === "good" ? "0 0 10px rgba(52,199,89,0.5)" : netStatus === "warning" ? "0 0 10px rgba(255,204,0,0.5)" : "0 0 10px rgba(255,59,48,0.5)",
-            transition: "background-color 0.4s ease",
-          }}
-        />
+        {isActiveContent && (
+          <div
+            style={{
+              width: 6, height: 6, borderRadius: "50%", flexShrink: 0, marginLeft: 4,
+              backgroundColor: netStatus === "good" ? "#34C759" : netStatus === "warning" ? "#FFCC00" : "#FF3B30",
+              boxShadow: netStatus === "good" ? "0 0 10px rgba(52,199,89,0.5)" : netStatus === "warning" ? "0 0 10px rgba(255,204,0,0.5)" : "0 0 10px rgba(255,59,48,0.5)",
+              transition: "background-color 0.4s ease",
+            }}
+          />
+        )}
       </div>
     </div>
   );

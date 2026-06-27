@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use std::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use std::os::windows::ffi::OsStrExt;
 use sysinfo::{Networks, System};
-use tauri::{State, Manager};
+use tauri::{State, Manager, Emitter};
 
 static LAST_NOTIFICATION_ID: AtomicU32 = AtomicU32::new(0);
 static IS_NOTIF_INIT: AtomicBool = AtomicBool::new(false);
@@ -480,4 +480,19 @@ pub fn is_widget_visible(app: tauri::AppHandle) -> bool {
         Some(win) => win.is_visible().unwrap_or(false),
         None => false,
     }
+}
+
+pub fn toggle_island(app_handle: &tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app_handle.get_webview_window("widget") {
+        if win.is_visible().unwrap_or(false) {
+            // 隐藏：发送事件让前端执行退出动画
+            let _ = app_handle.emit("control-island-visibility", serde_json::json!({ "show": false }));
+        } else {
+            // 显示：先显示窗口再发送事件
+            win.show().map_err(|e| format!("显示灵动岛失败: {}", e))?;
+            win.set_always_on_top(true).map_err(|e| format!("设置置顶失败: {}", e))?;
+            let _ = app_handle.emit("control-island-visibility", serde_json::json!({ "show": true }));
+        }
+    }
+    Ok(())
 }

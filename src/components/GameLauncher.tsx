@@ -80,7 +80,7 @@ export default function GameLauncher() {
     } catch (error) {
       console.error("Failed to launch game:", error);
     } finally {
-      setTimeout(() => setIsLaunching(null), 500);
+      setIsLaunching(null);
     }
   };
 

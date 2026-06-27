@@ -1415,6 +1415,9 @@
     "filter": "滤镜",
     "filterToggle": "切换滤镜",
     "filterToggleDesc": "使用快捷键开启或关闭滤镜",
+    "island": "灵动岛",
+    "islandToggle": "切换灵动岛",
+    "islandToggleDesc": "使用快捷键显示或隐藏灵动岛",
     "saved": "快捷键已保存"
   }
 }

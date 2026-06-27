@@ -19,10 +19,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { useAppStartup } from "@/contexts/app-startup-context";
+import { useToast } from "@chakra-ui/react";
 
 export default function DynamicIslandPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { islandHotkey, saveIslandHotkey } = useAppStartup();
+  const toast = useToast();
 
   // State from localStorage (shared with widget window)
   // Default: music controller & message notification ON for new users
@@ -152,11 +157,25 @@ export default function DynamicIslandPage() {
                 {isVisible ? "灵动岛已开启，显示在屏幕顶部" : "点击开启灵动岛"}
               </Text>
             </Box>
-            <ThemeSwitch
-              size="lg"
-              isChecked={isVisible}
-              onChange={toggleVisibility}
-            />
+            <HStack spacing={3}>
+              <HotkeyRecorder
+                value={islandHotkey}
+                onChange={(val) => {
+                  saveIslandHotkey(val);
+                  toast({
+                    title: "快捷键已保存",
+                    status: "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+              <ThemeSwitch
+                size="lg"
+                isChecked={isVisible}
+                onChange={toggleVisibility}
+              />
+            </HStack>
           </HStack>
         </LiquidGlassCard>
 

@@ -12,6 +12,7 @@ const store = new LazyStore(SETTINGS_FILE);
 const DEFAULT_OVERLAY_HOTKEY = "Shift+F10";
 const DEFAULT_CROSSHAIR_HOTKEY = "Shift+F9";
 const DEFAULT_FILTER_HOTKEY = "Shift+F8";
+const DEFAULT_ISLAND_HOTKEY = "Shift+F11";
 
 interface DisplayItem {
   id: string;
@@ -83,6 +84,8 @@ interface AppStartupContextType {
   saveCrosshairHotkey: (shortcut: string) => Promise<void>;
   filterHotkey: string;
   saveFilterHotkey: (shortcut: string) => Promise<void>;
+  islandHotkey: string;
+  saveIslandHotkey: (shortcut: string) => Promise<void>;
 }
 
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
@@ -130,6 +133,8 @@ const AppStartupContext = createContext<AppStartupContextType>({
   saveCrosshairHotkey: async () => {},
   filterHotkey: DEFAULT_FILTER_HOTKEY,
   saveFilterHotkey: async () => {},
+  islandHotkey: DEFAULT_ISLAND_HOTKEY,
+  saveIslandHotkey: async () => {},
 });
 
 export function useAppStartup() {
@@ -146,6 +151,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [overlayHotkey, setOverlayHotkey] = useState(DEFAULT_OVERLAY_HOTKEY);
   const [crosshairHotkey, setCrosshairHotkey] = useState(DEFAULT_CROSSHAIR_HOTKEY);
   const [filterHotkey, setFilterHotkey] = useState(DEFAULT_FILTER_HOTKEY);
+  const [islandHotkey, setIslandHotkey] = useState(DEFAULT_ISLAND_HOTKEY);
   const hasStarted = useRef(false);
 
   const updateProgress = (progress: number, message: string) => {
@@ -348,6 +354,31 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loadIslandHotkey = async () => {
+    try {
+      const saved = await store.get<string>("island-hotkey");
+      if (saved) {
+        setIslandHotkey(saved);
+        await invoke("set_island_hotkey", { shortcut: saved });
+      } else {
+        await invoke("set_island_hotkey", { shortcut: DEFAULT_ISLAND_HOTKEY });
+      }
+    } catch (error) {
+      console.error("Failed to load island hotkey:", error);
+    }
+  };
+
+  const saveIslandHotkey = async (shortcut: string) => {
+    setIslandHotkey(shortcut);
+    try {
+      await invoke("set_island_hotkey", { shortcut });
+      await store.set("island-hotkey", shortcut);
+      await store.save();
+    } catch (error) {
+      console.error("Failed to save island hotkey:", error);
+    }
+  };
+
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSettingsRef = useRef<OverlaySettings | null>(null);
 
@@ -384,6 +415,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         { name: "crosshair-hotkey", fn: loadCrosshairHotkey, weight: 1 },
         { name: "crosshair-settings", fn: loadCrosshairSettings, weight: 1 },
         { name: "filter-hotkey", fn: loadFilterHotkey, weight: 1 },
+        { name: "island-hotkey", fn: loadIslandHotkey, weight: 1 },
       ];
 
       const totalWeight = tasks.reduce((sum, t) => sum + t.weight, 0);
@@ -444,6 +476,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         saveCrosshairHotkey,
         filterHotkey,
         saveFilterHotkey,
+        islandHotkey,
+        saveIslandHotkey,
       }}
     >
       {children}
