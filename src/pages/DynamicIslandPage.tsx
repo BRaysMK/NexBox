@@ -208,7 +208,7 @@ export default function DynamicIslandPage() {
             >
               <ThemeSwitch
                 isChecked={musicCtrl}
-                onChange={(e) => handleMusicCtrlChange(e.target.checked)}
+                onChange={(e) => { void handleMusicCtrlChange(e.target.checked); }}
               />
             </SettingRow>
 
@@ -234,7 +234,7 @@ export default function DynamicIslandPage() {
             >
               <ThemeSwitch
                 isChecked={hardwareMon}
-                onChange={(e) => handleHardwareMonChange(e.target.checked)}
+                onChange={(e) => { void handleHardwareMonChange(e.target.checked); }}
               />
             </SettingRow>
 
@@ -247,7 +247,7 @@ export default function DynamicIslandPage() {
             >
               <ThemeSwitch
                 isChecked={pinTaskbar}
-                onChange={(e) => handlePinTaskbarChange(e.target.checked)}
+                onChange={(e) => { void handlePinTaskbarChange(e.target.checked); }}
               />
             </SettingRow>
 

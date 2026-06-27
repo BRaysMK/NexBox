@@ -36,6 +36,7 @@ pub struct RecordingConfig {
     pub output_width: i32,
     pub output_height: i32,
     pub fps: u32,
+    #[allow(dead_code)]
     pub format: String,
     pub quality: u32,
     pub output_path: String,
@@ -483,7 +484,6 @@ struct AviEncoder {
     height: i32,
     quality: u32,
     movi_size_pos: u64,      // file position of dwMoviChunkSize in avih (offset 52 from RIFF start)
-    output_path: String,
 }
 
 impl AviEncoder {
@@ -498,7 +498,7 @@ impl AviEncoder {
         // We'll fill in the real sizes later.
         // RIFF 'AVI ' + LIST 'hdrl' + LIST 'movi' = 12 + hdrl_size + movi_size
         writer.write_all(b"RIFF").map_err(|e| e.to_string())?;
-        let riff_size_pos: u64 = 4; // position of RIFF size field
+        let _riff_size_pos: u64 = 4; // position of RIFF size field
         writer.write_all(&[0u8; 4]).map_err(|e| e.to_string())?; // placeholder
         writer.write_all(b"AVI ").map_err(|e| e.to_string())?;
 
@@ -592,7 +592,6 @@ impl AviEncoder {
             height,
             quality: quality.clamp(5, 100),
             movi_size_pos,
-            output_path: output_path.to_string(),
         })
     }
 
@@ -616,11 +615,10 @@ impl AviEncoder {
         }
 
         // JPEG encode
-        let jpeg = jpeg_encoder::Encoder::new(&mut std::io::sink(), self.quality as u8);
         // Encode to memory
         let mut jpeg_buf = Vec::new();
         {
-            let mut enc = jpeg_encoder::Encoder::new(&mut jpeg_buf, self.quality as u8);
+            let enc = jpeg_encoder::Encoder::new(&mut jpeg_buf, self.quality as u8);
             enc.encode(&rgb, w as u16, h as u16, jpeg_encoder::ColorType::Rgb)
                 .map_err(|e| format!("JPEG encode error: {:?}", e))?;
         }

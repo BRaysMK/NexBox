@@ -84,9 +84,9 @@ export default function WidgetIslandPage() {
 
   // features
   const [isPinned, setIsPinned] = useState(() => localStorage.getItem("nsd_pin_taskbar") === "true");
-  const [showMusic, setShowMusic] = useState(() => localStorage.getItem("nsd_music_ctrl") === "true");
+  const [showMusic, setShowMusic] = useState(() => localStorage.getItem("nsd_music_ctrl") !== "false");
   const [showHardware, setShowHardware] = useState(() => localStorage.getItem("nsd_hardware_mon") === "true");
-  const [glowBorder, setGlowBorder] = useState(() => localStorage.getItem("nsd_glow_border") === "true");
+  const [glowBorder, setGlowBorder] = useState(() => localStorage.getItem("nsd_glow_border") !== "false");
   const [msgEnabled] = useState(() => localStorage.getItem("nsd_msg_notify") === "true");
 
   // Speed
@@ -417,9 +417,23 @@ export default function WidgetIslandPage() {
 
       const u6 = await listen<{ show: boolean }>("control-island-visibility", async (evt) => {
         if (evt.payload.show) {
-          await getCurrentWindow().show();
+          // Position before showing (first open uses correct default position)
+          const pinned = localStorage.getItem("nsd_pin_taskbar") === "true";
+          if (pinned) {
+            await snapToBottomLeft();
+          } else {
+            await adjustPosition();
+          }
           await getCurrentWindow().setAlwaysOnTop(true);
-          setTimeout(() => setIsVisible(true), 40);
+          setIsVisible(true);
+          // Sync content state immediately on first open
+          setShowInfo(true);
+          if (localStorage.getItem("nsd_music_ctrl") !== "false") {
+            syncMusic();
+          }
+          if (localStorage.getItem("nsd_hardware_mon") === "true") {
+            fetchHardware();
+          }
         } else {
           setIsVisible(false);
         }

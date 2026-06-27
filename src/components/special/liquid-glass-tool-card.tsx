@@ -67,7 +67,7 @@ export function LiquidGlassToolCard({
       p={padding}
       border={isDashed ? "1px dashed" : "1px solid"}
       borderColor={glassBorder}
-      backdropFilter="blur(20px)"
+      backdropFilter="blur(1px)"
       transition="all 0.2s"
       position="relative"
       onMouseMove={handleMouseMove}

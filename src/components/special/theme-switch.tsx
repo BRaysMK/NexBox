@@ -6,7 +6,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 interface ThemeSwitchProps {
   size?: "sm" | "md" | "lg";
   isChecked?: boolean;
-  onChange?: () => void;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   isDisabled?: boolean;
   [key: string]: any;
 }

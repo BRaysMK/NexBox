@@ -488,9 +488,7 @@ pub fn toggle_island(app_handle: &tauri::AppHandle) -> Result<(), String> {
             // 隐藏：发送事件让前端执行退出动画
             let _ = app_handle.emit("control-island-visibility", serde_json::json!({ "show": false }));
         } else {
-            // 显示：先显示窗口再发送事件
-            win.show().map_err(|e| format!("显示灵动岛失败: {}", e))?;
-            win.set_always_on_top(true).map_err(|e| format!("设置置顶失败: {}", e))?;
+            // 显示：发送事件让前端先定位再显示
             let _ = app_handle.emit("control-island-visibility", serde_json::json!({ "show": true }));
         }
     }
