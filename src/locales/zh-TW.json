@@ -47,7 +47,8 @@
         "gpuRename": "顯卡改寫",
         "resolutionConverter": "解析度換算",
         "dlssPreset": "三角洲DLSS設定",
-        "epicFree": "喜加一"
+        "epicFree": "喜加一",
+        "dynamicIsland": "動態島"
     },
   "optimization": {
     "pageTitle": "優化",
@@ -747,8 +748,9 @@
     "gpuRenameDesc": "改寫顯卡名稱以優化遊戲效能",
     "resolutionConverterDesc": "換算不同解析度下的畫面比例",
     "shaderCacheDesc": "清理 NVIDIA/AMD 著色器快取釋放磁碟空間",
-    "dlssPresetDesc": "切換DLSS模型預設以優化遊戲畫質"
-  },
+    "dlssPresetDesc": "切換DLSS模型預設以優化遊戲畫質",
+        "dynamicIslandDesc": "螢幕頂部懸浮島，顯示網速/硬體/音樂/通知"
+    },
   "gpuRename": {
     "title": "顯卡改寫",
     "loading": "載入中...",

@@ -26,11 +26,12 @@ import StartupManagerPage from "./pages/StartupManagerPage";
 import SystemOptimizerPage from "./pages/SystemOptimizerPage";
 import NetworkOptimizerPage from "./pages/NetworkOptimizerPage";
 import PeripheralOptimizePage from "./pages/PeripheralOptimizePage";
-import ActivationPage from "./pages/ActivationPage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
 import TestsPage from "./pages/TestsPage";
 import EpicFreePage from "./pages/EpicFreePage";
 import ReactionTestPage from "./pages/ReactionTestPage";
+import WidgetIslandPage from "./pages/WidgetIslandPage";
+import DynamicIslandPage from "./pages/DynamicIslandPage";
 import AimTestPage from "./pages/AimTestPage";
 import FocusTestPage from "./pages/FocusTestPage";
 import ChoiceTestPage from "./pages/ChoiceTestPage";
@@ -68,13 +69,18 @@ import { MusicProvider } from "./contexts/music-context";
 import { MiniMusicPlayer } from "./components/MiniMusicPlayer";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "3.9.9";
+const CURRENT_VERSION = "4.2.5";
 
 function App() {
   const { t } = useTranslation();
   const { isStartupComplete } = useAppStartup();
   const location = useLocation();
   const toast = useToast();
+
+  // Widget window: render WidgetIslandPage standalone, no main layout
+  if (location.pathname === "/widget") {
+    return <WidgetIslandPage />;
+  }
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -241,7 +247,6 @@ function App() {
               <Route path="/tests/schulte" element={<AnimatedPage><SchulteTestPage /></AnimatedPage>} />
               <Route path="/tests/cps" element={<AnimatedPage><CpsTestPage /></AnimatedPage>} />
               <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
-              <Route path="/activation" element={<AnimatedPage><ActivationPage /></AnimatedPage>} />
               <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
               <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
               <Route path="/optimize/power-management" element={<AnimatedPage><PowerManagementPage /></AnimatedPage>} />
@@ -252,6 +257,7 @@ function App() {
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
+              <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
         </Routes>
       </AnimatePresence>
     ) : (
@@ -281,7 +287,6 @@ function App() {
             <Route path="/tests/schulte" element={<AnimatedPage><SchulteTestPage /></AnimatedPage>} />
             <Route path="/tests/cps" element={<AnimatedPage><CpsTestPage /></AnimatedPage>} />
             <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
-            <Route path="/activation" element={<AnimatedPage><ActivationPage /></AnimatedPage>} />
             <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
             <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
             <Route path="/optimize/power-management" element={<AnimatedPage><PowerManagementPage /></AnimatedPage>} />
@@ -292,6 +297,7 @@ function App() {
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
             <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
+            <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
       </Routes>
     )}
 

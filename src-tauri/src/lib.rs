@@ -1,4 +1,3 @@
-mod activation;
 mod announcement;
 mod auto_start;
 mod crosshair;
@@ -12,6 +11,7 @@ mod gpu_rename;
 mod hardware;
 mod heart_rate;
 mod hotkey;
+mod island;
 mod music;
 mod network_optimize;
 mod netease_lyrics;
@@ -98,6 +98,61 @@ pub fn run() {
             }
             sensor::start_sensor_process(app);
             utils::sys_info::check_and_send_statistics(app);
+
+            // Initialize island (Dynamic Island) state
+            app.manage(island::AppState::new());
+
+            // Configure widget window (DWM clipping + close intercept)
+            if let Some(widget_window) = app.get_webview_window("widget") {
+                #[cfg(target_os = "windows")]
+                {
+                    use windows_sys::Win32::Graphics::Dwm::{
+                        DwmSetWindowAttribute,
+                        DWMWA_WINDOW_CORNER_PREFERENCE,
+                        DWMWA_BORDER_COLOR,
+                        DWMWCP_DONOTROUND,
+                    };
+                    use windows_sys::Win32::UI::WindowsAndMessaging::{
+                        SetWindowLongPtrW,
+                        GWL_STYLE,
+                        WS_CAPTION,
+                    };
+                    use windows_sys::Win32::Foundation::HWND;
+
+                    if let Ok(hwnd) = widget_window.hwnd() {
+                        let hwnd_raw = hwnd.0 as HWND;
+                        unsafe {
+                            let current_style = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd_raw, GWL_STYLE);
+                            SetWindowLongPtrW(hwnd_raw, GWL_STYLE, current_style & !(WS_CAPTION as isize));
+
+                            let border_color: u32 = 0xFFFFFFFE;
+                            let _ = DwmSetWindowAttribute(
+                                hwnd_raw,
+                                DWMWA_BORDER_COLOR as u32,
+                                &border_color as *const _ as *const _,
+                                std::mem::size_of::<u32>() as u32,
+                            );
+
+                            let corner_preference = DWMWCP_DONOTROUND;
+                            let _ = DwmSetWindowAttribute(
+                                hwnd_raw,
+                                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                                &corner_preference as *const _ as *const _,
+                                std::mem::size_of::<i32>() as u32,
+                            );
+                        }
+                    }
+                }
+
+                // Intercept close → hide instead
+                let w_clone = widget_window.clone();
+                widget_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = w_clone.hide();
+                    }
+                });
+            }
 
             // 预填显示器信息缓存，确保热键路径也能正确获取设备名
             display_filter::init();
@@ -427,9 +482,19 @@ pub fn run() {
             tray::set_close_behavior,
             tray::get_dont_ask_again,
             tray::set_dont_ask_again,
+            // === Island (Dynamic Island) 命令 ===
+            island::get_network_stats,
+            island::get_network_latency,
+            island::get_hardware_stats,
+            island::control_system_media,
+            island::fetch_netease_music_info,
+            island::get_random_cover_url,
+            island::fetch_latest_notification,
+            island::open_app_by_aumid,
+            island::force_window_topmost,
+            island::is_widget_visible,
             // === MCTier 命令 ===
-        activation::check_windows_activation,
-        activation::run_windows_activation,
+
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

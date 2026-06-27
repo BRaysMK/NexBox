@@ -13,7 +13,7 @@ import {
   Cpu,
   Monitor,
   Zap,
-  ShieldCheck,
+  Smartphone,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
@@ -70,6 +70,14 @@ const tools: ViewItem[] = [
     titleKey: "sidebar.dlssPreset",
     descriptionKey: "builtinTools.dlssPresetDesc",
     color: "#76B900",
+  },
+  {
+    id: "dynamic-island",
+    path: "/dynamic-island",
+    icon: Smartphone,
+    titleKey: "sidebar.dynamicIsland",
+    descriptionKey: "builtinTools.dynamicIslandDesc",
+    color: "#E91E63",
   },
   // {
   //   id: "activation",

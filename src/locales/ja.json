@@ -47,7 +47,8 @@
         "gpuRename": "GPU名前変更",
         "resolutionConverter": "解像度変換",
         "dlssPreset": "デルタフォースDLSS設定",
-        "epicFree": "Epic 料ゲーム"
+        "epicFree": "Epic 無料ゲーム",
+        "dynamicIsland": "ダイナミックアイランド"
     },
   "optimization": {
     "pageTitle": "最適化",
@@ -765,8 +766,9 @@
     "gpuRenameDesc": "ゲームパフォーマンスを最適化するためにGPU名を変更",
     "resolutionConverterDesc": "様々な解像度で画面アスペクト比を変換",
     "shaderCacheDesc": "NVIDIA/AMDのシェーダーキャッシュをクリーンアップしてディスクスペースを解放",
-    "dlssPresetDesc": "DLSSモデルプリセットを切り替えてゲームグラフィックを最適化"
-  },
+    "dlssPresetDesc": "DLSSモデルプリセットを切り替えてゲームグラフィックを最適化",
+        "dynamicIslandDesc": "画面上部に表示されるフローティングアイランド、ネット速度/ハードウェア/音楽/通知を表示"
+    },
   "gpuRename": {
     "title": "GPU名前変更",
     "loading": "読み込み中...",

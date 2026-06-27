@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "3.9.9"
+version = "4.2.5"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -84,6 +84,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_Networking_WinSock",
 ] }
 winreg = "0.52"
+winapi = { version = "0.3", features = ["winuser", "windef", "shellapi"] }
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
@@ -101,4 +102,8 @@ windows = { version = "0.58", features = [
     "Media_Control",
     "Storage_Streams",
     "UI_UIAutomation",
+    "UI_Notifications",
+    "UI_Notifications_Management",
+    "ApplicationModel",
+    "implement",
 ] }

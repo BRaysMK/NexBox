@@ -47,7 +47,8 @@
         "gpuRename": "GPU-Umbenennung",
         "resolutionConverter": "Auflösungskonverter",
         "dlssPreset": "Delta Force DLSS-Einstellungen",
-        "epicFree": "Epic Gratis-Spiele"
+        "epicFree": "Epic Gratis-Spiele",
+        "dynamicIsland": "Dynamic Island"
     },
   "optimization": {
     "pageTitle": "Optimieren",
@@ -765,8 +766,9 @@
     "gpuRenameDesc": "GPU-Namen ändern, um Spielleistung zu optimieren",
     "resolutionConverterDesc": "Seitenverhältnisse für verschiedene Auflösungen umrechnen",
     "shaderCacheDesc": "NVIDIA/AMD Shader-Cache bereinigen, um Speicherplatz freizugeben",
-    "dlssPresetDesc": "DLSS-Modell-Voreinstellungen wechseln, um Spielgrafiken zu optimieren"
-  },
+    "dlssPresetDesc": "DLSS-Modell-Voreinstellungen wechseln, um Spielgrafiken zu optimieren",
+        "dynamicIslandDesc": "Schwebende Insel oben auf dem Bildschirm, zeigt Netzwerkgeschwindigkeit/Hardware/Musik/Benachrichtigungen"
+    },
   "gpuRename": {
     "title": "GPU-Umbenennung",
     "loading": "Laden...",

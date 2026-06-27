@@ -31,7 +31,7 @@ import {
   HardDrive,
   Settings2,
   Shield,
-  ShieldCheck,
+  Smartphone,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -171,14 +171,6 @@ export const searchIndex: SearchItem[] = [
     keywords: ["显卡", "改写", "gpu", "rename", "伪装"],
   },
   {
-    id: "activation",
-    nameKey: "activation.pageTitle",
-    path: "/activation",
-    icon: ShieldCheck,
-    category: "builtin-tool",
-    keywords: ["激活", "windows", "正版", "系统激活", "hwid", "kms", "tsforge", "数字许可证", "activation"],
-  },
-  {
     id: "resolution-converter",
     nameKey: "sidebar.resolutionConverter",
     path: "/resolution-converter",
@@ -195,6 +187,14 @@ export const searchIndex: SearchItem[] = [
       keywords: ["dlss", "预设", "preset", "三角洲", "delta", "force", "nvidia", "模型"],
     },
     {
+    id: "dynamic-island",
+    nameKey: "sidebar.dynamicIsland",
+    path: "/dynamic-island",
+    icon: Smartphone,
+    category: "builtin-tool",
+    keywords: ["灵动岛", "dynamic", "island", "悬浮", "网速", "监控", "音乐", "通知", "widget"],
+  },
+  {
     id: "reaction-test",
     nameKey: "tests.reactionTitle",
     path: "/tests/reaction",

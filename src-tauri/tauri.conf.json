@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "3.9.9",
+  "version": "4.2.5",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
@@ -21,6 +21,22 @@
         "fullscreen": false,
         "decorations": false,
         "devtools": true
+      },
+      {
+        "title": "NexBox Widget",
+        "width": 260,
+        "height": 42,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "widget",
+        "url": "/widget"
       }
     ],
     "security": {

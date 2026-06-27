@@ -47,7 +47,8 @@
         "gpuRename": "Renommage GPU",
         "resolutionConverter": "Convertisseur de résolution",
         "dlssPreset": "Paramètres DLSS Delta Force",
-        "epicFree": "Jeux gratuits Epic"
+        "epicFree": "Jeux gratuits Epic",
+        "dynamicIsland": "Dynamic Island"
     },
   "optimization": {
     "pageTitle": "Optimiser",
@@ -765,8 +766,9 @@
     "gpuRenameDesc": "Modifier le nom du GPU pour optimiser les performances de jeu",
     "resolutionConverterDesc": "Convertir les proportions d'image pour différentes résolutions",
     "shaderCacheDesc": "Nettoyer le cache des shaders NVIDIA/AMD pour libérer de l'espace disque",
-    "dlssPresetDesc": "Changer les préréglages de modèle DLSS pour optimiser les graphismes du jeu"
-  },
+    "dlssPresetDesc": "Changer les préréglages de modèle DLSS pour optimiser les graphismes du jeu",
+        "dynamicIslandDesc": "Île flottante en haut de l'écran, affiche la vitesse réseau/le matériel/la musique/les notifications"
+    },
   "gpuRename": {
     "title": "Renommage GPU",
     "loading": "Chargement...",
