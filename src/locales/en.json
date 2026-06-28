@@ -393,6 +393,19 @@
         "success": "All optimizations complete",
         "partial": "Partial optimization complete, check details"
       },
+      "autoDetect": {
+        "title": "Auto Detect & Optimize ACE Processes",
+        "description": "Background monitoring - automatically limit priority and core affinity when ACE-Tray/SGuard processes are detected (checks every 5 seconds)",
+        "status": {
+          "running": "Auto detect running",
+          "stopped": "Auto detect stopped"
+        },
+        "lastCheck": "Last check",
+        "never": "Never checked",
+        "optimizing": "Optimizing {{count}} process(es)",
+        "enabled": "Auto detect enabled",
+        "disabled": "Auto detect disabled"
+      },
       "status": {
         "optimized": "Optimized",
         "notRunning": "Not Running",

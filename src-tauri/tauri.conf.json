@@ -55,7 +55,6 @@
       "../nvidiaProfileInspector.exe.config",
       "../Reference.xml",
       "../power-plans/*",
-      "../mas-cn-main/MAS/MAS_AIO_CN_v3.11.cmd",
       "../MiSans-Medium.ttf",
       "../monitor/bin/Release/net48/*"
     ],

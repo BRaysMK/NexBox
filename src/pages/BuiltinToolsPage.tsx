@@ -87,15 +87,7 @@ const tools: ViewItem[] = [
   //   titleKey: "sidebar.screenRecord",
   //   descriptionKey: "builtinTools.screenRecordDesc",
   //   color: "#E74C3C",
-  // },
-  // {
-  //   id: "activation",
-  //   path: "/activation",
-  //   icon: ShieldCheck,
-  //   titleKey: "activation.pageTitle",
-  //   descriptionKey: "builtinTools.activationDesc",
-  //   color: "#3182CE",
-  // },
+  //   },
 ];
 
 export default function BuiltinToolsPage() {

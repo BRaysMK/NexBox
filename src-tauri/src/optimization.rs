@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::os::windows::process::CommandExt;
+use std::panic;
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
@@ -935,6 +936,8 @@ pub struct AutoCleanConfig {
     pub clean_type: String,
 }
 
+use tauri_plugin_store::StoreExt;
+
 static AUTO_CLEAN_CONFIG: Mutex<Option<AutoCleanConfig>> = Mutex::new(None);
 static AUTO_CLEAN_GENERATION: AtomicU64 = AtomicU64::new(0);
 
@@ -1218,6 +1221,256 @@ pub async fn stop_auto_clean() -> Result<(), String> {
 pub async fn get_auto_clean_config() -> Result<Option<AutoCleanConfig>, String> {
     let cfg = AUTO_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
     Ok(cfg.clone())
+}
+
+// ===== ACE 自动检测与优化 =====
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct AceAutoDetectConfig {
+    pub enabled: bool,
+}
+
+#[derive(serde::Serialize, Clone, Debug, Default)]
+pub struct AceAutoDetectStats {
+    pub is_running: bool,
+    pub last_check: Option<String>,
+    pub total_optimized: u32,
+    pub currently_optimized: Vec<String>,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+pub struct AceAutoDetectStatus {
+    pub enabled: bool,
+    pub is_running: bool,
+    pub last_check: Option<String>,
+    pub total_optimized: u32,
+    pub currently_optimized: Vec<String>,
+}
+
+static AUTO_DETECT_CONFIG: Mutex<Option<AceAutoDetectConfig>> = Mutex::new(None);
+static AUTO_DETECT_GENERATION: AtomicU64 = AtomicU64::new(0);
+static AUTO_DETECT_STATS: Mutex<Option<AceAutoDetectStats>> = Mutex::new(None);
+
+// 内存中的 enabled 状态，避免 store 读取竞争
+static AUTO_DETECT_ENABLED: AtomicBool = AtomicBool::new(false);
+
+const ACE_PROCESS_NAMES: &[&str] = &["ACE-Tray.exe", "SGuard64.exe", "SGuardSvc64.exe"];
+const ACE_DETECT_INTERVAL_SECS: u64 = 5;
+
+fn update_auto_detect_stats(optimized: Vec<String>) {
+    let mut stats = AUTO_DETECT_STATS.lock().unwrap();
+    if stats.is_none() {
+        *stats = Some(AceAutoDetectStats::default());
+    }
+    if let Some(ref mut s) = *stats {
+        s.is_running = true;
+        s.last_check = Some(
+            chrono::Local::now()
+                .to_rfc3339()
+        );
+        s.total_optimized = s.total_optimized.saturating_add(optimized.len() as u32);
+        s.currently_optimized = optimized;
+    }
+}
+
+fn set_auto_detect_running(running: bool) {
+    let mut stats = AUTO_DETECT_STATS.lock().unwrap();
+    if let Some(ref mut s) = *stats {
+        s.is_running = running;
+    }
+}
+
+fn detect_and_optimize_ace_processes() -> Vec<String> {
+    let mut optimized = Vec::new();
+    
+    let mut system = System::new();
+    system.refresh_processes();
+    
+    for (_, process) in system.processes() {
+        let name = process.name().to_string();
+        let name_lower = name.to_lowercase();
+        
+        if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
+            let mut this_optimized = false;
+            
+            // 1. 限制优先级为 Idle
+            if set_process_low_priority(process.pid().as_u32()) {
+                this_optimized = true;
+            }
+            
+            // 2. 限制亲和性为 CPU0 (affinity = 1)
+            if restrict_process_affinity_powershell(&name) {
+                this_optimized = true;
+            }
+            
+            if this_optimized {
+                optimized.push(name);
+            }
+        }
+    }
+    
+    optimized
+}
+
+fn restrict_process_affinity_powershell(process_name: &str) -> bool {
+    let name_without_ext = process_name.trim_end_matches(".exe");
+    let ps_script = format!(
+        r#"
+        $proc = Get-Process -Name "{}" -ErrorAction SilentlyContinue
+        if ($proc) {{
+            foreach ($p in $proc) {{
+                try {{
+                    $p.ProcessorAffinity = 1
+                    Write-Host "AFFINITY_SET:{}"
+                }} catch {{
+                    Write-Host "AFFINITY_FAILED:{}"
+                }}
+            }}
+            exit 0
+        }} else {{
+            Write-Host "NOT_FOUND"
+            exit 1
+        }}
+        "#,
+        name_without_ext, name_without_ext, name_without_ext
+    );
+    
+    let result = Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            stdout.contains("AFFINITY_SET")
+        }
+        Err(_) => false,
+    }
+}
+
+fn ace_auto_detect_loop(config: AceAutoDetectConfig, generation: u64) {
+    // 启动时立即标记为运行中
+    set_auto_detect_running(true);
+    
+    loop {
+        if AUTO_DETECT_GENERATION.load(Ordering::Relaxed) != generation {
+            break;
+        }
+        
+        thread::sleep(Duration::from_secs(ACE_DETECT_INTERVAL_SECS));
+        
+        if AUTO_DETECT_GENERATION.load(Ordering::Relaxed) != generation {
+            break;
+        }
+        
+        if !config.enabled {
+            continue;
+        }
+        
+        let optimized = detect_and_optimize_ace_processes();
+        update_auto_detect_stats(optimized);
+    }
+    set_auto_detect_running(false);
+}
+
+async fn load_persisted_config(app: &tauri::AppHandle) -> AceAutoDetectConfig {
+    if let Some(store) = app.get_store("ace_auto_detect.json") {
+        if let Some(value) = store.get("config") {
+            if let Ok(config) = serde_json::from_value::<AceAutoDetectConfig>(value) {
+                return config;
+            }
+        }
+    }
+    AceAutoDetectConfig::default()
+}
+
+async fn save_persisted_config(app: &tauri::AppHandle, config: &AceAutoDetectConfig) {
+    if let Some(store) = app.get_store("ace_auto_detect.json") {
+        store.set("config", serde_json::to_value(config).unwrap());
+        let _ = store.save();
+    }
+}
+
+#[tauri::command]
+pub async fn set_ace_auto_detect(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    // 读取当前内存状态，避免重复操作
+    let current = AUTO_DETECT_ENABLED.load(Ordering::Relaxed);
+    if current == enabled {
+        return Ok(()); // 状态未变，无需处理
+    }
+    
+    let gen = AUTO_DETECT_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    
+    let config = AceAutoDetectConfig { enabled };
+    
+    {
+        let mut cfg = AUTO_DETECT_CONFIG.lock().map_err(|e| e.to_string())?;
+        *cfg = Some(config.clone());
+    }
+    
+    // 更新内存状态（立即生效，供 status 读取）
+    AUTO_DETECT_ENABLED.store(enabled, Ordering::Relaxed);
+    
+    // 持久化保存（异步，不阻塞）
+    save_persisted_config(&app, &config).await;
+    
+    if enabled {
+        thread::spawn(move || {
+            // 捕获 panic，防止线程意外退出
+            let _ = panic::catch_unwind(|| {
+                ace_auto_detect_loop(config, gen);
+            });
+            set_auto_detect_running(false);
+        });
+    } else {
+        set_auto_detect_running(false);
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_ace_auto_detect_status(app: tauri::AppHandle) -> Result<AceAutoDetectStatus, String> {
+    // 直接读取内存状态，避免 store 读取竞争
+    let enabled = AUTO_DETECT_ENABLED.load(Ordering::Relaxed);
+    
+    let stats = AUTO_DETECT_STATS.lock().map_err(|e| e.to_string())?;
+    let stats = stats.clone().unwrap_or_default();
+    
+    Ok(AceAutoDetectStatus {
+        enabled,
+        is_running: stats.is_running && enabled,
+        last_check: stats.last_check,
+        total_optimized: stats.total_optimized,
+        currently_optimized: stats.currently_optimized,
+    })
+}
+
+#[tauri::command]
+pub async fn init_ace_auto_detect(app: tauri::AppHandle) -> Result<(), String> {
+    let config = load_persisted_config(&app).await;
+    
+    // 初始化内存状态
+    AUTO_DETECT_ENABLED.store(config.enabled, Ordering::Relaxed);
+    
+    if config.enabled {
+        let gen = AUTO_DETECT_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+        
+        {
+            let mut cfg = AUTO_DETECT_CONFIG.lock().map_err(|e| e.to_string())?;
+            *cfg = Some(config.clone());
+        }
+        
+        thread::spawn(move || {
+            let _ = panic::catch_unwind(|| {
+                ace_auto_detect_loop(config, gen);
+            });
+            set_auto_detect_running(false);
+        });
+    }
+    
+    Ok(())
 }
 
 #[derive(serde::Serialize)]

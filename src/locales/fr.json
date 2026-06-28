@@ -340,6 +340,19 @@
             "success": "Toutes les optimisations terminées",
             "partial": "Optimisation partielle terminée, vérifiez les détails"
         },
+        "autoDetect": {
+            "title": "Détection et optimisation automatique des processus ACE",
+            "description": "Surveillance en arrière-plan - limite automatiquement la priorité et l'affinité des cœurs lors de la détection des processus ACE-Tray/SGuard (vérification toutes les 5 secondes)",
+            "status": {
+                "running": "Détection automatique en cours",
+                "stopped": "Détection automatique arrêtée"
+            },
+            "lastCheck": "Dernière vérification",
+            "never": "Jamais vérifié",
+            "optimizing": "Optimisation de {{count}} processus",
+            "enabled": "Détection automatique activée",
+            "disabled": "Détection automatique désactivée"
+        },
         "status": {
             "optimized": "Optimisé",
             "notRunning": "Non en cours",

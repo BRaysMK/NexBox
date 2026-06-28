@@ -245,6 +245,19 @@
         "success": "全部优化完成",
         "partial": "部分优化完成，请查看详情"
       },
+      "autoDetect": {
+        "title": "自动检测并优化 ACE 进程",
+        "description": "后台持续监测，发现 ACE-Tray/SGuard 进程自动限制优先级和核心亲和性（每 5 秒检测一次）",
+        "status": {
+          "running": "自动检测运行中",
+          "stopped": "自动检测已停止"
+        },
+        "lastCheck": "上次检测",
+        "never": "从未检测",
+        "optimizing": "正在优化 {{count}} 个进程",
+        "enabled": "自动检测已启用",
+        "disabled": "自动检测已禁用"
+      },
       "status": {
         "optimized": "已优化",
         "notRunning": "未运行",

@@ -326,6 +326,19 @@
             "success": "全部最佳化完成",
             "partial": "部分最佳化完成，請檢視詳情"
         },
+        "autoDetect": {
+            "title": "自動偵測並優化 ACE 進程",
+            "description": "背景持續監測，發現 ACE-Tray/SGuard 進程自動限制優先級和核心親和性（每 5 秒檢測一次）",
+            "status": {
+                "running": "自動偵測運行中",
+                "stopped": "自動偵測已停止"
+            },
+            "lastCheck": "上次偵測",
+            "never": "從未偵測",
+            "optimizing": "正在優化 {{count}} 個進程",
+            "enabled": "自動偵測已啟用",
+            "disabled": "自動偵測已禁用"
+        },
         "status": {
             "optimized": "已最佳化",
             "notRunning": "未執行",

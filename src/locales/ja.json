@@ -340,6 +340,19 @@
             "success": "すべての最適化が完了しました",
             "partial": "一部の最適化が完了しました。詳細を確認してください"
         },
+        "autoDetect": {
+            "title": "ACEプロセスの自動検出と最適化",
+            "description": "バックグラウンドで継続的に監視 - ACE-Tray/SGuardプロセス検出時に自動的に優先度とコア親和性を制限（5秒ごとにチェック）",
+            "status": {
+                "running": "自動検出実行中",
+                "stopped": "自動検出停止中"
+            },
+            "lastCheck": "前回チェック",
+            "never": "チェックされたことなし",
+            "optimizing": "{{count}} 個のプロセスを最適化中",
+            "enabled": "自動検出が有効になりました",
+            "disabled": "自動検出が無効になりました"
+        },
         "status": {
             "optimized": "最適化済み",
             "notRunning": "実行中ではありません",

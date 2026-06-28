@@ -10,8 +10,9 @@ import {
   useToast,
   Badge,
   IconButton,
+  Switch,
 } from "@chakra-ui/react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import {
@@ -31,6 +32,35 @@ import { hexToRgba } from "@/lib/color-utils";
 interface OptionState {
   running: boolean;
   message: string;
+}
+
+interface AceAutoDetectStatus {
+  enabled: boolean;
+  is_running: boolean;
+  last_check: string | null;
+  total_optimized: number;
+  currently_optimized: string[];
+}
+
+function formatRelativeTime(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  
+  if (diffSecs < 60) {
+    return `${diffSecs}秒前`;
+  }
+  const diffMins = Math.floor(diffSecs / 60);
+  if (diffMins < 60) {
+    return `${diffMins}分钟前`;
+  }
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) {
+    return `${diffHours}小时前`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}天前`;
 }
 
 function OptionRow({
@@ -217,6 +247,71 @@ export default function AceOptimizePage() {
   const [aceAffinity, setAceAffinity] = useState<OptionState>({ running: false, message: "" });
   const [optimizeAllLoading, setOptimizeAllLoading] = useState(false);
 
+  // ACE 自动检测状态
+  const [autoDetectEnabled, setAutoDetectEnabled] = useState<boolean | null>(null); // null = 加载中
+  const [autoDetectStatus, setAutoDetectStatus] = useState<AceAutoDetectStatus | null>(null);
+  const [autoDetectLoading, setAutoDetectLoading] = useState(false);
+  const pollIntervalRef = useRef<number | null>(null);
+  const lastBackendEnabledRef = useRef<boolean | null>(null);
+  const isMountedRef = useRef(true);
+
+  // 加载自动检测状态并开始轮询
+  useEffect(() => {
+    isMountedRef.current = true;
+    const loadStatus = async () => {
+      try {
+        const status = await invoke<AceAutoDetectStatus>("get_ace_auto_detect_status");
+        if (!isMountedRef.current) return;
+        setAutoDetectStatus(status);
+        setAutoDetectEnabled(status.enabled);
+        lastBackendEnabledRef.current = status.enabled;
+      } catch (e) {
+        console.error("Failed to load auto detect status:", e);
+        if (!isMountedRef.current) return;
+        setAutoDetectEnabled(false);
+      }
+    };
+    loadStatus();
+
+    // 每 3 秒轮询一次状态
+    pollIntervalRef.current = window.setInterval(loadStatus, 3000);
+    return () => {
+      isMountedRef.current = false;
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
+  const handleToggleAutoDetect = useCallback(async (checked: boolean | React.ChangeEvent<HTMLInputElement>) => {
+    // Chakra UI Switch 在某些版本中可能传递 event 而非 boolean
+    const isChecked = typeof checked === 'boolean' ? checked : checked.target.checked;
+    
+    // 防抖：如果后端状态已经是目标状态，不重复发送命令
+    if (lastBackendEnabledRef.current === isChecked) {
+      return;
+    }
+    
+    setAutoDetectLoading(true);
+    try {
+      await invoke("set_ace_auto_detect", { enabled: isChecked });
+      if (!isMountedRef.current) return;
+      setAutoDetectEnabled(isChecked);
+      lastBackendEnabledRef.current = isChecked;
+      toast({
+        title: isChecked
+          ? t("optimization.aceOptimize.autoDetect.enabled")
+          : t("optimization.aceOptimize.autoDetect.disabled"),
+        status: "success",
+        duration: 2000,
+      });
+    } catch (e: any) {
+      if (!isMountedRef.current) return;
+      setAutoDetectEnabled(lastBackendEnabledRef.current ?? false);
+      toast({ title: String(e), status: "error", duration: 2000 });
+    } finally {
+      if (isMountedRef.current) setAutoDetectLoading(false);
+    }
+  }, [toast, t]);
+
   const applyDeltaPriority = useCallback(async () => {
     setDeltaPriority(prev => ({ ...prev, running: true }));
     try {
@@ -375,6 +470,58 @@ export default function AceOptimizePage() {
               gameRunning={aceAffinity.message ? !aceAffinity.message.includes("未找到") : null}
               onApply={applyAceAffinity}
             />
+
+            {/* 自动检测并优化 */}
+            <Box
+              mt={2}
+              pt={3}
+              borderTop="1px solid"
+              borderColor={useColorModeValue("gray.200", "#333333")}
+            >
+              <HStack justify="space-between" align="center">
+                <VStack align="flex-start" spacing={2}>
+                  <Text fontWeight="bold" fontSize="sm" color={headingColor}>
+                    {t("optimization.aceOptimize.autoDetect.title")}
+                  </Text>
+                  {autoDetectStatus && (
+                    <HStack spacing={2} align="center">
+                      <Text fontSize="xs" color="gray.500">
+                        {t("optimization.aceOptimize.autoDetect.lastCheck")}:{" "}
+                        {autoDetectStatus.last_check
+                          ? formatRelativeTime(autoDetectStatus.last_check)
+                          : t("optimization.aceOptimize.autoDetect.never")}
+                      </Text>
+                      {autoDetectStatus.currently_optimized.length > 0 && (
+                        <Badge colorScheme="green" variant="subtle" fontSize="2xs">
+                          {t("optimization.aceOptimize.autoDetect.optimizing", { count: autoDetectStatus.currently_optimized.length })}
+                        </Badge>
+                      )}
+                    </HStack>
+                  )}
+                </VStack>
+                <Switch
+                  isChecked={autoDetectEnabled ?? false}
+                  onChange={handleToggleAutoDetect}
+                  isDisabled={autoDetectLoading || autoDetectEnabled === null}
+                  size="md"
+                  sx={{
+                    "& > span": {
+                      bg: autoDetectEnabled ? getActiveColor() : useColorModeValue("gray.200", "gray.600"),
+                    },
+                    "& > span > span": {
+                      bg: "white",
+                    },
+                    "&:hover > span": {
+                      bg: autoDetectEnabled ? getActiveColor() : useColorModeValue("gray.200", "gray.600"),
+                    },
+                    "&[data-disabled] > span": {
+                      bg: useColorModeValue("gray.200", "gray.600"),
+                    },
+                  }}
+                  aria-label={t("optimization.aceOptimize.autoDetect.title")}
+                />
+              </HStack>
+            </Box>
           </VStack>
         </SettingCard>
       </SimpleGrid>

@@ -102,6 +102,12 @@ pub fn run() {
             sensor::start_sensor_process(app);
             utils::sys_info::check_and_send_statistics(app);
 
+            // 初始化 ACE 自动检测（读取持久化配置并启动后台任务）
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = optimization::init_ace_auto_detect(app_handle).await;
+            });
+
             // Initialize island (Dynamic Island) state
             app.manage(island::AppState::new());
 
@@ -214,6 +220,9 @@ pub fn run() {
         optimization::restrict_ace_affinity,
         optimization::set_ace_efficiency_mode,
         optimization::optimize_all_game_processes,
+        optimization::set_ace_auto_detect,
+        optimization::get_ace_auto_detect_status,
+        optimization::init_ace_auto_detect,
         optimization::get_builtin_power_plans,
         optimization::get_system_power_plans,
         optimization::get_active_power_plan,

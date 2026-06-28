@@ -340,6 +340,19 @@
             "success": "Alle Optimierungen abgeschlossen",
             "partial": "Teilweise Optimierung abgeschlossen, Details prüfen"
         },
+        "autoDetect": {
+            "title": "Automatische Erkennung und Optimierung von ACE-Prozessen",
+            "description": "Hintergrundüberwachung - erkennt ACE-Tray/SGuard-Prozesse automatisch und begrenzt Priorität und Kernaffinität (Prüfung alle 5 Sekunden)",
+            "status": {
+                "running": "Automatische Erkennung läuft",
+                "stopped": "Automatische Erkennung gestoppt"
+            },
+            "lastCheck": "Letzte Prüfung",
+            "never": "Nie geprüft",
+            "optimizing": "{{count}} Prozesse werden optimiert",
+            "enabled": "Automatische Erkennung aktiviert",
+            "disabled": "Automatische Erkennung deaktiviert"
+        },
         "status": {
             "optimized": "Optimiert",
             "notRunning": "Nicht ausgeführt",

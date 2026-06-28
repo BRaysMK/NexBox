@@ -30,8 +30,15 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                 "show" => {
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.show();
-                        let _ = window.set_focus();
                         let _ = window.unminimize();
+                        let _ = window.set_focus();
+                        
+                        // Ensure widget window doesn't block main window
+                        if let Some(widget) = app.get_webview_window("widget") {
+                            let _ = widget.set_always_on_top(false);
+                            let _ = widget.set_focus(); // temporarily focus widget then back to main
+                        }
+                        let _ = window.set_focus();
                     }
                 }
                 "exit" => {
@@ -48,8 +55,15 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
-                    let _ = window.set_focus();
                     let _ = window.unminimize();
+                    let _ = window.set_focus();
+                    
+                    // Ensure widget window doesn't block main window
+                    if let Some(widget) = app.get_webview_window("widget") {
+                        let _ = widget.set_always_on_top(false);
+                        let _ = widget.set_focus();
+                    }
+                    let _ = window.set_focus();
                 }
             }
         })
@@ -68,9 +82,18 @@ pub async fn minimize_to_tray<R: Runtime>(window: Window<R>) -> Result<(), Strin
 
 #[tauri::command]
 pub async fn show_window<R: Runtime>(window: Window<R>) -> Result<(), String> {
+    let app = window.app_handle();
     window.show().map_err(|e| e.to_string())?;
-    window.set_focus().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+    
+    // Ensure widget window doesn't block main window
+    if let Some(widget) = app.get_webview_window("widget") {
+        let _ = widget.set_always_on_top(false);
+        let _ = widget.set_focus();
+    }
+    let _ = window.set_focus();
+    
     Ok(())
 }
 
