@@ -47,6 +47,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 rand = "0.8"
 rfd = "0.15"
 urlencoding = "2.1"
+url = "2"
 base64 = "0.22"
 bytes = "1"
 dashmap = "6"
@@ -83,6 +84,8 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Time",
     "Win32_NetworkManagement_IpHelper",
     "Win32_Networking_WinSock",
+    "Win32_System_Services",
+    "Win32_Security",
 ] }
 winreg = "0.52"
 winapi = { version = "0.3", features = ["winuser", "windef", "shellapi"] }

@@ -176,7 +176,6 @@ export const optimizerItems: OptimizerItem[] = [
     descKey: "systemOptimizer.system.disableSmartScreenDesc",
     requiresReboot: false,
   },
-
   // ============== 新增系统（ZyperWin++）==============
   {
     id: "disableCEIP",

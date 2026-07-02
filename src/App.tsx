@@ -27,6 +27,7 @@ import StartupManagerPage from "./pages/StartupManagerPage";
 import SystemOptimizerPage from "./pages/SystemOptimizerPage";
 import NetworkOptimizerPage from "./pages/NetworkOptimizerPage";
 import PeripheralOptimizePage from "./pages/PeripheralOptimizePage";
+import WindowsUpdatePage from "./pages/WindowsUpdatePage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
 import TestsPage from "./pages/TestsPage";
 import EpicFreePage from "./pages/EpicFreePage";
@@ -257,6 +258,7 @@ function App() {
               <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
+              <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
@@ -297,6 +299,7 @@ function App() {
             <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
+            <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
             <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
             <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
