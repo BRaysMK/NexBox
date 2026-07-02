@@ -1375,20 +1375,32 @@ fn ace_auto_detect_loop(config: AceAutoDetectConfig, generation: u64) {
 }
 
 async fn load_persisted_config(app: &tauri::AppHandle) -> AceAutoDetectConfig {
-    if let Some(store) = app.get_store("ace_auto_detect.json") {
-        if let Some(value) = store.get("config") {
-            if let Ok(config) = serde_json::from_value::<AceAutoDetectConfig>(value) {
-                return config;
+    match app.store("ace_auto_detect.json") {
+        Ok(store) => {
+            if let Some(value) = store.get("config") {
+                if let Ok(config) = serde_json::from_value::<AceAutoDetectConfig>(value) {
+                    return config;
+                }
             }
+        }
+        Err(e) => {
+            log::warn!("Failed to open ace_auto_detect store: {}", e);
         }
     }
     AceAutoDetectConfig::default()
 }
 
 async fn save_persisted_config(app: &tauri::AppHandle, config: &AceAutoDetectConfig) {
-    if let Some(store) = app.get_store("ace_auto_detect.json") {
-        store.set("config", serde_json::to_value(config).unwrap());
-        let _ = store.save();
+    match app.store("ace_auto_detect.json") {
+        Ok(store) => {
+            store.set("config", serde_json::to_value(config).unwrap());
+            if let Err(e) = store.save() {
+                log::error!("Failed to save ace_auto_detect config: {}", e);
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to open ace_auto_detect store for saving: {}", e);
+        }
     }
 }
 
@@ -1431,7 +1443,7 @@ pub async fn set_ace_auto_detect(app: tauri::AppHandle, enabled: bool) -> Result
 }
 
 #[tauri::command]
-pub async fn get_ace_auto_detect_status(app: tauri::AppHandle) -> Result<AceAutoDetectStatus, String> {
+pub async fn get_ace_auto_detect_status(_app: tauri::AppHandle) -> Result<AceAutoDetectStatus, String> {
     // 直接读取内存状态，避免 store 读取竞争
     let enabled = AUTO_DETECT_ENABLED.load(Ordering::Relaxed);
     
@@ -4366,6 +4378,442 @@ $ErrorActionPreference = 'SilentlyContinue'
 Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -Name 'POWERSHELL_TELEMETRY_OPTOUT' -ErrorAction SilentlyContinue
 Write-Output 'OK'
 "#)
+}
+
+// === Windows Update Disable/Enable (Pure Rust, no PowerShell) ===
+
+/// Convert a Rust string to a null-terminated wide string for Windows API calls.
+fn to_wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// Helper: change service start type using ChangeServiceConfigW.
+unsafe fn set_service_start(service_name: &str, start_type: u32) -> Result<(), String> {
+    use windows_sys::Win32::System::Services::{
+        OpenSCManagerW, OpenServiceW, ChangeServiceConfigW, CloseServiceHandle,
+        SC_MANAGER_CONNECT, SERVICE_CHANGE_CONFIG, SERVICE_NO_CHANGE,
+    };
+
+    let scm = OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT);
+    if scm.is_null() {
+        return Err(format!("无法打开服务控制管理器 (SCM)"));
+    }
+
+    let svc_name = to_wide(service_name);
+    let svc = OpenServiceW(scm, svc_name.as_ptr(), SERVICE_CHANGE_CONFIG);
+    if svc.is_null() {
+        CloseServiceHandle(scm);
+        return Err(format!("无法打开服务: {}", service_name));
+    }
+
+    let ret = ChangeServiceConfigW(
+        svc,
+        SERVICE_NO_CHANGE, // dwServiceType
+        start_type,        // dwStartType
+        SERVICE_NO_CHANGE, // dwErrorControl
+        std::ptr::null(),  // lpBinaryPathName
+        std::ptr::null(),  // lpLoadOrderGroup
+        std::ptr::null_mut(),  // lpdwTagId
+        std::ptr::null(),  // lpDependencies
+        std::ptr::null(),  // lpServiceStartName
+        std::ptr::null(),  // lpPassword
+        std::ptr::null(),  // lpDisplayName
+    );
+
+    CloseServiceHandle(svc);
+    CloseServiceHandle(scm);
+
+    if ret == 0 {
+        return Err(format!("设置服务 Start 类型失败: {}", service_name));
+    }
+
+    Ok(())
+}
+
+/// Helper: clear failure actions for a service (prevents auto-restart/reboot).
+/// Uses sc.exe to reset failure actions.
+fn clear_service_failure_actions(service_name: &str) -> Result<(), String> {
+    // sc.exe failure <svc> reset=0 actions=""
+    let result = std::process::Command::new("sc.exe")
+        .args(&["failure", service_name, "reset=", "0", "actions=", ""])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行 sc.exe 失败: {}", e))?;
+
+    if !result.status.success() {
+        let err = String::from_utf8_lossy(&result.stderr);
+        if !err.trim().is_empty() && !err.contains("FAIL") {
+            // Non-fatal for some services
+            log::info!("sc.exe failure {} 输出: {}", service_name, err.trim());
+        }
+    }
+    Ok(())
+}
+
+/// Helper: grant Administrators write access to a protected service registry key.
+/// Uses PowerShell .NET API to take ownership and grant access (the only reliable way
+/// for ACL-protected keys like wuauserv).
+fn grant_service_key_access(service_name: &str) -> Result<(), String> {
+    let ps_script = format!(
+        r#"
+        $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubkey('SYSTEM\CurrentControlSet\Services\{}', [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree, [System.Security.AccessControl.RegistryRights]::TakeOwnership)
+        $acl = $key.GetAccessControl()
+        $me = [System.Security.Principal.NTAccount]'Administrators'
+        $acl.SetOwner($me)
+        $key.SetAccessControl($acl)
+        $acl = $key.GetAccessControl()
+        $rule = New-Object System.Security.AccessControl.RegistryAccessRule($me, 'FullControl', 'ContainerInherit', 'None', 'Allow')
+        $acl.SetAccessRule($rule)
+        $key.SetAccessControl($acl)
+        $key.Close()
+        "#,
+        service_name
+    );
+
+    let output = std::process::Command::new("powershell.exe")
+        .args(&["-NoProfile", "-NonInteractive", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行 PowerShell 权限获取失败: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        let out = String::from_utf8_lossy(&output.stdout);
+        let msg = if err.trim().is_empty() { out.trim() } else { err.trim() };
+        log::warn!("grant_service_key_access {} 输出: {}", service_name, msg);
+        // Don't fail — try reg add anyway
+    }
+    Ok(())
+}
+
+/// Helper: set a service start type via reg.exe with PowerShell ownership fallback.
+/// start_type: 2=auto, 3=demand, 4=disabled
+fn set_service_start_reg(service_name: &str, start_type: u32) -> Result<(), String> {
+    // First try: direct reg add
+    let cmd = format!(
+        "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\{}\" /v Start /t REG_DWORD /d {} /f",
+        service_name, start_type
+    );
+    let output = std::process::Command::new("cmd.exe")
+        .args(&["/c", &cmd])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行 cmd/reg 失败: {}", e))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    // First try failed — take ownership via PowerShell .NET API and retry
+    log::info!("reg add 直接写入失败，尝试获取注册表键所有权...");
+    let _ = grant_service_key_access(service_name);
+
+    // Retry reg add after taking ownership
+    let output2 = std::process::Command::new("cmd.exe")
+        .args(&["/c", &cmd])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行 cmd/reg (retry) 失败: {}", e))?;
+
+    if !output2.status.success() {
+        let err = String::from_utf8_lossy(&output2.stderr);
+        let out = String::from_utf8_lossy(&output2.stdout);
+        let msg = if err.trim().is_empty() { out.trim() } else { err.trim() };
+        log::error!("设置服务 {} Start={} 最终失败: {}", service_name, start_type, msg);
+        // Return Ok anyway — non-fatal, the policy + schtasks still apply
+        return Ok(());
+    }
+    log::info!("服务 {} Start={} 设置成功 (retry)", service_name, start_type);
+    Ok(())
+}
+
+/// Helper: control a service (stop/start).
+unsafe fn control_service(service_name: &str, control: u32) -> Result<(), String> {
+    use windows_sys::Win32::System::Services::{
+        OpenSCManagerW, OpenServiceW, ControlService, CloseServiceHandle, StartServiceW,
+        QueryServiceStatus,
+        SC_MANAGER_CONNECT, SERVICE_STOP, SERVICE_START,
+        SERVICE_QUERY_STATUS, SERVICE_STOPPED,
+        SERVICE_CONTROL_STOP,
+    };
+
+    let scm = OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT);
+    if scm.is_null() {
+        return Err(format!("无法打开 SCM (服务控制)"));
+    }
+
+    let svc_name = to_wide(service_name);
+    let access = if control == SERVICE_CONTROL_STOP { SERVICE_STOP | SERVICE_QUERY_STATUS }
+                 else { SERVICE_START | SERVICE_QUERY_STATUS };
+    let svc = OpenServiceW(scm, svc_name.as_ptr(), access);
+    if svc.is_null() {
+        CloseServiceHandle(scm);
+        // Service not found or not accessible – not fatal for disable
+        return Ok(());
+    }
+
+    if control == SERVICE_CONTROL_STOP {
+        // Query status first to see if it's running
+        let mut status: windows_sys::Win32::System::Services::SERVICE_STATUS = std::mem::zeroed();
+        let qs_ret = QueryServiceStatus(svc, &mut status);
+        if qs_ret != 0 && status.dwCurrentState != SERVICE_STOPPED {
+            let mut s = std::mem::zeroed();
+            ControlService(svc, SERVICE_CONTROL_STOP, &mut s);
+        }
+    } else {
+        // Start
+        StartServiceW(svc, 0, std::ptr::null_mut());
+    }
+
+    CloseServiceHandle(svc);
+    CloseServiceHandle(scm);
+    Ok(())
+}
+
+/// Helper: kill a process by name.
+fn kill_process(name: &str) {
+    let _ = std::process::Command::new("taskkill")
+        .args(&["/f", "/im", name])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+}
+
+/// Helper: run schtasks to disable or enable Windows Update scheduled tasks.
+fn schtasks_wu_tasks(enable: bool) -> Result<(), String> {
+    let action = if enable { "/enable" } else { "/disable" };
+
+    // Dynamically enumerate all tasks under \Microsoft\Windows\WindowsUpdate
+    let output = std::process::Command::new("cmd.exe")
+        .args(&["/c", "schtasks /query /fo csv /nh"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行 schtasks /query 失败: {}", e))?;
+
+    let out = String::from_utf8_lossy(&output.stdout);
+    let mut task_names: Vec<String> = Vec::new();
+
+    for line in out.lines() {
+        // CSV format: "TaskName","Next Run Time","Status"
+        if line.to_lowercase().contains("windowsupdate") {
+            // Extract task name from CSV (first field)
+            if let Some(name) = line.split(',').next() {
+                let name = name.trim().trim_matches('"');
+                if !name.is_empty() {
+                    task_names.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    log::info!("找到 {} 个 WindowsUpdate 计划任务: {:?}", task_names.len(), task_names);
+
+    if task_names.is_empty() {
+        log::warn!("未找到任何 WindowsUpdate 计划任务，跳过");
+        return Ok(());
+    }
+
+    for task_path in &task_names {
+        let result = std::process::Command::new("schtasks")
+            .args(&["/change", "/tn", task_path, action])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+
+        match result {
+            Ok(output) => {
+                let out_str = String::from_utf8_lossy(&output.stdout);
+                let err_str = String::from_utf8_lossy(&output.stderr);
+                if output.status.success() {
+                    log::info!("schtasks {} {} -> 成功", action, task_path);
+                } else {
+                    log::warn!("schtasks {} {} -> {} {}", action, task_path, out_str.trim(), err_str.trim());
+                }
+            }
+            Err(e) => {
+                log::error!("schtasks 调用失败: {}", e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if any WU scheduled task is disabled.
+fn check_schtasks_wu_disabled() -> bool {
+    // Use PowerShell Get-ScheduledTask — State enum values are always English
+    let ps_script = r#"
+        $tasks = Get-ScheduledTask -TaskPath '\Microsoft\Windows\WindowsUpdate\*' -ErrorAction SilentlyContinue
+        $disabled = $tasks | Where-Object { $_.State -eq 'Disabled' }
+        if ($disabled) { Write-Output 'YES' } else { Write-Output 'NO' }
+    "#;
+    let output = std::process::Command::new("powershell.exe")
+        .args(&["-NoProfile", "-NonInteractive", "-Command", ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout);
+        return text.trim().eq_ignore_ascii_case("YES");
+    }
+    false
+}
+
+#[tauri::command]
+pub async fn disable_windows_update() -> Result<String, String> {
+    log::info!("开始关闭 Windows Update...");
+
+    // 1. Stop services
+    let services = ["wuauserv", "UsoSvc", "WaaSMedicSvc"];
+    for svc in &services {
+        log::info!("停止服务: {}", svc);
+        unsafe {
+            control_service(svc, windows_sys::Win32::System::Services::SERVICE_CONTROL_STOP)
+                .unwrap_or_else(|e| log::error!("停止服务 {} 失败: {}", svc, e));
+        }
+    }
+
+    // 2. Kill UsoClient.exe
+    log::info!("终止 UsoClient.exe 进程");
+    kill_process("UsoClient.exe");
+
+    // 3. Set service start types to disabled (4) via registry (bypass SCM protection)
+    for svc in &services {
+        log::info!("禁用服务启动: {}", svc);
+        set_service_start_reg(svc, 4)
+            .unwrap_or_else(|e| log::error!("禁用 {} 服务启动失败: {}", svc, e));
+        // Verify the write
+        let after = get_service_start(svc);
+        log::info!("服务 {} 写入后 Start = {:?}", svc, after);
+        clear_service_failure_actions(svc)
+            .unwrap_or_else(|e| log::error!("清空失败恢复 {} 失败: {}", svc, e));
+    }
+
+    // 4. Registry: Set NoAutoUpdate=1, AUOptions=1
+    log::info!("设置注册表策略: NoAutoUpdate, AUOptions");
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+    let (wu_key, _) = hklm.create_subkey(
+        r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
+    ).map_err(|e| format!("创建/打开注册表键失败: {}", e))?;
+    wu_key.set_value("NoAutoUpdate", &1u32).map_err(|e| format!("设置 NoAutoUpdate 失败: {}", e))?;
+    wu_key.set_value("AUOptions", &1u32).map_err(|e| format!("设置 AUOptions 失败: {}", e))?;
+
+    // Optional: DisableWindowsUpdateAccess for Pro/Enterprise
+    let (wu_policy_key, _) = hklm.create_subkey(
+        r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
+    ).map_err(|e| format!("创建 WindowsUpdate 策略键失败: {}", e))?;
+    wu_policy_key.set_value("DisableWindowsUpdateAccess", &1u32)
+        .unwrap_or_else(|e| log::info!("DisableWindowsUpdateAccess 设置跳过（非 Pro/Enterprise 系统）: {}", e));
+
+    // 5. Disable scheduled tasks
+    log::info!("禁用 Windows Update 计划任务");
+    schtasks_wu_tasks(false)?;
+
+    log::info!("Windows Update 关闭完成");
+    Ok("ok".to_string())
+}
+
+#[tauri::command]
+pub async fn enable_windows_update() -> Result<String, String> {
+    log::info!("开始恢复 Windows Update...");
+
+    // 1. Restore service start types via registry: wuauserv=3 (demand), UsoSvc=2 (auto), WaaSMedicSvc=2 (auto)
+    let services_config = [
+        ("wuauserv", 3u32),
+        ("UsoSvc", 2u32),
+        ("WaaSMedicSvc", 2u32),
+    ];
+
+    for (svc, start_type) in &services_config {
+        log::info!("恢复服务启动类型: {} -> {}", svc, start_type);
+        set_service_start_reg(svc, *start_type)
+            .unwrap_or_else(|e| log::error!("恢复 {} 服务启动类型失败: {}", svc, e));
+    }
+
+    // 2. Registry: Delete policy keys
+    log::info!("删除注册表策略键值");
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+
+    // Delete NoAutoUpdate and AUOptions
+    if let Ok(wu_key) = hklm.open_subkey_with_flags(
+        r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU",
+        winreg::enums::KEY_SET_VALUE
+    ) {
+        let _ = wu_key.delete_value("NoAutoUpdate");
+        let _ = wu_key.delete_value("AUOptions");
+    }
+
+    // Delete DisableWindowsUpdateAccess
+    if let Ok(wu_policy_key) = hklm.open_subkey_with_flags(
+        r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate",
+        winreg::enums::KEY_SET_VALUE
+    ) {
+        let _ = wu_policy_key.delete_value("DisableWindowsUpdateAccess");
+    }
+
+    // 3. Enable scheduled tasks
+    log::info!("启用 Windows Update 计划任务");
+    schtasks_wu_tasks(true)?;
+
+    log::info!("Windows Update 恢复完成");
+    Ok("ok".to_string())
+}
+
+/// Check service Start value via registry (simpler and more reliable than SCM query).
+fn get_service_start(service_name: &str) -> Option<u32> {
+    // Use reg query via cmd.exe for reliable reading of ACL-protected keys
+    let output = std::process::Command::new("cmd.exe")
+        .args(&[
+            "/c",
+            &format!(
+                "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\{}\" /v Start",
+                service_name
+            ),
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+
+    let out = String::from_utf8_lossy(&output.stdout);
+    // Parse: "    Start    REG_DWORD    0x4"
+    for line in out.lines() {
+        let line = line.trim();
+        if line.contains("Start") && line.contains("REG_DWORD") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(last) = parts.last() {
+                if let Ok(v) = u32::from_str_radix(last.trim_start_matches("0x"), 16) {
+                    return Some(v);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+pub async fn check_windows_update_state() -> Result<serde_json::Value, String> {
+    let services_to_check = ["wuauserv", "UsoSvc", "WaaSMedicSvc"];
+    let services_disabled = services_to_check.iter().all(|svc| {
+            get_service_start(svc).map_or(false, |st| st == 4)
+        });
+
+    // Check registry: NoAutoUpdate == 1?
+    let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
+    let policy_set = hklm.open_subkey(
+        r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
+    ).and_then(|key| {
+        key.get_value::<u32, _>("NoAutoUpdate")
+    }).map_or(false, |v| v == 1);
+
+    let scheduler_disabled = check_schtasks_wu_disabled();
+    let all_disabled = services_disabled && policy_set && scheduler_disabled;
+
+    let result = serde_json::json!({
+        "services_disabled": services_disabled,
+        "policy_set": policy_set,
+        "scheduler_disabled": scheduler_disabled,
+        "all_disabled": all_disabled,
+    });
+
+    Ok(result)
 }
 
 // === State detection: single PowerShell to check all tweak states ===

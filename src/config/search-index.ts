@@ -324,6 +324,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["系统优化", "system", "optimizer", "注册表", "服务", "性能", "隐私", "游戏", "一键优化"],
   },
   {
+    id: "windows-update",
+    nameKey: "windowsUpdate.pageTitle",
+    path: "/optimize/windows-update",
+    icon: Download,
+    category: "optimization",
+    keywords: ["关闭更新", "禁用更新", "windows更新", "自动更新", "Windows Update", "wuauserv", "停止更新", "系统更新"],
+  },
+  {
     id: "network-optimizer",
     nameKey: "networkOptimize.pageTitle",
     path: "/optimize/network-optimizer",

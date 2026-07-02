@@ -17,6 +17,7 @@ import {
   Settings2,
   Network,
   MousePointer2,
+  Download,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
@@ -104,6 +105,14 @@ const tools: ViewItem[] = [
     icon: MousePointer2,
     titleKey: "peripheralOptimize.pageTitle",
     descriptionKey: "peripheralOptimize.pageDesc",
+    color: "#E53E3E",
+  },
+  {
+    id: "windows-update",
+    path: "/optimize/windows-update",
+    icon: Download,
+    titleKey: "windowsUpdate.pageTitle",
+    descriptionKey: "windowsUpdate.pageDesc",
     color: "#E53E3E",
   },
 ];
