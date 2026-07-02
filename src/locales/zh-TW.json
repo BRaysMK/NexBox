@@ -175,7 +175,6 @@
         "disableGameBar": "禁用遊戲列",
         "disableWindowsInk": "禁用 Windows Ink",
         "disableSpellCheck": "禁用拼字檢查",
-        "disableCloudClipboard": "禁用雲端剪貼簿",
         "disableAppLaunchTracking": "禁用應用啟動追蹤",
         "disableFileSystemAccess": "禁用檔案系統存取",
         "disableDocumentsAccess": "禁用文件存取",
@@ -670,6 +669,9 @@
       "description": "探索更多改槍碼平台"
     },
     "viewMore": "檢視更多",
+    "moreGunCodes": "更多改槍碼",
+    "moreGunCodesDesc": "探索更多改槍碼平台",
+    "openFailed": "打開失敗",
     "otherPlatforms": {
       "title": "其他改槍碼平台",
       "description": "以下是一些其他改槍碼平台，點擊在新視窗中開啟",

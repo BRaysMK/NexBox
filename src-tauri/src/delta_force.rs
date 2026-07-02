@@ -593,6 +593,47 @@ pub async fn get_dlss_preset_status() -> Result<DLSSPresetStatus, String> {
     Ok(DLSSPresetStatus { preset: "K".to_string() })
 }
 
+/// 在独立 WebView 窗口中打开外部平台链接，iframe 内嵌支持完整跳转
+#[tauri::command]
+pub async fn open_platform_window(
+    app: tauri::AppHandle,
+    url: String,
+    title: String,
+    label: String,
+) -> Result<(), String> {
+    use tauri::WebviewUrl;
+    use tauri::WebviewWindowBuilder;
+    use tauri::Manager;
+
+    // 目标 URL 编码后通过 hash fragment 传入 platform-viewer.html
+    let encoded = urlencoding::encode(&url);
+    let app_path = format!("platform-viewer.html#{}", encoded);
+
+    let app_clone = app.clone();
+    let label_clone = label.clone();
+
+    WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(app_path.into()))
+        .title(&title)
+        .inner_size(1200.0, 800.0)
+        .resizable(true)
+        .center()
+        // 拦截 iframe 内 target="_blank" / window.open() 的跳转
+        // 改为在 iframe 内导航，不弹出新窗口
+        .on_new_window(move |new_url, _features| {
+            if let Some(window) = app_clone.get_webview_window(&label_clone) {
+                let safe = new_url.as_str().replace('\\', "\\\\").replace('\'', "\\'");
+                let _ = window.eval(&format!(
+                    "var f=document.getElementById('viewer');if(f)f.src='{safe}';"
+                ));
+            }
+            tauri::webview::NewWindowResponse::Deny
+        })
+        .build()
+        .map_err(|e| format!("创建窗口失败: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

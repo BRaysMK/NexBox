@@ -15,7 +15,7 @@ import {
   useToast,
   Spinner,
 } from "@chakra-ui/react";
-import { ArrowLeft, Globe } from "lucide-react";
+import { ArrowLeft, Globe, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -31,6 +31,7 @@ import {
 } from "@/config/network-optimizer";
 
 const STORE_KEY = "network_optimizer_states";
+const DNS_STORE_KEY = "network_optimizer_dns";
 const store = new LazyStore("settings.json");
 
 export default function NetworkOptimizerPage() {
@@ -45,6 +46,7 @@ export default function NetworkOptimizerPage() {
   const [isInitialScanning, setIsInitialScanning] = useState(true);
   const [isBatchOptimizing, setIsBatchOptimizing] = useState(false);
   const [togglingItems, setTogglingItems] = useState<Set<string>>(new Set());
+  const [isRescanning, setIsRescanning] = useState(false);
 
   const [currentDns, setCurrentDns] = useState<{ primary: string; secondary: string }>({
     primary: "",
@@ -65,45 +67,62 @@ export default function NetworkOptimizerPage() {
   const contrastText = getContrastTextColor();
   const hoverBg = getHoverColor(false);
 
-  // 初始化：加载网络状态 + DNS 配置（后端 check_network_tweak_states 返回 NetworTweakState）
+  // 初始化：加载网络状态 + DNS 配置
   useEffect(() => {
     let cancelled = false;
     async function init() {
       const startTime = Date.now();
-      const [savedResult, scannedResult] = await Promise.allSettled([
+      
+      // 并行加载：本地保存的状态 + 后端实时检测
+      const [savedResult, dnsSavedResult, scannedResult] = await Promise.allSettled([
         store.get<Record<string, boolean>>(STORE_KEY),
+        store.get<{ primary: string; secondary: string }>(DNS_STORE_KEY),
         invoke("check_network_tweak_states").catch(() => null),
       ]);
+      
       if (cancelled) return;
+      
+      // 加载保存的优化状态
       const saved =
         savedResult.status === "fulfilled" && savedResult.value
           ? savedResult.value
           : {};
+      
+      // 加载保存的 DNS 状态
+      const savedDns =
+        dnsSavedResult.status === "fulfilled" && dnsSavedResult.value
+          ? dnsSavedResult.value
+          : { primary: "", secondary: "" };
+      
+      // 解析后端实时扫描结果
       const scanned = scannedResult.status === "fulfilled" ? scannedResult.value : null;
-
-      // 解析 NetworTweakState -> Record<string, boolean> + DNS
       const scannedMap: Record<string, boolean> = {};
-      let dns = { primary: "", secondary: "" };
+      let scannedDns = { primary: "", secondary: "" };
+      
       if (scanned && typeof scanned === "object") {
         const s = scanned as Record<string, unknown>;
         scannedMap["tcp_congestion_optimized"] = !!s.tcp_congestion_optimized;
         scannedMap["chimney_offload"] = !!s.chimney_offload;
         scannedMap["nagle_optimized"] = !!s.nagle_optimized;
         scannedMap["adapter_power_saving_off"] = !!s.adapter_power_saving_off;
-        dns = {
+        scannedDns = {
           primary: String(s.dns_primary ?? ""),
           secondary: String(s.dns_secondary ?? ""),
         };
       }
-
+      
+      // 确保 loading 至少显示 600ms
       const remaining = Math.max(0, 600 - (Date.now() - startTime));
       if (remaining > 0) {
         await new Promise((r) => setTimeout(r, remaining));
       }
       if (cancelled) return;
+      
+      // 一次性原子设置所有状态
       setSavedStates(saved);
       setScannedStates(scannedMap);
-      setCurrentDns(dns);
+      // DNS: 优先使用保存的手动设置，否则用扫描结果
+      setCurrentDns(savedDns.primary ? savedDns : scannedDns);
       setIsInitialScanning(false);
     }
     init();
@@ -118,6 +137,57 @@ export default function NetworkOptimizerPage() {
       await store.save();
     } catch {}
   }, []);
+
+  const persistDns = useCallback(async (dns: { primary: string; secondary: string }) => {
+    try {
+      await store.set(DNS_STORE_KEY, dns);
+      await store.save();
+    } catch {}
+  }, []);
+
+  // 重新扫描（不覆盖用户手动操作的状态）
+  const doRescan = useCallback(async () => {
+    setIsRescanning(true);
+    try {
+      const scanned = await invoke("check_network_tweak_states").catch(() => null);
+      const scannedMap: Record<string, boolean> = {};
+      let scannedDns = { primary: "", secondary: "" };
+      if (scanned && typeof scanned === "object") {
+        const s = scanned as Record<string, unknown>;
+        scannedMap["tcp_congestion_optimized"] = !!s.tcp_congestion_optimized;
+        scannedMap["chimney_offload"] = !!s.chimney_offload;
+        scannedMap["nagle_optimized"] = !!s.nagle_optimized;
+        scannedMap["adapter_power_saving_off"] = !!s.adapter_power_saving_off;
+        scannedDns = {
+          primary: String(s.dns_primary ?? ""),
+          secondary: String(s.dns_secondary ?? ""),
+        };
+      }
+      setScannedStates(scannedMap);
+      // DNS: 如果用户已手动设置 DNS，不覆盖
+      if (currentDns.primary) {
+        // 保持用户的手动 DNS 设置
+      } else {
+        setCurrentDns(scannedDns);
+      }
+      toast({
+        title: t("networkOptimize.rescanComplete"),
+        status: "info",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: t("networkOptimize.scanError"),
+        description: String(err),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsRescanning(false);
+    }
+  }, [toast, t, currentDns.primary]);
 
   const getItemState = useCallback(
     (item: NetworkOptimizerItem): boolean => {
@@ -237,7 +307,9 @@ export default function NetworkOptimizerPage() {
     async (primary: string, secondary: string) => {
       try {
         await invoke("set_dns_servers", { dnsPrimary: primary, dnsSecondary: secondary });
-        setCurrentDns({ primary, secondary });
+        const newDns = { primary, secondary };
+        setCurrentDns(newDns);
+        persistDns(newDns);
         toast({
           title: t("networkOptimize.dnsApplied"),
           description: `${primary}${secondary ? " / " + secondary : ""}`,
@@ -255,7 +327,7 @@ export default function NetworkOptimizerPage() {
         });
       }
     },
-    [toast, t],
+    [toast, t, persistDns],
   );
 
   // 应用预设 DNS
@@ -276,7 +348,9 @@ export default function NetworkOptimizerPage() {
     setIsRestoringDns(true);
     try {
       await invoke("restore_dns_servers");
-      setCurrentDns({ primary: "", secondary: "" });
+      const emptyDns = { primary: "", secondary: "" };
+      setCurrentDns(emptyDns);
+      persistDns(emptyDns);
       toast({
         title: t("networkOptimize.dnsRestored"),
         status: "success",
@@ -294,7 +368,7 @@ export default function NetworkOptimizerPage() {
     } finally {
       setIsRestoringDns(false);
     }
-  }, [toast, t]);
+  }, [toast, t, persistDns]);
 
   // 应用自定义 DNS
   const handleApplyCustomDns = useCallback(async () => {
@@ -542,6 +616,16 @@ export default function NetworkOptimizerPage() {
           </Heading>
         </HStack>
         <HStack spacing={2}>
+          <Button
+            size="sm"
+            leftIcon={<RefreshCw size={14} />}
+            onClick={doRescan}
+            isLoading={isRescanning}
+            variant="ghost"
+            color={subTextColor}
+          >
+            {t("networkOptimize.rescan")}
+          </Button>
           <Button
             size="sm"
             onClick={handleBatchEnable}

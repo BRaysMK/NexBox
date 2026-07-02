@@ -320,8 +320,6 @@ pub fn run() {
         optimization::enable_windows_ink,
         optimization::disable_spelling_typing,
         optimization::enable_spelling_typing,
-        optimization::disable_cloud_clipboard,
-        optimization::enable_cloud_clipboard,
         optimization::disable_app_launch_tracking,
         optimization::enable_app_launch_tracking,
         optimization::disable_advertising_id,

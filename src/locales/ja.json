@@ -175,7 +175,6 @@
         "disableGameBar": "ゲームバーを無効化",
         "disableWindowsInk": "Windows Inkを無効化",
         "disableSpellCheck": "スペルチェックを無効化",
-        "disableCloudClipboard": "クラウドクリップボードを無効化",
         "disableAppLaunchTracking": "アプリ起動追跡を無効化",
         "disableFileSystemAccess": "ファイルシステムアクセスを無効化",
         "disableDocumentsAccess": "ドキュメントアクセスを無効化",
@@ -688,6 +687,9 @@
       "description": "他の改槍コードプラットフォームを探索"
     },
     "viewMore": "もっと見る",
+    "moreGunCodes": "他のガンコード",
+    "moreGunCodesDesc": "他のガンコードプラットフォームを探索",
+    "openFailed": "開けませんでした",
     "otherPlatforms": {
       "title": "その他の改槍コードプラットフォーム",
       "description": "以下は他の改槍コードプラットフォームです。クリックして新しいウィンドウで開きます。",

@@ -203,40 +203,56 @@ $ErrorActionPreference = 'SilentlyContinue'
 $r = @{}
 
 # TCP Congestion
-$supp = netsh int tcp show supplemental 2>$null | Out-String
-$r['tcp_congestion'] = ($supp -match "CTCP" -or $supp -match "CUBIC")
+try {
+    $supp = netsh int tcp show supplemental 2>$null | Out-String
+    $r['tcp_congestion'] = ($supp -match "CTCP" -or $supp -match "CUBIC")
+} catch { $r['tcp_congestion'] = $false }
 
 # Chimney Offload
-$global = netsh int tcp show global 2>$null | Out-String
-$r['chimney'] = ($global -match "Chimney Offload State.*disabled" -or $global -match "Chimney 卸载状态.*禁用")
+try {
+    $global = netsh int tcp show global 2>$null | Out-String
+    $r['chimney'] = ($global -match "Chimney Offload State.*disabled" -or $global -match "Chimney 卸载状态.*禁用")
+} catch { $r['chimney'] = $false }
 
-# Nagle
-$firstIface = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" |
-    Where-Object { (Get-ItemProperty $_.PSPath -Name "IPAddress" -EA 0).IPAddress } |
-    Select-Object -First 1
-if ($firstIface) {
-    $tcpNoDelay = (Get-ItemProperty $firstIface.PSPath -Name "TCPNoDelay" -EA 0).TCPNoDelay
-    $r['nagle'] = ($tcpNoDelay -eq 1)
-} else {
-    $r['nagle'] = $false
-}
+# Nagle (check registry)
+try {
+    $firstIface = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" -ErrorAction SilentlyContinue |
+        Where-Object { (Get-ItemProperty $_.PSPath -Name "IPAddress" -EA 0).IPAddress } |
+        Select-Object -First 1
+    if ($firstIface) {
+        $tcpNoDelay = (Get-ItemProperty $firstIface.PSPath -Name "TCPNoDelay" -EA 0).TCPNoDelay
+        $r['nagle'] = ($tcpNoDelay -eq 1)
+    } else {
+        $r['nagle'] = $false
+    }
+} catch { $r['nagle'] = $false }
 
 # Adapter Power Saving
-$powerMgmtDisabled = Get-NetAdapter -Physical -EA 0 | Where-Object { $_.PowerManagementEnabled -eq $false }
-$r['powerSaving'] = ($powerMgmtDisabled.Count -gt 0)
+try {
+    $powerMgmtDisabled = Get-NetAdapter -Physical -EA 0 | Where-Object { $_.PowerManagementEnabled -eq $false }
+    $r['powerSaving'] = ($powerMgmtDisabled.Count -gt 0)
+} catch { $r['powerSaving'] = $false }
 
 # DNS
-$dnsAdapter = Get-DnsClientServerAddress -AddressFamily IPv4 -EA 0 | Where-Object { $_.ServerAddresses -ne $null } | Select-Object -First 1
-if ($dnsAdapter -and $dnsAdapter.ServerAddresses) {
-    $addrs = $dnsAdapter.ServerAddresses
-    $r['dns_primary'] = $addrs[0]
-    $r['dns_secondary'] = if ($addrs.Count -gt 1) { $addrs[1] } else { "" }
-} else {
+try {
+    $dnsAdapter = Get-DnsClientServerAddress -AddressFamily IPv4 -EA 0 | Where-Object { $_.ServerAddresses -ne $null } | Select-Object -First 1
+    if ($dnsAdapter -and $dnsAdapter.ServerAddresses) {
+        $addrs = $dnsAdapter.ServerAddresses
+        $r['dns_primary'] = $addrs[0]
+        $r['dns_secondary'] = if ($addrs.Count -gt 1) { $addrs[1] } else { "" }
+    } else {
+        $r['dns_primary'] = ""
+        $r['dns_secondary'] = ""
+    }
+} catch {
     $r['dns_primary'] = ""
     $r['dns_secondary'] = ""
 }
 
-$r.Keys | ForEach-Object { Write-Host "$($_):$($r[$_])" }
+# 始终输出所有 key，确保前端能解析到
+@("tcp_congestion","chimney","nagle","powerSaving","dns_primary","dns_secondary") | ForEach-Object {
+    Write-Host "$($_):$($r[$_])"
+}
 "#;
 
     let ps_path = get_powershell_path();
