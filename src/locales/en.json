@@ -176,7 +176,6 @@
         "disableGameBar": "Disable game bar",
         "disableWindowsInk": "Disable Windows Ink",
         "disableSpellCheck": "Disable spell check",
-        "disableCloudClipboard": "Disable cloud clipboard",
         "disableAppLaunchTracking": "Disable app launch tracking",
         "disableFileSystemAccess": "Disable file system access",
         "disableDocumentsAccess": "Disable documents access",
@@ -769,6 +768,9 @@
       "description": "Explore more gun code platforms"
     },
     "viewMore": "View More",
+    "moreGunCodes": "More Gun Codes",
+    "moreGunCodesDesc": "Explore more gun code platforms",
+    "openFailed": "Failed to open",
     "otherPlatforms": {
       "title": "Other Gun Code Platforms",
       "description": "Here are some other gun code platforms. Click to open in a new window.",
@@ -1319,9 +1321,7 @@
       "disableWindowsInk": "Disable Windows Ink",
       "disableWindowsInkDesc": "Disable Windows Ink workspace and inking suggestions",
       "disableSpellCheck": "Disable Spell Check",
-      "disableSpellCheckDesc": "Disable touch keyboard autocorrect, spell check, and text prediction",
-      "disableCloudClipboard": "Disable Cloud Clipboard",
-      "disableCloudClipboardDesc": "Disable clipboard history and cross-device sync"
+      "disableSpellCheckDesc": "Disable touch keyboard autocorrect, spell check, and text prediction"
     },
     "gaming": {
       "enableGameMode": "Enable Game Mode",
@@ -1345,6 +1345,9 @@
     "reverted": "Reverted",
     "optimizing": "Running...",
     "operationError": "Operation failed",
+    "rescan": "Rescan",
+    "rescanComplete": "Scan complete",
+    "scanError": "Scan failed",
     "requiresReboot": "Requires system reboot to take full effect"
   },
   "windowsUpdate": {
@@ -1391,9 +1394,11 @@
     "detected": "Detected",
     "notDetected": "Not Detected",
     "dirs": "{{count}} dirs",
-    "cleanButton": "Start Cleanup",
+    "cleanButton": "Force Cleanup",
     "cleaning": "Cleaning...",
     "scanButton": "Re-scan",
+    "forceCleanTip": "Force cleanup will attempt to delete all cache files. Files in use will be marked for deletion on next reboot.",
+    "rebootPending": "{{count}} file(s) are currently in use and will be deleted after reboot.",
     "officialTip": {
       "title": "NVIDIA Official Recommendation",
       "description": "Follow the steps below before running cleanup on this page.",

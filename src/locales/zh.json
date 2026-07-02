@@ -628,6 +628,9 @@
       "description": "探索更多改枪码平台"
     },
     "viewMore": "查看更多",
+    "moreGunCodes": "更多改枪码",
+    "moreGunCodesDesc": "探索更多改枪码平台",
+    "openFailed": "打开失败",
     "otherPlatforms": {
       "title": "其他改枪码平台",
       "description": "以下是一些其他改枪码平台，点击在新窗口中打开",
@@ -719,7 +722,7 @@
     "overlayPanelDesc": "显示系统硬件状态的悬浮框",
     "gpuRenameDesc": "改写显卡名称以优化游戏性能",
     "resolutionConverterDesc": "换算不同分辨率下的画面比例",
-    "shaderCacheDesc": "清理 NVIDIA/AMD 着色器缓存释放磁盘空间",
+    "shaderCacheDesc": "强制清理 NVIDIA/AMD 着色器缓存释放磁盘空间",
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
     "dynamicIslandDesc": "屏幕顶部灵动岛，显示网速/硬件/音乐/通知",
     "screenRecordDesc": "录制屏幕或窗口，支持分辨率与帧率调节"
@@ -1178,9 +1181,7 @@
       "disableWindowsInk": "禁用 Windows Ink",
       "disableWindowsInkDesc": "关闭 Windows Ink 工作区和笔迹建议",
       "disableSpellCheck": "禁用拼写检查",
-      "disableSpellCheckDesc": "关闭触控键盘的自动更正、拼写检查和文本预测",
-      "disableCloudClipboard": "禁用云剪贴板",
-      "disableCloudClipboardDesc": "关闭剪贴板历史和跨设备同步"
+      "disableSpellCheckDesc": "关闭触控键盘的自动更正、拼写检查和文本预测"
     },
     "gaming": {
       "enableGameMode": "启用游戏模式",
@@ -1278,7 +1279,10 @@
     "optimized": "已优化",
     "reverted": "已取消优化",
     "optimizing": "执行中...",
-    "operationError": "操作执行失败"
+    "operationError": "操作执行失败",
+    "rescan": "重新扫描",
+    "rescanComplete": "扫描完成",
+    "scanError": "扫描失败"
   },
   "peripheralOptimize": {
     "pageTitle": "外设优化",
@@ -1316,9 +1320,11 @@
     "detected": "已检测到",
     "notDetected": "未检测到",
     "dirs": "{{count}} 个目录",
-    "cleanButton": "开始清理",
+    "cleanButton": "强制清理",
     "cleaning": "清理中...",
     "scanButton": "重新扫描",
+    "forceCleanTip": "强制清理会尝试删除所有缓存文件，被占用的文件将标记为重启后删除。",
+    "rebootPending": "{{count}} 个文件已被占用，将在重启后自动删除。",
     "officialTip": {
       "title": "NVIDIA 官方建议",
       "description": "建议先按下述步骤处理，再回到本页执行清理。",

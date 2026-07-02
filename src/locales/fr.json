@@ -175,7 +175,6 @@
         "disableGameBar": "Désactiver la barre de jeu",
         "disableWindowsInk": "Désactiver Windows Ink",
         "disableSpellCheck": "Désactiver la vérification orthographique",
-        "disableCloudClipboard": "Désactiver le presse-papiers cloud",
         "disableAppLaunchTracking": "Désactiver le suivi des lancements",
         "disableFileSystemAccess": "Désactiver l'accès au système de fichiers",
         "disableDocumentsAccess": "Désactiver l'accès aux documents",
@@ -688,6 +687,9 @@
       "description": "Découvrir plus de plateformes de codes"
     },
     "viewMore": "Voir plus",
+    "moreGunCodes": "Plus de codes",
+    "moreGunCodesDesc": "Découvrir plus de plateformes de codes",
+    "openFailed": "Échec de l'ouverture",
     "otherPlatforms": {
       "title": "Autres plateformes de codes",
       "description": "Voici d'autres plateformes de codes d'armes. Cliquez pour ouvrir dans une nouvelle fenêtre.",

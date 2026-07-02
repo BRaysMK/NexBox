@@ -175,7 +175,6 @@
         "disableGameBar": "Spieleleiste deaktivieren",
         "disableWindowsInk": "Windows Ink deaktivieren",
         "disableSpellCheck": "Rechtschreibprüfung deaktivieren",
-        "disableCloudClipboard": "Cloud-Zwischenablage deaktivieren",
         "disableAppLaunchTracking": "App-Startverfolgung deaktivieren",
         "disableFileSystemAccess": "Dateisystemzugriff deaktivieren",
         "disableDocumentsAccess": "Dokumentenzugriff deaktivieren",
@@ -688,6 +687,9 @@
       "description": "Weitere Waffencode-Plattformen entdecken"
     },
     "viewMore": "Mehr anzeigen",
+    "moreGunCodes": "Mehr Waffencodes",
+    "moreGunCodesDesc": "Weitere Waffencode-Plattformen entdecken",
+    "openFailed": "Öffnen fehlgeschlagen",
     "otherPlatforms": {
       "title": "Andere Waffencode-Plattformen",
       "description": "Hier sind einige andere Waffencode-Plattformen. Klicken zum Öffnen in einem neuen Fenster.",

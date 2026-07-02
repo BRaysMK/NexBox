@@ -319,6 +319,7 @@ export default function ShaderCachePage() {
 
     setIsCleaning(true);
     let totalFreed = 0;
+    let totalRebootPending = 0;
     let successCount = 0;
 
     for (const vendor of selectedVendors) {
@@ -327,9 +328,11 @@ export default function ShaderCachePage() {
           success: boolean;
           message: string;
           freed_bytes: number;
+          reboot_pending_count: number;
         }>("clean_shader_cache", { vendor });
         if (result.success) {
           totalFreed += result.freed_bytes;
+          totalRebootPending += result.reboot_pending_count;
           successCount++;
         }
       } catch (error) {
@@ -342,8 +345,11 @@ export default function ShaderCachePage() {
     if (successCount > 0) {
       toast({
         title: t("shaderCache.cleanSuccess", { size: formatSize(totalFreed) }),
+        description: totalRebootPending > 0
+          ? t("shaderCache.rebootPending", { count: totalRebootPending })
+          : undefined,
         status: "success",
-        duration: 3000,
+        duration: 4000,
         isClosable: true,
       });
     } else {
@@ -425,6 +431,18 @@ export default function ShaderCachePage() {
           {t("shaderCache.scanButton")}
         </LiquidGlassButton>
       </HStack>
+
+      <Box
+        p={3}
+        borderRadius="md"
+        border="1px solid"
+        borderColor={useColorModeValue("orange.200", "orange.700")}
+        bg={useColorModeValue("orange.50", "rgba(237,137,54,0.1)")}
+      >
+        <Text fontSize="xs" color={useColorModeValue("orange.700", "orange.200")}>
+          {t("shaderCache.forceCleanTip")}
+        </Text>
+      </Box>
 
       <Box
         p={5}

@@ -11,7 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -61,15 +61,16 @@ export default function OtherGunCodePlatformsPage() {
     },
   ];
 
-  const handleOpenLink = (platform: PlatformInfo) => {
-    new WebviewWindow(`${platform.id}-${Date.now()}`, {
-      url: platform.url,
-      title: platform.name,
-      width: 1200,
-      height: 800,
-      resizable: true,
-      center: true,
-    });
+  const handleOpenLink = async (platform: PlatformInfo) => {
+    try {
+      await invoke("open_platform_window", {
+        url: platform.url,
+        title: platform.name,
+        label: `${platform.id}-${Date.now()}`,
+      });
+    } catch (error) {
+      console.error("打开平台窗口失败:", error);
+    }
   };
 
   return (

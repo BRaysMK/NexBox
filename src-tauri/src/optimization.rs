@@ -3740,33 +3740,6 @@ Write-Output 'OK'
 "#)
 }
 
-// === Optimizer features: Cloud Clipboard ===
-
-#[tauri::command]
-pub async fn disable_cloud_clipboard() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Force -ErrorAction SilentlyContinue | Out-Null
-Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'AllowClipboardHistory' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'AllowCrossDeviceClipboard' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Clipboard' -Name 'EnableClipboardHistory' -Value 0 -Type DWord -Force
-Set-ItemProperty -Path 'HKLM:\Software\Microsoft\Clipboard' -Name 'EnableClipboardHistory' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-Write-Output 'OK'
-"#)
-}
-
-#[tauri::command]
-pub async fn enable_cloud_clipboard() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'AllowClipboardHistory' -Force -ErrorAction SilentlyContinue
-Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'AllowCrossDeviceClipboard' -Force -ErrorAction SilentlyContinue
-Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Clipboard' -Name 'EnableClipboardHistory' -ErrorAction SilentlyContinue
-Remove-ItemProperty -Path 'HKLM:\Software\Microsoft\Clipboard' -Name 'EnableClipboardHistory' -Force -ErrorAction SilentlyContinue
-Write-Output 'OK'
-"#)
-}
-
 // === Optimizer features: App Launch Tracking ===
 
 #[tauri::command]
@@ -4387,49 +4360,6 @@ fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// Helper: change service start type using ChangeServiceConfigW.
-unsafe fn set_service_start(service_name: &str, start_type: u32) -> Result<(), String> {
-    use windows_sys::Win32::System::Services::{
-        OpenSCManagerW, OpenServiceW, ChangeServiceConfigW, CloseServiceHandle,
-        SC_MANAGER_CONNECT, SERVICE_CHANGE_CONFIG, SERVICE_NO_CHANGE,
-    };
-
-    let scm = OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT);
-    if scm.is_null() {
-        return Err(format!("无法打开服务控制管理器 (SCM)"));
-    }
-
-    let svc_name = to_wide(service_name);
-    let svc = OpenServiceW(scm, svc_name.as_ptr(), SERVICE_CHANGE_CONFIG);
-    if svc.is_null() {
-        CloseServiceHandle(scm);
-        return Err(format!("无法打开服务: {}", service_name));
-    }
-
-    let ret = ChangeServiceConfigW(
-        svc,
-        SERVICE_NO_CHANGE, // dwServiceType
-        start_type,        // dwStartType
-        SERVICE_NO_CHANGE, // dwErrorControl
-        std::ptr::null(),  // lpBinaryPathName
-        std::ptr::null(),  // lpLoadOrderGroup
-        std::ptr::null_mut(),  // lpdwTagId
-        std::ptr::null(),  // lpDependencies
-        std::ptr::null(),  // lpServiceStartName
-        std::ptr::null(),  // lpPassword
-        std::ptr::null(),  // lpDisplayName
-    );
-
-    CloseServiceHandle(svc);
-    CloseServiceHandle(scm);
-
-    if ret == 0 {
-        return Err(format!("设置服务 Start 类型失败: {}", service_name));
-    }
-
-    Ok(())
-}
-
 /// Helper: clear failure actions for a service (prevents auto-restart/reboot).
 /// Uses sc.exe to reset failure actions.
 fn clear_service_failure_actions(service_name: &str) -> Result<(), String> {
@@ -4879,7 +4809,6 @@ $v = GetSvc 'XboxNetApiSvc'; $r['disableXboxLive'] = ($null -ne $v -and $v -eq 4
 $v = GetDWord 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled'; $r['disableGameBar'] = ($null -ne $v -and $v -eq 0)
 $v = GetDWord 'HKLM:\SOFTWARE\Policies\Microsoft\WindowsInkWorkspace' 'AllowWindowsInkWorkspace'; $r['disableWindowsInk'] = ($null -ne $v -and $v -eq 0)
 $v = GetDWord 'HKCU:\SOFTWARE\Microsoft\TabletTip\1.7' 'EnableSpellchecking'; $r['disableSpellCheck'] = ($null -ne $v -and $v -eq 0)
-$v = GetDWord 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' 'AllowClipboardHistory'; $r['disableCloudClipboard'] = ($null -ne $v -and $v -eq 0)
 
 # === New privacy features ===
 $v = GetDWord 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy' 'EnableActivityFeed'; $r['disableAppLaunchTracking'] = ($null -ne $v -and $v -eq 0)
