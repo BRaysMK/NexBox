@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo/128x128.png" alt="NexBox Logo" width="128" />
+  <img src="src-tauri/icons/128x128.png" alt="NexBox Logo" width="128" />
 </p>
 
 <h1 align="center">NexBox <sub>新境盒</sub></h1>
@@ -14,7 +14,7 @@
 
 <p align="center">
   <strong>为 PC 游戏玩家打造的一站式性能工具箱</strong><br />
-  硬件监控 · 系统优化 · 显示增强 · 游戏辅助 · 联机平台
+  硬件监控 · 系统优化 · 显示增强 · 游戏辅助
 </p>
 
 ***
@@ -39,7 +39,7 @@
 
 ## 🎯 为什么选择 NexBox
 
-PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看帧率需要 MSI Afterburner、调色彩需要 DisplayCAL、清内存需要 Mem Reduct、联机需要 Radmin VPN……安装繁琐、切换低效，部分工具还会被反作弊系统误判。
+PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看帧率需要 MSI Afterburner、调色彩需要 DisplayCAL、清内存需要 Mem Reduct……安装繁琐、切换低效，部分工具还会被反作弊系统误判。
 
 **NexBox 把这一切装进一个盒子。**
 
