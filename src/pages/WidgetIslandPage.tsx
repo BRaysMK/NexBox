@@ -435,6 +435,7 @@ export default function WidgetIslandPage() {
             fetchHardware();
           }
         } else {
+          localStorage.setItem("nsd_island_visible", "false");
           setIsVisible(false);
         }
       });
@@ -521,7 +522,10 @@ export default function WidgetIslandPage() {
     const closeItem = await MenuItem.new({
       text: "关闭",
       id: "close",
-      action: () => setIsVisible(false),
+      action: () => {
+        localStorage.setItem("nsd_island_visible", "false");
+        setIsVisible(false);
+      },
     });
     const menu = await Menu.new();
     await menu.append(glowItem);

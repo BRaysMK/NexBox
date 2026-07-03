@@ -47,7 +47,7 @@ export function LiquidGlassMenuItem({
         bg={isActive ? activeBg : (isHovering ? glassHoverBg : glassInactiveBg)}
         border="1px solid"
         borderColor={isActive ? glassActiveBorder : glassBorderColor}
-        backdropFilter="blur(12px)"
+        backdropFilter="blur(1px)"
         color={isActive ? activeTextFinal : glassInactiveText}
         position="relative"
         onMouseMove={handleMouseMove}

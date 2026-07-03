@@ -172,14 +172,14 @@ export const searchIndex: SearchItem[] = [
     category: "builtin-tool",
     keywords: ["显卡", "改写", "gpu", "rename", "伪装"],
   },
-  // {
-  //   id: "nvidia-driver",
-  //   nameKey: "sidebar.nvidiaDriver",
-  //   path: "/nvidia-driver",
-  //   icon: Tv2,
-  //   category: "builtin-tool",
-  //   keywords: ["显卡设置", "nvidia", "驱动", "垂直同步", "纹理", "抗锯齿", "fxaa", "帧率", "电源", "各向异性过滤", "nvapi", "3d设置"],
-  // },
+  {
+    id: "nvidia-driver",
+    nameKey: "sidebar.nvidiaDriver",
+    path: "/nvidia-driver",
+    icon: Tv2,
+    category: "builtin-tool",
+    keywords: ["显卡设置", "nvidia", "驱动", "垂直同步", "纹理", "抗锯齿", "fxaa", "帧率", "电源", "各向异性过滤", "nvapi", "3d设置", "g-sync", "vr"],
+  },
   {
     id: "resolution-converter",
     nameKey: "sidebar.resolutionConverter",
