@@ -105,6 +105,7 @@ export default function NvidiaDriverPage() {
   const [diagnostic, setDiagnostic] = useState<NvApiDiagnostic | null>(null);
   const [driverVersion, setDriverVersion] = useState<string>("");
   const [driverBranch, setDriverBranch] = useState<string>("");
+  const [gpuName, setGpuName] = useState<string>("NVIDIA GPU");
   const [settings, setSettings] = useState<NvidiaSetting[]>([]);
   const [modifiedSettings, setModifiedSettings] = useState<Record<number, number>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -150,11 +151,14 @@ export default function NvidiaDriverPage() {
         return;
       }
 
-      // 3. 获取驱动版本
+      // 3. 获取驱动版本和 GPU 名称
       try {
-        const [ver, branch] = await invoke<[number, string]>("get_nvidia_driver_version");
-        setDriverVersion(ver.toString());
-        setDriverBranch(branch);
+        const info = await invoke<{ version: number; branch: string; gpu_name: string }>("get_nvidia_driver_version");
+        setDriverVersion(info.version ? info.version.toString() : "");
+        setDriverBranch(info.branch || "");
+        if (info.gpu_name && info.gpu_name !== "NVIDIA GPU") {
+          setGpuName(info.gpu_name);
+        }
       } catch (_) {
         // 老版本 NVAPI 可能不支持
       }
@@ -723,7 +727,7 @@ export default function NvidiaDriverPage() {
             </Box>
             <Box>
               <Text fontWeight="bold" color={textColor} fontSize="sm">
-                NVIDIA GeForce 显卡
+                {gpuName}
               </Text>
               <Text fontSize="xs" color={subTextColor}>
                 驱动版本: {driverVersion || "未知"} {driverBranch ? `(${driverBranch})` : ""}

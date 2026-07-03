@@ -81,14 +81,14 @@ const tools: ViewItem[] = [
     descriptionKey: "builtinTools.dynamicIslandDesc",
     color: "#E91E63",
   },
-  // {
-  //   id: "nvidia-driver",
-  //   path: "/nvidia-driver",
-  //   icon: Settings2,
-  //   titleKey: "sidebar.nvidiaDriver",
-  //   descriptionKey: "builtinTools.nvidiaDriverDesc",
-  //   color: "#76B900",
-  // },
+  {
+    id: "nvidia-driver",
+    path: "/nvidia-driver",
+    icon: Settings2,
+    titleKey: "sidebar.nvidiaDriver",
+    descriptionKey: "builtinTools.nvidiaDriverDesc",
+    color: "#76B900",
+  },
   // {
   //   id: "screen-record",
   //   path: "/screen-record",

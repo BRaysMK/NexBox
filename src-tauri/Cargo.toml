@@ -61,6 +61,7 @@ tauri-plugin-opener = "2"
 jpeg-encoder = "0.6"
 tauri-plugin-clipboard-manager = "2"
 btleplug = "0.12"
+libloading = "0.8"
 
 # 网易云 EAPI 加密
 md-5 = "0.10"
