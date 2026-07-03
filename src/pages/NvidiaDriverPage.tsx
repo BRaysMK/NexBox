@@ -7,12 +7,6 @@ import {
   HStack,
   useColorModeValue,
   Button,
-  Select,
-  Switch,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
   Spinner,
   Badge,
   useToast,
@@ -25,8 +19,10 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Cpu, Monitor, Settings2, AlertTriangle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Cpu, Settings2, AlertTriangle, RefreshCw, Monitor, Eye } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { CustomSelect } from "@/components/special/custom-select";
+import nvidiaLogo from "@/assets/nvidia.png";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
@@ -83,13 +79,59 @@ interface NvidiaSetting {
 }
 
 const SETTING_IDS: Record<string, number> = {
+  // 同步与显示
   VSYNCMODE: 0x00a879cf,
+  FRL_FPS: 0x10835002,
+  VRR_APP_OVERRIDE: 0x10a879cf,
+  VRR_MODE: 0x1194f158,
+  REFRESH_RATE_OVERRIDE: 0x0064b541,
+  VSYNCTEARCONTROL: 0x005a375c,
+  OGL_TRIPLE_BUFFER: 0x20fdd1f9,
+  // 画质与纹理
   QUALITY_ENHANCEMENTS: 0x00ce2691,
   ANISO_MODE_LEVEL: 0x101e61a9,
   AA_MODE_METHOD: 0x10d773d2,
-  FRL_FPS: 0x10835002,
-  PREFERRED_PSTATE: 0x1057eb71,
   FXAA_ENABLE: 0x1074c972,
+  AO_MODE: 0x00667329,
+  MFAA: 0x0098c1ac,
+  SHADERDISKCACHE: 0x00198fff,
+  AA_MODE_SELECTOR: 0x107efc5b,
+  AA_MODE_ALPHATOCOVERAGE: 0x10fc2d9c,
+  TEXFILTER_ANISO_OPTS2: 0x00e73211,
+  TEXFILTER_NO_NEG_LODBIAS: 0x0019bb68,
+  AUTO_LODBIASADJUST: 0x00638e8f,
+  TEXFILTER_BILINEAR_IN_ANISO: 0x0084cd70,
+  TEXFILTER_DISABLE_TRILIN_SLOPE: 0x002ecaf2,
+  // 电源与性能
+  PREFERRED_PSTATE: 0x1057eb71,
+  PRERENDERLIMIT: 0x007ba09e,
+  OGL_THREAD_CONTROL: 0x20c1221e,
+  VRPRERENDERLIMIT: 0x10111133,
+  BATTERY_BOOST_APP_FPS: 0x10115c8c,
+  // 同步与显示 (追加)
+  VSYNC_BEHAVIOR_FLAGS: 0x10fdec23,
+  VSYNCVRRCONTROL: 0x10a879ce,
+  // 画质与纹理 (追加)
+  AA_BEHAVIOR_FLAGS: 0x10ecdb82,
+  AA_MODE_REPLAY: 0x10d48a85,
+  ANISO_MODE_SELECTOR: 0x10d2bb16,
+  PREVENT_UI_AF_OVERRIDE: 0x103bccb5,
+  // 指示器与覆盖
+  VRRFEATUREINDICATOR: 0x1094f157,
+  VRROVERLAYINDICATOR: 0x1095f16f,
+  VRRREQUESTSTATE: 0x1094f1f7,
+  FXAA_INDICATOR_ENABLE: 0x1068fb9c,
+  PHYSXINDICATOR: 0x1094f16f,
+  EXPORT_PERF_COUNTERS: 0x108f0841,
+  // 电源与性能 (追加)
+  EXTERNAL_QUIET_MODE: 0x10115c8d,
+  // 新增常用设置
+  FXAA_ALLOW: 0x1034cb89,
+  QUALITY_ENHANCEMENT_SUBSTITUTION: 0x00ce2692,
+  AO_MODE_ACTIVE: 0x00664339,
+  VSYNCSMOOTHAFR: 0x101ae763,
+  LATENCY_INDICATOR_AUTOALIGN: 0x1095f170,
+  SHADERDISKCACHE_MAX_SIZE: 0x00ac8497,
 };
 
 export default function NvidiaDriverPage() {
@@ -97,7 +139,8 @@ export default function NvidiaDriverPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const { liquidGlassEnabled } = useBackground();
-  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const { config, getActiveColor, getContrastTextColor } = useThemeColor();
+  const isDark = useColorModeValue(false, true);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isNvidiaAvailable, setIsNvidiaAvailable] = useState<boolean | null>(null);
@@ -116,7 +159,6 @@ export default function NvidiaDriverPage() {
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const sectionBg = useColorModeValue("gray.50", "#161616");
-  const nvidiaGreen = "#76B900";
 
   useEffect(() => {
     loadData();
@@ -154,7 +196,9 @@ export default function NvidiaDriverPage() {
       // 3. 获取驱动版本和 GPU 名称
       try {
         const info = await invoke<{ version: number; branch: string; gpu_name: string }>("get_nvidia_driver_version");
-        setDriverVersion(info.version ? info.version.toString() : "");
+        // NVIDIA driver version: e.g., 56590 → "565.90"
+        const ver = info.version || 0;
+        setDriverVersion(ver > 99 ? `${Math.floor(ver / 100)}.${(ver % 100).toString().padStart(2, '0')}` : ver.toString());
         setDriverBranch(info.branch || "");
         if (info.gpu_name && info.gpu_name !== "NVIDIA GPU") {
           setGpuName(info.gpu_name);
@@ -266,80 +310,23 @@ export default function NvidiaDriverPage() {
     }
   }
 
-  // === 渲染单个设置项 ===
+  // === 渲染单个设置项（统一使用选择框） ===
   function renderSettingControl(setting: NvidiaSetting) {
     const currentVal = getModifiedValue(setting.id);
 
-    // 帧率限制 → 特殊处理：用 Slider
-    if (setting.id === SETTING_IDS.FRL_FPS) {
-      return (
-        <Box>
-          <HStack justify="space-between" mb={2}>
-            <Text fontSize="sm" color={subTextColor}>
-              {currentVal === 0 ? "关闭" : `${currentVal} FPS`}
-            </Text>
-            <Badge colorScheme={currentVal > 0 ? "green" : "gray"}>
-              {currentVal > 0 ? "已启用" : "已关闭"}
-            </Badge>
-          </HStack>
-          <Slider
-            min={0}
-            max={240}
-            step={1}
-            value={currentVal}
-            onChange={(v) => handleChange(setting.id, v)}
-          >
-            <SliderTrack bg={useColorModeValue("gray.200", "gray.600")}>
-              <SliderFilledTrack bg={nvidiaGreen} />
-            </SliderTrack>
-            <SliderThumb boxSize={5} bg={nvidiaGreen} />
-          </Slider>
-          <HStack justify="space-between" mt={1}>
-            <Text fontSize="xs" color={subTextColor}>关闭</Text>
-            <Text fontSize="xs" color={subTextColor}>240 FPS</Text>
-          </HStack>
-        </Box>
-      );
-    }
-
-    // 开关（FXAA）
-    if (setting.options.length === 2 &&
-        setting.options[0].value === 0 &&
-        setting.options[1].value === 1) {
-      return (
-        <HStack justify="space-between">
-          <Text fontSize="sm" color={subTextColor}>
-            {setting.options.find((o) => o.value === currentVal)?.label ?? String(currentVal)}
-          </Text>
-          <Switch
-            isChecked={currentVal === 1}
-            onChange={(e) => handleChange(setting.id, e.target.checked ? 1 : 0)}
-            colorScheme="green"
-          />
-        </HStack>
-      );
-    }
-
-    // Select 下拉菜单（其他设置）
+    const options = setting.options.map(opt => ({
+      value: opt.value.toString(),
+      label: opt.label,
+    }));
     return (
-      <Select
-        value={currentVal}
-        onChange={(e) => handleChange(setting.id, Number(e.target.value))}
-        bg={useColorModeValue("white", "#1f1f1f")}
-        borderColor={borderColor}
-        color={textColor}
-        _hover={{ borderColor: nvidiaGreen }}
-        focusBorderColor={nvidiaGreen}
-        borderRadius="lg"
-        size="sm"
-      >
-        {setting.options.map((opt) => (
-          <option key={opt.value} value={opt.value}
-            style={{ background: useColorModeValue("#fff", "#1f1f1f"), color: useColorModeValue("#000", "#fff") }}>
-            {opt.label}
-          </option>
-        ))}
-      </Select>
+      <Box w="full">
+        <CustomSelect
+          value={currentVal.toString()}
+          onChange={(val) => handleChange(setting.id, Number(val))}
+          options={options}
+          width="100%"
+        />
+      </Box>
     );
   }
 
@@ -351,8 +338,6 @@ export default function NvidiaDriverPage() {
     return (
       <LiquidGlassCard
         p={5}
-        bg={cardBg}
-        borderColor={borderColor}
         borderRadius="xl"
         w="full"
       >
@@ -386,7 +371,7 @@ export default function NvidiaDriverPage() {
     return (
       <Box pt={8}>
         <Flex justify="center" align="center" minH="200px">
-          <Spinner size="xl" color={nvidiaGreen} />
+          <Spinner size="xl" color={getActiveColor()} />
         </Flex>
       </Box>
     );
@@ -439,8 +424,6 @@ export default function NvidiaDriverPage() {
 
           <LiquidGlassCard
             p={6}
-            bg={cardBg}
-            borderColor={borderColor}
             borderRadius="xl"
             w="full"
           >
@@ -661,13 +644,13 @@ export default function NvidiaDriverPage() {
               <HStack spacing={3} w="full" pt={2}>
                 <Button
                   leftIcon={<RefreshCw size={16} />}
-                  colorScheme="green"
-                  bg={nvidiaGreen}
+                  bg={getActiveColor()}
+                  color={getContrastTextColor()}
                   variant="solid"
                   size="md"
                   borderRadius="lg"
                   onClick={() => loadData()}
-                  _hover={{ bg: "#6aa800" }}
+                  _hover={{ filter: 'brightness(0.85)' }}
                 >
                   重新检测
                 </Button>
@@ -705,7 +688,13 @@ export default function NvidiaDriverPage() {
             <Heading size="lg" color={headingColor}>
               显卡设置（仅 NVIDIA）
             </Heading>
-            <Badge colorScheme="green" variant="solid" fontSize="xs" px={2}>
+            <Badge
+              fontSize="xs" px={2}
+              color={getActiveColor()}
+              bg={hexToRgba(config.primaryColor, isDark ? 0.18 : 0.1)}
+              borderRadius="full"
+              fontWeight="700"
+            >
               BETA
             </Badge>
           </HStack>
@@ -714,16 +703,14 @@ export default function NvidiaDriverPage() {
         {/* 驱动信息卡片 */}
         <LiquidGlassCard
           p={4}
-          bg={cardBg}
-          borderColor={borderColor}
           borderRadius="xl"
           w="full"
           borderLeft="4px solid"
-          borderLeftColor={nvidiaGreen}
+          borderLeftColor={getActiveColor()}
         >
           <HStack spacing={4}>
-            <Box color={nvidiaGreen}>
-              <Monitor size={28} />
+            <Box color={getActiveColor()}>
+              <img src={nvidiaLogo} width={40} height={40} style={{ objectFit: 'contain' }} alt="NVIDIA" />
             </Box>
             <Box>
               <Text fontWeight="bold" color={textColor} fontSize="sm">
@@ -734,7 +721,7 @@ export default function NvidiaDriverPage() {
               </Text>
             </Box>
             <Box ml="auto">
-              <Badge colorScheme="green" variant="subtle" px={2}>
+              <Badge color={getActiveColor()} bg={hexToRgba(config.primaryColor, 0.12)} px={2} borderRadius="full">
                 NVAPI 已就绪
               </Badge>
             </Box>
@@ -744,29 +731,85 @@ export default function NvidiaDriverPage() {
         {/* 同步与显示 */}
         {renderSettingGroup(
           "同步与显示",
-          <Monitor size={18} color={nvidiaGreen} />,
-          [SETTING_IDS.VSYNCMODE, SETTING_IDS.FRL_FPS]
+          <Monitor size={18} color={getActiveColor()} />,
+          [
+            SETTING_IDS.VSYNCMODE,
+            SETTING_IDS.VRR_APP_OVERRIDE,
+            SETTING_IDS.VRR_MODE,
+            SETTING_IDS.FRL_FPS,
+            SETTING_IDS.REFRESH_RATE_OVERRIDE,
+            SETTING_IDS.VSYNCTEARCONTROL,
+            SETTING_IDS.OGL_TRIPLE_BUFFER,
+            SETTING_IDS.VSYNC_BEHAVIOR_FLAGS,
+            SETTING_IDS.VSYNCVRRCONTROL,
+            SETTING_IDS.VRRFEATUREINDICATOR,
+            SETTING_IDS.VRROVERLAYINDICATOR,
+            SETTING_IDS.VRRREQUESTSTATE,
+            SETTING_IDS.VSYNCSMOOTHAFR,
+          ]
         )}
 
         {/* 画质与纹理 */}
         {renderSettingGroup(
           "画质与纹理",
-          <Settings2 size={18} color={nvidiaGreen} />,
-          [SETTING_IDS.QUALITY_ENHANCEMENTS, SETTING_IDS.ANISO_MODE_LEVEL, SETTING_IDS.AA_MODE_METHOD, SETTING_IDS.FXAA_ENABLE]
+          <Settings2 size={18} color={getActiveColor()} />,
+          [
+            SETTING_IDS.QUALITY_ENHANCEMENTS,
+            SETTING_IDS.ANISO_MODE_LEVEL,
+            SETTING_IDS.ANISO_MODE_SELECTOR,
+            SETTING_IDS.AA_MODE_METHOD,
+            SETTING_IDS.AA_MODE_SELECTOR,
+            SETTING_IDS.AA_MODE_ALPHATOCOVERAGE,
+            SETTING_IDS.AA_BEHAVIOR_FLAGS,
+            SETTING_IDS.AA_MODE_REPLAY,
+            SETTING_IDS.FXAA_ENABLE,
+            SETTING_IDS.FXAA_INDICATOR_ENABLE,
+            SETTING_IDS.AO_MODE,
+            SETTING_IDS.MFAA,
+            SETTING_IDS.SHADERDISKCACHE,
+            SETTING_IDS.TEXFILTER_ANISO_OPTS2,
+            SETTING_IDS.TEXFILTER_NO_NEG_LODBIAS,
+            SETTING_IDS.AUTO_LODBIASADJUST,
+            SETTING_IDS.TEXFILTER_BILINEAR_IN_ANISO,
+            SETTING_IDS.TEXFILTER_DISABLE_TRILIN_SLOPE,
+            SETTING_IDS.PREVENT_UI_AF_OVERRIDE,
+            SETTING_IDS.FXAA_ALLOW,
+            SETTING_IDS.QUALITY_ENHANCEMENT_SUBSTITUTION,
+            SETTING_IDS.AO_MODE_ACTIVE,
+            SETTING_IDS.SHADERDISKCACHE_MAX_SIZE,
+          ]
+        )}
+
+        {/* 指示器与覆盖 */}
+        {renderSettingGroup(
+          "指示器与覆盖",
+          <Eye size={18} color={getActiveColor()} />,
+          [
+            SETTING_IDS.PHYSXINDICATOR,
+            SETTING_IDS.EXPORT_PERF_COUNTERS,
+            SETTING_IDS.LATENCY_INDICATOR_AUTOALIGN,
+          ]
         )}
 
         {/* 电源与性能 */}
         {renderSettingGroup(
           "电源与性能",
-          <Cpu size={18} color={nvidiaGreen} />,
-          [SETTING_IDS.PREFERRED_PSTATE]
+          <Cpu size={18} color={getActiveColor()} />,
+          [
+            SETTING_IDS.PREFERRED_PSTATE,
+            SETTING_IDS.PRERENDERLIMIT,
+            SETTING_IDS.OGL_THREAD_CONTROL,
+            SETTING_IDS.VRPRERENDERLIMIT,
+            SETTING_IDS.BATTERY_BOOST_APP_FPS,
+            SETTING_IDS.EXTERNAL_QUIET_MODE,
+          ]
         )}
 
         {/* 操作按钮 */}
         <HStack w="full" spacing={4} pt={2} pb={8}>
           <Button
-            colorScheme="green"
-            bg={nvidiaGreen}
+            bg={getActiveColor()}
+            color={getContrastTextColor()}
             isDisabled={!hasAnyChanges}
             isLoading={isSaving}
             loadingText="应用设置..."
@@ -774,7 +817,7 @@ export default function NvidiaDriverPage() {
             flex={1}
             size="md"
             borderRadius="lg"
-            _hover={{ bg: "#6aa800" }}
+            _hover={{ filter: 'brightness(0.85)' }}
           >
             应用更改
           </Button>

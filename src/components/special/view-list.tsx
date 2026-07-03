@@ -10,6 +10,8 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "./liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { hexToRgba } from "@/lib/color-utils";
 import type { ViewItem } from "./view-types";
 
 interface ViewListProps {
@@ -19,11 +21,13 @@ interface ViewListProps {
 export function ViewList({ tools }: ViewListProps) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
+  const { config } = useThemeColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const listBg = useColorModeValue("white", "#111111");
   const listBorder = useColorModeValue("gray.200", "#333333");
   const hoverBg = useColorModeValue("gray.50", "#1a1a1a");
+  const isDark = useColorModeValue(false, true);
 
   const listCardContent = (tool: ViewItem) => {
     const IconComponent = tool.icon;
@@ -36,8 +40,8 @@ export function ViewList({ tools }: ViewListProps) {
             right={2}
             fontSize="10px"
             fontWeight="700"
-            color="#FF6B9D"
-            bg="rgba(255,107,157,0.1)"
+            color={config.primaryColor}
+            bg={hexToRgba(config.primaryColor, isDark ? 0.18 : 0.1)}
             px={1.5}
             py={0.5}
             borderRadius="full"

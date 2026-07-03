@@ -11,12 +11,18 @@ import {
   Crosshair,
   Layout,
   Cpu,
-  Monitor,
   Zap,
   Video,
-  Settings2,
+  Monitor,
 } from "lucide-react";
+import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
+
+// NVIDIA Logo 图片组件
+function NvidiaLogo({ size = 24 }: { size?: number; color?: string }) {
+  return <img src={nvidiaLogoImg} width={size} height={size} style={{ objectFit: 'contain' }} alt="NVIDIA" />;
+}
+
 import { ViewGrid } from "@/components/special/view-grid";
 import { ViewList } from "@/components/special/view-list";
 import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
@@ -84,10 +90,11 @@ const tools: ViewItem[] = [
   {
     id: "nvidia-driver",
     path: "/nvidia-driver",
-    icon: Settings2,
+    icon: NvidiaLogo,
     titleKey: "sidebar.nvidiaDriver",
     descriptionKey: "builtinTools.nvidiaDriverDesc",
     color: "#76B900",
+    beta: true,
   },
   // {
   //   id: "screen-record",
