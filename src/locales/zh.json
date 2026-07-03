@@ -51,7 +51,7 @@
     "dlssPreset": "三角洲DLSS设置",
     "epicFree": "喜加一",
     "dynamicIsland": "灵动岛",
-    "nvidiaDriver": "显卡设置",
+    "nvidiaDriver": "显卡设置（仅NVIDIA）",
     "screenRecord": "屏幕录制"
   },
   "optimization": {

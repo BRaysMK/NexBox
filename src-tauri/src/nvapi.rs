@@ -333,22 +333,120 @@ pub struct NvidiaSetting {
     pub options: Vec<SettingOption>,
 }
 
+// === 同步与显示 ===
 const SETTING_VSYNCMODE: NvU32 = 0x00A879CF;
+const SETTING_FRL_FPS: NvU32 = 0x10835002;
+const SETTING_VRR_APP_OVERRIDE: NvU32 = 0x10A879CF;
+const SETTING_VRR_MODE: NvU32 = 0x1194F158;
+const SETTING_REFRESH_RATE_OVERRIDE: NvU32 = 0x0064B541;
+const SETTING_VSYNCTEARCONTROL: NvU32 = 0x005A375C;
+const SETTING_OGL_TRIPLE_BUFFER: NvU32 = 0x20FDD1F9;
+
+// === 画质与纹理 ===
 const SETTING_QUALITY_ENHANCEMENTS: NvU32 = 0x00CE2691;
 const SETTING_ANISO_MODE_LEVEL: NvU32 = 0x101E61A9;
 const SETTING_AA_MODE_METHOD: NvU32 = 0x10D773D2;
-const SETTING_FRL_FPS: NvU32 = 0x10835002;
-const SETTING_PREFERRED_PSTATE: NvU32 = 0x1057EB71;
 const SETTING_FXAA_ENABLE: NvU32 = 0x1074C972;
+const SETTING_AO_MODE: NvU32 = 0x00667329;
+const SETTING_MAXWELL_B_SAMPLE_INTERLEAVE: NvU32 = 0x0098C1AC;
+const SETTING_PS_SHADERDISKCACHE: NvU32 = 0x00198FFF;
+const SETTING_AA_MODE_SELECTOR: NvU32 = 0x107EFC5B;
+const SETTING_AA_MODE_ALPHATOCOVERAGE: NvU32 = 0x10FC2D9C;
+const SETTING_PS_TEXFILTER_ANISO_OPTS2: NvU32 = 0x00E73211;
+const SETTING_PS_TEXFILTER_NO_NEG_LODBIAS: NvU32 = 0x0019BB68;
+const SETTING_AUTO_LODBIASADJUST: NvU32 = 0x00638E8F;
+const SETTING_PS_TEXFILTER_BILINEAR_IN_ANISO: NvU32 = 0x0084CD70;
+const SETTING_PS_TEXFILTER_DISABLE_TRILIN_SLOPE: NvU32 = 0x002ECAF2;
+
+// === 电源与性能 ===
+const SETTING_PREFERRED_PSTATE: NvU32 = 0x1057EB71;
+const SETTING_PRERENDERLIMIT: NvU32 = 0x007BA09E;
+const SETTING_OGL_THREAD_CONTROL: NvU32 = 0x20C1221E;
+const SETTING_VRPRERENDERLIMIT: NvU32 = 0x10111133;
+const SETTING_BATTERY_BOOST_APP_FPS: NvU32 = 0x10115C8C;
+
+// === 同步与显示 (追加) ===
+const SETTING_VSYNC_BEHAVIOR_FLAGS: NvU32 = 0x10FDEC23;
+const SETTING_VSYNCVRRCONTROL: NvU32 = 0x10A879CE;
+
+// === 画质与纹理 (追加) ===
+const SETTING_AA_BEHAVIOR_FLAGS: NvU32 = 0x10ECDB82;
+const SETTING_AA_MODE_REPLAY: NvU32 = 0x10D48A85;
+const SETTING_ANISO_MODE_SELECTOR: NvU32 = 0x10D2BB16;
+const SETTING_PREVENT_UI_AF_OVERRIDE: NvU32 = 0x103BCCB5;
+
+// === 指示器与覆盖 ===
+const SETTING_VRRFEATUREINDICATOR: NvU32 = 0x1094F157;
+const SETTING_VRROVERLAYINDICATOR: NvU32 = 0x1095F16F;
+const SETTING_VRRREQUESTSTATE: NvU32 = 0x1094F1F7;
+const SETTING_FXAA_INDICATOR_ENABLE: NvU32 = 0x1068FB9C;
+const SETTING_PHYSXINDICATOR: NvU32 = 0x1094F16F;
+const SETTING_EXPORT_PERF_COUNTERS: NvU32 = 0x108F0841;
+
+// === 电源与性能 (追加) ===
+const SETTING_EXTERNAL_QUIET_MODE: NvU32 = 0x10115C8D;
+
+// === 新增常用设置 ===
+const SETTING_FXAA_ALLOW: NvU32 = 0x1034CB89;
+const SETTING_QUALITY_ENHANCEMENT_SUBSTITUTION: NvU32 = 0x00CE2692;
+const SETTING_AO_MODE_ACTIVE: NvU32 = 0x00664339;
+const SETTING_VSYNCSMOOTHAFR: NvU32 = 0x101AE763;
+const SETTING_LATENCY_INDICATOR_AUTOALIGN: NvU32 = 0x1095F170;
+const SETTING_PS_SHADERDISKCACHE_MAX_SIZE: NvU32 = 0x00AC8497;
 
 const TARGET_SETTINGS: &[NvU32] = &[
+    // 同步与显示
     SETTING_VSYNCMODE,
+    SETTING_FRL_FPS,
+    SETTING_VRR_APP_OVERRIDE,
+    SETTING_VRR_MODE,
+    SETTING_REFRESH_RATE_OVERRIDE,
+    SETTING_VSYNCTEARCONTROL,
+    SETTING_OGL_TRIPLE_BUFFER,
+    // 画质与纹理
     SETTING_QUALITY_ENHANCEMENTS,
     SETTING_ANISO_MODE_LEVEL,
     SETTING_AA_MODE_METHOD,
-    SETTING_FRL_FPS,
-    SETTING_PREFERRED_PSTATE,
     SETTING_FXAA_ENABLE,
+    SETTING_AO_MODE,
+    SETTING_MAXWELL_B_SAMPLE_INTERLEAVE,
+    SETTING_PS_SHADERDISKCACHE,
+    SETTING_AA_MODE_SELECTOR,
+    SETTING_AA_MODE_ALPHATOCOVERAGE,
+    SETTING_PS_TEXFILTER_ANISO_OPTS2,
+    SETTING_PS_TEXFILTER_NO_NEG_LODBIAS,
+    SETTING_AUTO_LODBIASADJUST,
+    SETTING_PS_TEXFILTER_BILINEAR_IN_ANISO,
+    SETTING_PS_TEXFILTER_DISABLE_TRILIN_SLOPE,
+    // 电源与性能
+    SETTING_PREFERRED_PSTATE,
+    SETTING_PRERENDERLIMIT,
+    SETTING_OGL_THREAD_CONTROL,
+    SETTING_VRPRERENDERLIMIT,
+    SETTING_BATTERY_BOOST_APP_FPS,
+    SETTING_EXTERNAL_QUIET_MODE,
+    // 同步与显示 (追加)
+    SETTING_VSYNC_BEHAVIOR_FLAGS,
+    SETTING_VSYNCVRRCONTROL,
+    // 画质与纹理 (追加)
+    SETTING_AA_BEHAVIOR_FLAGS,
+    SETTING_AA_MODE_REPLAY,
+    SETTING_ANISO_MODE_SELECTOR,
+    SETTING_PREVENT_UI_AF_OVERRIDE,
+    // 指示器与覆盖
+    SETTING_VRRFEATUREINDICATOR,
+    SETTING_VRROVERLAYINDICATOR,
+    SETTING_VRRREQUESTSTATE,
+    SETTING_FXAA_INDICATOR_ENABLE,
+    SETTING_PHYSXINDICATOR,
+    SETTING_EXPORT_PERF_COUNTERS,
+    // 新增常用
+    SETTING_FXAA_ALLOW,
+    SETTING_QUALITY_ENHANCEMENT_SUBSTITUTION,
+    SETTING_AO_MODE_ACTIVE,
+    SETTING_VSYNCSMOOTHAFR,
+    SETTING_LATENCY_INDICATOR_AUTOALIGN,
+    SETTING_PS_SHADERDISKCACHE_MAX_SIZE,
 ];
 
 type OptsEntry = (NvU32, &'static str, Vec<SettingOption>);
@@ -438,6 +536,343 @@ fn settings_options() -> &'static [OptsEntry] {
                 vec![
                     SettingOption { value: 0, label: "关闭".into() },
                     SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            // ---- 同步与显示 ----
+            (
+                SETTING_VRR_APP_OVERRIDE,
+                "G-Sync",
+                vec![
+                    SettingOption { value: 0, label: "允许".into() },
+                    SettingOption { value: 1, label: "强制关闭".into() },
+                    SettingOption { value: 2, label: "禁止".into() },
+                    SettingOption { value: 3, label: "ULMB".into() },
+                    SettingOption { value: 4, label: "固定刷新".into() },
+                ],
+            ),
+            (
+                SETTING_VRR_MODE,
+                "G-Sync 全局启用",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "仅全屏".into() },
+                    SettingOption { value: 2, label: "全屏和窗口".into() },
+                ],
+            ),
+            (
+                SETTING_REFRESH_RATE_OVERRIDE,
+                "首选刷新率",
+                vec![
+                    SettingOption { value: 0, label: "应用程序控制".into() },
+                    SettingOption { value: 1, label: "最高可用".into() },
+                ],
+            ),
+            (
+                SETTING_VSYNCTEARCONTROL,
+                "垂直同步撕裂控制",
+                vec![
+                    SettingOption { value: 0x96861077, label: "禁用".into() },
+                    SettingOption { value: 0x99941284, label: "启用".into() },
+                ],
+            ),
+            (
+                SETTING_OGL_TRIPLE_BUFFER,
+                "OpenGL 三重缓冲",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            // ---- 画质与纹理 ----
+            (
+                SETTING_AO_MODE,
+                "环境光遮蔽",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "低".into() },
+                    SettingOption { value: 2, label: "中".into() },
+                    SettingOption { value: 3, label: "高".into() },
+                ],
+            ),
+            (
+                SETTING_MAXWELL_B_SAMPLE_INTERLEAVE,
+                "MFAA 多帧采样",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_PS_SHADERDISKCACHE,
+                "着色器缓存",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_AA_MODE_SELECTOR,
+                "抗锯齿 - 模式选择",
+                vec![
+                    SettingOption { value: 0, label: "应用程序控制".into() },
+                    SettingOption { value: 1, label: "覆盖应用设置".into() },
+                    SettingOption { value: 2, label: "增强应用设置".into() },
+                ],
+            ),
+            (
+                SETTING_AA_MODE_ALPHATOCOVERAGE,
+                "抗锯齿 - 透明度多重采样",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 4, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_PS_TEXFILTER_ANISO_OPTS2,
+                "纹理过滤 - 各向异性采样优化",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_PS_TEXFILTER_NO_NEG_LODBIAS,
+                "纹理过滤 - 负 LOD 偏移",
+                vec![
+                    SettingOption { value: 0, label: "允许".into() },
+                    SettingOption { value: 1, label: "拒绝".into() },
+                ],
+            ),
+            (
+                SETTING_AUTO_LODBIASADJUST,
+                "纹理过滤 - 驱动控制 LOD 偏移",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_PS_TEXFILTER_BILINEAR_IN_ANISO,
+                "纹理过滤 - 各向异性过滤优化",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_PS_TEXFILTER_DISABLE_TRILIN_SLOPE,
+                "纹理过滤 - 三线性优化",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            // ---- 电源与性能 ----
+            (
+                SETTING_PRERENDERLIMIT,
+                "最大预渲染帧数",
+                vec![
+                    SettingOption { value: 0, label: "应用程序控制".into() },
+                    SettingOption { value: 1, label: "1".into() },
+                    SettingOption { value: 2, label: "2".into() },
+                    SettingOption { value: 3, label: "3".into() },
+                    SettingOption { value: 4, label: "4".into() },
+                ],
+            ),
+            (
+                SETTING_OGL_THREAD_CONTROL,
+                "OpenGL 线程优化",
+                vec![
+                    SettingOption { value: 0, label: "自动".into() },
+                    SettingOption { value: 1, label: "启用".into() },
+                    SettingOption { value: 2, label: "禁用".into() },
+                ],
+            ),
+            (
+                SETTING_VRPRERENDERLIMIT,
+                "VR 预渲染帧数",
+                vec![
+                    SettingOption { value: 0, label: "应用程序控制".into() },
+                    SettingOption { value: 1, label: "1".into() },
+                ],
+            ),
+            (
+                SETTING_BATTERY_BOOST_APP_FPS,
+                "电池加速帧率限制",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 30, label: "30 FPS".into() },
+                    SettingOption { value: 60, label: "60 FPS".into() },
+                ],
+            ),
+            // ---- 同步与显示 (追加) ----
+            (
+                SETTING_VSYNC_BEHAVIOR_FLAGS,
+                "垂直同步 - 行为标志",
+                vec![
+                    SettingOption { value: 0x00000000, label: "默认".into() },
+                    SettingOption { value: 0x00000001, label: "忽略交换间隔倍数".into() },
+                ],
+            ),
+            (
+                SETTING_VSYNCVRRCONTROL,
+                "可变刷新率 (VRR)",
+                vec![
+                    SettingOption { value: 0x00000000, label: "关闭".into() },
+                    SettingOption { value: 0x00000001, label: "开启".into() },
+                    SettingOption { value: 0x9f95128e, label: "不支持".into() },
+                ],
+            ),
+            // ---- 画质与纹理 (追加) ----
+            (
+                SETTING_AA_BEHAVIOR_FLAGS,
+                "抗锯齿 - 行为标志",
+                vec![
+                    SettingOption { value: 0x00000000, label: "无".into() },
+                    SettingOption { value: 0x00000001, label: "覆盖视为应用控制".into() },
+                    SettingOption { value: 0x00000002, label: "覆盖视为增强".into() },
+                    SettingOption { value: 0x00000003, label: "禁用覆盖".into() },
+                    SettingOption { value: 0x00000004, label: "增强视为应用控制".into() },
+                    SettingOption { value: 0x00000008, label: "增强视为覆盖".into() },
+                    SettingOption { value: 0x0000000c, label: "禁用增强".into() },
+                ],
+            ),
+            (
+                SETTING_AA_MODE_REPLAY,
+                "抗锯齿 - 透明度超级采样",
+                vec![
+                    SettingOption { value: 0x00000000, label: "关闭".into() },
+                    SettingOption { value: 0x00000010, label: "2x 采样".into() },
+                    SettingOption { value: 0x00000020, label: "4x 采样".into() },
+                    SettingOption { value: 0x00000030, label: "8x 采样".into() },
+                ],
+            ),
+            (
+                SETTING_ANISO_MODE_SELECTOR,
+                "各向异性过滤模式",
+                vec![
+                    SettingOption { value: 0x00000000, label: "应用程序控制".into() },
+                    SettingOption { value: 0x00000001, label: "用户自定义".into() },
+                    SettingOption { value: 0x00000002, label: "条件".into() },
+                ],
+            ),
+            (
+                SETTING_PREVENT_UI_AF_OVERRIDE,
+                "禁止覆盖各向异性过滤",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+
+            // ---- 指示器与覆盖 ----
+            (
+                SETTING_VRRFEATUREINDICATOR,
+                "G-Sync 功能指示器",
+                vec![
+                    SettingOption { value: 0x0, label: "关闭".into() },
+                    SettingOption { value: 0x1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_VRROVERLAYINDICATOR,
+                "G-Sync 叠加指示器",
+                vec![
+                    SettingOption { value: 0x0, label: "关闭".into() },
+                    SettingOption { value: 0x1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_VRRREQUESTSTATE,
+                "G-Sync 请求状态",
+                vec![
+                    SettingOption { value: 0x0, label: "关闭".into() },
+                    SettingOption { value: 0x1, label: "仅全屏".into() },
+                    SettingOption { value: 0x2, label: "全屏和窗口".into() },
+                ],
+            ),
+            (
+                SETTING_FXAA_INDICATOR_ENABLE,
+                "FXAA 指示器",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_PHYSXINDICATOR,
+                "PhysX 指示器",
+                vec![
+                    SettingOption { value: 0x34534064, label: "关闭".into() },
+                    SettingOption { value: 0x24545582, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_EXPORT_PERF_COUNTERS,
+                "性能计数器导出",
+                vec![
+                    SettingOption { value: 0x00000000, label: "关闭".into() },
+                    SettingOption { value: 0x00000001, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_EXTERNAL_QUIET_MODE,
+                "外部静音模式 (XQM)",
+                vec![
+                    SettingOption { value: 0x00000000, label: "关闭".into() },
+                    SettingOption { value: 0x00000001, label: "开启".into() },
+                ],
+            ),
+            // ---- 新增常用设置 ----
+            (
+                SETTING_FXAA_ALLOW,
+                "FXAA 允许",
+                vec![
+                    SettingOption { value: 0, label: "不允许".into() },
+                    SettingOption { value: 1, label: "允许".into() },
+                ],
+            ),
+            (
+                SETTING_QUALITY_ENHANCEMENT_SUBSTITUTION,
+                "纹理过滤 - 质量替换",
+                vec![
+                    SettingOption { value: 0x00000000, label: "无替换".into() },
+                    SettingOption { value: 0x00000001, label: "高质量→质量".into() },
+                ],
+            ),
+            (
+                SETTING_AO_MODE_ACTIVE,
+                "环境光遮蔽激活",
+                vec![
+                    SettingOption { value: 0, label: "关闭".into() },
+                    SettingOption { value: 1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_VSYNCSMOOTHAFR,
+                "平滑 AFR 行为",
+                vec![
+                    SettingOption { value: 0x00000000, label: "关闭".into() },
+                    SettingOption { value: 0x00000001, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_LATENCY_INDICATOR_AUTOALIGN,
+                "Reflex 指示器自动对齐",
+                vec![
+                    SettingOption { value: 0x0, label: "关闭".into() },
+                    SettingOption { value: 0x1, label: "开启".into() },
+                ],
+            ),
+            (
+                SETTING_PS_SHADERDISKCACHE_MAX_SIZE,
+                "着色器缓存最大尺寸",
+                vec![
+                    SettingOption { value: 0x0, label: "无限制".into() },
+                    SettingOption { value: 0x1000, label: "4 GB (默认)".into() },
+                    SettingOption { value: 0x2000, label: "8 GB".into() },
+                    SettingOption { value: 0x4000, label: "16 GB".into() },
+                    SettingOption { value: 0x8000, label: "32 GB".into() },
                 ],
             ),
         ]
@@ -697,12 +1132,51 @@ pub fn list_nvidia_settings() -> Result<Vec<NvidiaSetting>, String> {
 
             let description = match target_id {
                 SETTING_VSYNCMODE => "控制画面撕裂与帧同步",
+                SETTING_FRL_FPS => "限制游戏最大帧率，降低功耗",
+                SETTING_VRR_APP_OVERRIDE => "G-Sync 应用级覆盖控制",
+                SETTING_VRR_MODE => "G-Sync 全局启用范围",
+                SETTING_REFRESH_RATE_OVERRIDE => "选择首选刷新率策略",
+                SETTING_VSYNCTEARCONTROL => "控制垂直同步撕裂补偿",
+                SETTING_OGL_TRIPLE_BUFFER => "OpenGL 三重缓冲开关",
                 SETTING_QUALITY_ENHANCEMENTS => "纹理过滤的全局画质等级",
                 SETTING_ANISO_MODE_LEVEL => "增强斜角纹理的清晰度",
                 SETTING_AA_MODE_METHOD => "平滑物体边缘锯齿",
-                SETTING_FRL_FPS => "限制游戏最大帧率，降低功耗",
-                SETTING_PREFERRED_PSTATE => "控制 GPU 性能和功耗策略",
                 SETTING_FXAA_ENABLE => "快速且低开销的抗锯齿技术",
+                SETTING_AO_MODE => "模拟物体间环境光遮蔽阴影",
+                SETTING_MAXWELL_B_SAMPLE_INTERLEAVE => "MFAA 多帧抗锯齿技术",
+                SETTING_PS_SHADERDISKCACHE => "着色器缓存减少卡顿",
+                SETTING_AA_MODE_SELECTOR => "抗锯齿覆盖/增强模式",
+                SETTING_AA_MODE_ALPHATOCOVERAGE => "透明纹理的抗锯齿处理",
+                SETTING_PS_TEXFILTER_ANISO_OPTS2 => "各向异性过滤采样优化",
+                SETTING_PS_TEXFILTER_NO_NEG_LODBIAS => "控制负 LOD 偏移行为",
+                SETTING_AUTO_LODBIASADJUST => "驱动自动调节 LOD 偏移",
+                SETTING_PS_TEXFILTER_BILINEAR_IN_ANISO => "各向异性过滤时使用双线性",
+                SETTING_PS_TEXFILTER_DISABLE_TRILIN_SLOPE => "禁用三线性过滤优化",
+                SETTING_PREFERRED_PSTATE => "控制 GPU 性能和功耗策略",
+                SETTING_PRERENDERLIMIT => "CPU 提前渲染的帧数",
+                SETTING_OGL_THREAD_CONTROL => "OpenGL 多线程优化",
+                SETTING_VRPRERENDERLIMIT => "VR 头显预渲染帧数",
+                SETTING_BATTERY_BOOST_APP_FPS => "电池供电时帧率限制",
+                SETTING_VSYNC_BEHAVIOR_FLAGS => "控制垂直同步行为标志",
+                SETTING_VSYNCVRRCONTROL => "可变刷新率开关",
+                SETTING_AA_BEHAVIOR_FLAGS => "抗锯齿覆盖/增强行为控制",
+                SETTING_AA_MODE_REPLAY => "透明纹理超级采样模式",
+                SETTING_ANISO_MODE_SELECTOR => "各向异性过滤控制模式",
+                SETTING_PREVENT_UI_AF_OVERRIDE => "禁止程序覆盖各向异性过滤",
+
+                SETTING_VRRFEATUREINDICATOR => "G-Sync 功能状态指示图标",
+                SETTING_VRROVERLAYINDICATOR => "G-Sync 刷新率叠加层",
+                SETTING_VRRREQUESTSTATE => "G-Sync 请求启用模式",
+                SETTING_FXAA_INDICATOR_ENABLE => "FXAA 激活状态指示图标",
+                SETTING_PHYSXINDICATOR => "PhysX 状态指示图标",
+                SETTING_EXPORT_PERF_COUNTERS => "导出性能计数器数据",
+                SETTING_EXTERNAL_QUIET_MODE => "外部静音模式功耗控制",
+                SETTING_FXAA_ALLOW => "控制应用是否可使用 FXAA 抗锯齿",
+                SETTING_QUALITY_ENHANCEMENT_SUBSTITUTION => "纹理过滤质量降级策略",
+                SETTING_AO_MODE_ACTIVE => "环境光遮蔽全局启用开关",
+                SETTING_VSYNCSMOOTHAFR => "多 GPU 交替帧渲染优化",
+                SETTING_LATENCY_INDICATOR_AUTOALIGN => "NVIDIA Reflex 延迟标记自动对齐",
+                SETTING_PS_SHADERDISKCACHE_MAX_SIZE => "着色器缓存磁盘使用上限",
                 _ => "",
             };
 
