@@ -2036,3 +2036,254 @@ pub async fn delete_icc_preset(id: String) -> Result<FilterResult, String> {
         Err("此功能仅支持 Windows 系统".to_string())
     }
 }
+
+// ─── ICC Profile Export ───
+
+/// Write a big-endian u32 into a byte vector.
+fn push_u32_be(buf: &mut Vec<u8>, val: u32) {
+    buf.extend_from_slice(&val.to_be_bytes());
+}
+
+/// Write a big-endian u16 into a byte vector.
+fn push_u16_be(buf: &mut Vec<u8>, val: u16) {
+    buf.extend_from_slice(&val.to_be_bytes());
+}
+
+/// Write an s15Fixed16Number (signed 16.16 fixed-point) into a byte vector.
+fn push_s15fixed16(buf: &mut Vec<u8>, val: f64) {
+    let raw = (val * 65536.0).round() as i32;
+    buf.extend_from_slice(&raw.to_be_bytes());
+}
+
+/// Pad a byte vector to a 4-byte boundary with zero bytes.
+fn pad_to_4(buf: &mut Vec<u8>) {
+    while buf.len() % 4 != 0 {
+        buf.push(0);
+    }
+}
+
+/// Build a minimal valid ICC v2 display profile containing a vcgt
+/// (Video Card Gamma Table) tag with the supplied 3×256 gamma ramp.
+///
+/// The profile also includes the required v2 tags (desc, cprt, wtpt,
+/// rXYZ/gXYZ/bXYZ, rTRC/gTRC/bTRC) so it is accepted by Windows Color
+/// Management and other ICC-aware tools.
+fn build_icc_profile(ramp: &[[u16; 256]; 3], description: &str) -> Vec<u8> {
+    // Collect tag data blocks as (tag_signature, data_bytes).
+    // Each block's data already starts with its type signature + reserved.
+    let mut blocks: Vec<([u8; 4], Vec<u8>)> = Vec::new();
+
+    // ── desc (profileDescriptionTag) ──
+    {
+        let mut d = Vec::new();
+        d.extend_from_slice(b"desc");
+        d.extend_from_slice(&[0u8; 4]); // reserved
+        let desc_bytes = description.as_bytes();
+        push_u32_be(&mut d, desc_bytes.len() as u32 + 1); // length incl. null
+        d.extend_from_slice(desc_bytes);
+        d.push(0); // null terminator
+        pad_to_4(&mut d);
+        // Unicode section (empty)
+        push_u32_be(&mut d, 0); // language code
+        push_u32_be(&mut d, 0); // count
+        // ScriptCode section
+        push_u16_be(&mut d, 2); // code
+        d.push(0); // string length
+        d.extend_from_slice(&[0u8; 67]); // string (67 bytes fixed)
+        blocks.push((*b"desc", d));
+    }
+
+    // ── cprt (copyrightTag) ──
+    {
+        let mut d = Vec::new();
+        d.extend_from_slice(b"text");
+        d.extend_from_slice(&[0u8; 4]);
+        let cprt = b"NexBox Exported ICC Profile\0";
+        d.extend_from_slice(cprt);
+        pad_to_4(&mut d);
+        blocks.push((*b"cprt", d));
+    }
+
+    // ── wtpt (mediaWhitePointTag) – D50 ──
+    {
+        let mut d = Vec::new();
+        d.extend_from_slice(b"XYZ ");
+        d.extend_from_slice(&[0u8; 4]);
+        push_s15fixed16(&mut d, 0.9505); // X
+        push_s15fixed16(&mut d, 1.0000); // Y
+        push_s15fixed16(&mut d, 1.0890); // Z
+        blocks.push((*b"wtpt", d));
+    }
+
+    // ── rXYZ / gXYZ / bXYZ – sRGB primaries (D50-adapted) ──
+    {
+        let colorants: [([u8; 4], f64, f64, f64); 3] = [
+            (*b"rXYZ", 0.4360, 0.2225, 0.0139),
+            (*b"gXYZ", 0.3851, 0.7169, 0.0971),
+            (*b"bXYZ", 0.1431, 0.0606, 0.7141),
+        ];
+        for (sig, x, y, z) in colorants {
+            let mut d = Vec::new();
+            d.extend_from_slice(b"XYZ ");
+            d.extend_from_slice(&[0u8; 4]);
+            push_s15fixed16(&mut d, x);
+            push_s15fixed16(&mut d, y);
+            push_s15fixed16(&mut d, z);
+            blocks.push((sig, d));
+        }
+    }
+
+    // ── rTRC / gTRC / bTRC – identity curves (curv count=0) ──
+    // All three share the same data block.
+    {
+        let mut d = Vec::new();
+        d.extend_from_slice(b"curv");
+        d.extend_from_slice(&[0u8; 4]);
+        push_u32_be(&mut d, 0); // count = 0 → identity
+        blocks.push((*b"rTRC", d.clone()));
+        blocks.push((*b"gTRC", d.clone()));
+        blocks.push((*b"bTRC", d));
+    }
+
+    // ── vcgt (Video Card Gamma Table) ──
+    {
+        let mut d = Vec::new();
+        d.extend_from_slice(b"vcgt"); // type signature
+        d.extend_from_slice(&[0u8; 4]); // reserved
+        push_u32_be(&mut d, 0); // formula type = 0 (table)
+        push_u16_be(&mut d, 3); // channels
+        push_u16_be(&mut d, 256); // entries per channel
+        push_u16_be(&mut d, 2); // entry size in bytes (16-bit)
+        // Planar data: all R values, then all G, then all B.
+        for ch in 0..3 {
+            for i in 0..256 {
+                push_u16_be(&mut d, ramp[ch][i]);
+            }
+        }
+        blocks.push((*b"vcgt", d));
+    }
+
+    // ── Assemble header + tag table + data ──
+    let num_tags = blocks.len();
+    let header_size: usize = 128;
+    let tag_table_size: usize = 4 + num_tags * 12;
+    let data_start = header_size + tag_table_size;
+
+    // Build concatenated tag data and record per-tag offsets/sizes.
+    let mut all_data: Vec<u8> = Vec::new();
+    let mut entries: Vec<([u8; 4], usize, usize)> = Vec::new();
+
+    for (sig, data) in &blocks {
+        let offset = data_start + all_data.len();
+        let size = data.len();
+        entries.push((*sig, offset, size));
+        all_data.extend_from_slice(data);
+        pad_to_4(&mut all_data);
+    }
+
+    let profile_size = data_start + all_data.len();
+
+    // Header (128 bytes)
+    let mut profile = Vec::with_capacity(profile_size);
+    push_u32_be(&mut profile, profile_size as u32); // 0  profile size
+    push_u32_be(&mut profile, 0); // 4  CMM type
+    push_u32_be(&mut profile, 0x0210_0000); // 8  version 2.1.0
+    profile.extend_from_slice(b"mntr"); // 12 device class (monitor)
+    profile.extend_from_slice(b"RGB "); // 16 color space
+    profile.extend_from_slice(b"XYZ "); // 20 PCS
+    push_u16_be(&mut profile, 2025); // 24 year
+    push_u16_be(&mut profile, 1); // 26 month
+    push_u16_be(&mut profile, 1); // 28 day
+    push_u16_be(&mut profile, 0); // 30 hour
+    push_u16_be(&mut profile, 0); // 32 minute
+    push_u16_be(&mut profile, 0); // 34 second
+    profile.extend_from_slice(b"acsp"); // 36 file signature
+    push_u32_be(&mut profile, 0); // 40 primary platform
+    push_u32_be(&mut profile, 0); // 44 flags
+    push_u32_be(&mut profile, 0); // 48 manufacturer
+    push_u32_be(&mut profile, 0); // 52 model
+    profile.extend_from_slice(&[0u8; 8]); // 56 attributes
+    push_u32_be(&mut profile, 0); // 64 rendering intent
+    push_s15fixed16(&mut profile, 0.9642); // 68 PCS illuminant X (D50)
+    push_s15fixed16(&mut profile, 1.0000); // 72 PCS illuminant Y
+    push_s15fixed16(&mut profile, 0.8249); // 76 PCS illuminant Z
+    push_u32_be(&mut profile, 0); // 80 creator
+    profile.extend_from_slice(&[0u8; 16]); // 84 profile ID
+    profile.extend_from_slice(&[0u8; 28]); // 100 reserved
+    assert_eq!(profile.len(), header_size);
+
+    // Tag table
+    push_u32_be(&mut profile, num_tags as u32);
+    for (sig, offset, size) in &entries {
+        profile.extend_from_slice(sig);
+        push_u32_be(&mut profile, *offset as u32);
+        push_u32_be(&mut profile, *size as u32);
+    }
+    assert_eq!(profile.len(), data_start);
+
+    // Tag data
+    profile.extend_from_slice(&all_data);
+
+    // Fix profile size (it may differ if last block needed no padding)
+    let final_size = profile.len() as u32;
+    profile[0..4].copy_from_slice(&final_size.to_be_bytes());
+
+    profile
+}
+
+#[tauri::command]
+pub async fn export_preset_as_icc(preset_id: String) -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        // Look up preset parameters
+        let presets = get_filter_presets().await?;
+        let preset = presets
+            .iter()
+            .find(|p| p.id == preset_id)
+            .ok_or(format!("未找到预设: {}", preset_id))?;
+
+        // Build gamma ramp from preset parameters
+        let mode = FilterMode::from_i32(preset.mode);
+        let ramp = build_gamma_ramp(
+            preset.temperature,
+            preset.brightness,
+            preset.contrast,
+            preset.saturation,
+            mode,
+        );
+
+        // Show save file dialog
+        let default_name = format!("NexBox_{}.icc", preset.name);
+        let result = rfd::FileDialog::new()
+            .set_title("保存 ICC 色彩配置文件")
+            .add_filter("ICC 文件", &["icc", "icm"])
+            .set_file_name(&default_name)
+            .save_file();
+
+        let path = match result {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+
+        // Build ICC profile binary
+        let description = format!("NexBox {} Filter", preset.name);
+        let icc_data = build_icc_profile(&ramp, &description);
+
+        // Write to file
+        fs::write(&path, &icc_data).map_err(|e| format!("无法保存文件: {}", e))?;
+
+        log::info!(
+            "ICC profile exported: {} ({} bytes) from preset '{}'",
+            path.display(),
+            icc_data.len(),
+            preset.name
+        );
+
+        Ok(path.to_str().map(|s| s.to_string()))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("此功能仅支持 Windows 系统".to_string())
+    }
+}

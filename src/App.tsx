@@ -29,6 +29,7 @@ import NetworkOptimizerPage from "./pages/NetworkOptimizerPage";
 import PeripheralOptimizePage from "./pages/PeripheralOptimizePage";
 import WindowsUpdatePage from "./pages/WindowsUpdatePage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
+import NvidiaDriverPage from "./pages/NvidiaDriverPage";
 import TestsPage from "./pages/TestsPage";
 import EpicFreePage from "./pages/EpicFreePage";
 import ReactionTestPage from "./pages/ReactionTestPage";
@@ -71,7 +72,7 @@ import { MusicProvider } from "./contexts/music-context";
 import { MiniMusicPlayer } from "./components/MiniMusicPlayer";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "4.2.6";
+const CURRENT_VERSION = "4.3.2";
 
 function App() {
   const { t } = useTranslation();
@@ -260,6 +261,7 @@ function App() {
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
               <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+              <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
         </Routes>
@@ -301,6 +303,7 @@ function App() {
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
             <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
             <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+            <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
             <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
       </Routes>

@@ -526,9 +526,12 @@
     "selectDisplay": "ディスプレイを選択",
     "primary": "メイン",
     "cancel": "キャンセル",
-    "delete": "削除"
+    "delete": "削除",
+    "exportIcc": "ICCファイルとしてエクスポート",
+    "exportIccSuccess": "ICCファイルをエクスポートしました",
+    "exportIccFailed": "ICCエクスポートに失敗しました"
   },
-  "floatingNav": {
+"floatingNav": {
     "title": "フローティングナビゲーションボックス",
     "enable": "フローティングボックスを有効化",
     "settings": "設定",

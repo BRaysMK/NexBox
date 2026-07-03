@@ -14,6 +14,7 @@ import {
   Monitor,
   Zap,
   Video,
+  Settings2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
@@ -80,6 +81,14 @@ const tools: ViewItem[] = [
     descriptionKey: "builtinTools.dynamicIslandDesc",
     color: "#E91E63",
   },
+  // {
+  //   id: "nvidia-driver",
+  //   path: "/nvidia-driver",
+  //   icon: Settings2,
+  //   titleKey: "sidebar.nvidiaDriver",
+  //   descriptionKey: "builtinTools.nvidiaDriverDesc",
+  //   color: "#76B900",
+  // },
   // {
   //   id: "screen-record",
   //   path: "/screen-record",

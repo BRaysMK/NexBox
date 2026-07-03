@@ -48,6 +48,18 @@ src-tauri/src-tauri.zip
 # Trae AI documents
 .trae/
 
+# WorkBuddy
+.workbuddy/
+
+# Uploads
+.uploads/
+
+# Joycode
+.joycode/
+
+# Husky
+.husky/
+
 # Third-party executables
 nvidiaProfileInspector.exe
 Reference.xml

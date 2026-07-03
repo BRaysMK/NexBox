@@ -22,6 +22,7 @@ import {
   AlertDialogOverlay,
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
@@ -30,7 +31,7 @@ import { hexToRgba } from "@/lib/color-utils";
 import { 
   Sun, BookOpen, Monitor, Sparkles, RotateCcw, 
   Film, Heart, Palette, Gamepad2, Save, Settings2, ArrowLeft,
-  Upload, Trash2, FileImage
+  Upload, Trash2, FileImage, Download
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -161,6 +162,9 @@ export default function DisplayFilterPage() {
   const sliderBg = useColorModeValue("gray.100", "#222222");
   const infoBg = useColorModeValue("gray.50", "#1a1a1a");
   const inputBg = useColorModeValue("white", "#1a1a1a");
+  const miniGlassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const miniGlassBorder = useColorModeValue("rgba(255,255,255,0.5)", "rgba(255,255,255,0.2)");
+  const miniGlassGlow = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.45)");
 
   const loadSettings = useCallback(async () => {
     try {
@@ -599,6 +603,29 @@ export default function DisplayFilterPage() {
     }
   };
 
+  const handleExportIcc = async (presetId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const result: string | null = await invoke("export_preset_as_icc", { presetId });
+      if (result) {
+        toast({
+          title: t("displayFilter.exportIccSuccess"),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: t("displayFilter.exportIccFailed"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   const handleDeleteIcc = async () => {
     if (!deleteIccId) return;
     setIsLoading(true);
@@ -669,44 +696,64 @@ export default function DisplayFilterPage() {
     unit: string;
     colorValue?: number;
   }) => (
-    <HStack justify="space-between" py={2} px={3} borderRadius="lg" bg={infoBg}>
-      <HStack spacing={2}>
-        <Text color={subTextColor} fontSize="sm">
-          {label}
-        </Text>
-        {colorValue !== undefined && (
-          <Box 
-            w={3} 
-            h={3} 
-            borderRadius="full" 
-            bg={getTemperatureColor(colorValue)}
-            border="1px solid"
+    <Box position="relative" overflow="hidden" borderRadius="lg">
+      {liquidGlassEnabled && (
+        <Box style={getBorderGlowStyle(miniGlassGlow)} />
+      )}
+      <HStack
+        justify="space-between"
+        py={2}
+        px={3}
+        borderRadius="lg"
+        bg={liquidGlassEnabled ? miniGlassBg : infoBg}
+        backdropFilter={liquidGlassEnabled ? "blur(6px)" : "none"}
+        sx={liquidGlassEnabled ? {
+          transform: "translateZ(0)",
+          WebkitTransform: "translateZ(0)",
+          WebkitBackfaceVisibility: "hidden",
+          backfaceVisibility: "hidden",
+        } : undefined}
+        border={liquidGlassEnabled ? "1px solid" : "none"}
+        borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
+      >
+        <HStack spacing={2}>
+          <Text color={subTextColor} fontSize="sm">
+            {label}
+          </Text>
+          {colorValue !== undefined && (
+            <Box 
+              w={3} 
+              h={3} 
+              borderRadius="full" 
+              bg={getTemperatureColor(colorValue)}
+              border="1px solid"
+              borderColor={cardBorder}
+            />
+          )}
+        </HStack>
+        <HStack spacing={2}>
+          <Input
+            key={`${label}-${inputVersion}`}
+            defaultValue={value}
+            onChange={(e) => onChange(e.target.value)}
+            size="xs"
+            w="70px"
+            h="24px"
+            textAlign="right"
+            fontWeight="600"
+            color={textColor}
+            bg={inputBg}
             borderColor={cardBorder}
+            borderRadius="md"
+            px={2}
+            _focus={{ borderColor: primaryColor, boxShadow: "none" }}
           />
-        )}
+          <Text color={subTextColor} fontSize="sm" minW="20px">
+            {unit}
+          </Text>
+        </HStack>
       </HStack>
-      <HStack spacing={2}>
-        <Input
-          key={`${label}-${inputVersion}`}
-          defaultValue={value}
-          onChange={(e) => onChange(e.target.value)}
-          size="xs"
-          w="70px"
-          h="24px"
-          textAlign="right"
-          fontWeight="600"
-          color={textColor}
-          bg={inputBg}
-          borderColor={cardBorder}
-          borderRadius="md"
-          px={2}
-          _focus={{ borderColor: primaryColor, boxShadow: "none" }}
-        />
-        <Text color={subTextColor} fontSize="sm" minW="20px">
-          {unit}
-        </Text>
-      </HStack>
-    </HStack>
+    </Box>
   );
 
   const ReadOnlyItem = ({ label, value, unit = "", colorValue }: { 
@@ -715,26 +762,46 @@ export default function DisplayFilterPage() {
     unit?: string;
     colorValue?: number;
   }) => (
-    <HStack justify="space-between" py={2} px={3} borderRadius="lg" bg={infoBg}>
-      <Text color={subTextColor} fontSize="sm">
-        {label}
-      </Text>
-      <HStack>
-        {colorValue !== undefined && (
-          <Box 
-            w={3} 
-            h={3} 
-            borderRadius="full" 
-            bg={getTemperatureColor(colorValue)}
-            border="1px solid"
-            borderColor={cardBorder}
-          />
-        )}
-        <Text color={textColor} fontSize="sm" fontWeight="600">
-          {value}{unit}
+    <Box position="relative" overflow="hidden" borderRadius="lg">
+      {liquidGlassEnabled && (
+        <Box style={getBorderGlowStyle(miniGlassGlow)} />
+      )}
+      <HStack
+        justify="space-between"
+        py={2}
+        px={3}
+        borderRadius="lg"
+        bg={liquidGlassEnabled ? miniGlassBg : infoBg}
+        backdropFilter={liquidGlassEnabled ? "blur(6px)" : "none"}
+        sx={liquidGlassEnabled ? {
+          transform: "translateZ(0)",
+          WebkitTransform: "translateZ(0)",
+          WebkitBackfaceVisibility: "hidden",
+          backfaceVisibility: "hidden",
+        } : undefined}
+        border={liquidGlassEnabled ? "1px solid" : "none"}
+        borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
+      >
+        <Text color={subTextColor} fontSize="sm">
+          {label}
         </Text>
+        <HStack>
+          {colorValue !== undefined && (
+            <Box 
+              w={3} 
+              h={3} 
+              borderRadius="full" 
+              bg={getTemperatureColor(colorValue)}
+              border="1px solid"
+              borderColor={cardBorder}
+            />
+          )}
+          <Text color={textColor} fontSize="sm" fontWeight="600">
+            {value}{unit}
+          </Text>
+        </HStack>
       </HStack>
-    </HStack>
+    </Box>
   );
 
   const content = (
@@ -832,13 +899,24 @@ export default function DisplayFilterPage() {
             return (
               <Tooltip key={preset.id} label={preset.description} placement="top">
                 <Box
-                  bg={isActive ? `${accentColor}20` : sliderBg}
+                  bg={liquidGlassEnabled
+                    ? (isActive ? hexToRgba(accentColor, 0.2) : miniGlassBg)
+                    : (isActive ? `${accentColor}20` : sliderBg)}
                   borderRadius="xl"
                   p={4}
                   cursor="pointer"
                   onClick={() => applyPreset(preset)}
-                  border="2px solid"
-                  borderColor={isActive ? accentColor : "transparent"}
+                  border={liquidGlassEnabled ? "1px solid" : "2px solid"}
+                  borderColor={liquidGlassEnabled
+                    ? (isActive ? accentColor : miniGlassBorder)
+                    : (isActive ? accentColor : "transparent")}
+                  backdropFilter={liquidGlassEnabled ? "blur(8px)" : "none"}
+                  sx={liquidGlassEnabled ? {
+                    transform: "translateZ(0)",
+                    WebkitTransform: "translateZ(0)",
+                    WebkitBackfaceVisibility: "hidden",
+                    backfaceVisibility: "hidden",
+                  } : undefined}
                   transition="all 0.2s"
                   _hover={{
                     borderColor: accentColor,
@@ -847,6 +925,13 @@ export default function DisplayFilterPage() {
                   position="relative"
                   overflow="hidden"
                 >
+                  {liquidGlassEnabled && (
+                    <Box
+                      style={getBorderGlowStyle(
+                        isActive ? hexToRgba(accentColor, 0.5) : miniGlassGlow
+                      )}
+                    />
+                  )}
                   {isActive && (
                     <Box
                       position="absolute"
@@ -857,6 +942,21 @@ export default function DisplayFilterPage() {
                       bg={accentColor}
                     />
                   )}
+                  <Tooltip label={t("displayFilter.exportIcc")} placement="top">
+                    <IconButton
+                      aria-label={t("displayFilter.exportIcc")}
+                      icon={<Download size={14} />}
+                      size="xs"
+                      variant="ghost"
+                      position="absolute"
+                      top={1}
+                      right={1}
+                      color={subTextColor}
+                      opacity={0.5}
+                      _hover={{ opacity: 1, color: accentColor }}
+                      onClick={(e) => handleExportIcc(preset.id, e)}
+                    />
+                  </Tooltip>
                   <VStack spacing={2}>
                     <Icon size={24} color={accentColor} />
                     <Text color={textColor} fontSize="sm" fontWeight="600">
@@ -870,13 +970,24 @@ export default function DisplayFilterPage() {
           
           <Tooltip label={t("displayFilter.customDescription")} placement="top">
             <Box
-              bg={activePresetId === "custom" ? `${presetColors["custom"]}20` : sliderBg}
+              bg={liquidGlassEnabled
+                ? (activePresetId === "custom" ? hexToRgba(presetColors["custom"], 0.2) : miniGlassBg)
+                : (activePresetId === "custom" ? `${presetColors["custom"]}20` : sliderBg)}
               borderRadius="xl"
               p={4}
               cursor="pointer"
               onClick={openCustom}
-              border="2px solid"
-              borderColor={activePresetId === "custom" ? presetColors["custom"] : "transparent"}
+              border={liquidGlassEnabled ? "1px solid" : "2px solid"}
+              borderColor={liquidGlassEnabled
+                ? (activePresetId === "custom" ? presetColors["custom"] : miniGlassBorder)
+                : (activePresetId === "custom" ? presetColors["custom"] : "transparent")}
+              backdropFilter={liquidGlassEnabled ? "blur(8px)" : "none"}
+              sx={liquidGlassEnabled ? {
+                transform: "translateZ(0)",
+                WebkitTransform: "translateZ(0)",
+                WebkitBackfaceVisibility: "hidden",
+                backfaceVisibility: "hidden",
+              } : undefined}
               transition="all 0.2s"
               _hover={{
                 borderColor: presetColors["custom"],
@@ -885,6 +996,13 @@ export default function DisplayFilterPage() {
               position="relative"
               overflow="hidden"
             >
+              {liquidGlassEnabled && (
+                <Box
+                  style={getBorderGlowStyle(
+                    activePresetId === "custom" ? hexToRgba(presetColors["custom"], 0.5) : miniGlassGlow
+                  )}
+                />
+              )}
               {activePresetId === "custom" && (
                 <Box
                   position="absolute"
@@ -952,13 +1070,24 @@ export default function DisplayFilterPage() {
               return (
                 <Box
                   key={icc.id}
-                  bg={isActive ? `${accentColor}20` : sliderBg}
+                  bg={liquidGlassEnabled
+                    ? (isActive ? hexToRgba(accentColor, 0.2) : miniGlassBg)
+                    : (isActive ? `${accentColor}20` : sliderBg)}
                   borderRadius="xl"
                   p={4}
                   cursor="pointer"
                   onClick={() => handleApplyIcc(icc.id)}
-                  border="2px solid"
-                  borderColor={isActive ? accentColor : "transparent"}
+                  border={liquidGlassEnabled ? "1px solid" : "2px solid"}
+                  borderColor={liquidGlassEnabled
+                    ? (isActive ? accentColor : miniGlassBorder)
+                    : (isActive ? accentColor : "transparent")}
+                  backdropFilter={liquidGlassEnabled ? "blur(8px)" : "none"}
+                  sx={liquidGlassEnabled ? {
+                    transform: "translateZ(0)",
+                    WebkitTransform: "translateZ(0)",
+                    WebkitBackfaceVisibility: "hidden",
+                    backfaceVisibility: "hidden",
+                  } : undefined}
                   transition="all 0.2s"
                   _hover={{
                     borderColor: accentColor,
@@ -967,6 +1096,13 @@ export default function DisplayFilterPage() {
                   position="relative"
                   overflow="hidden"
                 >
+                  {liquidGlassEnabled && (
+                    <Box
+                      style={getBorderGlowStyle(
+                        isActive ? hexToRgba(accentColor, 0.5) : miniGlassGlow
+                      )}
+                    />
+                  )}
                   {isActive && (
                     <Box
                       position="absolute"
