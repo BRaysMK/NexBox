@@ -28,7 +28,6 @@ mod thirdparty_tools;
 mod tray;
 mod utils;
 mod video_bg;
-
 use tauri::Manager;
 
 
@@ -422,6 +421,7 @@ pub fn run() {
         display_filter::get_icc_presets,
         display_filter::apply_icc_preset,
         display_filter::delete_icc_preset,
+        display_filter::export_preset_as_icc,
         thirdparty_tools::get_thirdparty_tools,
         thirdparty_tools::get_tool_install_path,
         thirdparty_tools::get_tool_download_path,

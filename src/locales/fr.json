@@ -526,9 +526,12 @@
     "selectDisplay": "Sélectionner l'écran",
     "primary": "Principal",
     "cancel": "Annuler",
-    "delete": "Supprimer"
+    "delete": "Supprimer",
+    "exportIcc": "Exporter en fichier ICC",
+    "exportIccSuccess": "Fichier ICC exporté",
+    "exportIccFailed": "Échec de l'exportation ICC"
   },
-  "floatingNav": {
+"floatingNav": {
     "title": "Boîte de navigation flottante",
     "enable": "Activer la boîte flottante",
     "settings": "Paramètres",

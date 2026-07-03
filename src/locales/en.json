@@ -588,7 +588,10 @@
     "selectDisplay": "Select Display",
     "primary": "Primary",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "exportIcc": "Export as ICC File",
+    "exportIccSuccess": "ICC file exported",
+    "exportIccFailed": "ICC export failed"
   },
   "floatingNav": {
     "title": "Floating Navigation Box",

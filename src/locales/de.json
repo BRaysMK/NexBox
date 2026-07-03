@@ -526,9 +526,12 @@
     "selectDisplay": "Bildschirm auswählen",
     "primary": "Primär",
     "cancel": "Abbrechen",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "exportIcc": "Als ICC-Datei exportieren",
+    "exportIccSuccess": "ICC-Datei exportiert",
+    "exportIccFailed": "ICC-Export fehlgeschlagen"
   },
-  "floatingNav": {
+"floatingNav": {
     "title": "Schwebendes Navigationsfeld",
     "enable": "Schwebendes Feld aktivieren",
     "settings": "Einstellungen",

@@ -508,9 +508,12 @@
     "selectDisplay": "選擇顯示器",
     "primary": "主",
     "cancel": "取消",
-    "delete": "刪除"
+    "delete": "刪除",
+    "exportIcc": "匯出為 ICC 檔案",
+    "exportIccSuccess": "ICC 檔案已匯出",
+    "exportIccFailed": "ICC 檔案匯出失敗"
   },
-  "floatingNav": {
+"floatingNav": {
     "title": "懸浮導航框",
     "enable": "啟用懸浮框",
     "settings": "設定",

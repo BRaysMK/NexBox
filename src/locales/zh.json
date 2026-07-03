@@ -51,6 +51,7 @@
     "dlssPreset": "三角洲DLSS设置",
     "epicFree": "喜加一",
     "dynamicIsland": "灵动岛",
+    "nvidiaDriver": "显卡设置",
     "screenRecord": "屏幕录制"
   },
   "optimization": {
@@ -448,7 +449,10 @@
     "selectDisplay": "选择显示器",
     "primary": "主",
     "cancel": "取消",
-    "delete": "删除"
+    "delete": "删除",
+    "exportIcc": "导出为 ICC 文件",
+    "exportIccSuccess": "ICC 文件已导出",
+    "exportIccFailed": "ICC 文件导出失败"
   },
   "floatingNav": {
     "title": "悬浮导航框",
@@ -725,6 +729,7 @@
     "shaderCacheDesc": "强制清理 NVIDIA/AMD 着色器缓存释放磁盘空间",
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
     "dynamicIslandDesc": "屏幕顶部灵动岛，显示网速/硬件/音乐/通知",
+    "nvidiaDriverDesc": "通过 NVAPI 直接控制 NVIDIA 驱动图形设置",
     "screenRecordDesc": "录制屏幕或窗口，支持分辨率与帧率调节"
   },
   "gpuRename": {
