@@ -15,6 +15,7 @@ mod island;
 mod music;
 mod network_optimize;
 mod netease_lyrics;
+mod nvapi;
 mod optimization;
 mod overlay_panel;
 mod screen_record;
@@ -487,8 +488,14 @@ pub fn run() {
         gpu_rename::restore_gpu_name,
         video_bg::pick_video_file,
             sponsor::get_sponsors,
-            shader_cache::scan_shader_caches,
-            shader_cache::clean_shader_cache,
+        shader_cache::scan_shader_caches,
+        shader_cache::clean_shader_cache,
+        nvapi::get_nvapi_status,
+        nvapi::diagnose_nvapi,
+        nvapi::get_nvidia_driver_version,
+        nvapi::list_nvidia_settings,
+        nvapi::set_nvidia_setting,
+        nvapi::reset_nvidia_settings,
             storage_clean::scan_storage_items,
             storage_clean::clean_storage_items,
             storage_clean::empty_recycle_bin_cmd,
@@ -538,6 +545,7 @@ pub fn run() {
                 heart_rate::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);
+                nvapi::cleanup();
             }
             _ => {}
         }

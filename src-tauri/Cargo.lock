@@ -3219,6 +3219,7 @@ dependencies = [
  "env_logger",
  "futures-util",
  "jpeg-encoder",
+ "libloading 0.8.9",
  "log",
  "md-5",
  "nvml-wrapper",
