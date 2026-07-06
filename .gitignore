@@ -48,6 +48,9 @@ src-tauri/src-tauri.zip
 # Trae AI documents
 .trae/
 
+# CodeBuddy
+.codebuddy/
+
 # WorkBuddy
 .workbuddy/
 
