@@ -73,7 +73,7 @@ import { MusicProvider } from "./contexts/music-context";
 import { MiniMusicPlayer } from "./components/MiniMusicPlayer";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "4.3.2";
+const CURRENT_VERSION = "4.6.5";
 
 function App() {
   const { t } = useTranslation();
