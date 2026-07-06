@@ -275,10 +275,17 @@
       "warningText": "Setting memory limit requires administrator privileges and system restart to take effect",
       "adminRequired": "Administrator Required",
       "options": {
+        "7.9gb": "7.9 GB",
         "11.9gb": "11.9 GB",
         "13.9gb": "13.9 GB",
         "15.9gb": "15.9 GB"
-      }
+      },
+      "presetTab": "Preset Limit",
+      "customTab": "Custom Limit",
+      "customPlaceholder": "Enter limit value (GB)",
+      "selectPreset": "Select a preset limit",
+      "invalidInput": "Please enter a valid memory limit value",
+      "outOfRange": "Limit must be between 0.1 and physical memory"
     },
     "powerManagement": {
       "title": "Power Management",
@@ -1028,6 +1035,8 @@
       "gameLauncherDesc": "Show quick launch card on homepage",
       "homeHardwareModelLabel": "Hardware Model",
       "homeHardwareModelDesc": "Show a brief summary of CPU/GPU/RAM/Motherboard/Storage on the homepage",
+      "searchBarLabel": "Search Bar",
+      "searchBarDesc": "Show the global search bar in the title bar",
       "splash": "Animation",
       "splashLogoLabel": "Splash Logo",
       "splashLogoDesc": "Customize the logo image shown during startup",

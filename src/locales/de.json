@@ -241,10 +241,17 @@
       "warningText": "Das Festlegen des Speicherlimits erfordert Administratorrechte und einen Systemneustart, um wirksam zu werden",
       "adminRequired": "Administrator erforderlich",
       "options": {
+            "7.9gb": "7.9 GB",
             "11.9gb": "11.9 GB",
             "13.9gb": "13.9 GB",
             "15.9gb": "15.9 GB"
-        }
+        },
+        "presetTab": "Voreingestelltes Limit",
+        "customTab": "Benutzerdefiniertes Limit",
+        "customPlaceholder": "Limitwert eingeben (GB)",
+        "selectPreset": "Voreingestelltes Limit auswählen",
+        "invalidInput": "Bitte geben Sie einen gültigen Speicherlimitwert ein",
+        "outOfRange": "Limit muss zwischen 0,1 und physischem Speicher liegen"
     },
     "powerManagement": {
       "title": "Energieverwaltung",

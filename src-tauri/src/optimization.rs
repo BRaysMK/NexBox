@@ -779,6 +779,12 @@ fn get_physical_memory_mb() -> u64 {
 fn get_memory_limit_options_internal() -> Vec<MemoryLimitOption> {
     vec![
         MemoryLimitOption {
+            id: "7.9gb".to_string(),
+            label: "7.9 GB".to_string(),
+            limit_gb: 7.9,
+            min_physical_gb: 0.0,
+        },
+        MemoryLimitOption {
             id: "11.9gb".to_string(),
             label: "11.9 GB".to_string(),
             limit_gb: 11.9,
