@@ -49,7 +49,8 @@
         "dlssPreset": "三角洲DLSS設定",
         "epicFree": "喜加一",
         "dynamicIsland": "動態島",
-        "screenRecord": "螢幕錄製"
+        "screenRecord": "螢幕錄製",
+    "diskHealth": "磁碟健康"
     },
   "optimization": {
     "pageTitle": "優化",
@@ -386,6 +387,11 @@
     "storage": "儲存",
     "totalCapacity": "總容量",
     "count": "條數",
+    "soundCard": "音效卡",
+    "networkCard": "網路卡",
+    "adapterType": "介面卡類型",
+    "macAddress": "MAC位址",
+    "linkSpeed": "鏈路速率",
     "deltaPasswordFetched": "已取得",
     "deltaPasswordNotFetched": "--"
   },
@@ -511,7 +517,13 @@
     "delete": "刪除",
     "exportIcc": "匯出為 ICC 檔案",
     "exportIccSuccess": "ICC 檔案已匯出",
-    "exportIccFailed": "ICC 檔案匯出失敗"
+    "exportIccFailed": "ICC 檔案匯出失敗",
+    "previewTitle": "濾鏡預覽",
+    "previewOriginal": "原始",
+    "previewFiltered": "濾鏡",
+    "previewDisabledNote": "濾鏡未啟用 · 僅預覽效果",
+    "paramsUpdated": "參數已更新",
+    "paramsUpdatedHint": "請手動開啟濾鏡開關以生效"
   },
 "floatingNav": {
     "title": "懸浮導航框",
@@ -769,7 +781,8 @@
     "shaderCacheDesc": "清理 NVIDIA/AMD 著色器快取釋放磁碟空間",
     "dlssPresetDesc": "切換DLSS模型預設以優化遊戲畫質",
         "dynamicIslandDesc": "螢幕頂部懸浮島，顯示網速/硬體/音樂/通知",
-        "screenRecordDesc": "錄製螢幕或視窗，支援解析度與幀率調節"
+        "screenRecordDesc": "錄製螢幕或視窗，支援解析度與幀率調節",
+    "diskHealthDesc": "檢測硬碟健康狀態與SMART資訊"
     },
   "gpuRename": {
     "title": "顯卡改寫",
@@ -995,6 +1008,10 @@
       "closeBehaviorDesc": "選擇點擊關閉按鈕時的行為",
       "closeDirectly": "直接關閉",
       "minimizeToTray": "最小化到系統匣",
+      "navPositionLabel": "導航欄位置",
+      "navPositionDesc": "選擇導航欄顯示在側邊還是頂部",
+      "navPositionLeft": "側邊",
+      "navPositionTop": "頂部",
       "sidebarShowLabel": "導航欄標籤",
       "sidebarShowLabelDesc": "選擇導航欄的顯示模式",
       "sidebarShowLabelNoText": "無字",
@@ -1190,6 +1207,24 @@
     "selectWindow": "請選擇一個視窗",
     "captureCursor": "擷取滑鼠游標",
     "primaryMonitor": "主顯示器"
+  },
+  "diskHealth": {
+    "title": "磁碟健康檢測",
+    "refresh": "重新整理",
+    "scanning": "檢測中...",
+    "total": "磁碟總數",
+    "healthy": "健康",
+    "warning": "警告",
+    "unhealthy": "故障",
+    "temperature": "溫度",
+    "lifespan": "健康壽命",
+    "powerOnHours": "通電時間",
+    "operationalStatus": "運行狀態",
+    "readErrors": "讀取錯誤",
+    "writeErrors": "寫入錯誤",
+    "partitions": "個分割區",
+    "loadError": "載入失敗",
+    "retry": "重試"
   }
 }
 

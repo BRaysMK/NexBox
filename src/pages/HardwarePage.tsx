@@ -18,6 +18,8 @@ import {
   Database,
   CircuitBoard,
   HardDrive,
+  Volume2,
+  Wifi,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -170,6 +172,66 @@ function StatCard({
   );
 }
 
+const MARQUEE_STYLE_ID = "nexbox-marquee-keyframes";
+
+function MarqueeText({ text, color }: { text: string; color: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [needsScroll, setNeedsScroll] = useState(false);
+
+  // Measure overflow after render
+  useEffect(() => {
+    const el = containerRef.current;
+    const txt = textRef.current;
+    if (!el || !txt) return;
+    const timer = setTimeout(() => {
+      setNeedsScroll(txt.scrollWidth > el.clientWidth);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [text]);
+
+  // Inject keyframes once
+  useEffect(() => {
+    if (needsScroll && !document.getElementById(MARQUEE_STYLE_ID)) {
+      const style = document.createElement("style");
+      style.id = MARQUEE_STYLE_ID;
+      style.textContent = `
+        @keyframes nexbox-marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, [needsScroll]);
+
+  const animationStyle = needsScroll
+    ? { animation: "nexbox-marquee 12s linear infinite" }
+    : undefined;
+
+  return (
+    <Box ref={containerRef} flex={1} overflow="hidden" textAlign="right" whiteSpace="nowrap">
+      <Box
+        as="span"
+        ref={textRef}
+        display="inline-block"
+        whiteSpace="nowrap"
+        fontSize="sm"
+        fontWeight="medium"
+        color={color}
+        sx={animationStyle}
+      >
+        {text}
+        {needsScroll && (
+          <Box as="span" ml={6}>
+            {text}
+          </Box>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
 function DetailCard({
   title,
   icon: IconComponent,
@@ -200,7 +262,11 @@ function DetailCard({
           ? "#06b6d4"
           : type === "storage"
             ? "#a855f7"
-            : "#f59e0b";
+            : type === "sound"
+              ? "#f97316"
+              : type === "network"
+                ? "#14b8a6"
+                : "#f59e0b";
 
   const cardContent = (
     <Box position="relative" overflow="hidden" p={5} minH="140px">
@@ -214,13 +280,11 @@ function DetailCard({
 
         <VStack align="start" spacing={1.5} width="full">
           {info.map((item, index) => (
-            <HStack key={index} justify="space-between" width="full" spacing={4}>
-              <Text fontSize="sm" color={subTextColor} noOfLines={1}>
+            <HStack key={index} justify="space-between" width="full" spacing={3}>
+              <Text fontSize="sm" color={subTextColor} noOfLines={1} flexShrink={0} maxW="35%">
                 {item.name}
               </Text>
-              <Text fontSize="sm" fontWeight="medium" color={textColor} noOfLines={1} textAlign="right">
-                {item.value}
-              </Text>
+              <MarqueeText text={item.value} color={textColor} />
             </HStack>
           ))}
         </VStack>
@@ -407,6 +471,19 @@ export default function HardwarePage() {
     { name: t("hardware.model"), value: hardwareInfo.motherboard },
   ];
 
+  const soundCardDisplayInfos: DisplayInfo[][] = (hardwareInfo.sound_card || []).map((card) => [
+    { name: t("hardware.model"), value: card.name },
+    { name: t("hardware.manufacturer"), value: card.manufacturer },
+  ]);
+
+  const networkCardDisplayInfos: DisplayInfo[][] = (hardwareInfo.network_card || []).map((card) => [
+    { name: t("hardware.model"), value: card.name },
+    { name: t("hardware.manufacturer"), value: card.manufacturer },
+    { name: t("hardware.adapterType"), value: card.adapter_type },
+    { name: t("hardware.macAddress"), value: card.mac_address },
+    { name: t("hardware.linkSpeed"), value: card.speed_mbps > 0 ? `${card.speed_mbps} Mbps` : "--" },
+  ]);
+
   return (
     <Box pt={8}>
       <Heading size="lg" color={headingColor} mb={6}>
@@ -543,6 +620,34 @@ export default function HardwarePage() {
               liquidGlassEnabled={liquidGlassEnabled}
             />
           )}
+          {soundCardDisplayInfos.map((info, i) => (
+            <DetailCard
+              key={`sound-${i}`}
+              title={t("hardware.soundCard")}
+              icon={Volume2}
+              info={info}
+              type="sound"
+              cardBg={cardBg}
+              borderColor={borderColor}
+              textColor={textColor}
+              subTextColor={subTextColor}
+              liquidGlassEnabled={liquidGlassEnabled}
+            />
+          ))}
+          {networkCardDisplayInfos.map((info, i) => (
+            <DetailCard
+              key={`network-${i}`}
+              title={t("hardware.networkCard")}
+              icon={Wifi}
+              info={info}
+              type="network"
+              cardBg={cardBg}
+              borderColor={borderColor}
+              textColor={textColor}
+              subTextColor={subTextColor}
+              liquidGlassEnabled={liquidGlassEnabled}
+            />
+          ))}
         </Grid>
       </VStack>
     </Box>

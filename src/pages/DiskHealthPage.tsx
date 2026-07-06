@@ -1,0 +1,330 @@
+import {
+  Box,
+  Text,
+  Heading,
+  VStack,
+  HStack,
+  SimpleGrid,
+  useColorModeValue,
+  useColorMode,
+  IconButton,
+  Button,
+  Badge,
+  Spinner,
+  Progress,
+} from "@chakra-ui/react";
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
+import { ArrowLeft, HardDrive, RefreshCw, Thermometer, AlertTriangle, Star } from "lucide-react";
+import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useBackground } from "@/contexts/background-context";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { useNavigate } from "react-router-dom";
+
+interface PartitionInfo {
+  drive_letter: string;
+  total_gb: number;
+  available_gb: number;
+  used_gb: number;
+  usage_percent: number;
+  filesystem: string;
+}
+
+interface DiskHealthInfo {
+  index: number;
+  model: string;
+  media_type: string;
+  size_gb: number;
+  interface_type: string;
+  health_status: string;
+  operational_status: string;
+  temperature_c: number | null;
+  wear_percentage: number | null;
+  power_on_hours: number | null;
+  read_errors: number | null;
+  write_errors: number | null;
+  status: string;
+  partition_count: number;
+  serial_number: string;
+  partition_style: string;
+  is_boot_disk: boolean;
+  partitions: PartitionInfo[];
+  total_usage_gb: number;
+  total_capacity_gb: number;
+}
+
+interface DiskHealthResponse {
+  disks: DiskHealthInfo[];
+  total_count: number;
+  healthy_count: number;
+  warning_count: number;
+  unhealthy_count: number;
+}
+
+function SettingCard({ title, children }: { title: string; children: React.ReactNode }) {
+  const { liquidGlassEnabled } = useBackground();
+  const cardBg = useColorModeValue("white", "#111111");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const { colorMode } = useColorMode();
+  const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
+
+  if (liquidGlassEnabled) {
+    return (
+      <LiquidGlassCard p={5}>
+        <VStack align="stretch" spacing={4}>
+          <Text fontWeight="medium" color={headerColor}>{title}</Text>
+          {children}
+        </VStack>
+      </LiquidGlassCard>
+    );
+  }
+
+  return (
+    <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
+      <VStack align="stretch" spacing={4}>
+        <Text fontWeight="medium" color={headerColor}>{title}</Text>
+        {children}
+      </VStack>
+    </Box>
+  );
+}
+
+function HealthBadge({ status }: { status: string }) {
+  switch (status.toLowerCase()) {
+    case "healthy":
+      return <Badge colorScheme="green" px={2} py={0.5} borderRadius="full">Healthy</Badge>;
+    case "warning":
+      return <Badge colorScheme="yellow" px={2} py={0.5} borderRadius="full">Warning</Badge>;
+    default:
+      return <Badge colorScheme="red" px={2} py={0.5} borderRadius="full">{status}</Badge>;
+  }
+}
+
+function MediaTypeBadge({ type }: { type: string }) {
+  const t = type.toLowerCase();
+  const label = t.includes("hdd") ? "HDD" : t.includes("nvme") ? "NVMe" : t.includes("ssd") ? "SSD" : type;
+  const cs = t.includes("ssd") || t.includes("nvme") ? "blue" : "orange";
+  return <Badge colorScheme={cs} px={2} py={0.5} borderRadius="md" fontSize="xs">{label}</Badge>;
+}
+
+function formatGb(gb: number): string {
+  if (gb >= 1000) return `${(gb / 1000).toFixed(1)}TB`;
+  if (gb >= 1) return `${gb.toFixed(0)}GB`;
+  return `${(gb * 1000).toFixed(0)}MB`;
+}
+
+export default function DiskHealthPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { getActiveColor } = useThemeColor();
+  const { liquidGlassEnabled } = useBackground();
+
+  const [response, setResponse] = useState<DiskHealthResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const headingColor = useColorModeValue("black", "#ffffff");
+  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const subTextColor = useColorModeValue("gray.500", "#888888");
+
+  const fetchHealth = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await invoke<DiskHealthResponse>("get_disk_health_info");
+      setResponse(data);
+    } catch (e) {
+      setError(String(e));
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchHealth();
+  }, [fetchHealth]);
+
+  return (
+    <Box pt={8} pb={8}>
+      <HStack justify="space-between" mb={6}>
+        <HStack>
+          <IconButton
+            aria-label={t("builtinTools.back")}
+            icon={<ArrowLeft size={20} />}
+            variant="ghost"
+            onClick={() => navigate("/builtin-tools")}
+            color={headingColor}
+          />
+          <Heading size="lg" color={headingColor}>
+            <HStack spacing={2}>
+              <HardDrive size={24} />
+              <Text>{t("diskHealth.title")}</Text>
+            </HStack>
+          </Heading>
+        </HStack>
+        <Button
+          leftIcon={<RefreshCw size={16} />}
+          variant="outline"
+          size="sm"
+          onClick={fetchHealth}
+          isLoading={loading}
+          loadingText={t("diskHealth.scanning")}
+        >
+          {t("diskHealth.refresh")}
+        </Button>
+      </HStack>
+
+      {loading && !response && (
+        <VStack py={20} spacing={4}>
+          <Spinner size="xl" color={getActiveColor()} />
+          <Text color={subTextColor}>{t("diskHealth.scanning")}</Text>
+        </VStack>
+      )}
+
+      {error && (
+        <LiquidGlassCard p={6}>
+          <VStack spacing={3}>
+            <AlertTriangle size={32} color="red" />
+            <Text color="red.400" fontWeight="medium">{t("diskHealth.loadError")}</Text>
+            <Text color={subTextColor} fontSize="sm" textAlign="center">{error}</Text>
+            <Button size="sm" onClick={fetchHealth}>{t("diskHealth.retry")}</Button>
+          </VStack>
+        </LiquidGlassCard>
+      )}
+
+      {response && (
+        <VStack align="stretch" spacing={6}>
+          <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
+            <LiquidGlassCard p={4} textAlign="center">
+              <Text fontSize="3xl" fontWeight="bold" color={headingColor}>{response.total_count}</Text>
+              <Text fontSize="sm" color={subTextColor}>{t("diskHealth.total")}</Text>
+            </LiquidGlassCard>
+            <LiquidGlassCard p={4} textAlign="center">
+              <Text fontSize="3xl" fontWeight="bold" color="green.400">{response.healthy_count}</Text>
+              <Text fontSize="sm" color={subTextColor}>{t("diskHealth.healthy")}</Text>
+            </LiquidGlassCard>
+            <LiquidGlassCard p={4} textAlign="center">
+              <Text fontSize="3xl" fontWeight="bold" color="yellow.400">{response.warning_count}</Text>
+              <Text fontSize="sm" color={subTextColor}>{t("diskHealth.warning")}</Text>
+            </LiquidGlassCard>
+            <LiquidGlassCard p={4} textAlign="center">
+              <Text fontSize="3xl" fontWeight="bold" color="red.400">{response.unhealthy_count}</Text>
+              <Text fontSize="sm" color={subTextColor}>{t("diskHealth.unhealthy")}</Text>
+            </LiquidGlassCard>
+          </SimpleGrid>
+
+          {response.disks.map((disk) => (
+            <SettingCard key={disk.index} title={disk.model}>
+              <VStack align="stretch" spacing={4}>
+                <HStack justify="space-between" wrap="wrap" gap={2}>
+                  <HStack gap={2}>
+                    <HealthBadge status={disk.health_status} />
+                    <MediaTypeBadge type={disk.media_type} />
+                    {disk.partition_style && (
+                      <Badge colorScheme="telegram" px={2} py={0.5} borderRadius="md" fontSize="xs">
+                        {disk.partition_style}
+                      </Badge>
+                    )}
+                    {disk.interface_type && (
+                      <Badge colorScheme="gray" px={2} py={0.5} borderRadius="md" fontSize="xs">
+                        {disk.interface_type}
+                      </Badge>
+                    )}
+                    {disk.is_boot_disk && (
+                      <Badge colorScheme="yellow" px={2} py={0.5} borderRadius="md" fontSize="xs" display="flex" alignItems="center" gap={1}>
+                        <Star size={10} /> System
+                      </Badge>
+                    )}
+                  </HStack>
+                  <Text fontSize="sm" color={subTextColor}>
+                    {disk.size_gb >= 1000
+                      ? `${(disk.size_gb / 1000).toFixed(1)} TB`
+                      : `${disk.size_gb.toFixed(0)} GB`}
+                  </Text>
+                </HStack>
+
+                {disk.partitions.map((part) => (
+                  <Box key={part.drive_letter}>
+                    <HStack justify="space-between" mb={1}>
+                      <HStack spacing={1}>
+                        <Badge colorScheme="purple" px={2} py={0} borderRadius="md" fontSize="xs">
+                          {part.drive_letter}:
+                        </Badge>
+                        {part.filesystem && (
+                          <Badge colorScheme="cyan" px={1.5} py={0} borderRadius="md" fontSize="2xs" textTransform="uppercase">
+                            {part.filesystem}
+                          </Badge>
+                        )}
+                        <Text fontSize="xs" color={subTextColor}>
+                          {formatGb(part.used_gb)} / {formatGb(part.total_gb)}
+                        </Text>
+                      </HStack>
+                      <Text fontSize="xs" fontWeight="medium" color={part.usage_percent > 90 ? "red.400" : part.usage_percent > 75 ? "yellow.400" : textColor}>
+                        {part.usage_percent.toFixed(0)}%
+                      </Text>
+                    </HStack>
+                    <Progress
+                      value={part.usage_percent}
+                      size="sm"
+                      borderRadius="full"
+                      colorScheme={part.usage_percent > 90 ? "red" : part.usage_percent > 75 ? "yellow" : "green"}
+                      bg={useColorModeValue("gray.200", "gray.600")}
+                    />
+                  </Box>
+                ))}
+
+                <SimpleGrid columns={{ base: 2, md: 2 }} spacing={4}>
+                  {liquidGlassEnabled ? (
+                    <LiquidGlassCard p={3} textAlign="center">
+                      <HStack justify="center" mb={1}>
+                        <Thermometer size={14} />
+                        <Text fontSize="xs" color={headingColor}>{t("diskHealth.temperature")}</Text>
+                      </HStack>
+                      {disk.temperature_c !== null ? (
+                        <Text fontSize="lg" fontWeight="bold" color={disk.temperature_c > 55 ? "orange.400" : disk.temperature_c > 45 ? "yellow.400" : "green.400"}>
+                          {disk.temperature_c.toFixed(0)}°C
+                        </Text>
+                      ) : (
+                        <Text fontSize="lg" color={headingColor}>--</Text>
+                      )}
+                    </LiquidGlassCard>
+                  ) : (
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                      <HStack justify="center" mb={1}>
+                        <Thermometer size={14} />
+                        <Text fontSize="xs" color={subTextColor}>{t("diskHealth.temperature")}</Text>
+                      </HStack>
+                      {disk.temperature_c !== null ? (
+                        <Text fontSize="lg" fontWeight="bold" color={disk.temperature_c > 55 ? "orange.400" : disk.temperature_c > 45 ? "yellow.400" : "green.400"}>
+                          {disk.temperature_c.toFixed(0)}°C
+                        </Text>
+                      ) : (
+                        <Text fontSize="lg" color={subTextColor}>--</Text>
+                      )}
+                    </Box>
+                  )}
+
+                  {liquidGlassEnabled ? (
+                    <LiquidGlassCard p={3} textAlign="center">
+                      <Text fontSize="xs" color={headingColor} mb={1}>{t("diskHealth.operationalStatus")}</Text>
+                      <Text fontSize="sm" fontWeight="medium" color={headingColor} noOfLines={1}>
+                        {disk.operational_status}
+                      </Text>
+                    </LiquidGlassCard>
+                  ) : (
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                      <Text fontSize="xs" color={subTextColor} mb={1}>{t("diskHealth.operationalStatus")}</Text>
+                      <Text fontSize="sm" fontWeight="medium" color={textColor} noOfLines={1}>
+                        {disk.operational_status}
+                      </Text>
+                    </Box>
+                  )}
+                </SimpleGrid>
+              </VStack>
+            </SettingCard>
+          ))}
+        </VStack>
+      )}
+    </Box>
+  );
+}

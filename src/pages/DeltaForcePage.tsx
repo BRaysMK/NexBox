@@ -549,7 +549,7 @@ const LoadoutCard = memo(function LoadoutCard({
   );
 
   if (liquidGlassEnabled) {
-    return <LiquidGlassCard p={4} _hover={{ borderColor: primaryColor }}>{code}</LiquidGlassCard>;
+    return <LiquidGlassCard p={4}>{code}</LiquidGlassCard>;
   }
   return (
     <Box

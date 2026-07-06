@@ -49,7 +49,8 @@
         "dlssPreset": "デルタフォースDLSS設定",
         "epicFree": "Epic 無料ゲーム",
         "dynamicIsland": "ダイナミックアイランド",
-        "screenRecord": "画面録画"
+        "screenRecord": "画面録画",
+    "diskHealth": "ディスク健全性"
     },
   "optimization": {
     "pageTitle": "最適化",
@@ -404,6 +405,11 @@
     "storage": "ストレージ",
     "totalCapacity": "合計容量",
     "count": "枚数",
+    "soundCard": "サウンドカード",
+    "networkCard": "ネットワークカード",
+    "adapterType": "アダプター種類",
+    "macAddress": "MACアドレス",
+    "linkSpeed": "リンク速度",
     "deltaPasswordFetched": "取得済み",
     "deltaPasswordNotFetched": "--"
   },
@@ -529,7 +535,13 @@
     "delete": "削除",
     "exportIcc": "ICCファイルとしてエクスポート",
     "exportIccSuccess": "ICCファイルをエクスポートしました",
-    "exportIccFailed": "ICCエクスポートに失敗しました"
+    "exportIccFailed": "ICCエクスポートに失敗しました",
+    "previewTitle": "フィルタープレビュー",
+    "previewOriginal": "元画像",
+    "previewFiltered": "フィルター",
+    "previewDisabledNote": "フィルター無効 · プレビューのみ",
+    "paramsUpdated": "パラメータを更新しました",
+    "paramsUpdatedHint": "フィルタースイッチを手動で有効にしてください"
   },
 "floatingNav": {
     "title": "フローティングナビゲーションボックス",
@@ -787,7 +799,8 @@
     "shaderCacheDesc": "NVIDIA/AMDのシェーダーキャッシュをクリーンアップしてディスクスペースを解放",
     "dlssPresetDesc": "DLSSモデルプリセットを切り替えてゲームグラフィックを最適化",
         "dynamicIslandDesc": "画面上部に表示されるフローティングアイランド、ネット速度/ハードウェア/音楽/通知を表示",
-        "screenRecordDesc": "画面またはウィンドウを録画、解像度とフレームレート調整可能"
+        "screenRecordDesc": "画面またはウィンドウを録画、解像度とフレームレート調整可能",
+    "diskHealthDesc": "ディスクの健全性とSMART情報を確認"
     },
   "gpuRename": {
     "title": "GPU名前変更",
@@ -1013,6 +1026,10 @@
       "closeBehaviorDesc": "閉じるボタンを押した時の動作を選択",
       "closeDirectly": "直接閉じる",
       "minimizeToTray": "トレイに最小化",
+      "navPositionLabel": "ナビゲーション位置",
+      "navPositionDesc": "ナビゲーションをサイドに表示するか上部に表示するかを選択",
+      "navPositionLeft": "サイド",
+      "navPositionTop": "上部",
       "sidebarShowLabel": "サイドバーラベル",
       "sidebarShowLabelDesc": "サイドバーの表示モードを選択",
       "sidebarShowLabelNoText": "アイコンのみ",
@@ -1208,6 +1225,24 @@
     "selectWindow": "ウィンドウを選択してください",
     "captureCursor": "カーソルをキャプチャ",
     "primaryMonitor": "プライマリモニター"
+  },
+  "diskHealth": {
+    "title": "ディスク健全性",
+    "refresh": "更新",
+    "scanning": "スキャン中...",
+    "total": "ディスク数",
+    "healthy": "正常",
+    "warning": "警告",
+    "unhealthy": "異常",
+    "temperature": "温度",
+    "lifespan": "健全寿命",
+    "powerOnHours": "稼働時間",
+    "operationalStatus": "動作状態",
+    "readErrors": "読み取りエラー",
+    "writeErrors": "書き込みエラー",
+    "partitions": "パーティション",
+    "loadError": "読み込み失敗",
+    "retry": "再試行"
   }
 }
 

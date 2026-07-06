@@ -34,12 +34,27 @@ export interface MemoryInfo {
   bank_label: string;
 }
 
+export interface SoundCardInfo {
+  name: string;
+  manufacturer: string;
+}
+
+export interface NetworkCardInfo {
+  name: string;
+  manufacturer: string;
+  adapter_type: string;
+  mac_address: string;
+  speed_mbps: number;
+}
+
 export interface HardwareInfo {
   cpu: CpuInfo;
   gpu: GpuInfo[];
   memory: MemoryInfo[];
   motherboard: string;
   disk: string[];
+  sound_card: SoundCardInfo[];
+  network_card: NetworkCardInfo[];
 }
 
 export async function getHardwareInfo(): Promise<HardwareInfo> {

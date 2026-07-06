@@ -13,6 +13,7 @@ import DisplayFilterPage from "./pages/DisplayFilterPage";
 import SettingsPage from "./pages/SettingsPage";
 import CrosshairPage from "./pages/CrosshairPage";
 import ScreenRecordPage from "./pages/ScreenRecordPage";
+import DiskHealthPage from "./pages/DiskHealthPage";
 import OverlayPanelPage from "./pages/OverlayPanelPage";
 import DeltaForcePage from "./pages/DeltaForcePage";
 import OtherGunCodePlatformsPage from "./pages/OtherGunCodePlatformsPage";
@@ -238,6 +239,7 @@ function App() {
               <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
               <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
               <Route path="/screen-record" element={<AnimatedPage><ScreenRecordPage /></AnimatedPage>} />
+              <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
               <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
               <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
               <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
@@ -304,6 +306,7 @@ function App() {
             <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
             <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
             <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
+            <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
             <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
       </Routes>

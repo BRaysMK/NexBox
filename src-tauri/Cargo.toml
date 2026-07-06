@@ -107,6 +107,8 @@ windows = { version = "0.58", features = [
     "Foundation_Collections",
     "Media_Control",
     "Storage_Streams",
+    "Win32_Media_Audio",
+    "Win32_Media",
     "UI_UIAutomation",
     "UI_Notifications",
     "UI_Notifications_Management",

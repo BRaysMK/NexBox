@@ -14,6 +14,7 @@ import {
   Zap,
   Video,
   Monitor,
+  HardDrive,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
@@ -86,6 +87,14 @@ const tools: ViewItem[] = [
     titleKey: "sidebar.dynamicIsland",
     descriptionKey: "builtinTools.dynamicIslandDesc",
     color: "#E91E63",
+  },
+  {
+    id: "disk-health",
+    path: "/disk-health",
+    icon: HardDrive,
+    titleKey: "sidebar.diskHealth",
+    descriptionKey: "builtinTools.diskHealthDesc",
+    color: "#00B4D8",
   },
   {
     id: "nvidia-driver",

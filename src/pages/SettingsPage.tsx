@@ -84,6 +84,7 @@ function GeneralSettings() {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
   });
   const [sidebarShowLabel, setSidebarShowLabel] = useState(false);
+  const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const [pageTransitionMode, setPageTransitionMode] = useState<"slide" | "fade" | "off">("fade");
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
@@ -182,6 +183,11 @@ function GeneralSettings() {
       setSidebarShowLabel(savedSidebarShowLabel === "true");
     }
 
+    const savedNavPosition = localStorage.getItem("nexbox_nav_position");
+    if (savedNavPosition === "top") {
+      setNavPosition("top");
+    }
+
     const mode = localStorage.getItem("nexbox_page_transition") as "slide" | "fade" | "off" | null;
     if (mode && ["slide", "fade", "off"].includes(mode)) {
       setPageTransitionMode(mode);
@@ -272,6 +278,13 @@ function GeneralSettings() {
     setSidebarShowLabel(newValue);
     localStorage.setItem("nexbox_sidebar_show_label", String(newValue));
     window.dispatchEvent(new CustomEvent("sidebar-show-label-changed", { detail: newValue }));
+  };
+
+  const handleNavPositionChange = (value: string) => {
+    const newValue = value as "left" | "top";
+    setNavPosition(newValue);
+    localStorage.setItem("nexbox_nav_position", newValue);
+    window.dispatchEvent(new CustomEvent("nav-position-changed", { detail: newValue }));
   };
 
   const handleAutoStartToggle = () => {
@@ -655,25 +668,59 @@ function GeneralSettings() {
           {t("settings.navigation")}
         </Text>
         <LiquidGlassCard px={4} py={3} boxShadow="sm">
-          <HStack justify="space-between">
-            <Box flex={1}>
-              <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                {t("settings.generalSettings.sidebarShowLabel")}
-              </Text>
-              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                {t("settings.generalSettings.sidebarShowLabelDesc")}
-              </Text>
-            </Box>
-            <CustomSelect
-              value={String(sidebarShowLabel)}
-              onChange={handleSidebarShowLabelChange}
-              options={[
-                { value: "false", label: t("settings.generalSettings.sidebarShowLabelNoText") },
-                { value: "true", label: t("settings.generalSettings.sidebarShowLabelWithText") },
-              ]}
-              width="100px"
-            />
-          </HStack>
+          <VStack spacing={0} align="stretch">
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.navPositionLabel")}
+                  <Badge
+                    ml={1.5}
+                    fontSize="0.6rem"
+                    variant="subtle"
+                    px={1.5}
+                    py={0.5}
+                    borderRadius="full"
+                    color={config.primaryColor}
+                    bg={hexToRgba(config.primaryColor, 0.15)}
+                  >
+                    BETA
+                  </Badge>
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.navPositionDesc")}
+                </Text>
+              </Box>
+              <CustomSelect
+                value={navPosition}
+                onChange={handleNavPositionChange}
+                options={[
+                  { value: "left", label: t("settings.generalSettings.navPositionLeft") },
+                  { value: "top", label: t("settings.generalSettings.navPositionTop") },
+                ]}
+                width="100px"
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.sidebarShowLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.sidebarShowLabelDesc")}
+                </Text>
+              </Box>
+              <CustomSelect
+                value={String(sidebarShowLabel)}
+                onChange={handleSidebarShowLabelChange}
+                options={[
+                  { value: "false", label: t("settings.generalSettings.sidebarShowLabelNoText") },
+                  { value: "true", label: t("settings.generalSettings.sidebarShowLabelWithText") },
+                ]}
+                width="100px"
+              />
+            </HStack>
+          </VStack>
         </LiquidGlassCard>
       </Box>
     </Box>

@@ -33,7 +33,7 @@ import {
   Film, Heart, Palette, Gamepad2, Save, Settings2, ArrowLeft,
   Upload, Trash2, FileImage, Download
 } from "lucide-react";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -134,10 +134,19 @@ export default function DisplayFilterPage() {
   const [iccPresets, setIccPresets] = useState<IccPresetInfo[]>([]);
   const [activeIccId, setActiveIccId] = useState<string | null>(null);
   const [deleteIccId, setDeleteIccId] = useState<string | null>(null);
+  // ICC 滤镜预览参数
+  const [iccPreviewFilter, setIccPreviewFilter] = useState<string | null>(null);
+  const [iccTintColor, setIccTintColor] = useState<string | null>(null);
+  const [iccTintOpacity, setIccTintOpacity] = useState<number>(0);
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [activeDisplayIndex, setActiveDisplayIndex] = useState<number>(0);
   const activeDisplayIndexRef = useRef(0);
+  
+  // 滤镜预览相关
+  const [splitPosition, setSplitPosition] = useState(50);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
   
   const editValuesRef = useRef({
     temperature: 6500,
@@ -328,9 +337,13 @@ export default function DisplayFilterPage() {
 
   const applyPreset = async (preset: FilterPreset) => {
     setIsLoading(true);
+    // 批量更新状态，减少重渲染
     setManualPresetChange(true);
     setActivePresetId(preset.id);
     setActiveIccId(null);
+    setIccPreviewFilter(null);
+    setIccTintColor(null);
+    setIccTintOpacity(0);
     setHasChanges(false);
     setInputVersion(v => v + 1);
     
@@ -338,20 +351,23 @@ export default function DisplayFilterPage() {
       const result: any = await invoke("apply_preset", {
         displayIndex: activeDisplayIndex,
         presetId: preset.id,
+        isActive: settings.is_active,
       });
       if (result.success) {
+        // 直接用 setSettings 更新全部值，避免多次 setState
         setSettings({
           temperature: preset.temperature,
           brightness: preset.brightness,
           contrast: preset.contrast,
           saturation: preset.saturation,
           mode: preset.mode,
-          is_active: true,
+          is_active: settings.is_active,
         });
         toast({
           title: `${t("displayFilter.presetAppliedPrefix")}${preset.name}${t("displayFilter.presetAppliedSuffix")}`,
+          description: !settings.is_active ? t("displayFilter.paramsUpdatedHint") : undefined,
           status: "success",
-          duration: 2000,
+          duration: 2500,
           isClosable: true,
         });
       }
@@ -373,6 +389,10 @@ export default function DisplayFilterPage() {
   const openCustom = async () => {
     setManualPresetChange(true);
     setActivePresetId("custom");
+    setActiveIccId(null);
+    setIccPreviewFilter(null);
+    setIccTintColor(null);
+    setIccTintOpacity(0);
     setIsLoading(true);
     // 不要用当前已应用的 settings 覆盖：切换其它预设后 settings 会变成该预设参数，
     // 会冲掉未保存的编辑或磁盘上的自定义档案。editValuesRef 由 loadCustomSettings / 保存 / 用户输入维护。
@@ -395,16 +415,17 @@ export default function DisplayFilterPage() {
           contrast: savedCustom.contrast,
           saturation: savedCustom.saturation,
           mode: 0,
+          isActive: settings.is_active,
         });
         if (result.success) {
-          setSettings({
+          setSettings(prev => ({
             temperature: savedCustom.temperature,
             brightness: savedCustom.brightness,
             contrast: savedCustom.contrast,
             saturation: savedCustom.saturation,
             mode: 0,
-            is_active: true,
-          });
+            is_active: prev.is_active,
+          }));
         }
       } catch (error) {
         console.error("Failed to apply custom settings:", error);
@@ -414,6 +435,29 @@ export default function DisplayFilterPage() {
     }
     setIsLoading(false);
     setTimeout(() => setManualPresetChange(false), 100);
+  };
+
+  const handleExportCustom = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const result: string | null = await invoke("export_custom_filter", { displayIndex: activeDisplayIndex });
+      if (result) {
+        toast({
+          title: t("displayFilter.exportIccSuccess"),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: t("displayFilter.exportIccFailed"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
   };
 
   const saveAndApply = async () => {
@@ -434,16 +478,17 @@ export default function DisplayFilterPage() {
         contrast: contrast,
         saturation: saturation,
         mode: 0,
+        isActive: settings.is_active,
       });
       if (result.success) {
-        setSettings({
+        setSettings(prev => ({
           temperature: temp,
           brightness: brightness,
           contrast: contrast,
           saturation: saturation,
           mode: 0,
-          is_active: true,
-        });
+          is_active: prev.is_active,
+        }));
         
         await invoke("save_custom_filter_settings", {
           displayIndex: activeDisplayIndex,
@@ -489,16 +534,16 @@ export default function DisplayFilterPage() {
     setActivePresetId("normal");
     setActiveIccId(null);
     try {
-      const result: any = await invoke("apply_preset", { displayIndex: activeDisplayIndex, presetId: "normal" });
+      const result: any = await invoke("apply_preset", { displayIndex: activeDisplayIndex, presetId: "normal", isActive: settings.is_active });
       if (result.success) {
-        setSettings({
+        setSettings(prev => ({
           temperature: 6500,
           brightness: 100,
           contrast: 100,
           saturation: 100,
           mode: 0,
-          is_active: true,
-        });
+          is_active: prev.is_active,
+        }));
         const normal = {
           temperature: 6500,
           brightness: 100,
@@ -575,16 +620,20 @@ export default function DisplayFilterPage() {
     setActivePresetId(""); // 取消内置预设选中状态
     setManualPresetChange(true);
     try {
-      const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id });
+      const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id, isActive: settings.is_active });
       if (result.success) {
+        // 存储 ICC 预览参数
+        setIccPreviewFilter(result.preview_filter || null);
+        setIccTintColor(result.preview_tint_color || null);
+        setIccTintOpacity(result.preview_tint_opacity ?? 0);
         setSettings((prev: FilterSettings) => ({
           ...prev,
-          is_active: true,
         }));
         toast({
           title: t("displayFilter.iccApplied"),
+          description: !settings.is_active ? t("displayFilter.paramsUpdatedHint") : undefined,
           status: "success",
-          duration: 2000,
+          duration: 2500,
           isClosable: true,
         });
       }
@@ -665,6 +714,105 @@ export default function DisplayFilterPage() {
     if (temp >= 3000) return "#ffd080";
     return "#ffb040";
   };
+
+  // 计算 CSS filter 近似值（缓存结果，避免每次渲染触发浏览器重绘）
+  const filterStyle = useMemo((): React.CSSProperties => {
+    const t = settings.temperature;
+    const b = settings.brightness / 100;
+    const c = settings.contrast / 100;
+    const s = settings.saturation / 100;
+    const params = modeParams[settings.mode] || modeParams[0];
+    
+    // Gamma 近似：gamma < 1 = 更亮, gamma > 1 = 更暗
+    const gammaBrightness = 1 / params.gamma;
+    // S-Curve 近似：增加或减少对比度
+    const sCurveContrast = 1 + params.sCurve * 0.5;
+    
+    const filterParts: string[] = [
+      `brightness(${(b * gammaBrightness).toFixed(3)})`,
+      `contrast(${(c * sCurveContrast).toFixed(3)})`,
+      `saturate(${s.toFixed(3)})`,
+    ];
+    
+    return { filter: filterParts.join(" ") } as React.CSSProperties;
+  }, [settings.temperature, settings.brightness, settings.contrast, settings.saturation, settings.mode]);
+
+  // 色温覆盖层颜色（缓存结果）
+  const temperatureOverlay = useMemo((): React.CSSProperties => {
+    const t = settings.temperature;
+    if (t >= 6400 && t <= 6600) return { display: "none" };
+    let color: string;
+    let opacity: number;
+    if (t < 6500) {
+      // 暖色（低色温）
+      const warmth = Math.min((6500 - t) / 5500, 0.5);
+      color = "#FF8C00";
+      opacity = warmth;
+    } else {
+      // 冷色（高色温）
+      const coolness = Math.min((t - 6500) / 3500, 0.4);
+      color = "#4A90FF";
+      opacity = coolness;
+    }
+    return {
+      position: "absolute",
+      inset: 0,
+      backgroundColor: color,
+      mixBlendMode: "overlay",
+      opacity: opacity,
+      pointerEvents: "none",
+    } as React.CSSProperties;
+  }, [settings.temperature]);
+
+  // 拖拽分割线
+  const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    document.body.style.cursor = "ew-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingRef.current || !previewContainerRef.current) return;
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const pct = Math.max(5, Math.min(95, (x / rect.width) * 100));
+      setSplitPosition(pct);
+    };
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  // 触摸拖拽
+  const handleSplitTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+
+    const handleTouchMove = (ev: TouchEvent) => {
+      if (!isDraggingRef.current || !previewContainerRef.current) return;
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      const x = ev.touches[0].clientX - rect.left;
+      const pct = Math.max(5, Math.min(95, (x / rect.width) * 100));
+      setSplitPosition(pct);
+    };
+
+    const handleTouchEnd = () => {
+      isDraggingRef.current = false;
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+    };
+
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd);
+  }, []);
 
   const currentModeParams = modeParams[settings.mode] || modeParams[0];
 
@@ -1013,11 +1161,21 @@ export default function DisplayFilterPage() {
                   bg={presetColors["custom"]}
                 />
               )}
-              <Box position="absolute" top={2} right={2}>
-                <Text fontSize="10px" fontWeight="700" color="#FF6B9D" bg="rgba(255,107,157,0.1)" px={1.5} py={0.5} borderRadius="full">
-                  BETA
-                </Text>
-              </Box>
+              <Tooltip label={t("displayFilter.exportIcc")} placement="top">
+                <IconButton
+                  aria-label={t("displayFilter.exportIcc")}
+                  icon={<Download size={14} />}
+                  size="xs"
+                  variant="ghost"
+                  position="absolute"
+                  top={1}
+                  right={1}
+                  color={subTextColor}
+                  opacity={0.5}
+                  _hover={{ opacity: 1, color: presetColors["custom"] }}
+                  onClick={(e) => handleExportCustom(e)}
+                />
+              </Tooltip>
               <VStack spacing={2}>
                 <Settings2 size={24} color={presetColors["custom"]} />
                 <Text color={textColor} fontSize="sm" fontWeight="600">
@@ -1143,137 +1301,288 @@ export default function DisplayFilterPage() {
         )}
       </VStack>
 
-      <VStack align="start" spacing={4} w="full">
-        {(activePresetId === "custom" || activeIccId) && (
-        <HStack justify="space-between" w="full">
-          <HStack>
-            <Text color={textColor} fontSize="md" fontWeight="600">
-              {t("displayFilter.currentSettings")}
+      {/* 滤镜预览 + 当前设置 (3:1) */}
+      <Flex w="full" gap={4} align="stretch" direction={{ base: "column", lg: "row" }}>
+        {/* 左侧 3/4：滤镜预览对比器 */}
+        <Box
+          w={{ base: "full", lg: "75%" }}
+          borderRadius="xl"
+          overflow="hidden"
+          position="relative"
+          bg={sliderBg}
+          border="1px solid"
+          borderColor={cardBorder}
+        >
+          <HStack justify="space-between" px={4} pt={3} pb={1}>
+            <Text color={textColor} fontSize="sm" fontWeight="600">
+              {t("displayFilter.previewTitle")}
             </Text>
-            {activePresetId === "custom" && (
-              <Text fontSize="10px" fontWeight="700" color="#FF6B9D" bg="rgba(255,107,157,0.1)" px={1.5} py={0.5} borderRadius="full">
-                BETA
-              </Text>
-            )}
-            {activeIccId && (
-              <Text fontSize="10px" fontWeight="700" color={primaryColor} bg={`${primaryColor}20`} px={1.5} py={0.5} borderRadius="full">
-                ICC
+            {!settings.is_active && (
+              <Text color="#F1C40F" fontSize="xs" fontWeight="500" bg={hexToRgba("#F1C40F", 0.15)} px={2} py={0.5} borderRadius="full">
+                {t("displayFilter.previewDisabledNote")}
               </Text>
             )}
           </HStack>
-          {activePresetId === "custom" && (
-            <Button
-              size="sm"
-              leftIcon={<Save size={16} />}
-              bg={primaryColor}
-              color={contrastText}
-              onClick={saveAndApply}
-              isLoading={isLoading}
-              isDisabled={!hasChanges}
-              _hover={{
-                bg: getHoverColor(),
-              }}
+          <Box
+            ref={previewContainerRef}
+            position="relative"
+            w="full"
+            h="380px"
+            overflow="hidden"
+            cursor="ew-resize"
+            onMouseDown={handleSplitMouseDown}
+            onTouchStart={handleSplitTouchStart}
+          >
+            {/* 原始图（全宽） */}
+            <Box position="absolute" inset={0}>
+              <img
+                src="/icc-preview.png"
+                alt="Original"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: "center",
+                }}
+                draggable={false}
+              />
+            </Box>
+            
+            {/* 滤镜图（从分割线开始向右裁剪） */}
+            <Box
+              position="absolute"
+              inset={0}
+              style={{ clipPath: `inset(0 0 0 ${splitPosition}%)` }}
             >
-              {t("displayFilter.saveAndApply")}
-            </Button>
-          )}
-        </HStack>
-        )}
-
-        {activeIccId && (
-          <Box w="full" p={4} borderRadius="md" bg={sliderBg}>
-            <Text color={textColor} fontSize="sm">
-              {iccPresets.find(p => p.id === activeIccId)?.description || t("displayFilter.iccApplied")}
-            </Text>
+              <img
+                src="/icc-preview.png"
+                alt="Filtered"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: "center",
+                  willChange: "filter",
+                  ...(activeIccId
+                    ? { filter: iccPreviewFilter || "none" } as React.CSSProperties
+                    : filterStyle),
+                }}
+                draggable={false}
+              />
+              {/* 色温/ICC 覆盖层 */}
+              {activeIccId ? (
+                iccTintColor ? (
+                  <Box
+                    position="absolute"
+                    inset={0}
+                    backgroundColor={iccTintColor}
+                    mixBlendMode="overlay"
+                    opacity={iccTintOpacity}
+                    pointerEvents="none"
+                  />
+                ) : null
+              ) : (
+                <Box style={temperatureOverlay} />
+              )}
+            </Box>
+            
+            {/* 分割线 */}
+            <Box
+              position="absolute"
+              top={0}
+              bottom={0}
+              left={`${splitPosition}%`}
+              width="3px"
+              bg={primaryColor}
+              transform="translateX(-50%)"
+              boxShadow={`0 0 12px ${hexToRgba(primaryColor, 0.6)}`}
+              zIndex={2}
+              pointerEvents="none"
+            />
+            
+            {/* 拖拽手柄 */}
+            <Box
+              position="absolute"
+              top="50%"
+              left={`${splitPosition}%`}
+              transform="translate(-50%, -50%)"
+              w="32px"
+              h="32px"
+              borderRadius="full"
+              bg={cardBg}
+              border="2px solid"
+              borderColor={primaryColor}
+              boxShadow={`0 0 16px ${hexToRgba(primaryColor, 0.4)}`}
+              zIndex={3}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              pointerEvents="none"
+            >
+              <Box fontSize="10px" color={primaryColor} fontWeight="700" letterSpacing="-1px" userSelect="none">
+                ◀▶
+              </Box>
+            </Box>
+            
+            {/* 底部标签 */}
+            <HStack
+              position="absolute"
+              bottom={3}
+              left={0}
+              right={0}
+              justify="space-between"
+              px={4}
+              zIndex={2}
+              pointerEvents="none"
+            >
+              <Text
+                color="#ffffff"
+                fontSize="xs"
+                fontWeight="600"
+                bg="rgba(0,0,0,0.5)"
+                px={2}
+                py={0.5}
+                borderRadius="md"
+                backdropFilter="blur(4px)"
+              >
+                {t("displayFilter.previewOriginal")}
+              </Text>
+              <Text
+                color="#ffffff"
+                fontSize="xs"
+                fontWeight="600"
+                bg="rgba(0,0,0,0.5)"
+                px={2}
+                py={0.5}
+                borderRadius="md"
+                backdropFilter="blur(4px)"
+              >
+                {t("displayFilter.previewFiltered")}
+              </Text>
+            </HStack>
           </Box>
-        )}
+        </Box>
 
-        {!activeIccId && (
-        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} w="full">
-          <VStack spacing={2} align="stretch">
-            {activePresetId === "custom" ? (
-              <>
-                <EditableItem 
-                  label={t("displayFilter.colorTemperature")} 
-                  value={editValuesRef.current.temperature}
-                  onChange={(val) => handleInputChange("temperature", val)}
-                  unit="K"
-                  colorValue={editValuesRef.current.temperature}
-                />
-                <EditableItem 
-                  label={t("displayFilter.brightness")} 
-                  value={editValuesRef.current.brightness}
-                  onChange={(val) => handleInputChange("brightness", val)}
-                  unit="%"
-                />
-                <EditableItem 
-                  label={t("displayFilter.contrast")} 
-                  value={editValuesRef.current.contrast}
-                  onChange={(val) => handleInputChange("contrast", val)}
-                  unit="%"
-                />
-                <EditableItem 
-                  label={t("displayFilter.saturation")} 
-                  value={editValuesRef.current.saturation}
-                  onChange={(val) => handleInputChange("saturation", val)}
-                  unit="%"
-                />
-              </>
-            ) : (
-              <>
-                <ReadOnlyItem 
-                  label={t("displayFilter.colorTemperature")} 
-                  value={settings.temperature} 
-                  unit="K"
-                  colorValue={settings.temperature}
-                />
-                <ReadOnlyItem 
-                  label={t("displayFilter.brightness")} 
-                  value={settings.brightness} 
-                  unit="%"
-                />
-                <ReadOnlyItem 
-                  label={t("displayFilter.contrast")} 
-                  value={settings.contrast} 
-                  unit="%"
-                />
-                <ReadOnlyItem 
-                  label={t("displayFilter.saturation")} 
-                  value={settings.saturation} 
-                  unit="%"
-                />
-              </>
+        {/* 右侧 1/4：当前设置 */}
+        <VStack
+          w={{ base: "full", lg: "25%" }}
+          align="stretch"
+          spacing={2}
+          bg={sliderBg}
+          borderRadius="xl"
+          border="1px solid"
+          borderColor={cardBorder}
+          p={3}
+        >
+          <HStack justify="space-between">
+            <HStack spacing={1}>
+              <Text color={textColor} fontSize="sm" fontWeight="600">
+                {t("displayFilter.currentSettings")}
+              </Text>
+
+              {activeIccId && (
+                <Text fontSize="9px" fontWeight="700" color={primaryColor} bg={`${primaryColor}20`} px={1} py={0.5} borderRadius="full">
+                  ICC
+                </Text>
+              )}
+            </HStack>
+            {activePresetId === "custom" && (
+              <Button
+                size="xs"
+                leftIcon={<Save size={12} />}
+                bg={primaryColor}
+                color={contrastText}
+                onClick={saveAndApply}
+                isLoading={isLoading}
+                isDisabled={!hasChanges}
+                _hover={{ bg: getHoverColor() }}
+                fontSize="xs"
+              >
+                {t("displayFilter.saveAndApply")}
+              </Button>
             )}
-          </VStack>
-          
-          <VStack spacing={2} align="stretch">
-            <ReadOnlyItem 
-              label="Gamma" 
-              value={currentModeParams.gamma.toFixed(2)} 
-            />
-            <ReadOnlyItem 
-              label="S-Curve" 
-              value={currentModeParams.sCurve.toFixed(2)} 
-            />
-            <ReadOnlyItem 
-              label="R Boost" 
-              value={(currentModeParams.rBoost * 100).toFixed(0)} 
-              unit="%"
-            />
-            <ReadOnlyItem 
-              label="G Boost" 
-              value={(currentModeParams.gBoost * 100).toFixed(0)} 
-              unit="%"
-            />
-            <ReadOnlyItem 
-              label="B Boost" 
-              value={(currentModeParams.bBoost * 100).toFixed(0)} 
-              unit="%"
-            />
-          </VStack>
-        </SimpleGrid>
-        )}
-      </VStack>
+          </HStack>
+
+          {activeIccId && (
+            <Box p={2} borderRadius="md" bg={hexToRgba(primaryColor, 0.08)}>
+              <Text color={textColor} fontSize="xs">
+                {iccPresets.find(p => p.id === activeIccId)?.description || t("displayFilter.iccApplied")}
+              </Text>
+            </Box>
+          )}
+
+          {!activeIccId && (
+            <VStack spacing={1} align="stretch" flex={1} justify="center">
+              {activePresetId === "custom" ? (
+                <>
+                  <EditableItem 
+                    label={t("displayFilter.colorTemperature")} 
+                    value={editValuesRef.current.temperature}
+                    onChange={(val) => handleInputChange("temperature", val)}
+                    unit="K"
+                    colorValue={editValuesRef.current.temperature}
+                  />
+                  <EditableItem 
+                    label={t("displayFilter.brightness")} 
+                    value={editValuesRef.current.brightness}
+                    onChange={(val) => handleInputChange("brightness", val)}
+                    unit="%"
+                  />
+                  <EditableItem 
+                    label={t("displayFilter.contrast")} 
+                    value={editValuesRef.current.contrast}
+                    onChange={(val) => handleInputChange("contrast", val)}
+                    unit="%"
+                  />
+                  <EditableItem 
+                    label={t("displayFilter.saturation")} 
+                    value={editValuesRef.current.saturation}
+                    onChange={(val) => handleInputChange("saturation", val)}
+                    unit="%"
+                  />
+                </>
+              ) : (
+                <>
+                  <ReadOnlyItem 
+                    label={t("displayFilter.colorTemperature")} 
+                    value={settings.temperature} 
+                    unit="K"
+                    colorValue={settings.temperature}
+                  />
+                  <ReadOnlyItem 
+                    label={t("displayFilter.brightness")} 
+                    value={settings.brightness} 
+                    unit="%"
+                  />
+                  <ReadOnlyItem 
+                    label={t("displayFilter.contrast")} 
+                    value={settings.contrast} 
+                    unit="%"
+                  />
+                  <ReadOnlyItem 
+                    label={t("displayFilter.saturation")} 
+                    value={settings.saturation} 
+                    unit="%"
+                  />
+                </>
+              )}
+              {/* 模式参数 */}
+              <Box mt={2} pt={2} borderTop="1px solid" borderColor={cardBorder}>
+                <Text color={subTextColor} fontSize="10px" fontWeight="600" mb={1}>
+                  {presets.find(p => p.id === activePresetId)?.name || "Normal"}
+                </Text>
+                <Box fontSize="11px" color={subTextColor} lineHeight="1.6">
+                  <Flex justify="space-between"><Text>Gamma</Text><Text color={textColor}>{currentModeParams.gamma.toFixed(2)}</Text></Flex>
+                  <Flex justify="space-between"><Text>S-Curve</Text><Text color={textColor}>{currentModeParams.sCurve.toFixed(2)}</Text></Flex>
+                  <Flex justify="space-between"><Text>R Boost</Text><Text color={textColor}>{(currentModeParams.rBoost * 100).toFixed(0)}%</Text></Flex>
+                  <Flex justify="space-between"><Text>G Boost</Text><Text color={textColor}>{(currentModeParams.gBoost * 100).toFixed(0)}%</Text></Flex>
+                  <Flex justify="space-between"><Text>B Boost</Text><Text color={textColor}>{(currentModeParams.bBoost * 100).toFixed(0)}%</Text></Flex>
+                </Box>
+              </Box>
+            </VStack>
+          )}
+        </VStack>
+      </Flex>
 
       <Box 
         w="full" 

@@ -8,6 +8,25 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
+function useNavPosition() {
+  const [navPosition, setNavPosition] = useState<"left" | "top">(() => {
+    const saved = localStorage.getItem("nexbox_nav_position");
+    return saved === "top" ? "top" : "left";
+  });
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      setNavPosition(e.detail === "top" ? "top" : "left");
+    };
+    window.addEventListener("nav-position-changed", handler as EventListener);
+    return () => {
+      window.removeEventListener("nav-position-changed", handler as EventListener);
+    };
+  }, []);
+
+  return navPosition;
+}
+
 interface MainLayoutProps {
   children: ReactNode;
 }
@@ -16,6 +35,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const bgColor = useColorModeValue("#fafafa", "#0a0a0a");
   const { backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, activePresetIndex, presetBackgrounds } = useBackground();
   const { config } = useThemeColor();
+  const navPosition = useNavPosition();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoReady, setVideoReady] = useState(false);
   const idCounter = useRef(0);
@@ -93,6 +113,20 @@ export function MainLayout({ children }: MainLayoutProps) {
     }
   }, [dynamicBgVideo, showDynamicBg]);
 
+  // 顶部导航栏模式下，body 不滚动，内容区域自行管理滚动
+  useEffect(() => {
+    if (navPosition === "top") {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [navPosition]);
+
+  const isNavTop = navPosition === "top";
+
   return (
     <Box
       position="relative"
@@ -169,9 +203,12 @@ export function MainLayout({ children }: MainLayoutProps) {
       <TitleBar />
       <Sidebar />
       <Box 
-        ml="96px" 
-        pt="56px"
+        position="relative"
+        zIndex={0}
+        ml={isNavTop ? 0 : "96px"}
+        pt={isNavTop ? "120px" : "56px"}
         pb={8}
+        transition="margin 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
         px={8} 
         pr="40px" 
         overflowY="auto" 

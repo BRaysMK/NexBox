@@ -43,7 +43,7 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
   );
 
   return (
-    <Link key={item.path} to={item.path}>
+    <Link key={item.path} to={item.path} style={{ transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)", flexShrink: 0, display: "flex" }}>
       <ChakraBox position="relative">
         {showLabel ? (
           <Flex
@@ -116,6 +116,10 @@ export function Sidebar() {
   const [showLabel, setShowLabel] = useState(() => {
     return localStorage.getItem("nexbox_sidebar_show_label") === "true";
   });
+  const [navPosition, setNavPosition] = useState<"left" | "top">(() => {
+    const saved = localStorage.getItem("nexbox_nav_position");
+    return saved === "top" ? "top" : "left";
+  });
   
   useEffect(() => {
     const handler = (e: CustomEvent) => {
@@ -126,6 +130,19 @@ export function Sidebar() {
       window.removeEventListener("sidebar-show-label-changed", handler as EventListener);
     };
   }, []);
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const val = e.detail;
+      setNavPosition(val === "top" ? "top" : "left");
+    };
+    window.addEventListener("nav-position-changed", handler as EventListener);
+    return () => {
+      window.removeEventListener("nav-position-changed", handler as EventListener);
+    };
+  }, []);
+
+  const isTop = navPosition === "top";
   
   const defaultBgColor = useColorModeValue("rgba(255,255,255,0.9)", "rgba(17,17,17,0.95)");
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
@@ -153,7 +170,7 @@ export function Sidebar() {
   ];
 
   const sidebarContent = (
-    <Flex direction="column" gap={3}>
+    <Flex direction="row" wrap="wrap" gap={3} align="center" justify="center" transition="gap 0.4s cubic-bezier(0.4, 0, 0.2, 1)">
       {navItems.map((item) => (
         <NavButton
           key={item.path}
@@ -169,7 +186,9 @@ export function Sidebar() {
     </Flex>
   );
 
-  const containerStyles = {
+  const containerTransition = "max-width 0.25s cubic-bezier(0.95, 0, 1, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+
+  const leftContainerStyles = {
     position: "fixed" as const,
     left: 6,
     top: "50%",
@@ -179,14 +198,34 @@ export function Sidebar() {
     boxShadow: "2xl",
     py: 6,
     px: 2,
+    maxWidth: "64px",
+    transition: containerTransition,
     sx: { WebkitBackfaceVisibility: "hidden" as const, backfaceVisibility: "hidden" as const },
   };
+
+  const topContainerStyles = {
+    position: "fixed" as const,
+    top: "54px",
+    left: "50%",
+    transform: "translateX(-50%) translateZ(0)",
+    zIndex: 40,
+    borderRadius: "2xl",
+    boxShadow: "2xl",
+    py: 2,
+    px: 3,
+    maxWidth: "2000px",
+    width: "max-content",
+    transition: containerTransition,
+    sx: { WebkitBackfaceVisibility: "hidden" as const, backfaceVisibility: "hidden" as const },
+  };
+
+  const containerStyles = isTop ? topContainerStyles : leftContainerStyles;
 
   if (liquidGlassEnabled) {
     return (
       <ChakraBox
         {...containerStyles}
-        bg={glassBgColor}
+        bg={isTop ? glassBgColor : glassBgColor}
         border="1px solid"
         borderColor={glassBorderColor}
         backdropFilter="blur(1px)"
