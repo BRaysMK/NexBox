@@ -241,10 +241,17 @@
       "warningText": "La définition de la limite de mémoire nécessite des privilèges d'administrateur et un redémarrage du système pour prendre effet",
       "adminRequired": "Administrateur requis",
       "options": {
+            "7.9gb": "7.9 GB",
             "11.9gb": "11.9 GB",
             "13.9gb": "13.9 GB",
             "15.9gb": "15.9 GB"
-        }
+        },
+        "presetTab": "Limite prédéfinie",
+        "customTab": "Limite personnalisée",
+        "customPlaceholder": "Entrez la valeur limite (GB)",
+        "selectPreset": "Sélectionnez une limite prédéfinie",
+        "invalidInput": "Veuillez entrer une valeur de limite mémoire valide",
+        "outOfRange": "La limite doit être comprise entre 0,1 et la mémoire physique"
     },
     "powerManagement": {
       "title": "Gestion de l'alimentation",

@@ -18,6 +18,10 @@ export function TitleBar() {
   const logoSrc = useColorModeValue("/logo/NexBoxW.png", "/logo/NexBoxB.png");
 
   const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [searchBarVisible, setSearchBarVisible] = useState(() => {
+    const saved = localStorage.getItem("nexbox_search_bar_enabled");
+    return saved === null ? true : saved === "true";
+  });
 
   const [navPosition, setNavPosition] = useState<"left" | "top">(() => {
     const saved = localStorage.getItem("nexbox_nav_position");
@@ -31,6 +35,16 @@ export function TitleBar() {
     window.addEventListener("nav-position-changed", handler as EventListener);
     return () => {
       window.removeEventListener("nav-position-changed", handler as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      setSearchBarVisible(!!e.detail);
+    };
+    window.addEventListener("search-bar-setting-changed", handler as EventListener);
+    return () => {
+      window.removeEventListener("search-bar-setting-changed", handler as EventListener);
     };
   }, []);
 
@@ -118,7 +132,7 @@ export function TitleBar() {
             transition="margin 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <GlobalSearch />
+            {searchBarVisible && <GlobalSearch />}
           </Box>
           <HStack spacing={1} h="40px" align="center">
             <IconButton

@@ -79,6 +79,7 @@ function GeneralSettings() {
   const [randomQuoteEnabled, setRandomQuoteEnabled] = useState(true);
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
+  const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
   const [closeBehavior, setCloseBehavior] = useState<string>(() => {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
@@ -156,6 +157,11 @@ function GeneralSettings() {
     const savedRandomQuote = localStorage.getItem("nexbox_random_quote_enabled");
     if (savedRandomQuote !== null) {
       setRandomQuoteEnabled(savedRandomQuote === "true");
+    }
+
+    const savedSearchBar = localStorage.getItem("nexbox_search_bar_enabled");
+    if (savedSearchBar !== null) {
+      setSearchBarEnabled(savedSearchBar === "true");
     }
 
     const savedGameLauncher = localStorage.getItem("nexbox_game_launcher_enabled");
@@ -246,6 +252,13 @@ function GeneralSettings() {
     setHomeHardwareModelEnabled(newValue);
     localStorage.setItem("nexbox_home_hardware_model_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("home-hardware-model-setting-changed", { detail: newValue }));
+  };
+
+  const handleSearchBarToggle = () => {
+    const newValue = !searchBarEnabled;
+    setSearchBarEnabled(newValue);
+    localStorage.setItem("nexbox_search_bar_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("search-bar-setting-changed", { detail: newValue }));
   };
 
   const handleSplashLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -456,6 +469,22 @@ function GeneralSettings() {
                 size="md"
                 isChecked={homeHardwareModelEnabled}
                 onChange={handleHomeHardwareModelToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.searchBarLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.searchBarDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={searchBarEnabled}
+                onChange={handleSearchBarToggle}
               />
             </HStack>
           </VStack>

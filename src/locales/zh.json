@@ -129,10 +129,17 @@
       "warningText": "设置内存限制需要管理员权限，且需要重启系统才能生效",
       "adminRequired": "需要管理员权限",
       "options": {
+        "7.9gb": "7.9 GB",
         "11.9gb": "11.9 GB",
         "13.9gb": "13.9 GB",
         "15.9gb": "15.9 GB"
-      }
+      },
+      "presetTab": "预设限制",
+      "customTab": "自定义限制",
+      "customPlaceholder": "输入限制值 (GB)",
+      "selectPreset": "选择预设限制值",
+      "invalidInput": "请输入有效的内存限制值",
+      "outOfRange": "限制值必须在 0.1 到物理内存之间"
     },
     "powerManagement": {
       "title": "电源管理",
@@ -890,6 +897,8 @@
       "gameLauncherDesc": "在主页显示快捷启动卡片",
       "homeHardwareModelLabel": "硬件型号",
       "homeHardwareModelDesc": "在主页显示 CPU/GPU/内存/主板/硬盘的型号摘要",
+      "searchBarLabel": "搜索框",
+      "searchBarDesc": "在标题栏显示全局搜索框",
       "splash": "动画",
       "splashLogoLabel": "启动动画 Logo",
       "splashLogoDesc": "自定义启动动画中显示的 Logo 图片",

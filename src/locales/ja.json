@@ -241,10 +241,17 @@
       "warningText": "メモリ制限の設定には管理者権限が必要で、システムの再起動が必要です",
       "adminRequired": "管理者権限が必要",
       "options": {
+            "7.9gb": "7.9 GB",
             "11.9gb": "11.9 GB",
             "13.9gb": "13.9 GB",
             "15.9gb": "15.9 GB"
-        }
+        },
+        "presetTab": "プリセット制限",
+        "customTab": "カスタム制限",
+        "customPlaceholder": "制限値を入力 (GB)",
+        "selectPreset": "プリセット制限値を選択",
+        "invalidInput": "有効なメモリ制限値を入力してください",
+        "outOfRange": "制限値は0.1から物理メモリの間である必要があります"
     },
     "powerManagement": {
       "title": "電源管理",

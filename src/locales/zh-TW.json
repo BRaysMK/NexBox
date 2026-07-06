@@ -241,10 +241,17 @@
       "warningText": "設定記憶體限制需要管理員權限，且需要重啟系統才能生效",
       "adminRequired": "需要管理員權限",
       "options": {
+            "7.9gb": "7.9 GB",
             "11.9gb": "11.9 GB",
             "13.9gb": "13.9 GB",
             "15.9gb": "15.9 GB"
-        }
+        },
+        "presetTab": "預設限制",
+        "customTab": "自訂限制",
+        "customPlaceholder": "輸入限制值 (GB)",
+        "selectPreset": "選擇預設限制值",
+        "invalidInput": "請輸入有效的記憶體限制值",
+        "outOfRange": "限制值必須在 0.1 到實體記憶體之間"
     },
     "powerManagement": {
       "title": "電源管理",
