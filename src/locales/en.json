@@ -50,7 +50,8 @@
     "dlssPreset": "Delta Force DLSS Settings",
     "epicFree": "Epic Free Games",
     "dynamicIsland": "Dynamic Island",
-    "screenRecord": "Screen Record"
+    "screenRecord": "Screen Record",
+    "diskHealth": "Disk Health"
   },
   "optimization": {
     "pageTitle": "Optimize",
@@ -466,6 +467,11 @@
     "storage": "Storage",
     "totalCapacity": "Total Capacity",
     "count": "Sticks",
+    "soundCard": "Sound Card",
+    "networkCard": "Network Card",
+    "adapterType": "Adapter Type",
+    "macAddress": "MAC Address",
+    "linkSpeed": "Link Speed",
     "deltaPasswordFetched": "Fetched",
     "deltaPasswordNotFetched": "--"
   },
@@ -591,7 +597,13 @@
     "delete": "Delete",
     "exportIcc": "Export as ICC File",
     "exportIccSuccess": "ICC file exported",
-    "exportIccFailed": "ICC export failed"
+    "exportIccFailed": "ICC export failed",
+    "previewTitle": "Filter Preview",
+    "previewOriginal": "Original",
+    "previewFiltered": "Filter",
+    "previewDisabledNote": "Filter inactive · Preview only",
+    "paramsUpdated": "Parameters updated",
+    "paramsUpdatedHint": "Enable filter switch to apply"
   },
   "floatingNav": {
     "title": "Floating Navigation Box",
@@ -868,7 +880,8 @@
     "shaderCacheDesc": "Clean up NVIDIA/AMD shader cache to free disk space",
     "dlssPresetDesc": "Switch DLSS model presets to optimize game graphics",
     "dynamicIslandDesc": "Floating island on screen, showing network speed/hardware/music/notifications",
-    "screenRecordDesc": "Record screen or window with adjustable resolution & frame rate"
+    "screenRecordDesc": "Record screen or window with adjustable resolution & frame rate",
+    "diskHealthDesc": "Check disk health status and SMART information"
   },
   "gpuRename": {
     "title": "GPU Rename",
@@ -1043,6 +1056,10 @@
       "closeBehaviorDesc": "Choose what happens when clicking the close button",
       "closeDirectly": "Close Directly",
       "minimizeToTray": "Minimize to Tray",
+      "navPositionLabel": "Navigation Position",
+      "navPositionDesc": "Choose whether to display the navigation on the side or top",
+      "navPositionLeft": "Side",
+      "navPositionTop": "Top",
       "sidebarShowLabel": "Sidebar Labels",
       "sidebarShowLabelDesc": "Choose the sidebar display mode",
       "sidebarShowLabelNoText": "Icons Only",
@@ -1493,6 +1510,24 @@
     "selectWindow": "Please select a window",
     "captureCursor": "Capture Cursor",
     "primaryMonitor": "Primary Monitor"
+  },
+  "diskHealth": {
+    "title": "Disk Health",
+    "refresh": "Refresh",
+    "scanning": "Scanning...",
+    "total": "Total Disks",
+    "healthy": "Healthy",
+    "warning": "Warning",
+    "unhealthy": "Unhealthy",
+    "temperature": "Temperature",
+    "lifespan": "Health",
+    "powerOnHours": "Power On Hours",
+    "operationalStatus": "Status",
+    "readErrors": "Read Errors",
+    "writeErrors": "Write Errors",
+    "partitions": "partitions",
+    "loadError": "Failed to load disk data",
+    "retry": "Retry"
   }
 }
 

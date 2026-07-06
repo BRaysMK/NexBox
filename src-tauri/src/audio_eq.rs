@@ -1,540 +1,1115 @@
-use cpal::traits::{DeviceTrait, HostTrait};
-use serde::{Deserialize, Serialize};
-use std::os::windows::process::CommandExt;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+//! WASAPI 音频均衡器模块
+//! 
+//! 通过 WASAPI Loopback 捕获系统全局音频输出 → 10段Biquad EQ处理 → 输出至播放设备
+//! 
+//! 架构：
+//! - 全局状态：Mutex<Option<PipelineState>> 管理音频管线生命周期
+//! - 后台线程：处理音频数据流，由 Arc<AtomicBool> 控制启停
+//! - Biquad滤波器：RBJ Peaking EQ 直接II型转置，10段级联，每声道独立状态
+//! - 声道转换：捕获端与渲染端声道数/采样率可能不同，写入前做转换
+
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+use tauri::Emitter;
+use windows::core::Interface;
+use windows::Win32::Media::Audio::{
+    eConsole, eRender, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK,
+    DEVICE_STATE_ACTIVE, IAudioCaptureClient, IAudioClient, IAudioRenderClient,
+    IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
+};
+use windows::Win32::System::Com::{
+    CLSCTX_ALL, CoCreateInstance, CoInitializeEx, CoUninitialize,
+    COINIT_MULTITHREADED,
+};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EqBand {
-    pub frequency: f32,
-    pub gain: f32,
-}
+// ─── 常量 ───
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AudioDevice {
+/// 10段 EQ 中心频率 & Q 值
+const EQ_BANDS: [(f32, f32); 10] = [
+    (31.0, 1.41), (62.0, 1.41), (125.0, 1.41),
+    (250.0, 1.41), (500.0, 1.41), (1000.0, 1.41),
+    (2000.0, 1.41), (4000.0, 1.41), (8000.0, 1.41),
+    (16000.0, 1.41),
+];
+
+/// WASAPI REFERENCE_TIME per millisecond
+const REFTIMES_PER_MILLISEC: i64 = 10_000;
+
+/// AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY
+const AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY: u32 = 0x1;
+
+// ─── 数据结构 ───
+
+/// 音频设备信息（前端用）
+#[derive(serde::Serialize, Clone, Debug)]
+pub struct AudioDeviceInfo {
     pub id: String,
     pub name: String,
     pub is_default: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EqConfig {
+/// EQ 设置（前端 ↔ 后端通信 + 持久化用）
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct EqSettings {
     pub enabled: bool,
-    pub bands: Vec<EqBand>,
+    pub bands: [f32; 10],
     pub master_gain: f32,
-    pub output_device_id: Option<String>,
+    pub output_device_id: String,
+    pub preset_id: String,
 }
 
-// cpal::Stream is not Send on some platforms (Windows WASAPI).
-// We only keep the stream alive in global state, so this wrapper is sufficient.
-struct SendStream {
-    _stream: cpal::Stream,
-}
-unsafe impl Send for SendStream {}
-
-struct AudioStreamState {
-    input_stream: Option<SendStream>,
-    output_stream: Option<SendStream>,
-}
-
-lazy_static::lazy_static! {
-    static ref EQ_CONFIG: Arc<Mutex<EqConfig>> = Arc::new(Mutex::new(EqConfig {
-        enabled: false,
-        bands: vec![
-            EqBand { frequency: 31.0, gain: 0.0 },
-            EqBand { frequency: 62.0, gain: 0.0 },
-            EqBand { frequency: 125.0, gain: 0.0 },
-            EqBand { frequency: 250.0, gain: 0.0 },
-            EqBand { frequency: 500.0, gain: 0.0 },
-            EqBand { frequency: 1000.0, gain: 0.0 },
-            EqBand { frequency: 2000.0, gain: 0.0 },
-            EqBand { frequency: 4000.0, gain: 0.0 },
-            EqBand { frequency: 8000.0, gain: 0.0 },
-            EqBand { frequency: 16000.0, gain: 0.0 },
-        ],
-        master_gain: 0.0,
-        output_device_id: None,
-    }));
-
-    static ref STREAM_STATE: Arc<Mutex<AudioStreamState>> = Arc::new(Mutex::new(AudioStreamState {
-        input_stream: None,
-        output_stream: None,
-    }));
+impl Default for EqSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bands: [0.0; 10],
+            master_gain: 0.0,
+            output_device_id: "default".to_string(),
+            preset_id: "flat".to_string(),
+        }
+    }
 }
 
-#[tauri::command]
-pub fn check_virtual_audio_driver() -> bool {
-    let host = cpal::default_host();
-    if device_list_contains_virtual(host.input_devices()) {
-        return true;
+// ─── 全局状态 ───
+
+struct PipelineState {
+    settings: EqSettings,
+    is_running: Arc<AtomicBool>,
+    thread_handle: Option<thread::JoinHandle<()>>,
+    eq_filters: Arc<Mutex<Vec<[BiquadFilter; 10]>>>,
+    sample_rate: Arc<AtomicU32>,
+}
+
+static PIPELINE: Mutex<Option<PipelineState>> = Mutex::new(None);
+
+// ─── Biquad 滤波器 ───
+
+#[derive(Clone, Debug)]
+struct BiquadFilter {
+    b0: f32, b1: f32, b2: f32,
+    a1: f32, a2: f32,
+    z1: f32, z2: f32,
+}
+
+impl BiquadFilter {
+    fn peaking_eq(freq: f32, q: f32, gain_db: f32, sample_rate: f32) -> Self {
+        let a = 10.0_f32.powf(gain_db / 40.0);
+        let omega = 2.0 * std::f32::consts::PI * freq / sample_rate;
+        let sn = omega.sin();
+        let cs = omega.cos();
+        let alpha = sn / (2.0 * q);
+
+        let b0 = 1.0 + alpha * a;
+        let b1 = -2.0 * cs;
+        let b2 = 1.0 - alpha * a;
+        let a0 = 1.0 + alpha / a;
+        let a1_n = -2.0 * cs;
+        let a2_n = 1.0 - alpha / a;
+
+        Self {
+            b0: b0 / a0, b1: b1 / a0, b2: b2 / a0,
+            a1: a1_n / a0, a2: a2_n / a0,
+            z1: 0.0, z2: 0.0,
+        }
     }
 
-    device_list_contains_virtual(host.output_devices())
+    fn update_peaking_eq(&mut self, freq: f32, q: f32, gain_db: f32, sample_rate: f32) {
+        let a = 10.0_f32.powf(gain_db / 40.0);
+        let omega = 2.0 * std::f32::consts::PI * freq / sample_rate;
+        let sn = omega.sin();
+        let cs = omega.cos();
+        let alpha = sn / (2.0 * q);
+
+        let b0 = 1.0 + alpha * a;
+        let b1 = -2.0 * cs;
+        let b2 = 1.0 - alpha * a;
+        let a0 = 1.0 + alpha / a;
+        let a1_n = -2.0 * cs;
+        let a2_n = 1.0 - alpha / a;
+
+        self.b0 = b0 / a0;
+        self.b1 = b1 / a0;
+        self.b2 = b2 / a0;
+        self.a1 = a1_n / a0;
+        self.a2 = a2_n / a0;
+    }
+
+    #[inline]
+    fn process(&mut self, sample: f32) -> f32 {
+        let out = self.b0 * sample + self.z1;
+        self.z1 = self.b1 * sample - self.a1 * out + self.z2;
+        self.z2 = self.b2 * sample - self.a2 * out;
+        if self.z1.abs() < 1e-38 { self.z1 = 0.0; }
+        if self.z2.abs() < 1e-38 { self.z2 = 0.0; }
+        out
+    }
+
+    fn reset(&mut self) {
+        self.z1 = 0.0;
+        self.z2 = 0.0;
+    }
 }
 
-#[tauri::command]
-pub fn get_audio_output_devices() -> Vec<AudioDevice> {
-    let host = cpal::default_host();
-    if let Ok(devices) = host.output_devices() {
-        let default_device = host.default_output_device().and_then(|d| d.name().ok());
-        
-        devices.map(|d| {
-            let name = d.name().unwrap_or_default();
-            AudioDevice {
-                id: name.clone(),
-                name: name.clone(),
-                is_default: Some(name) == default_device,
+fn create_default_filters(sample_rate: f32) -> [BiquadFilter; 10] {
+    std::array::from_fn(|i| {
+        BiquadFilter::peaking_eq(EQ_BANDS[i].0, EQ_BANDS[i].1, 0.0, sample_rate)
+    })
+}
+
+fn create_filters_from_settings(settings: &EqSettings, sample_rate: f32) -> [BiquadFilter; 10] {
+    let mut chain = create_default_filters(sample_rate);
+    for (i, &gain) in settings.bands.iter().enumerate() {
+        if gain.abs() > 0.01 {
+            chain[i] = BiquadFilter::peaking_eq(EQ_BANDS[i].0, EQ_BANDS[i].1, gain, sample_rate);
+        }
+    }
+    chain
+}
+
+/// 软限幅器：低于 0.9 完全透过，高于 0.9 平滑压缩
+#[inline]
+fn soft_clip(x: f32) -> f32 {
+    const THRESHOLD: f32 = 0.9;
+    if x.abs() <= THRESHOLD {
+        x
+    } else {
+        let sign = x.signum();
+        let over = x.abs() - THRESHOLD;
+        sign * (THRESHOLD + (1.0 - THRESHOLD) * over.tanh())
+    }
+}
+
+// ─── 声道转换 ───
+
+/// 将交错排列的音频数据从 in_ch 声道转换为 out_ch 声道
+/// 支持常见的 stereo↔mono、stereo↔surround 转换
+fn convert_channels(input: &[f32], in_ch: usize, out_ch: usize, frames: usize) -> Vec<f32> {
+    if in_ch == out_ch || out_ch == 0 || in_ch == 0 {
+        return input.to_vec();
+    }
+    let mut output = vec![0.0_f32; frames * out_ch];
+    for frame in 0..frames {
+        let in_off = frame * in_ch;
+        let out_off = frame * out_ch;
+        match (in_ch, out_ch) {
+            // mono → stereo
+            (1, 2) => {
+                output[out_off] = input[in_off];
+                output[out_off + 1] = input[in_off];
             }
-        }).collect()
-    } else {
-        Vec::new()
-    }
-}
-
-#[tauri::command]
-pub fn get_eq_config() -> EqConfig {
-    EQ_CONFIG.lock().unwrap().clone()
-}
-
-#[tauri::command]
-pub fn set_eq_enabled(enabled: bool) {
-    {
-        let mut config = EQ_CONFIG.lock().unwrap();
-        config.enabled = enabled;
-    }
-
-    if enabled {
-        start_audio_processing();
-    } else {
-        stop_audio_processing();
-    }
-}
-
-fn start_audio_processing() {
-    let config = EQ_CONFIG.lock().unwrap().clone();
-    let host = cpal::default_host();
-    
-    // 1. 查找虚拟声卡作为输入
-    let input_device = host.input_devices().ok().and_then(|mut ds| 
-        ds.find(|d| d.name().map(|n| n.contains("FxSound") || n.contains("NexBox")).unwrap_or(false))
-    ).or_else(|| host.default_input_device());
-    
-    // 2. 查找物理声卡作为输出
-    let output_device = if let Some(id) = config.output_device_id {
-        host.output_devices().ok().and_then(|mut ds| 
-            ds.find(|d| d.name().map(|n| n == id).unwrap_or(false))
-        )
-    } else {
-        host.default_output_device()
-    };
-
-    if let (Some(_in_dev), Some(_out_dev)) = (input_device, output_device) {
-        // let in_config: cpal::StreamConfig = in_dev.default_input_config().unwrap().into();
-        // let out_config: cpal::StreamConfig = out_dev.default_output_config().unwrap().into();
-
-        let _err_fn = |err: cpal::StreamError| eprintln!("an error occurred on stream: {}", err);
-        
-        // TODO: 实现跨设备路由
-    }
-}
-
-fn stop_audio_processing() {
-    let mut state = STREAM_STATE.lock().unwrap();
-    state.input_stream = None;
-    state.output_stream = None;
-}
-
-#[tauri::command]
-pub fn set_eq_band(index: usize, gain: f32) {
-    let mut config = EQ_CONFIG.lock().unwrap();
-    if index < config.bands.len() {
-        config.bands[index].gain = gain;
-    }
-}
-
-#[tauri::command]
-pub fn set_master_gain(gain: f32) {
-    let mut config = EQ_CONFIG.lock().unwrap();
-    config.master_gain = gain;
-}
-
-#[tauri::command]
-pub fn set_output_device(device_id: String) {
-    let enabled = {
-        let mut config = EQ_CONFIG.lock().unwrap();
-        config.output_device_id = Some(device_id);
-        config.enabled
-    };
-
-    if enabled {
-        stop_audio_processing();
-        start_audio_processing();
-    }
-}
-
-#[tauri::command]
-pub fn reset_eq() {
-    let mut config = EQ_CONFIG.lock().unwrap();
-    for band in &mut config.bands {
-        band.gain = 0.0;
-    }
-    config.master_gain = 0.0;
-}
-
-#[tauri::command]
-pub fn remove_eq_driver() -> Result<String, String> {
-    let driver_assets = resolve_driver_assets()?;
-
-    // 预检：驱动是否已安装
-    let is_installed = check_virtual_audio_driver();
-    if !is_installed {
-        return Ok("虚拟声卡驱动未安装，无需卸载".to_string());
-    }
-
-    if !driver_assets.fxdevcon.exists() {
-        return Err(format!(
-            "未找到驱动安装程序: {}",
-            driver_assets.fxdevcon.display()
-        ));
-    }
-
-    // 第 1 步：fxdevcon remove — 移除 PnP 设备节点
-    let _ = run_elevated(
-        &driver_assets.fxdevcon,
-        &["remove".to_string(), "root\\fxvad".to_string()],
-        &driver_assets.driver_dir,
-    );
-
-    // 第 2 步：pnputil /enum-drivers → 找到 FXVAD 驱动包 → 删除
-    let _ = remove_pnputil_driver_package(&driver_assets);
-
-    Ok("虚拟声卡驱动已卸载，建议重启电脑以完全清除".to_string())
-}
-
-/// 使用 pnputil 枚举驱动存储区，找到 FXVAD 驱动包并删除
-fn remove_pnputil_driver_package(assets: &DriverAssets) -> Result<(), String> {
-    // pnputil /enum-drivers 列出所有第三方驱动包（不需要管理员权限）
-    let output = Command::new("pnputil")
-        .args(["/enum-drivers"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("启动 pnputil 失败: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!("pnputil /enum-drivers 执行失败"));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    // 解析输出，找到发布名（Published Name）
-    // pnputil 输出格式:
-    //   Published Name:    oem0.inf
-    //   Driver Package Provider:  FxSound
-    //   ...
-    let mut oem_names: Vec<String> = Vec::new();
-    let mut current_oem = String::new();
-    let mut found_match = false;
-
-    for line in stdout.lines() {
-        let trimmed = line.trim();
-
-        // 捕获 Published Name
-        if let Some(name) = trimmed.strip_prefix("Published Name:") {
-            current_oem = name.trim().to_string();
-        }
-
-        // 检查是否匹配 FXVAD 或 FxSound
-        let lower = trimmed.to_ascii_lowercase();
-        if lower.contains("fxvad") || lower.contains("fxsound") || lower.contains("dfx") {
-            found_match = true;
-        }
-
-        // 遇到空行 = 一个驱动包条目结束
-        if trimmed.is_empty() && found_match && !current_oem.is_empty() {
-            oem_names.push(current_oem.clone());
-            current_oem.clear();
-            found_match = false;
-        }
-    }
-    // 处理最后一个条目
-    if found_match && !current_oem.is_empty() {
-        oem_names.push(current_oem);
-    }
-
-    if oem_names.is_empty() {
-        // 驱动包没有被发布到存储区，不需要删除
-        return Ok(());
-    }
-
-    // 逐个删除匹配的驱动包（需要管理员权限）
-    for oem in &oem_names {
-        let result = run_elevated(
-            Path::new("pnputil.exe"),
-            &[
-                "/delete-driver".to_string(),
-                oem.clone(),
-                "/force".to_string(),
-            ],
-            &assets.driver_dir,
-        );
-        // 忽略"未找到"类错误
-        if let Err(ref e) = result {
-            if e.contains("1168") || e.contains("退出码: 0") {
-                continue;
+            // stereo → mono
+            (2, 1) => {
+                output[out_off] = (input[in_off] + input[in_off + 1]) * 0.5;
             }
-            return Err(format!("删除驱动包 {} 失败: {}", oem, e));
-        }
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub fn install_eq_driver() -> Result<String, String> {
-    let driver_assets = resolve_driver_assets()?;
-
-    if !driver_assets.fxdevcon.exists() {
-        return Err(format!(
-            "未找到驱动安装程序: {}",
-            driver_assets.fxdevcon.display()
-        ));
-    }
-
-    if !driver_assets.inf.exists() {
-        return Err(format!(
-            "未找到驱动 INF 文件: {}",
-            driver_assets.inf.display()
-        ));
-    }
-
-    // 第 1 步：先尝试移除旧驱动（忽略失败）
-    let _ = run_elevated(
-        &driver_assets.fxdevcon,
-        &["remove".to_string(), "root\\fxvad".to_string()],
-        &driver_assets.driver_dir,
-    );
-
-    // 第 2 步：尝试用 fxdevcon 安装驱动
-    let install_result = run_elevated(
-        &driver_assets.fxdevcon,
-        &[
-            "install".to_string(),
-            driver_assets.inf.to_string_lossy().into_owned(),
-            "root\\fxvad".to_string(),
-        ],
-        &driver_assets.driver_dir,
-    );
-
-    // 第 3 步：如果 fxdevcon 失败，尝试用 pnputil 作为备选方案
-    if install_result.is_err() {
-        let pnp_result = try_install_with_pnputil(&driver_assets);
-        if let Err(ref pnp_err) = pnp_result {
-            return Err(format!(
-                "fxdevcon 安装失败，pnputil 也失败:\n- fxdevcon: {:?}\n- pnputil: {}\n\n\
-                 建议尝试以下方法:\n\
-                 1. 以管理员身份运行本程序再试\n\
-                 2. 开启Windows测试签名模式: bcdedit /set testsigning on\n\
-                 3. 手动安装驱动: 右键 fxvad.inf -> 安装",
-                install_result.unwrap_err(),
-                pnp_err
-            ));
-        }
-    }
-
-    // 第 4 步：安装后配置（DfxSetupDrv 可选步骤）
-    if driver_assets.dfx_setup.exists() {
-        let _ = run_hidden(
-            &driver_assets.dfx_setup,
-            &["setname".to_string()],
-            &driver_assets.apps_dir,
-        );
-        let _ = run_hidden(
-            &driver_assets.dfx_setup,
-            &["defaultbuffersize".to_string()],
-            &driver_assets.apps_dir,
-        );
-    }
-
-    Ok("虚拟声卡驱动安装命令已执行，请允许管理员授权并稍候刷新状态".to_string())
-}
-
-/// 备选方案: 使用 Windows 内置的 pnputil 安装驱动（更适合现代 Windows 版本）
-/// pnputil 也需要管理员权限，所以复用 run_elevated
-fn try_install_with_pnputil(assets: &DriverAssets) -> Result<(), String> {
-    run_elevated(
-        Path::new("pnputil.exe"),
-        &[
-            "/add-driver".to_string(),
-            assets.inf.to_string_lossy().into_owned(),
-            "/install".to_string(),
-        ],
-        &assets.driver_dir,
-    )
-}
-
-struct DriverAssets {
-    fxdevcon: PathBuf,
-    inf: PathBuf,
-    dfx_setup: PathBuf,
-    driver_dir: PathBuf,
-    apps_dir: PathBuf,
-}
-
-fn device_list_contains_virtual<I>(
-    devices: Result<I, cpal::DevicesError>,
-) -> bool
-where
-    I: Iterator<Item = cpal::Device>,
-{
-    if let Ok(devices) = devices {
-        for device in devices {
-            if let Ok(name) = device.name() {
-                let lower = name.to_ascii_lowercase();
-                if lower.contains("fxsound")
-                    || lower.contains("fxvad")
-                    || lower.contains("nexbox")
-                {
-                    return true;
+            // stereo → multi-channel (复制到前两声道，其余静音)
+            (2, _) => {
+                output[out_off] = input[in_off];
+                output[out_off + 1] = input[in_off + 1];
+            }
+            // multi → stereo (取前两声道)
+            (_, 2) => {
+                output[out_off] = input[in_off];
+                output[out_off + 1] = if in_ch > 1 { input[in_off + 1] } else { input[in_off] };
+            }
+            // mono → multi
+            (1, _) => {
+                for c in 0..out_ch {
+                    output[out_off + c] = input[in_off];
+                }
+            }
+            // multi → mono (所有声道平均)
+            (_, 1) => {
+                let mut sum = 0.0_f32;
+                for c in 0..in_ch {
+                    sum += input[in_off + c];
+                }
+                output[out_off] = sum / in_ch as f32;
+            }
+            // fallback: 复制可重叠的声道
+            _ => {
+                let copy_ch = in_ch.min(out_ch);
+                for c in 0..copy_ch {
+                    output[out_off + c] = input[in_off + c];
                 }
             }
         }
     }
-    false
+    output
 }
 
-fn resolve_driver_assets() -> Result<DriverAssets, String> {
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or_else(|| "无法定位项目根目录".to_string())?;
+// ─── WASAPI 设备枚举 ───
 
-    let installer_root = repo_root.join("fxsound-app-main").join("Installer");
-    let apps_root = installer_root.join("Apps").join("Version14");
-    let drivers_root = installer_root.join("Drivers").join("Version14");
+/// 查找一个不同于默认捕获设备的渲染设备
+/// 注意：调用者需确保 COM 已初始化
+fn find_alternative_render_device(default_id: &str) -> Option<String> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let collection = enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE).ok()?;
+        let count = collection.GetCount().ok()?;
 
-    let arch_dir = match std::env::consts::ARCH {
-        "x86_64" => ("win10", "x64", "fxdevcon64.exe"),
-        "x86" => ("win10", "x86", "fxdevcon32.exe"),
-        "aarch64" => ("win10", "arm64", "fxdevcon64.exe"),
-        other => {
-            return Err(format!("暂不支持当前架构: {other}"));
+        for i in 0..count {
+            let device = collection.Item(i).ok()?;
+            let device: IMMDevice = device.cast().ok()?;
+            let id_ptr = device.GetId().ok()?;
+            let id = id_ptr.to_string().ok()?;
+            if id != default_id {
+                return Some(id);
+            }
         }
-    };
-
-    let driver_dir = drivers_root.join(arch_dir.0).join(arch_dir.1);
-
-    Ok(DriverAssets {
-        fxdevcon: driver_dir.join(arch_dir.2),
-        inf: driver_dir.join("fxvad.inf"),
-        dfx_setup: apps_root.join("DfxSetupDrv.exe"),
-        driver_dir,
-        apps_dir: apps_root,
-    })
+    }
+    None
 }
 
-fn run_hidden(exe: &Path, args: &[String], working_dir: &Path) -> Result<(), String> {
-    let status = Command::new(exe)
-        .args(args)
-        .current_dir(working_dir)
-        .creation_flags(CREATE_NO_WINDOW)
-        .status()
-        .map_err(|e| format!("启动 {} 失败: {}", exe.display(), e))?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "{} 执行失败，退出码: {:?}",
-            exe.display(),
-            status.code()
-        ))
+/// 获取默认输出设备 ID
+fn get_default_device_id() -> Option<String> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        let device: IMMDevice = device.cast().ok()?;
+        let id_ptr = device.GetId().ok()?;
+        let id = id_ptr.to_string().ok()?;
+        Some(id)
     }
 }
 
-fn run_elevated(exe: &Path, args: &[String], working_dir: &Path) -> Result<(), String> {
-    let exe_str = exe.to_string_lossy();
-    let wd_str = working_dir.to_string_lossy();
+// ─── WASAPI 初始化 ───
 
-    // PowerShell 脚本：
-    // 1. 用 -Verb RunAs 提权运行目标程序（显示 UAC 窗口）
-    // 2. 捕获执行结果（区分"用户取消UAC"和"工具执行失败"）
-    // 3. 通过 stdout 输出 JSON 格式的结果信息
-    let script = format!(
-        "$ErrorActionPreference='Stop'; \
-         $r=@{{code=-1;msg=''}}; \
-         try{{ \
-             $p=Start-Process -FilePath '{}' -WorkingDirectory '{}' -ArgumentList @({}) -Verb RunAs -Wait -PassThru -WindowStyle Normal -ErrorAction Stop; \
-             $r.code=$p.ExitCode; \
-         }}catch{{ \
-             $r.code=-2; \
-             $r.msg=$_.Exception.Message; \
-         }}; \
-         Write-Output (ConvertTo-Json $r -Compress)",
-        exe_str.replace('\'', "''"),
-        wd_str.replace('\'', "''"),
-        args.iter()
-            .map(|a| format!("'{}'", a.replace('\'', "''")))
-            .collect::<Vec<_>>()
-            .join(", "),
+/// 初始化 WASAPI 捕获客户端（Loopback）
+/// 返回 (audio_client, capture_client, sample_rate, channels)
+unsafe fn init_capture_client(
+    enumerator: &IMMDeviceEnumerator,
+) -> Result<(IAudioClient, IAudioCaptureClient, u32, u16), String> {
+    let device: IMMDevice = enumerator
+        .GetDefaultAudioEndpoint(eRender, eConsole)
+        .map_err(|e| format!("获取默认渲染设备失败: {:?}", e))?;
+    let device: IMMDevice = device.cast().map_err(|e| format!("设备转换失败: {:?}", e))?;
+
+    let audio_client: IAudioClient = device
+        .Activate(CLSCTX_ALL, None)
+        .map_err(|e| format!("激活音频客户端失败: {:?}", e))?;
+
+    let mix_format_ptr = audio_client
+        .GetMixFormat()
+        .map_err(|e| format!("获取混音格式失败: {:?}", e))?;
+    let mix_format = &*mix_format_ptr;
+    let sample_rate = mix_format.nSamplesPerSec;
+    let channels = mix_format.nChannels;
+    let bits_per_sample = mix_format.wBitsPerSample;
+    let format_tag = mix_format.wFormatTag;
+
+    log::info!(
+        "Loopback 捕获格式: {} Hz, {} 声道, {} bits, tag=0x{:04X}",
+        sample_rate, channels, bits_per_sample, format_tag
     );
 
-    let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &script,
-        ])
-        // 不使用 CREATE_NO_WINDOW，确保 UAC 授权窗口能正常弹出
-        .creation_flags(0x00000000)
-        .output()
-        .map_err(|e| format!("提权执行失败: {}", e))?;
+    // 验证格式为 float32
+    if bits_per_sample != 32 {
+        return Err(format!(
+            "捕获格式不是 32-bit float (当前 {} bits)，EQ 暂不支持此格式",
+            bits_per_sample
+        ));
+    }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let buffer_duration = REFTIMES_PER_MILLISEC * 10;
+    audio_client
+        .Initialize(
+            AUDCLNT_SHAREMODE_SHARED,
+            AUDCLNT_STREAMFLAGS_LOOPBACK,
+            buffer_duration,
+            0,
+            mix_format_ptr as *const _,
+            None,
+        )
+        .map_err(|e| format!("初始化捕获客户端失败: {:?}", e))?;
 
-    // 尝试解析 PowerShell 返回的 JSON 结果
-    if let Ok(json) = serde_json::from_str::<serde_json::Value>(stdout.trim()) {
-        let code = json["code"].as_i64().unwrap_or(-1);
-        let msg = json["msg"].as_str().unwrap_or("");
+    let capture_client: IAudioCaptureClient = audio_client
+        .GetService()
+        .map_err(|e| format!("获取捕获客户端服务失败: {:?}", e))?;
 
-        match code {
-            0 => return Ok(()),
-            -2 => {
-                // UAC 被取消
-                return Err(format!(
-                    "管理员授权被取消: {}",
-                    if msg.is_empty() { "用户未允许管理员授权" } else { msg }
-                ));
+    Ok((audio_client, capture_client, sample_rate, channels))
+}
+
+/// 初始化 WASAPI 渲染客户端（输出到指定设备）
+/// 返回 (audio_client, render_client, buffer_frame_count, sample_rate, channels)
+unsafe fn init_render_client_for_device(
+    enumerator: &IMMDeviceEnumerator,
+    device_id: &str,
+) -> Result<(IAudioClient, IAudioRenderClient, u32, u32, u16), String> {
+    let output_device: IMMDevice = if device_id.is_empty() || device_id == "default" {
+        enumerator
+            .GetDefaultAudioEndpoint(eRender, eConsole)
+            .map_err(|e| format!("获取默认输出设备失败: {:?}", e))?
+    } else {
+        let device_str = windows::core::BSTR::from(device_id);
+        enumerator
+            .GetDevice(&device_str)
+            .map_err(|e| format!("获取指定输出设备失败: {:?}", e))?
+    };
+
+    let output_device: IMMDevice = output_device
+        .cast()
+        .map_err(|e| format!("输出设备转换失败: {:?}", e))?;
+
+    let render_client: IAudioClient = output_device
+        .Activate(CLSCTX_ALL, None)
+        .map_err(|e| format!("激活渲染客户端失败: {:?}", e))?;
+
+    let mix_format_ptr = render_client
+        .GetMixFormat()
+        .map_err(|e| format!("获取输出混音格式失败: {:?}", e))?;
+
+    let bits = (*mix_format_ptr).wBitsPerSample;
+    let tag = (*mix_format_ptr).wFormatTag;
+    let sr = (*mix_format_ptr).nSamplesPerSec;
+    let ch = (*mix_format_ptr).nChannels;
+
+    log::info!(
+        "渲染混音格式: {} Hz, {} ch, {} bits, tag=0x{:04X}",
+        sr, ch, bits, tag
+    );
+
+    if bits != 32 {
+        return Err(format!(
+            "渲染设备格式不是 32-bit float (当前 {} bits), EQ 暂不支持此格式",
+            bits
+        ));
+    }
+
+    let buffer_duration = REFTIMES_PER_MILLISEC * 10;
+    render_client
+        .Initialize(
+            AUDCLNT_SHAREMODE_SHARED,
+            0,
+            buffer_duration,
+            0,
+            &*mix_format_ptr as *const _ as *const _,
+            None,
+        )
+        .map_err(|e| format!("初始化渲染客户端失败: {:?}", e))?;
+
+    let render_service: IAudioRenderClient = render_client
+        .GetService()
+        .map_err(|e| format!("获取渲染客户端服务失败: {:?}", e))?;
+
+    let buffer_frame_count = render_client
+        .GetBufferSize()
+        .map_err(|e| format!("获取缓冲区大小失败: {:?}", e))?;
+
+    Ok((render_client, render_service, buffer_frame_count, sr, ch))
+}
+
+// ─── 音频处理线程 ───
+
+fn run_audio_pipeline(
+    filter_chain: Arc<Mutex<Vec<[BiquadFilter; 10]>>>,
+    is_running: Arc<AtomicBool>,
+    app: tauri::AppHandle,
+    eq_settings: Arc<Mutex<EqSettings>>,
+    sample_rate_arc: Arc<AtomicU32>,
+) {
+    log::info!("音频处理线程启动");
+
+    let capture_sample_rate: u32;
+    let capture_channels: u16;
+
+    unsafe {
+        let com_hr = CoInitializeEx(None, COINIT_MULTITHREADED);
+        if com_hr.is_err() {
+            log::error!("线程 COM 初始化失败: {:?}", com_hr);
+            return;
+        }
+
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .expect("创建设备枚举器失败");
+
+        // ── 初始化捕获 ──
+        let (capture_client, capture_service, sr, ch) = match init_capture_client(&enumerator) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("捕获客户端初始化失败: {}", e);
+                CoUninitialize();
+                return;
             }
-            _ => {
-                // 工具执行失败
-                return Err(format!(
-                    "驱动安装程序返回错误 (退出码: {})",
-                    code
-                ));
+        };
+        capture_sample_rate = sr;
+        capture_channels = ch;
+
+        if capture_channels == 0 {
+            log::error!("声道数为 0，无法启动音频管线");
+            let _ = capture_client.Stop();
+            CoUninitialize();
+            return;
+        }
+
+        log::info!("捕获: {}Hz, {}声道", capture_sample_rate, capture_channels);
+        sample_rate_arc.store(capture_sample_rate, Ordering::SeqCst);
+
+        // 用实际采样率和声道数重建滤波器组
+        {
+            let settings = eq_settings.lock().unwrap();
+            let mut filters = filter_chain.lock().unwrap();
+            *filters = (0..capture_channels as usize)
+                .map(|_| create_filters_from_settings(&settings, capture_sample_rate as f32))
+                .collect();
+            log::info!(
+                "滤波器组: {}声道 × 10段 @ {}Hz",
+                capture_channels, capture_sample_rate
+            );
+        }
+
+        // ── 初始化渲染 ──
+        let device_id = eq_settings.lock().unwrap().output_device_id.clone();
+
+        let (render_client, render_service, buf_frames, render_sr, render_ch) =
+            match init_render_client_for_device(&enumerator, &device_id) {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!("渲染客户端初始化失败: {}", e);
+                    CoUninitialize();
+                    return;
+                }
+            };
+
+        log::info!(
+            "渲染: {}Hz, {}声道, {}帧缓冲区",
+            render_sr, render_ch, buf_frames
+        );
+
+        // ── 格式差异警告 ──
+        let need_channel_convert = render_ch != capture_channels;
+        let need_resample = render_sr != capture_sample_rate;
+
+        if need_channel_convert {
+            log::warn!(
+                "声道数不匹配: 捕获{}ch → 渲染{}ch，将自动转换",
+                capture_channels, render_ch
+            );
+        }
+        if need_resample {
+            log::warn!(
+                "采样率不匹配: 捕获{}Hz → 渲染{}Hz，将自动重采样",
+                capture_sample_rate, render_sr
+            );
+        }
+
+        let cap_ch = capture_channels as usize;
+        let rnd_ch = render_ch as usize;
+        // 采样率差异目前仅记录日志，暂不做重采样（WASAPI 共享模式通常一致）
+
+        // ── 启动音频流 ──
+        let _ = render_client.Start();
+        let _ = capture_client.Start();
+
+        let mut local_stats_counter: u64 = 0;
+        let mut overflow_buf: Vec<f32> = Vec::new();
+
+        while is_running.load(Ordering::SeqCst) {
+
+            // ── Phase 1: 排空溢出缓冲区到渲染 ──
+            let overflow_frames = (overflow_buf.len() / cap_ch) as u32;
+            if overflow_frames > 0 {
+                let padding = render_client.GetCurrentPadding().unwrap_or(0);
+                let available = buf_frames.saturating_sub(padding);
+                let drain_frames = overflow_frames.min(available);
+                if drain_frames > 0 {
+                    match render_service.GetBuffer(drain_frames) {
+                        Ok(render_ptr) if !render_ptr.is_null() => {
+                            let render_data = std::slice::from_raw_parts_mut(
+                                render_ptr as *mut f32,
+                                drain_frames as usize * rnd_ch,
+                            );
+
+                            if need_channel_convert || need_resample {
+                                // 需要声道转换：从 overflow_buf 取数据，转换后写入
+                                let src_data = &overflow_buf[..drain_frames as usize * cap_ch];
+                                let converted = convert_channels(src_data, cap_ch, rnd_ch, drain_frames as usize);
+                                let copy_len = converted.len().min(render_data.len());
+                                render_data[..copy_len].copy_from_slice(&converted[..copy_len]);
+                            } else {
+                                // 格式一致，直接复制
+                                let copy_samples = drain_frames as usize * cap_ch;
+                                render_data[..copy_samples].copy_from_slice(&overflow_buf[..copy_samples]);
+                            }
+
+                            let _ = render_service.ReleaseBuffer(drain_frames, 0);
+                            overflow_buf.drain(..drain_frames as usize * cap_ch);
+                        }
+                        Err(e) => log::error!("渲染溢出写出错: {:?}", e),
+                        _ => {}
+                    }
+                }
             }
+
+            // ── Phase 2: 从捕获读取数据 ──
+            let mut data_ptr: *mut u8 = std::ptr::null_mut();
+            let mut frames_available: u32 = 0;
+            let mut flags: u32 = 0;
+
+            let hr = capture_service.GetBuffer(
+                &mut data_ptr, &mut frames_available, &mut flags, None, None,
+            );
+
+            if hr.is_ok() && frames_available > 0 && !data_ptr.is_null() {
+                let frame_samples = frames_available as usize * cap_ch;
+                let float_slice = std::slice::from_raw_parts(data_ptr as *const f32, frame_samples);
+                overflow_buf.extend_from_slice(float_slice);
+                let _ = capture_service.ReleaseBuffer(frames_available);
+
+                let discontinuity = (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY) != 0;
+
+                // ── Phase 3: EQ 处理（只处理新追加的部分）──
+                let new_start = overflow_buf.len().saturating_sub(frame_samples);
+                let new_slice = &mut overflow_buf[new_start..];
+
+                let master_gain_db = eq_settings.lock().unwrap().master_gain;
+                let master_gain_linear = 10.0_f32.powf(master_gain_db / 20.0);
+
+                {
+                    let mut filters = filter_chain.lock().unwrap();
+
+                    if discontinuity {
+                        for ch_filters in filters.iter_mut() {
+                            for f in ch_filters.iter_mut() {
+                                f.reset();
+                            }
+                        }
+                        log::debug!("捕获数据不连续，已重置滤波器");
+                    }
+
+                    for frame in 0..frames_available as usize {
+                        for ch_idx in 0..cap_ch {
+                            let idx = frame * cap_ch + ch_idx;
+                            let mut sample = new_slice[idx];
+                            if let Some(ch_filters) = filters.get_mut(ch_idx) {
+                                for filter in ch_filters.iter_mut() {
+                                    sample = filter.process(sample);
+                                }
+                            }
+                            sample *= master_gain_linear;
+                            new_slice[idx] = soft_clip(sample);
+                        }
+                    }
+                }
+
+                // ── Phase 4: 尝试写入渲染 ──
+                let new_frames = (new_slice.len() / cap_ch) as u32;
+                let padding2 = render_client.GetCurrentPadding().unwrap_or(0);
+                let available2 = buf_frames.saturating_sub(padding2);
+                let write_frames = new_frames.min(available2);
+
+                if write_frames > 0 {
+                    match render_service.GetBuffer(write_frames) {
+                        Ok(render_ptr) if !render_ptr.is_null() => {
+                            let render_data = std::slice::from_raw_parts_mut(
+                                render_ptr as *mut f32,
+                                write_frames as usize * rnd_ch,
+                            );
+
+                            if need_channel_convert || need_resample {
+                                let src_data = &overflow_buf[..write_frames as usize * cap_ch];
+                                let converted = convert_channels(src_data, cap_ch, rnd_ch, write_frames as usize);
+                                let copy_len = converted.len().min(render_data.len());
+                                render_data[..copy_len].copy_from_slice(&converted[..copy_len]);
+                            } else {
+                                let copy_samples = write_frames as usize * cap_ch;
+                                render_data[..copy_samples].copy_from_slice(&overflow_buf[..copy_samples]);
+                            }
+
+                            let _ = render_service.ReleaseBuffer(write_frames, 0);
+                            overflow_buf.drain(..write_frames as usize * cap_ch);
+                        }
+                        Err(e) => log::error!("渲染写出错: {:?}", e),
+                        _ => {}
+                    }
+                }
+            } else {
+                // 没有捕获数据 → 排空溢出缓冲区
+                let padding = render_client.GetCurrentPadding().unwrap_or(0);
+                let available = buf_frames.saturating_sub(padding);
+                let overflow_frames2 = (overflow_buf.len() / cap_ch) as u32;
+                let drain_frames = overflow_frames2.min(available);
+                if drain_frames > 0 {
+                    if let Ok(render_ptr) = render_service.GetBuffer(drain_frames) {
+                        if !render_ptr.is_null() {
+                            let render_data = std::slice::from_raw_parts_mut(
+                                render_ptr as *mut f32,
+                                drain_frames as usize * rnd_ch,
+                            );
+                            if need_channel_convert || need_resample {
+                                let src_data = &overflow_buf[..drain_frames as usize * cap_ch];
+                                let converted = convert_channels(src_data, cap_ch, rnd_ch, drain_frames as usize);
+                                let copy_len = converted.len().min(render_data.len());
+                                render_data[..copy_len].copy_from_slice(&converted[..copy_len]);
+                            } else {
+                                let copy_samples = drain_frames as usize * cap_ch;
+                                render_data[..copy_samples].copy_from_slice(&overflow_buf[..copy_samples]);
+                            }
+                            let _ = render_service.ReleaseBuffer(drain_frames, 0);
+                            overflow_buf.drain(..drain_frames as usize * cap_ch);
+                        }
+                    }
+                }
+                thread::sleep(Duration::from_millis(1));
+            }
+
+            // 溢出缓冲区过大时丢弃最旧数据
+            let max_overflow = buf_frames as usize * cap_ch * 3;
+            if overflow_buf.len() > max_overflow {
+                let target = max_overflow * 2 / 3;
+                let drop_count = overflow_buf.len() - target;
+                // 确保丢弃的是完整帧
+                let drop_frames = drop_count / cap_ch;
+                let drop_samples = drop_frames * cap_ch;
+                overflow_buf.drain(..drop_samples);
+                log::warn!("溢出缓冲区过大，丢弃 {} 旧样本", drop_samples);
+            }
+
+            local_stats_counter += 1;
+            if local_stats_counter % 100 == 0 {
+                if let Ok(s) = eq_settings.lock() {
+                    let _ = app.emit("eq-stats-update", &s.clone());
+                }
+            }
+        }
+
+        let _ = capture_client.Stop();
+        let _ = render_client.Stop();
+        CoUninitialize();
+    }
+
+    log::info!("音频处理线程已停止");
+}
+
+// ─── Tauri 命令 ───
+
+/// 枚举所有活跃的音频输出设备
+#[tauri::command]
+pub fn get_audio_devices() -> Result<Vec<AudioDeviceInfo>, String> {
+    let mut devices = Vec::new();
+
+    unsafe {
+        let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
+        if hr.is_err() {
+            if devices.is_empty() {
+                devices.push(AudioDeviceInfo {
+                    id: "default".to_string(),
+                    name: "默认音频输出设备".to_string(),
+                    is_default: true,
+                });
+                return Ok(devices);
+            }
+        }
+
+        let enumerator: IMMDeviceEnumerator =
+            match CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) {
+                Ok(e) => e,
+                Err(_) => {
+                    CoUninitialize();
+                    devices.push(AudioDeviceInfo {
+                        id: "default".to_string(),
+                        name: "默认音频输出设备".to_string(),
+                        is_default: true,
+                    });
+                    return Ok(devices);
+                }
+            };
+
+        let collection = match enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) {
+            Ok(c) => c,
+            Err(_) => {
+                CoUninitialize();
+                devices.push(AudioDeviceInfo {
+                    id: "default".to_string(),
+                    name: "默认音频输出设备".to_string(),
+                    is_default: true,
+                });
+                return Ok(devices);
+            }
+        };
+
+        let count = match collection.GetCount() {
+            Ok(c) => c,
+            Err(_) => {
+                CoUninitialize();
+                devices.push(AudioDeviceInfo {
+                    id: "default".to_string(),
+                    name: "默认音频输出设备".to_string(),
+                    is_default: true,
+                });
+                return Ok(devices);
+            }
+        };
+
+        let default_id = get_default_device_id();
+
+        for i in 0..count {
+            let device = match collection.Item(i) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            let device: IMMDevice = match device.cast::<IMMDevice>() {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            let id_ptr = match device.GetId() {
+                Ok(id) => id,
+                Err(_) => continue,
+            };
+            let id = match id_ptr.to_string() {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let is_default = Some(&id) == default_id.as_ref();
+            let name = if is_default {
+                format!("默认设备 ({})", &id[..id.len().min(20)])
+            } else {
+                format!("音频设备 ({})", &id[..id.len().min(20)])
+            };
+            devices.push(AudioDeviceInfo { id, name, is_default });
+        }
+
+        CoUninitialize();
+    }
+
+    if devices.is_empty() {
+        devices.push(AudioDeviceInfo {
+            id: "default".to_string(),
+            name: "默认音频输出设备".to_string(),
+            is_default: true,
+        });
+    }
+
+    log::info!("枚举到 {} 个音频输出设备", devices.len());
+    Ok(devices)
+}
+
+/// 启动 EQ 音频管线
+#[tauri::command]
+pub async fn start_eq(
+    app: tauri::AppHandle,
+    settings: EqSettings,
+) -> Result<EqSettings, String> {
+    if cfg!(not(target_os = "windows")) {
+        return Err("EQ 功能仅支持 Windows 系统".to_string());
+    }
+
+    // 检查是否已运行
+    {
+        let pipeline = PIPELINE.lock().map_err(|e| e.to_string())?;
+        if pipeline.is_some() {
+            return Err("EQ 管线已在运行中".to_string());
         }
     }
 
-    // 如果 JSON 解析失败（例如 PowerShell 本身出错），使用备用的错误信息
-    if !output.status.success() {
-        let detail = match output.status.code() {
-            Some(-1) => "可能是用户取消了管理员授权，或驱动安装程序执行失败".to_string(),
-            Some(code) => format!("退出码: {}", code),
-            None => "未获取到退出码".to_string(),
-        };
-        let err_msg = if !stderr.trim().is_empty() {
-            format!("{} [PowerShell: {}]", detail, stderr.trim())
-        } else {
-            detail
-        };
-        return Err(format!("驱动安装命令执行失败: {}", err_msg));
+    // ── 反馈循环检测与自动设备选择 ──
+    // Loopback 捕获默认渲染设备的输出，如果渲染也输出到同一设备，
+    // 会形成反馈循环导致信号指数增长（炸音）
+    let default_device_id = get_default_device_id().unwrap_or_default();
+    let output_is_default = settings.output_device_id.is_empty()
+        || settings.output_device_id == "default"
+        || settings.output_device_id == default_device_id;
+
+    let active_device_id = if output_is_default && !default_device_id.is_empty() {
+        // 尝试自动找一个不同的渲染设备
+        let alternative = find_alternative_render_device(&default_device_id);
+        match alternative {
+            Some(alt_id) => {
+                log::info!(
+                    "自动选择非捕获设备作为输出: {} (捕获设备: {})",
+                    &alt_id[..alt_id.len().min(30)],
+                    &default_device_id[..default_device_id.len().min(30)]
+                );
+                alt_id
+            }
+            None => {
+                return Err(
+                    "反馈回路告警！\n\n\
+                     EQ 通过 Loopback 捕获系统音频，无法输出到同一设备。\n\
+                     您当前只有一个音频输出设备，需要插入第二个设备\n\
+                     （如 USB 耳机/音响、HDMI 显示器）后才能启动 EQ。"
+                        .to_string(),
+                );
+            }
+        }
+    } else {
+        settings.output_device_id.clone()
+    };
+
+    // 使用选定的设备 ID 继续
+    let resolved_settings = EqSettings {
+        output_device_id: active_device_id.clone(),
+        ..settings
+    };
+
+    let is_running = Arc::new(AtomicBool::new(true));
+    let is_running_clone = is_running.clone();
+    let app_clone = app.clone();
+
+    let filter_chain = Arc::new(Mutex::new(vec![create_default_filters(48000.0); 2]));
+    let filter_chain_clone = filter_chain.clone();
+    let eq_settings_arc = Arc::new(Mutex::new(resolved_settings.clone()));
+    let eq_settings_clone = eq_settings_arc.clone();
+    let sample_rate = Arc::new(AtomicU32::new(48000));
+    let sample_rate_clone = sample_rate.clone();
+
+    {
+        let mut filters = filter_chain.lock().unwrap();
+        for channel_filters in filters.iter_mut() {
+            *channel_filters = create_filters_from_settings(&resolved_settings, 48000.0);
+        }
     }
 
-    Ok(())
+    let thread_handle = thread::Builder::new()
+        .name("eq-audio-pipeline".into())
+        .spawn(move || {
+            run_audio_pipeline(
+                filter_chain_clone,
+                is_running_clone,
+                app_clone,
+                eq_settings_clone,
+                sample_rate_clone,
+            );
+        })
+        .map_err(|e| format!("创建处理线程失败: {}", e))?;
+
+    {
+        let mut pipeline = PIPELINE.lock().map_err(|e| e.to_string())?;
+        *pipeline = Some(PipelineState {
+            settings: resolved_settings.clone(),
+            is_running: is_running.clone(),
+            thread_handle: Some(thread_handle),
+            eq_filters: filter_chain,
+            sample_rate,
+        });
+    }
+
+    log::info!("EQ 音频管线启动成功");
+
+    let mut s = resolved_settings;
+    s.enabled = true;
+    let _ = app.emit("eq-status-changed", &s);
+
+    Ok(s)
+}
+
+/// 停止 EQ 音频管线
+#[tauri::command]
+pub async fn stop_eq(app: tauri::AppHandle) -> Result<(), String> {
+    let mut pipeline = PIPELINE.lock().map_err(|e| e.to_string())?;
+
+    match pipeline.take() {
+        Some(state) => {
+            log::info!("正在停止 EQ 音频管线...");
+            state.is_running.store(false, Ordering::SeqCst);
+
+            if let Some(handle) = state.thread_handle {
+                let _ = handle.join();
+            }
+
+            let mut settings = state.settings;
+            settings.enabled = false;
+            let _ = app.emit("eq-status-changed", &settings);
+
+            log::info!("EQ 音频管线已停止");
+            Ok(())
+        }
+        None => Err("EQ 管线未在运行".to_string()),
+    }
+}
+
+/// 获取当前 EQ 状态
+#[tauri::command]
+pub fn get_eq_status() -> Result<EqSettings, String> {
+    let pipeline = PIPELINE.lock().map_err(|e| e.to_string())?;
+
+    match pipeline.as_ref() {
+        Some(state) => {
+            let mut s = state.settings.clone();
+            s.enabled = state.is_running.load(Ordering::SeqCst);
+            Ok(s)
+        }
+        None => Ok(EqSettings::default()),
+    }
+}
+
+/// 更新 EQ 设置
+#[tauri::command]
+pub fn update_eq_settings(settings: EqSettings) -> Result<(), String> {
+    let mut pipeline = PIPELINE.lock().map_err(|e| e.to_string())?;
+
+    match pipeline.as_mut() {
+        Some(state) => {
+            state.settings = settings.clone();
+
+            let sample_rate = state.sample_rate.load(Ordering::SeqCst) as f32;
+            let mut filters = state.eq_filters.lock().map_err(|e| e.to_string())?;
+
+            for channel_filters in filters.iter_mut() {
+                for i in 0..10 {
+                    let gain = settings.bands[i].clamp(-12.0, 12.0);
+                    channel_filters[i].update_peaking_eq(
+                        EQ_BANDS[i].0, EQ_BANDS[i].1, gain, sample_rate,
+                    );
+                }
+            }
+
+            log::info!(
+                "EQ 设置已更新 (采样率: {}Hz, 声道数: {})",
+                sample_rate as u32,
+                filters.len()
+            );
+            Ok(())
+        }
+        None => Err("EQ 管线未启动，无法更新设置".to_string()),
+    }
+}
+
+// ─── 生命周期 ───
+
+pub fn cleanup() {
+    if let Ok(mut pipeline) = PIPELINE.lock() {
+        if let Some(state) = pipeline.take() {
+            log::info!("正在清理 EQ 音频管线资源...");
+            state.is_running.store(false, Ordering::SeqCst);
+            if let Some(handle) = state.thread_handle {
+                let _ = handle.join();
+            }
+            log::info!("EQ 音频管线资源已清理");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_biquad_peaking_flat() {
+        let mut filter = BiquadFilter::peaking_eq(1000.0, 1.41, 0.0, 48000.0);
+        let input: Vec<f32> = (0..100).map(|_| 1.0).collect();
+        let output: Vec<f32> = input.iter().map(|&s| filter.process(s)).collect();
+        let avg = output[20..].iter().sum::<f32>() / 80.0;
+        assert!((avg - 1.0).abs() < 0.01, "0dB 增益应为直通，实际均值: {}", avg);
+    }
+
+    #[test]
+    fn test_biquad_gain_boost() {
+        let mut filter = BiquadFilter::peaking_eq(1000.0, 1.41, 6.0, 48000.0);
+        let mut input = vec![0.0_f32; 48000];
+        for (i, sample) in input.iter_mut().enumerate() {
+            let t = i as f32 / 48000.0;
+            *sample = (2.0 * std::f32::consts::PI * 1000.0 * t).sin();
+        }
+        let mut output = vec![0.0_f32; 48000];
+        for (i, &s) in input.iter().enumerate() {
+            output[i] = filter.process(s);
+        }
+        let rms_in = (input[1000..].iter().map(|s| s * s).sum::<f32>() / 47000.0).sqrt();
+        let rms_out = (output[1000..].iter().map(|s| s * s).sum::<f32>() / 47000.0).sqrt();
+        let gain_db = 20.0 * (rms_out / rms_in).log10();
+        assert!((gain_db - 6.0).abs() < 1.5, "期望 6dB 增益，实际: {:.2}dB", gain_db);
+    }
+
+    #[test]
+    fn test_filter_reset() {
+        let mut filter = BiquadFilter::peaking_eq(1000.0, 1.41, 12.0, 48000.0);
+        for _ in 0..1000 {
+            filter.process(1.0);
+        }
+        filter.reset();
+        assert_eq!(filter.z1, 0.0);
+        assert_eq!(filter.z2, 0.0);
+    }
+
+    #[test]
+    fn test_update_preserves_state() {
+        let mut filter = BiquadFilter::peaking_eq(1000.0, 1.41, 6.0, 48000.0);
+        for _ in 0..1000 {
+            filter.process(0.5);
+        }
+        let z1_before = filter.z1;
+        let z2_before = filter.z2;
+        assert!(z1_before.abs() > 0.001);
+        filter.update_peaking_eq(2000.0, 1.41, 3.0, 48000.0);
+        assert!((filter.z1 - z1_before).abs() < 1e-10);
+        assert!((filter.z2 - z2_before).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_soft_clip_transparent() {
+        for x in [-0.5, -0.1, 0.0, 0.1, 0.5, 0.89].iter() {
+            let y = soft_clip(*x);
+            assert!((y - x).abs() < 1e-7, "soft_clip({}) 应透过得 {}", x, y);
+        }
+    }
+
+    #[test]
+    fn test_soft_clip_limits() {
+        for x in [-10.0, -5.0, -2.0, 2.0, 5.0, 10.0].iter() {
+            let y = soft_clip(*x);
+            assert!(y.abs() <= 1.0, "soft_clip({}) = {} 超出 [-1,1]", x, y);
+        }
+    }
+
+    #[test]
+    fn test_per_channel_independence() {
+        let sr = 48000.0_f32;
+        let mut left_chain = create_default_filters(sr);
+        let mut right_chain = create_default_filters(sr);
+        for _ in 0..1000 {
+            let mut s = 0.8_f32;
+            for f in left_chain.iter_mut() {
+                s = f.process(s);
+            }
+        }
+        for _ in 0..1000 {
+            let mut s = 0.0_f32;
+            for f in right_chain.iter_mut() {
+                s = f.process(s);
+            }
+        }
+        for (i, f) in right_chain.iter().enumerate() {
+            assert!(f.z1.abs() < 0.01, "右声道滤波器[{}] z1 应接近 0", i);
+        }
+    }
+
+    #[test]
+    fn test_convert_stereo_to_mono() {
+        // 2 frames, 2 channels → 1 channel
+        let input = vec![0.1, 0.2, 0.3, 0.4]; // [L0,R0, L1,R1]
+        let output = convert_channels(&input, 2, 1, 2);
+        assert!((output[0] - 0.15).abs() < 1e-6, "frame0: {}", output[0]);
+        assert!((output[1] - 0.35).abs() < 1e-6, "frame1: {}", output[1]);
+    }
+
+    #[test]
+    fn test_convert_mono_to_stereo() {
+        let input = vec![0.5, 0.7]; // 2 frames, 1 channel
+        let output = convert_channels(&input, 1, 2, 2);
+        assert_eq!(output, vec![0.5, 0.5, 0.7, 0.7]);
+    }
+
+    #[test]
+    fn test_convert_same_channels() {
+        let input = vec![0.1, 0.2, 0.3, 0.4];
+        let output = convert_channels(&input, 2, 2, 2);
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn test_convert_stereo_to_surround() {
+        // 1 frame, stereo → 5.1 (6ch)
+        let input = vec![0.1, 0.2];
+        let output = convert_channels(&input, 2, 6, 1);
+        assert_eq!(output.len(), 6);
+        assert_eq!(output[0], 0.1); // L
+        assert_eq!(output[1], 0.2); // R
+        assert_eq!(output[2], 0.0); // silence
+    }
 }

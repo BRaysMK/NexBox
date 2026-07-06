@@ -1,473 +1,478 @@
 import {
-  Box,
-  Button,
-  Heading,
-  Text,
-  VStack,
-  useColorModeValue,
-  useToast,
-  HStack,
-  IconButton,
-  Card,
-  CardBody,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-  Grid,
-  GridItem,
-  Switch,
-  FormControl,
-  FormLabel,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
-  useDisclosure,
+  Box, Flex, Heading, Text, VStack, HStack, Switch,
+  Slider, SliderTrack, SliderFilledTrack, SliderThumb,
+  useColorModeValue, useToast, IconButton,
+  SimpleGrid, Select, Badge,
 } from "@chakra-ui/react";
-import { CustomSelect } from "@/components/special/custom-select";
-import { useEffect, useRef, useState } from "react";
+import {
+  ArrowLeft, Volume2, Disc3, Music, Clapperboard,
+  Mic, Gamepad2, Circle, RefreshCw,
+} from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { useNavigate } from "react-router-dom";
+import { LazyStore } from "@tauri-apps/plugin-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
-import { AnimatedPage } from "@/components/ui/animated-page";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, SlidersHorizontal, Download, Trash2 } from "lucide-react";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
-interface EqBand {
-  frequency: number;
-  gain: number;
-}
+// ─── Types ───
 
-interface AudioDevice {
+interface AudioDeviceInfo {
   id: string;
   name: string;
   is_default: boolean;
 }
 
-const DEFAULT_BANDS = [
-  { frequency: 31, gain: 0 },
-  { frequency: 62, gain: 0 },
-  { frequency: 125, gain: 0 },
-  { frequency: 250, gain: 0 },
-  { frequency: 500, gain: 0 },
-  { frequency: 1000, gain: 0 },
-  { frequency: 2000, gain: 0 },
-  { frequency: 4000, gain: 0 },
-  { frequency: 8000, gain: 0 },
-  { frequency: 16000, gain: 0 },
+interface EqSettings {
+  enabled: boolean;
+  bands: number[];
+  master_gain: number;
+  output_device_id: string;
+  preset_id: string;
+}
+
+interface Preset {
+  id: string;
+  nameKey: string;
+  icon: React.ElementType;
+  bands: number[];
+  master_gain: number;
+  color: string;
+}
+
+// ─── 10段 EQ 频率标签 ───
+
+const BAND_FREQ_LABELS = ["31", "62", "125", "250", "500", "1K", "2K", "4K", "8K", "16K"];
+const DEFAULT_BANDS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+const store = new LazyStore("settings.json");
+const EQ_STORE_KEY = "eq-settings";
+
+const DEFAULT_SETTINGS: EqSettings = {
+  enabled: false,
+  bands: DEFAULT_BANDS,
+  master_gain: 0,
+  output_device_id: "default",
+  preset_id: "flat",
+};
+
+// ─── Presets ───
+
+const PRESETS: Preset[] = [
+  { id: "flat", nameKey: "eqTuning.presets.flat", icon: Circle, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], master_gain: 0, color: "#8B949E" },
+  { id: "gaming", nameKey: "eqTuning.presets.gaming", icon: Gamepad2, bands: [4, 3, 1, 0, -1, 0, 2, 5, 6, 4], master_gain: 2, color: "#00D9FF" },
+  { id: "music", nameKey: "eqTuning.presets.music", icon: Music, bands: [2, 3, 4, 1, 0, 0, 1, 3, 4, 2], master_gain: 0, color: "#7B68EE" },
+  { id: "movie", nameKey: "eqTuning.presets.movie", icon: Clapperboard, bands: [6, 5, 2, 0, 0, 0, 1, 3, 2, 1], master_gain: 3, color: "#FFA502" },
+  { id: "voice", nameKey: "eqTuning.presets.voice", icon: Mic, bands: [-4, -2, 2, 3, 3, 3, 1, 0, -2, -4], master_gain: 1, color: "#00FF88" },
+  { id: "custom", nameKey: "eqTuning.presets.custom", icon: Disc3, bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], master_gain: 0, color: "#FF6B9D" },
 ];
 
-const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+// ─── Component ───
 
 export default function EqTuningPage() {
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
   const toast = useToast();
   const navigate = useNavigate();
+  const { liquidGlassEnabled } = useBackground();
+  const { getActiveColor } = useThemeColor();
 
-  const { getActiveColor, getContrastTextColor } = useThemeColor();
-  const primaryColor = getActiveColor();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const textColor = useColorModeValue("gray.600", "#a0a0a0");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  const sliderBg = useColorModeValue("gray.100", "#1a1a1a");
-
-  const [isEnabled, setIsEnabled] = useState(false);
-  const [bands, setBands] = useState<EqBand[]>(DEFAULT_BANDS);
-  const [masterGain, setMasterGain] = useState(0);
-  const [devices, setDevices] = useState<AudioDevice[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<string>("");
-  const [isVirtualDriverInstalled, setIsVirtualDriverInstalled] = useState(true);
+  const [settings, setSettings] = useState<EqSettings>(DEFAULT_SETTINGS);
+  const [devices, setDevices] = useState<AudioDeviceInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isInstallingDriver, setIsInstallingDriver] = useState(false);
-  const [isRemovingDriver, setIsRemovingDriver] = useState(false);
-  const [isTogglingPower, setIsTogglingPower] = useState(false);
-  const { isOpen: isRemoveOpen, onOpen: onRemoveOpen, onClose: onRemoveClose } = useDisclosure();
-  const cancelRef = useRef<HTMLButtonElement>(null);
+  const [toastMsg, setToastMsg] = useState<{ title: string; status: "info" | "success" | "error" } | null>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initRef = useRef(false);
+
+  const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const textColor = useColorModeValue("gray.700", "#e0e0e0");
+  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const cardBg = useColorModeValue("white", "#161B22");
+  const cardBorder = useColorModeValue("gray.200", "#2a2a3a");
+  const sliderTrackBg = useColorModeValue("gray.100", "#1C2333");
+
+  // ─── Toast 副作用（避免跨组件 setState-in-render）───
 
   useEffect(() => {
-    checkDriverAndLoadDevices();
+    if (toastMsg) {
+      toast({ title: toastMsg.title, status: toastMsg.status, duration: 1500, isClosable: true });
+      setToastMsg(null);
+    }
+  }, [toastMsg, toast]);
+
+  // ─── 持久化 + 后端同步（settings 变更时自动处理）───
+
+  useEffect(() => {
+    if (!initRef.current) return; // 初始化期间不触发
+
+    store.set(EQ_STORE_KEY, settings);
+
+    if (!settings.enabled) return;
+
+    // 防抖同步到后端
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      invoke("update_eq_settings", { settings }).catch((e) => {
+        console.error("EQ 后端更新失败:", e);
+      });
+    }, 150);
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [settings]);
+
+  // ─── 加载保存的设置 + 恢复 EQ 运行状态 ───
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await store.get<EqSettings>(EQ_STORE_KEY);
+        if (saved) {
+          const restored = {
+            ...DEFAULT_SETTINGS,
+            ...saved,
+            bands: saved.bands || DEFAULT_BANDS,
+          };
+          setSettings(restored);
+
+          // 如果保存的状态是运行中，尝试自动重启管线
+          if (restored.enabled) {
+            try {
+              const result = await invoke<EqSettings>("start_eq", { settings: restored });
+              const updated = { ...result, enabled: true };
+              setSettings(updated);
+              store.set(EQ_STORE_KEY, updated);
+            } catch (e: any) {
+              // 重启失败（可能是反馈回路），重置为关闭状态
+              const off = { ...restored, enabled: false };
+              setSettings(off);
+              store.set(EQ_STORE_KEY, off);
+              console.warn("EQ 自动重启失败:", String(e));
+            }
+          }
+        }
+      } catch { /* ignore */ }
+      setLoading(false);
+      initRef.current = true;
+    })();
   }, []);
 
-  const checkDriverAndLoadDevices = async () => {
-    try {
-      setLoading(true);
-      const installed = await invoke<boolean>("check_virtual_audio_driver");
-      setIsVirtualDriverInstalled(installed);
-      
-      const deviceList = await invoke<AudioDevice[]>("get_audio_output_devices");
-      setDevices(deviceList);
-      
-      const config = await invoke<any>("get_eq_config");
-      setIsEnabled(config.enabled);
-      setBands(config.bands);
-      setMasterGain(config.master_gain);
-      
-      if (config.output_device_id) {
-        setSelectedDevice(config.output_device_id);
-      } else {
-        const defaultDev = deviceList.find(d => d.is_default);
-        if (defaultDev) setSelectedDevice(defaultDev.id);
+  // ─── 枚举音频设备 ───
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const deviceList = await invoke<AudioDeviceInfo[]>("get_audio_devices");
+        setDevices(deviceList);
+      } catch {
+        setDevices([{ id: "default", name: "默认音频输出设备", is_default: true }]);
       }
-    } catch (error) {
-      console.error("Failed to load audio data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    })();
+  }, []);
 
-  const handleBandChange = (index: number, value: number) => {
-    const newBands = [...bands];
-    newBands[index].gain = value;
-    setBands(newBands);
-    invoke("set_eq_band", { index, gain: value });
-  };
+  // ─── 监听后端状态变更 ───
 
-  const handleTogglePower = async () => {
-    if (!isVirtualDriverInstalled) {
-      toast({
-        title: t("eqTuning.virtualAudioNotFound"),
-        description: t("eqTuning.driverNote"),
-        status: "warning",
-        duration: 3000,
-      });
-      return;
-    }
+  useEffect(() => {
+    const unlisten = listen<EqSettings>("eq-status-changed", (event) => {
+      setSettings(event.payload);
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, []);
 
-    const newState = !isEnabled;
-    try {
-      setIsTogglingPower(true);
-      setIsEnabled(newState);
-      await invoke("set_eq_enabled", { enabled: newState });
-    } catch (error) {
-      setIsEnabled(!newState);
-      toast({
-        title: t("gpuRename.error"),
-        description: String(error),
-        status: "error",
-        duration: 3000,
-      });
-    } finally {
-      setIsTogglingPower(false);
-    }
-  };
+  // ─── 更新单个频段 ───
 
-  const handleReset = () => {
-    setBands(DEFAULT_BANDS.map(b => ({ ...b })));
-    setMasterGain(0);
-    invoke("reset_eq");
-  };
+  const updateBand = useCallback((index: number, value: number) => {
+    setSettings(prev => {
+      const bands = [...prev.bands];
+      bands[index] = Math.round(value * 2) / 2;
+      return { ...prev, bands, preset_id: "custom" };
+    });
+  }, []);
 
-  const handleDeviceChange = (deviceId: string) => {
-    setSelectedDevice(deviceId);
-    invoke("set_output_device", { deviceId });
-  };
+  // ─── 应用预设 ───
 
-  const handleMasterGainChange = (value: number) => {
-    setMasterGain(value);
-    invoke("set_master_gain", { gain: value });
-  };
+  const applyPreset = useCallback((preset: Preset) => {
+    setSettings(prev => ({
+      ...prev,
+      bands: [...preset.bands],
+      master_gain: preset.master_gain,
+      preset_id: preset.id,
+    }));
+    setToastMsg({ title: t(`eqTuning.presets.${preset.id}` as any), status: "success" });
+  }, [t]);
 
-  const handleInstallDriver = async () => {
-    try {
-      setIsInstallingDriver(true);
-      const message = await invoke<string>("install_eq_driver");
+  // ─── 主开关 ───
 
-      let installed = false;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        await sleep(1500);
-        await checkDriverAndLoadDevices();
-        const detected = await invoke<boolean>("check_virtual_audio_driver");
-        if (detected) {
-          installed = true;
-          break;
-        }
+  const toggleEq = useCallback(async () => {
+    if (settings.enabled) {
+      try {
+        await invoke("stop_eq");
+        const next = { ...settings, enabled: false };
+        setSettings(next);
+        setToastMsg({ title: t("eqTuning.stopped"), status: "info" });
+      } catch (e: any) {
+        setToastMsg({ title: String(e), status: "error" });
       }
-
-      toast({
-        title: t("eqTuning.installDriver"),
-        description: installed
-          ? "虚拟声卡驱动已安装完成，现可启用 EQ 调音"
-          : message,
-        status: installed ? "success" : "info",
-        duration: 5000,
-      });
-    } catch (error) {
-      toast({
-        title: t("gpuRename.error"),
-        description: String(error),
-        status: "error",
-        duration: 3000,
-      });
-    } finally {
-      setIsInstallingDriver(false);
+    } else {
+      try {
+        const result = await invoke<EqSettings>("start_eq", { settings });
+        setToastMsg({ title: t("eqTuning.started"), status: "success" });
+      } catch (e: any) {
+        setToastMsg({ title: String(e), status: "error" });
+      }
     }
-  };
+  }, [settings, t]);
 
-  const handleRemoveDriver = async () => {
-    try {
-      setIsRemovingDriver(true);
-      onRemoveClose();
-      const message = await invoke<string>("remove_eq_driver");
+  // ─── 设备切换 ───
 
-      setIsVirtualDriverInstalled(false);
-      setIsEnabled(false);
+  const changeDevice = useCallback((deviceId: string) => {
+    setSettings(prev => ({ ...prev, output_device_id: deviceId }));
+  }, []);
 
-      toast({
-        title: t("eqTuning.removeDriver"),
-        description: message,
-        status: "success",
-        duration: 5000,
-      });
-    } catch (error) {
-      toast({
-        title: t("gpuRename.error"),
-        description: String(error),
-        status: "error",
-        duration: 5000,
-      });
-    } finally {
-      setIsRemovingDriver(false);
-    }
-  };
+  // ─── 渲染 ───
 
-  const formatFreq = (freq: number) => {
-    return freq >= 1000 ? `${freq / 1000}k` : `${freq}`;
-  };
-
-  const content = (
-    <VStack align="start" spacing={6} w="full">
-      <HStack w="full" justify="space-between">
-        <HStack>
-          <IconButton
-            aria-label={t("eqTuning.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/builtin-tools")}
-            color={headingColor}
-          />
-          <SlidersHorizontal size={28} color={headingColor} />
-          <Heading size="lg" color={headingColor} fontWeight="700">
-            {t("eqTuning.title")}
-          </Heading>
-        </HStack>
-
-        <HStack spacing={4}>
-          <FormControl display="flex" alignItems="center">
-            <FormLabel htmlFor="eq-power" mb="0" color={textColor} fontSize="sm">
-              {t("eqTuning.power")}
-            </FormLabel>
-            <Switch
-              id="eq-power"
-              isChecked={isEnabled}
-              onChange={handleTogglePower}
-              colorScheme="teal"
-              isDisabled={!isVirtualDriverInstalled || loading || isTogglingPower}
-            />
-          </FormControl>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleReset}
-            borderColor={cardBorder}
-            color={textColor}
-            _hover={{ bg: sliderBg }}
-          >
-            {t("eqTuning.reset")}
-          </Button>
-          {isVirtualDriverInstalled && (
-            <IconButton
-              aria-label={t("eqTuning.removeDriver")}
-              icon={<Trash2 size={16} />}
-              size="sm"
-              variant="ghost"
-              colorScheme="red"
-              onClick={onRemoveOpen}
-              isLoading={isRemovingDriver}
-            />
-          )}
-        </HStack>
-      </HStack>
-
-      {!isVirtualDriverInstalled && (
-        <Alert
-          status="warning"
-          variant="subtle"
-          flexDirection="column"
-          alignItems="center"
-          justifyContent="center"
-          textAlign="center"
-          borderRadius="xl"
-          py={6}
-          bg={useColorModeValue("orange.50", "rgba(251, 211, 141, 0.1)")}
-          border="1px solid"
-          borderColor={useColorModeValue("orange.200", "rgba(251, 211, 141, 0.2)")}
-        >
-          <AlertIcon boxSize="40px" mr={0} />
-          <AlertTitle mt={4} mb={1} fontSize="lg">
-            {t("eqTuning.virtualAudioNotFound")}
-          </AlertTitle>
-          <AlertDescription maxWidth="sm" color={textColor}>
-            {t("eqTuning.driverNote")}
-          </AlertDescription>
-          <Button
-            mt={4}
-            leftIcon={<Download size={16} />}
-            colorScheme="orange"
-            onClick={handleInstallDriver}
-            isLoading={isInstallingDriver}
-          >
-            {t("eqTuning.installDriver")}
-          </Button>
-        </Alert>
-      )}
-
-      <VStack w="full" spacing={8} opacity={isEnabled ? 1 : 0.5} transition="opacity 0.2s">
-        <Box w="full">
-          <Text color={textColor} fontSize="sm" mb={4} fontWeight="600">
-            {t("eqTuning.outputDevice")}
-          </Text>
-          <CustomSelect
-            value={selectedDevice}
-            onChange={handleDeviceChange}
-            options={devices.map(d => ({ value: d.id, label: d.name }))}
-            placeholder={t("eqTuning.outputDevice")}
-            width="100%"
-          />
-        </Box>
-
-        <Grid templateColumns="repeat(10, 1fr)" gap={2} w="full" h="300px">
-          {bands.map((band, index) => (
-            <GridItem key={band.frequency} h="full">
-              <VStack h="full" spacing={2}>
-                <Text fontSize="xs" color={textColor} fontWeight="bold">
-                  {band.gain > 0 ? `+${band.gain}` : band.gain}
-                </Text>
-                <Box h="200px" py={2}>
-                  <Slider
-                    aria-label={`freq-${band.frequency}`}
-                    orientation="vertical"
-                    min={-12}
-                    max={12}
-                    step={1}
-                    value={band.gain}
-                    onChange={(v) => handleBandChange(index, v)}
-                    isDisabled={!isEnabled}
-                    h="full"
-                  >
-                    <SliderTrack bg={sliderBg} borderRadius="full">
-                      <SliderFilledTrack bg={primaryColor} />
-                    </SliderTrack>
-                    <SliderThumb boxSize={4} bg="white" border="2px solid" borderColor={primaryColor} />
-                  </Slider>
-                </Box>
-                <Text fontSize="xs" color={textColor} transform="rotate(-45deg)" mt={2}>
-                  {formatFreq(band.frequency)}
-                </Text>
-              </VStack>
-            </GridItem>
-          ))}
-        </Grid>
-
-        <Box w="full" pt={4}>
-          <HStack justify="space-between" mb={2}>
-            <Text color={textColor} fontSize="sm" fontWeight="600">
-              {t("eqTuning.masterGain")}
-            </Text>
-            <Text color={primaryColor} fontWeight="bold">
-              {masterGain > 0 ? `+${masterGain}` : masterGain} dB
-            </Text>
-          </HStack>
-          <Slider
-            aria-label="master-gain"
-            min={-12}
-            max={12}
-            step={1}
-            value={masterGain}
-            onChange={handleMasterGainChange}
-            isDisabled={!isEnabled}
-          >
-            <SliderTrack bg={sliderBg} h="6px" borderRadius="full">
-              <SliderFilledTrack bg={primaryColor} />
-            </SliderTrack>
-            <SliderThumb boxSize={5} bg="white" border="2px solid" borderColor={primaryColor} />
-          </Slider>
-        </Box>
-      </VStack>
-
-      <AlertDialog
-        isOpen={isRemoveOpen}
-        leastDestructiveRef={cancelRef}
-        onClose={onRemoveClose}
-      >
-        <AlertDialogOverlay>
-          <AlertDialogContent>
-            <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              {t("eqTuning.removeDriver")}
-            </AlertDialogHeader>
-
-            <AlertDialogBody>
-              {t("eqTuning.removeDriverConfirm")}
-            </AlertDialogBody>
-
-            <AlertDialogFooter>
-              <Button ref={cancelRef} onClick={onRemoveClose}>
-                {t("common.cancel")}
-              </Button>
-              <Button
-                colorScheme="red"
-                onClick={handleRemoveDriver}
-                ml={3}
-                isLoading={isRemovingDriver}
-              >
-                {t("common.confirm")}
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogOverlay>
-      </AlertDialog>
-    </VStack>
-  );
+  if (loading) return <Box pt={8} />;
 
   return (
-    <AnimatedPage>
-      <Box pt={8}>
-        {liquidGlassEnabled ? (
-          <LiquidGlassCard
-            w="full"
-            boxShadow="2xl"
-            overflow="hidden"
-            position="relative"
-            p={6}
-          >
-            {content}
-          </LiquidGlassCard>
-        ) : (
-          <Card
-            bg={cardBg}
-            borderColor={cardBorder}
-            borderWidth="1px"
-            w="full"
-            boxShadow="2xl"
-            overflow="hidden"
-            position="relative"
-          >
-            <CardBody p={6}>
-              {content}
-            </CardBody>
-          </Card>
-        )}
-      </Box>
-    </AnimatedPage>
+    <Box pt={8} pb={16}>
+      <VStack align="stretch" spacing={6}>
+        {/* 顶栏 */}
+        <Flex justify="space-between" align="center">
+          <HStack spacing={3}>
+            <IconButton
+              aria-label={t("builtinTools.back")}
+              icon={<ArrowLeft size={20} />}
+              variant="ghost"
+              color={headingColor}
+              onClick={() => navigate("/builtin-tools")}
+              _hover={{ bg: "rgba(255,255,255,0.1)" }}
+            />
+            <Heading size="lg" color={headingColor}>{t("eqTuning.title")}</Heading>
+          </HStack>
+          <HStack spacing={3}>
+            <Text fontSize="sm" color={subTextColor}>
+              {settings.enabled ? t("eqTuning.running") : t("eqTuning.stopped")}
+            </Text>
+            <Switch
+              size="lg"
+              isChecked={settings.enabled}
+              onChange={toggleEq}
+              colorScheme="cyan"
+              sx={{
+                "& .chakra-switch__track": {
+                  bg: settings.enabled ? "cyan.500" : "gray.500",
+                  boxShadow: settings.enabled ? "0 0 12px rgba(0,217,255,0.5)" : "none",
+                },
+              }}
+            />
+          </HStack>
+        </Flex>
+
+        {/* 预设卡片 */}
+        <LiquidGlassCard>
+          <VStack align="stretch" spacing={4} p={1}>
+            <Text fontWeight="semibold" color={headingColor} fontSize="sm">
+              {t("eqTuning.presets.title")}
+            </Text>
+            <SimpleGrid columns={{ base: 2, md: 3, lg: 6 }} spacing={3}>
+              {PRESETS.map(preset => {
+                const isActive = settings.preset_id === preset.id;
+                const Icon = preset.icon;
+                return (
+                  <Box
+                    key={preset.id}
+                    onClick={() => applyPreset(preset)}
+                    p={3}
+                    borderRadius="xl"
+                    bg={isActive ? `${preset.color}18` : cardBg}
+                    border="1px solid"
+                    borderColor={isActive ? preset.color : cardBorder}
+                    cursor="pointer"
+                    transition="all 0.2s"
+                    _hover={{
+                      borderColor: preset.color,
+                      transform: "translateY(-2px)",
+                      shadow: "md",
+                    }}
+                  >
+                    <VStack spacing={1}>
+                      <Icon size={20} color={isActive ? preset.color : subTextColor} />
+                      <Text fontSize="xs" fontWeight="bold" color={isActive ? preset.color : textColor}>
+                        {t(preset.nameKey)}
+                      </Text>
+                      {/* 迷你频段预览 */}
+                      <HStack spacing="1px" h="24px" w="full" justify="center">
+                        {preset.bands.map((db, i) => {
+                          const h = Math.abs(db) / 12 * 100;
+                          return (
+                            <Box key={i} w="6px" position="relative" h="full">
+                              <Box
+                                position="absolute"
+                                bottom="50%"
+                                w="full"
+                                h={`${h / 2}%`}
+                                bg={db >= 0 ? preset.color : "red.400"}
+                                borderRadius="1px"
+                                opacity={0.8}
+                              />
+                              <Box
+                                position="absolute"
+                                top="50%"
+                                w="full"
+                                h={`${h / 2}%`}
+                                bg={db <= 0 ? preset.color : "red.400"}
+                                borderRadius="1px"
+                                opacity={0.6}
+                              />
+                            </Box>
+                          );
+                        })}
+                      </HStack>
+                    </VStack>
+                  </Box>
+                );
+              })}
+            </SimpleGrid>
+          </VStack>
+        </LiquidGlassCard>
+
+        {/* 10段均衡器 */}
+        <LiquidGlassCard>
+          <VStack align="stretch" spacing={5} p={1}>
+            <Flex justify="space-between" align="center">
+              <Text fontWeight="semibold" color={headingColor} fontSize="sm">
+                {t("eqTuning.equalizer")}
+              </Text>
+              <IconButton
+                aria-label={t("eqTuning.reset")}
+                icon={<RefreshCw size={16} />}
+                size="xs"
+                variant="ghost"
+                color={subTextColor}
+                onClick={() => applyPreset(PRESETS[0])}
+              />
+            </Flex>
+            {BAND_FREQ_LABELS.map((label, i) => {
+              const isMid = i === 5; // 1kHz
+              return (
+                <HStack key={i} spacing={3}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight={isMid ? "bold" : "normal"}
+                    color={isMid ? "#00D9FF" : subTextColor}
+                    w="36px"
+                    textAlign="right"
+                  >
+                    {label}
+                  </Text>
+                  <Slider
+                    flex={1}
+                    min={-12}
+                    max={12}
+                    step={0.5}
+                    value={settings.bands[i]}
+                    onChange={(v) => updateBand(i, v)}
+                    focusThumbOnChange={false}
+                  >
+                    <SliderTrack
+                      bg={sliderTrackBg}
+                      h="6px"
+                      borderRadius="full"
+                    >
+                      <SliderFilledTrack
+                        bg={`linear-gradient(90deg, #FF4757 0%, ${isMid ? "#00D9FF" : "#7B68EE"} 50%, #00D9FF 100%)`}
+                      />
+                    </SliderTrack>
+                    <SliderThumb
+                      boxSize={5}
+                      bg={isMid ? "#00D9FF" : getActiveColor()}
+                      boxShadow="0 0 8px rgba(0,217,255,0.4)"
+                      _active={{ boxShadow: "0 0 16px rgba(0,217,255,0.6)" }}
+                    />
+                  </Slider>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="medium"
+                    color={settings.bands[i] !== 0 ? headingColor : subTextColor}
+                    w="40px"
+                  >
+                    {settings.bands[i] > 0 ? "+" : ""}{settings.bands[i].toFixed(1)}dB
+                  </Text>
+                </HStack>
+              );
+            })}
+
+            {/* 主增益 */}
+            <Box pt={3}>
+              <HStack spacing={3}>
+                <Text fontSize="xs" fontWeight="bold" color={subTextColor} w="36px" textAlign="right">
+                  {t("eqTuning.masterGain")}
+                </Text>
+                <Slider
+                  flex={1}
+                  min={-20}
+                  max={6}
+                  step={0.5}
+                  value={settings.master_gain}
+                  onChange={(v) => setSettings(prev => ({ ...prev, master_gain: v }))}
+                  focusThumbOnChange={false}
+                >
+                  <SliderTrack bg={sliderTrackBg} h="6px" borderRadius="full">
+                    <SliderFilledTrack bg="linear-gradient(90deg, #FF4757, #FFA502, #00FF88)" />
+                  </SliderTrack>
+                  <SliderThumb boxSize={5} bg="#FFA502" boxShadow="0 0 8px rgba(255,165,2,0.4)" />
+                </Slider>
+                <Text fontSize="xs" fontWeight="medium" color={headingColor} w="40px">
+                  {settings.master_gain > 0 ? "+" : ""}{settings.master_gain.toFixed(1)}dB
+                </Text>
+              </HStack>
+            </Box>
+          </VStack>
+        </LiquidGlassCard>
+
+        {/* 设备选择 */}
+        <LiquidGlassCard>
+          <VStack align="stretch" spacing={3} p={1}>
+            <Text fontWeight="semibold" color={headingColor} fontSize="sm">
+              {t("eqTuning.outputDevice")}
+            </Text>
+            <Select
+              value={settings.output_device_id}
+              onChange={(e) => changeDevice(e.target.value)}
+              size="sm"
+              bg={cardBg}
+              borderColor={
+                devices.some(d => d.is_default && (settings.output_device_id === "default" || settings.output_device_id === d.id))
+                  ? "#FF4757"
+                  : cardBorder
+              }
+              color={textColor}
+              _hover={{ borderColor: "#00D9FF" }}
+              icon={<Volume2 size={16} />}
+            >
+              {devices.map(dev => (
+                <option key={dev.id} value={dev.id}>
+                  {dev.is_default ? `🔊 ${dev.name}（捕获端）` : `🎵 ${dev.name}（输出端）`}
+                </option>
+              ))}
+            </Select>
+            {devices.length <= 1 && devices.some(d => d.is_default) && (
+              <Text fontSize="xs" color="#FF4757">
+                ⚠️ 仅检测到一个音频设备。EQ 无法将音频输出到与捕获相同的设备（会形成反馈啸叫）。
+                请插入另一个音频输出设备（USB 耳机、HDMI 音响等）后重试。
+              </Text>
+            )}
+            {devices.length > 1 && devices.some(d => d.is_default && (settings.output_device_id === "default" || settings.output_device_id === d.id)) && (
+              <Text fontSize="xs" color="#FFA502">
+                ⚠️ 当前输出设备与捕获设备相同，启动 EQ 时会自动切换到其他可用设备。
+              </Text>
+            )}
+          </VStack>
+        </LiquidGlassCard>
+      </VStack>
+    </Box>
   );
 }

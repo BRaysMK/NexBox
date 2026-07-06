@@ -15,7 +15,6 @@ export default function HomePage() {
   const todayPopularityEnabled = useTodayPopularityEnabled();
   const announcementEnabled = useAnnouncementEnabled();
   const randomQuoteEnabled = useRandomQuoteEnabled();
-
   useEffect(() => {
     const savedGameLauncher = localStorage.getItem("nexbox_game_launcher_enabled");
     if (savedGameLauncher !== null) {

@@ -53,12 +53,29 @@ pub struct MemoryInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SoundCardInfo {
+    pub name: String,
+    pub manufacturer: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NetworkCardInfo {
+    pub name: String,
+    pub manufacturer: String,
+    pub adapter_type: String,
+    pub mac_address: String,
+    pub speed_mbps: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HardwareInfo {
     pub cpu: CpuInfo,
     pub gpu: Vec<GpuInfo>,
     pub memory: Vec<MemoryInfo>,
     pub motherboard: String,
     pub disk: Vec<String>,
+    pub sound_card: Vec<SoundCardInfo>,
+    pub network_card: Vec<NetworkCardInfo>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -104,6 +121,23 @@ struct PsDiskDrive {
     Size: u64,
 }
 
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsSoundDevice {
+    Name: String,
+    Manufacturer: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsNetworkAdapter {
+    Name: String,
+    Manufacturer: Option<String>,
+    AdapterType: Option<String>,
+    MACAddress: Option<String>,
+    Speed: Option<u64>,
+}
+
 // 静态硬件信息缓存（不会变化的部分）
 #[derive(Debug, Clone)]
 struct StaticHardwareInfo {
@@ -112,6 +146,8 @@ struct StaticHardwareInfo {
     motherboard: String,
     memory: Vec<MemoryInfo>,
     disk: Vec<String>,
+    sound_card: Vec<SoundCardInfo>,
+    network_card: Vec<NetworkCardInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -524,6 +560,55 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         }
     });
 
+    let errors_sound = errors.clone();
+    let sound_handle = thread::spawn(move || {
+        let sound_cmd = r#"Get-WmiObject Win32_SoundDevice | Where-Object { $_.Status -eq 'OK' -and $_.PNPDeviceID -notlike 'USB\*' -and $_.PNPDeviceID -notlike 'HID\*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VB-Audio*' -and $_.Name -notlike '*Voicemeeter*' -and $_.Name -notlike '*CABLE*' -and $_.Name -notlike '*Sonic Studio*' -and $_.Name -notlike '*NVIDIA Virtual Audio*' -and $_.Name -notlike '*Steam Streaming*' -and $_.Name -notlike '*Oculus Virtual*' -and $_.Name -notlike '*Wave Link*' -and $_.Name -notlike '*Elgato Sound Capture*' } | Select-Object Name, Manufacturer | ConvertTo-Json -Compress"#;
+        match run_powershell::<PsSoundDevice>(sound_cmd) {
+            Ok(results) => {
+                log::info!("获取到{}个声卡信息", results.len());
+                results.into_iter().map(|s| {
+                    SoundCardInfo {
+                        name: s.Name,
+                        manufacturer: s.Manufacturer.unwrap_or_else(|| "未知".to_string()),
+                    }
+                }).collect::<Vec<SoundCardInfo>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_sound.lock() {
+                    errs.push(format!("声卡: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
+    let errors_network = errors.clone();
+    let network_handle = thread::spawn(move || {
+        let network_cmd = r#"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-WmiObject Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -and $_.NetEnabled -eq $true -and $_.Name -notlike '*Hyper-V*' -and $_.Name -notlike '*vEthernet*' -and $_.Name -notlike '*VirtualBox*' -and $_.Name -notlike '*VMware*' -and $_.Name -notlike '*Bluetooth*' -and $_.AdapterType -notlike '*Loopback*' } | Select-Object Name, Manufacturer, AdapterType, MACAddress, Speed | ConvertTo-Json -Compress"#;
+        match run_powershell::<PsNetworkAdapter>(network_cmd) {
+            Ok(results) => {
+                log::info!("获取到{}个网卡信息", results.len());
+                results.into_iter().map(|n| {
+                    // Speed is in bits per second, convert to Mbps
+                    let speed_mbps = n.Speed.map(|s| s / 1_000_000).unwrap_or(0);
+                    NetworkCardInfo {
+                        name: n.Name,
+                        manufacturer: n.Manufacturer.unwrap_or_else(|| "未知".to_string()),
+                        adapter_type: n.AdapterType.unwrap_or_else(|| "未知".to_string()),
+                        mac_address: n.MACAddress.unwrap_or_else(|| "未知".to_string()),
+                        speed_mbps,
+                    }
+                }).collect::<Vec<NetworkCardInfo>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_network.lock() {
+                    errs.push(format!("网卡: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
     let cpu = cpu_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| CpuInfo {
         name: "未知CPU".to_string(),
         cores: 0,
@@ -537,6 +622,8 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
     let motherboard = mobo_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| "未知主板".to_string());
     let memory = mem_handle.join().unwrap_or_else(|_| Vec::new());
     let disk = disk_handle.join().unwrap_or_else(|_| Vec::new());
+    let sound_card = sound_handle.join().unwrap_or_else(|_| Vec::new());
+    let network_card = network_handle.join().unwrap_or_else(|_| Vec::new());
 
     if let Ok(errs) = errors.lock() {
         for e in errs.iter() {
@@ -550,6 +637,8 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         motherboard,
         memory,
         disk,
+        sound_card,
+        network_card,
     };
 
     {
@@ -598,6 +687,8 @@ pub fn get_hardware_info() -> Result<HardwareInfo, HardwareError> {
         motherboard: static_info.motherboard,
         memory: static_info.memory,
         disk: static_info.disk,
+        sound_card: static_info.sound_card,
+        network_card: static_info.network_card,
     })
 }
 
@@ -723,6 +814,268 @@ pub fn is_nvidia_gpu() -> bool {
 #[tauri::command]
 pub fn get_os_version() -> Result<String, String> {
     sysinfo::System::long_os_version().ok_or_else(|| "无法获取操作系统版本".to_string())
+}
+
+// ─── Disk Health ───
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PartitionInfo {
+    pub drive_letter: String,
+    pub total_gb: f64,
+    pub available_gb: f64,
+    pub used_gb: f64,
+    pub usage_percent: f64,
+    pub filesystem: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiskHealthInfo {
+    pub index: u32,
+    pub model: String,
+    pub media_type: String,
+    pub size_gb: f64,
+    pub interface_type: String,
+    pub health_status: String,
+    pub operational_status: String,
+    pub temperature_c: Option<f64>,
+    pub wear_percentage: Option<f64>,
+    pub power_on_hours: Option<u64>,
+    pub read_errors: Option<u64>,
+    pub write_errors: Option<u64>,
+    pub status: String,
+    pub partition_count: u32,
+    pub serial_number: String,
+    pub partition_style: String,
+    pub is_boot_disk: bool,
+    pub partitions: Vec<PartitionInfo>,
+    pub total_usage_gb: f64,
+    pub total_capacity_gb: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiskHealthResponse {
+    pub disks: Vec<DiskHealthInfo>,
+    pub total_count: u32,
+    pub healthy_count: u32,
+    pub warning_count: u32,
+    pub unhealthy_count: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case, dead_code)]
+struct PsDiskHealthRaw {
+    DeviceId: String,
+    FriendlyName: String,
+    Model: String,
+    MediaType: Option<String>,
+    Size: Option<u64>,
+    BusType: String,
+    HealthStatus: String,
+    OperationalStatus: String,
+    SerialNumber: Option<String>,
+    NumberOfPartitions: Option<u32>,
+    Temperature: Option<f64>,
+    WearPercentage: Option<f64>,
+    PowerOnHours: Option<u64>,
+    ReadErrorsTotal: Option<u64>,
+    WriteErrorsTotal: Option<u64>,
+    WmiStatus: Option<String>,
+    WmiInterfaceType: Option<String>,
+    PartitionStyle: Option<String>,
+    IsBoot: Option<bool>,
+    Partitions: Option<Vec<PsPartitionRaw>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsPartitionRaw {
+    DriveLetter: Option<String>,
+    SizeRemaining: Option<u64>,
+    Size: Option<u64>,
+    FileSystem: Option<String>,
+}
+
+fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
+    let ps_script = r#"
+$disks = Get-PhysicalDisk -ErrorAction SilentlyContinue
+$wmiDisks = Get-WmiObject Win32_DiskDrive -ErrorAction SilentlyContinue
+$diskLayout = Get-WmiObject -Namespace root\Microsoft\Windows\Storage -Class MSFT_Disk -ErrorAction SilentlyContinue
+
+# Try multiple methods to get reliability/SMART data
+$reliabilityMap = @{}
+# Method 1: Standard PowerShell pipeline
+try {
+    $relData = Get-PhysicalDisk -ErrorAction SilentlyContinue | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+    if ($relData) {
+        foreach ($r in $relData) {
+            $reliabilityMap[$r.DeviceId] = $r
+        }
+    }
+} catch {}
+# Method 2: WMI MSFT_StorageReliabilityCounter
+if ($reliabilityMap.Count -eq 0) {
+    try {
+        $relWmi = Get-WmiObject -Namespace root\Microsoft\Windows\Storage -Class MSFT_StorageReliabilityCounter -ErrorAction SilentlyContinue
+        if ($relWmi) {
+            foreach ($r in $relWmi) {
+                $did = if ($r.DeviceId) { $r.DeviceId } else { "PhysicalDrive$($r.PSComputerName)" }
+                $reliabilityMap[$did] = $r
+            }
+        }
+    } catch {}
+}
+# Method 3: CIM MSFT_StorageReliabilityCounter
+if ($reliabilityMap.Count -eq 0) {
+    try {
+        $relCim = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -ClassName MSFT_StorageReliabilityCounter -ErrorAction SilentlyContinue
+        if ($relCim) {
+            foreach ($r in $relCim) {
+                $reliabilityMap[$r.DeviceId] = $r
+            }
+        }
+    } catch {}
+}
+
+$result = $disks | ForEach-Object {
+    $d = $_
+    $rel = $reliabilityMap[$d.DeviceId]
+    $diskNum = [int]($d.DeviceId -replace '.*?(\d+)$', '$1')
+
+    $wmiMatch = $wmiDisks | Where-Object { $_.Model -eq $d.Model -or $_.Model -eq $d.FriendlyName } | Select-Object -First 1
+
+    $layout = $diskLayout | Where-Object { $_.Number -eq $diskNum } | Select-Object -First 1
+
+    $parts = Get-Partition -DiskNumber $diskNum -ErrorAction SilentlyContinue | Where-Object { $_.DriveLetter } | ForEach-Object {
+        $vol = Get-Volume -DriveLetter $_.DriveLetter -ErrorAction SilentlyContinue
+        [PSCustomObject]@{
+            DriveLetter = if ($vol) { $_.DriveLetter.ToString() } else { $null }
+            SizeRemaining = if ($vol) { [long]$vol.SizeRemaining } else { $null }
+            Size = if ($vol) { [long]$vol.Size } else { $null }
+            FileSystem = if ($vol -and $vol.FileSystemType) { $vol.FileSystemType.ToString() } else { $null }
+        }
+    }
+
+    [PSCustomObject]@{
+        DeviceId = $d.DeviceId
+        FriendlyName = $d.FriendlyName
+        Model = if ($d.Model) { $d.Model } else { $d.FriendlyName }
+        MediaType = if ($d.MediaType) { $d.MediaType.ToString() } else { $null }
+        Size = if ($d.Size) { [long]$d.Size } else { $null }
+        BusType = $d.BusType.ToString()
+        HealthStatus = $d.HealthStatus.ToString()
+        OperationalStatus = $d.OperationalStatus.ToString()
+        SerialNumber = $d.SerialNumber
+        NumberOfPartitions = if ($d.NumberOfPartitions -ne $null) { [int]$d.NumberOfPartitions } else { $null }
+        Temperature = if ($rel -and $rel.Temperature -ne $null) { [double]$rel.Temperature } else { $null }
+        WearPercentage = if ($rel -and $rel.WearPercentage -ne $null) { [double]$rel.WearPercentage } else { $null }
+        PowerOnHours = if ($rel -and $rel.PowerOnHours -ne $null) { [long]$rel.PowerOnHours } else { $null }
+        ReadErrorsTotal = if ($rel -and $rel.ReadErrorsTotal -ne $null) { [long]$rel.ReadErrorsTotal } else { $null }
+        WriteErrorsTotal = if ($rel -and $rel.WriteErrorsTotal -ne $null) { [long]$rel.WriteErrorsTotal } else { $null }
+        WmiStatus = if ($wmiMatch) { $wmiMatch.Status } else { $null }
+        WmiInterfaceType = if ($wmiMatch) { $wmiMatch.InterfaceType } else { $null }
+        PartitionStyle = if ($layout) { if ($layout.PartitionStyle -eq 1) { "MBR" } elseif ($layout.PartitionStyle -eq 2) { "GPT" } elseif ($layout.PartitionStyle -eq 3) { "RAW" } else { "Unknown" } } else { $null }
+        IsBoot = if ($layout) { [bool]$layout.IsBoot } else { $false }
+        Partitions = @($parts)
+    }
+}
+
+if ($result) { $result | ConvertTo-Json -Depth 3 -Compress } else { '[]' }
+"#;
+
+    let raw_disks = run_powershell::<PsDiskHealthRaw>(ps_script)
+        .map_err(|e| format!("获取磁盘信息失败: {}", e))?;
+
+    if raw_disks.is_empty() {
+        return Ok(DiskHealthResponse {
+            disks: vec![],
+            total_count: 0,
+            healthy_count: 0,
+            warning_count: 0,
+            unhealthy_count: 0,
+        });
+    }
+
+    let mut disk_infos = Vec::new();
+    let mut healthy = 0u32;
+    let mut warning = 0u32;
+    let mut unhealthy = 0u32;
+
+    for (i, d) in raw_disks.iter().enumerate() {
+        let media_type = d.MediaType.as_deref().unwrap_or("Unknown").to_string();
+        let size_gb = d.Size.map(|s| s as f64 / 1_000_000_000.0).unwrap_or(0.0);
+        let health_status = d.HealthStatus.clone();
+        let partition_count = d.NumberOfPartitions.unwrap_or(0);
+        let serial = d.SerialNumber.as_deref().unwrap_or("").to_string();
+        let interface_type = d.WmiInterfaceType.as_deref().unwrap_or(&d.BusType).to_string();
+
+        match health_status.to_lowercase().as_str() {
+            "healthy" => healthy += 1,
+            "warning" => warning += 1,
+            _ => unhealthy += 1,
+        }
+
+        let partitions: Vec<PartitionInfo> = d.Partitions.as_ref().map(|parts| {
+            parts.iter().filter_map(|p| {
+                let letter = p.DriveLetter.as_deref()?;
+                let total = p.Size.unwrap_or(0) as f64;
+                let available = p.SizeRemaining.unwrap_or(0) as f64;
+                let used = total - available;
+                let usage_pct = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
+                let fs = p.FileSystem.as_deref().unwrap_or("").to_string();
+                Some(PartitionInfo {
+                    drive_letter: letter.to_string(),
+                    total_gb: total / 1_000_000_000.0,
+                    available_gb: available / 1_000_000_000.0,
+                    used_gb: used / 1_000_000_000.0,
+                    usage_percent: usage_pct,
+                    filesystem: fs,
+                })
+            }).collect()
+        }).unwrap_or_default();
+
+        let total_capacity_gb: f64 = partitions.iter().map(|p| p.total_gb).sum();
+        let total_usage_gb: f64 = partitions.iter().map(|p| p.used_gb).sum();
+
+        disk_infos.push(DiskHealthInfo {
+            index: i as u32,
+            model: d.FriendlyName.clone(),
+            media_type,
+            size_gb,
+            interface_type,
+            health_status,
+            operational_status: d.OperationalStatus.clone(),
+            temperature_c: d.Temperature,
+            wear_percentage: d.WearPercentage,
+            power_on_hours: d.PowerOnHours,
+            read_errors: d.ReadErrorsTotal,
+            write_errors: d.WriteErrorsTotal,
+            status: d.WmiStatus.as_deref().unwrap_or("").to_string(),
+            partition_count,
+            serial_number: serial,
+            partition_style: d.PartitionStyle.as_deref().unwrap_or("").to_string(),
+            is_boot_disk: d.IsBoot.unwrap_or(false),
+            partitions,
+            total_usage_gb,
+            total_capacity_gb,
+        });
+    }
+
+    Ok(DiskHealthResponse {
+        disks: disk_infos,
+        total_count: raw_disks.len() as u32,
+        healthy_count: healthy,
+        warning_count: warning,
+        unhealthy_count: unhealthy,
+    })
+}
+
+#[tauri::command]
+pub async fn get_disk_health_info() -> Result<DiskHealthResponse, String> {
+    match tauri::async_runtime::spawn_blocking(|| get_disk_health_info_inner()).await {
+        Ok(Ok(info)) => Ok(info),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(format!("异步任务失败: {}", e)),
+    }
 }
 
 pub fn cleanup_hardware_cache() {

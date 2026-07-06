@@ -227,7 +227,7 @@ export function GlobalSearch() {
 
   return (
     <Box position="relative" ref={containerRef}>
-      <InputGroup size="sm" w="220px">
+      <InputGroup size="sm" w="180px">
         <InputLeftElement pointerEvents="none">
           <Icon as={Search} boxSize={4} color={placeholderColor} />
         </InputLeftElement>

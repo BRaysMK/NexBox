@@ -19,6 +19,21 @@ export function TitleBar() {
 
   const [showCloseDialog, setShowCloseDialog] = useState(false);
 
+  const [navPosition, setNavPosition] = useState<"left" | "top">(() => {
+    const saved = localStorage.getItem("nexbox_nav_position");
+    return saved === "top" ? "top" : "left";
+  });
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      setNavPosition(e.detail === "top" ? "top" : "left");
+    };
+    window.addEventListener("nav-position-changed", handler as EventListener);
+    return () => {
+      window.removeEventListener("nav-position-changed", handler as EventListener);
+    };
+  }, []);
+
   const getCloseBehavior = useCallback(() => {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
   }, []);
@@ -98,7 +113,11 @@ export function TitleBar() {
         onMouseDown={handleMouseDown}
       >
         <Flex justify="space-between" align="center" h="full" pl={4} pr={4}>
-          <Box ml="112px" onMouseDown={(e) => e.stopPropagation()}>
+          <Box
+            ml={navPosition === "top" ? "16px" : "112px"}
+            transition="margin 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <GlobalSearch />
           </Box>
           <HStack spacing={1} h="40px" align="center">

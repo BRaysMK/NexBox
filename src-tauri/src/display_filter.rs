@@ -293,6 +293,9 @@ pub struct FilterResult {
     pub success: bool,
     pub message: String,
     pub settings: Option<FilterSettings>,
+    pub preview_filter: Option<String>,
+    pub preview_tint_color: Option<String>,
+    pub preview_tint_opacity: Option<f64>,
 }
 
 #[derive(serde::Serialize)]
@@ -954,6 +957,7 @@ pub async fn set_filter_settings(
     contrast: i32,
     saturation: i32,
     mode: i32,
+    is_active: bool,
 ) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
@@ -972,7 +976,8 @@ pub async fn set_filter_settings(
             state.mode = mode;
             state.icc_active = false;
 
-            if !state.filter_active {
+            // Only activate if is_active is true and filter is not already active
+            if is_active && !state.filter_active {
                 if state.original_gamma.is_none() {
                     if let Ok(ramp) = get_current_gamma_ramp_for_display(idx) {
                         state.original_gamma = Some(ramp);
@@ -982,8 +987,12 @@ pub async fn set_filter_settings(
             }
         });
 
-        apply_filter_internal_for_display(idx)?;
-        start_filter_monitor();
+        // Only apply filter to hardware if it's actually active
+        let actually_active = with_display_state(idx, |s| s.filter_active);
+        if actually_active {
+            apply_filter_internal_for_display(idx)?;
+            start_filter_monitor();
+        }
 
         Ok(FilterResult {
             success: true,
@@ -994,8 +1003,11 @@ pub async fn set_filter_settings(
                 contrast,
                 saturation,
                 mode,
-                is_active: true,
+                is_active: actually_active,
             }),
+            preview_filter: None,
+            preview_tint_color: None,
+            preview_tint_opacity: None,
         })
     }
 
@@ -1037,6 +1049,9 @@ pub async fn enable_filter(display_index: Option<usize>) -> Result<FilterResult,
                     mode: state.mode,
                     is_active: true,
                 }),
+                preview_filter: None,
+                preview_tint_color: None,
+                preview_tint_opacity: None,
             }));
         }
 
@@ -1054,6 +1069,9 @@ pub async fn enable_filter(display_index: Option<usize>) -> Result<FilterResult,
                 mode: state.mode,
                 is_active: true,
             }),
+            preview_filter: None,
+            preview_tint_color: None,
+            preview_tint_opacity: None,
         }))
     }
 
@@ -1091,6 +1109,9 @@ pub async fn disable_filter(display_index: Option<usize>) -> Result<FilterResult
                     mode: state.mode,
                     is_active: false,
                 }),
+                preview_filter: None,
+                preview_tint_color: None,
+                preview_tint_opacity: None,
             }));
         }
 
@@ -1113,6 +1134,9 @@ pub async fn disable_filter(display_index: Option<usize>) -> Result<FilterResult
                 mode: state.mode,
                 is_active: false,
             }),
+            preview_filter: None,
+            preview_tint_color: None,
+            preview_tint_opacity: None,
         }))
     }
 
@@ -1188,6 +1212,9 @@ fn enable_filter_sync() -> Result<FilterResult, String> {
                 mode: state.mode,
                 is_active: true,
             }),
+            preview_filter: None,
+            preview_tint_color: None,
+            preview_tint_opacity: None,
         }));
     }
 
@@ -1205,6 +1232,9 @@ fn enable_filter_sync() -> Result<FilterResult, String> {
             mode: state.mode,
             is_active: true,
         }),
+        preview_filter: None,
+        preview_tint_color: None,
+        preview_tint_opacity: None,
     }))
 }
 
@@ -1234,6 +1264,9 @@ fn disable_filter_sync() -> Result<FilterResult, String> {
                 mode: state.mode,
                 is_active: false,
             }),
+            preview_filter: None,
+            preview_tint_color: None,
+            preview_tint_opacity: None,
         }));
     }
 
@@ -1252,6 +1285,9 @@ fn disable_filter_sync() -> Result<FilterResult, String> {
             mode: state.mode,
             is_active: false,
         }),
+        preview_filter: None,
+        preview_tint_color: None,
+        preview_tint_opacity: None,
     }))
 }
 
@@ -1355,6 +1391,7 @@ pub async fn get_filter_presets() -> Result<Vec<FilterPreset>, String> {
 pub async fn apply_preset(
     display_index: Option<usize>,
     preset_id: String,
+    is_active: bool,
 ) -> Result<FilterResult, String> {
     let presets = get_filter_presets().await?;
 
@@ -1366,6 +1403,7 @@ pub async fn apply_preset(
             preset.contrast,
             preset.saturation,
             preset.mode,
+            is_active,
         )
         .await
     } else {
@@ -1432,6 +1470,48 @@ pub async fn save_custom_filter_settings(
     *settings_lock = Some(all_settings);
 
     Ok(settings)
+}
+
+#[tauri::command]
+pub async fn export_custom_filter(display_index: Option<usize>) -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let idx = resolve_display_index(display_index);
+        let all_settings = get_or_load_custom_settings();
+        let settings = all_settings.get(&idx).cloned().unwrap_or_default();
+
+        // Build gamma ramp from custom settings (mode = Normal)
+        let ramp = build_gamma_ramp(
+            settings.temperature,
+            settings.brightness,
+            settings.contrast,
+            settings.saturation,
+            FilterMode::Normal,
+        );
+
+        let default_name = "NexBox_Custom.icc";
+        let result = rfd::FileDialog::new()
+            .set_title("导出自定义滤镜为 ICC")
+            .add_filter("ICC 文件", &["icc", "icm"])
+            .set_file_name(default_name)
+            .save_file();
+
+        let path = match result {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+
+        let icc_data = build_icc_profile(&ramp, "NexBox Custom Filter");
+        fs::write(&path, &icc_data).map_err(|e| format!("无法保存文件: {}", e))?;
+
+        log::info!("Custom ICC exported: {} ({} bytes)", path.display(), icc_data.len());
+        Ok(Some(path.to_string_lossy().to_string()))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("此功能仅支持 Windows 系统".to_string())
+    }
 }
 
 // ─── ICC Profile Support ───
@@ -1934,10 +2014,68 @@ pub async fn get_icc_presets() -> Result<Vec<IccPresetInfo>, String> {
     }
 }
 
+/// 从 ICC ramp 计算近似 CSS filter 预览参数
+fn compute_icc_preview(ramp: &[[u16; 256]; 3]) -> (String, Option<String>, Option<f64>) {
+    let mut ch_brightness = [1.0f64; 3];
+    
+    // 计算每个通道在中间调（32..224）的平均乘数
+    for c in 0..3 {
+        let mut sum = 0.0;
+        let mut count = 0u32;
+        for i in 32..224 {
+            let identity = (i as u32 * 256) as u16;
+            if identity > 0 {
+                sum += ramp[c][i as usize] as f64 / identity as f64;
+                count += 1;
+            }
+        }
+        if count > 0 {
+            ch_brightness[c] = sum / count as f64;
+        }
+    }
+    
+    let avg_brightness = (ch_brightness[0] + ch_brightness[1] + ch_brightness[2]) / 3.0;
+    
+    // 如果所有通道接近 1.0，返回空（无显著变化）
+    if (avg_brightness - 1.0).abs() < 0.015
+        && (ch_brightness[0] - ch_brightness[1]).abs() < 0.015
+        && (ch_brightness[1] - ch_brightness[2]).abs() < 0.015
+    {
+        return (String::new(), None, None);
+    }
+    
+    let mut filters: Vec<String> = Vec::new();
+    
+    // Brightness
+    if (avg_brightness - 1.0).abs() > 0.01 {
+        filters.push(format!("brightness({:.3})", avg_brightness.clamp(0.3, 2.5)));
+    }
+    
+    let filter_str = filters.join(" ");
+    
+    // 检测颜色偏移（通道间差异）
+    let drift_r = ch_brightness[0] - avg_brightness;
+    let drift_g = ch_brightness[1] - avg_brightness;
+    let drift_b = ch_brightness[2] - avg_brightness;
+    let max_drift = drift_r.abs().max(drift_g.abs()).max(drift_b.abs());
+    
+    if max_drift > 0.02 {
+        // 用颜色覆盖层近似通道偏移
+        let r = ((0.5 + drift_r * 3.0).clamp(0.0, 1.0) * 255.0) as u8;
+        let g = ((0.5 + drift_g * 3.0).clamp(0.0, 1.0) * 255.0) as u8;
+        let b = ((0.5 + drift_b * 3.0).clamp(0.0, 1.0) * 255.0) as u8;
+        let opacity = (max_drift * 1.5).min(0.4);
+        (filter_str, Some(format!("#{:02X}{:02X}{:02X}", r, g, b)), Some(opacity))
+    } else {
+        (filter_str, None, None)
+    }
+}
+
 #[tauri::command]
 pub async fn apply_icc_preset(
     display_index: Option<usize>,
     id: String,
+    is_active: bool,
 ) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
@@ -1965,9 +2103,11 @@ pub async fn apply_icc_preset(
 
         with_display_state(idx, |state| {
             state.icc_ramp = Some(ramp_array);
+            // 始终标记 ICC 活跃，无论 is_active 是否开启
+            // 这样用户后续手动开启滤镜开关时，enable_filter 会读取 icc_active 并应用 ICC ramp
             state.icc_active = true;
 
-            if !state.filter_active {
+            if is_active && !state.filter_active {
                 if state.original_gamma.is_none() {
                     if let Ok(ramp) = get_current_gamma_ramp_for_display(idx) {
                         state.original_gamma = Some(ramp);
@@ -1977,10 +2117,13 @@ pub async fn apply_icc_preset(
             }
         });
 
-        // Apply ICC ramp first, then start monitor
-        set_gamma_ramp_for_display(idx, &ramp_array)?;
+        let actually_active = with_display_state(idx, |s| s.filter_active);
+        if actually_active {
+            set_gamma_ramp_for_display(idx, &ramp_array)?;
+            start_filter_monitor();
+        }
 
-        start_filter_monitor();
+        let (preview_filter, preview_tint_color, preview_tint_opacity) = compute_icc_preview(&ramp_array);
 
         Ok(with_display_state(idx, |state| FilterResult {
             success: true,
@@ -1991,8 +2134,11 @@ pub async fn apply_icc_preset(
                 contrast: state.contrast,
                 saturation: state.saturation,
                 mode: state.mode,
-                is_active: true,
+                is_active: state.filter_active,
             }),
+            preview_filter: if preview_filter.is_empty() { None } else { Some(preview_filter) },
+            preview_tint_color,
+            preview_tint_opacity,
         }))
     }
 
@@ -2028,6 +2174,9 @@ pub async fn delete_icc_preset(id: String) -> Result<FilterResult, String> {
             success: true,
             message: "ICC 预设已删除".to_string(),
             settings: None,
+            preview_filter: None,
+            preview_tint_color: None,
+            preview_tint_opacity: None,
         })
     }
 

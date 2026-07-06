@@ -27,6 +27,7 @@ function GridCard({ tool }: { tool: ViewItem }) {
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const IconComponent = tool.icon;
   const isDark = useColorModeValue(false, true);
+  const hoverBg = useColorModeValue("gray.50", "#1a1a1a");
 
   const cardContent = (
     <>
@@ -102,7 +103,7 @@ function GridCard({ tool }: { tool: ViewItem }) {
         transition="all 0.2s"
         _hover={{
           borderColor: tool.color,
-          bg: `${tool.color}10`,
+          bg: hoverBg,
         }}
         position="relative"
         overflow="hidden"

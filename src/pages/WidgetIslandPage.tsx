@@ -31,7 +31,7 @@ const getAppIcon = (appName: string): string => {
   // ── 常见应用（浏览器/游戏/社交/笔记等）──
   if (name.includes("chrome") || name.includes("google")) return "/icons/browser.svg";
   if (name.includes("edge") || name.includes("bing")) return "/icons/browser.svg";
-  if (name.includes("steam") || name.includes("epic")) return "/icons/game.svg";
+  if (name.includes("epic")) return "/icons/game.svg";
   if (name.includes("discord") || name.includes("telegram")) return "/icons/chat.svg";
   if (name.includes("onenote") || name.includes("notion") || name.includes("evernote") || name.includes("笔记")) return "/icons/note.svg";
   if (name.includes("bilibili") || name.includes("哔哩哔哩")) return "/icons/bilibili.svg";

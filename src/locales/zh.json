@@ -52,7 +52,8 @@
     "epicFree": "喜加一",
     "dynamicIsland": "灵动岛",
     "nvidiaDriver": "显卡设置（仅NVIDIA）",
-    "screenRecord": "屏幕录制"
+    "screenRecord": "屏幕录制",
+    "diskHealth": "磁盘健康"
   },
   "optimization": {
     "pageTitle": "优化",
@@ -321,6 +322,11 @@
     "storage": "存储",
     "totalCapacity": "总容量",
     "count": "条数",
+    "soundCard": "声卡",
+    "networkCard": "网卡",
+    "adapterType": "适配器类型",
+    "macAddress": "MAC地址",
+    "linkSpeed": "链路速率",
     "deltaPasswordFetched": "已获取",
     "deltaPasswordNotFetched": "--"
   },
@@ -452,7 +458,13 @@
     "delete": "删除",
     "exportIcc": "导出为 ICC 文件",
     "exportIccSuccess": "ICC 文件已导出",
-    "exportIccFailed": "ICC 文件导出失败"
+    "exportIccFailed": "ICC 文件导出失败",
+    "previewTitle": "滤镜预览",
+    "previewOriginal": "原始",
+    "previewFiltered": "滤镜",
+    "previewDisabledNote": "滤镜未启用 · 仅预览效果",
+    "paramsUpdated": "参数已更新",
+    "paramsUpdatedHint": "请手动开启滤镜开关以生效"
   },
   "floatingNav": {
     "title": "悬浮导航框",
@@ -730,7 +742,8 @@
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
     "dynamicIslandDesc": "屏幕顶部灵动岛，显示网速/硬件/音乐/通知",
     "nvidiaDriverDesc": "通过 NVAPI 直接控制 NVIDIA 驱动图形设置",
-    "screenRecordDesc": "录制屏幕或窗口，支持分辨率与帧率调节"
+    "screenRecordDesc": "录制屏幕或窗口，支持分辨率与帧率调节",
+    "diskHealthDesc": "检测硬盘健康状态与SMART信息"
   },
   "gpuRename": {
     "title": "显卡改写",
@@ -905,6 +918,10 @@
       "closeBehaviorDesc": "选择点击关闭按钮时的行为",
       "closeDirectly": "直接关闭",
       "minimizeToTray": "最小化到托盘",
+      "navPositionLabel": "导航栏位置",
+      "navPositionDesc": "选择导航栏显示在侧边还是顶部",
+      "navPositionLeft": "侧边",
+      "navPositionTop": "顶部",
       "sidebarShowLabel": "导航栏标签",
       "sidebarShowLabelDesc": "选择导航栏的显示模式",
       "sidebarShowLabelNoText": "无字",
@@ -1503,6 +1520,24 @@
     "selectWindow": "请选择一个窗口",
     "captureCursor": "捕获鼠标光标",
     "primaryMonitor": "主显示器"
+  },
+  "diskHealth": {
+    "title": "磁盘健康检测",
+    "refresh": "刷新",
+    "scanning": "检测中...",
+    "total": "磁盘总数",
+    "healthy": "健康",
+    "warning": "警告",
+    "unhealthy": "故障",
+    "temperature": "温度",
+    "lifespan": "健康寿命",
+    "powerOnHours": "通电时间",
+    "operationalStatus": "运行状态",
+    "readErrors": "读取错误",
+    "writeErrors": "写入错误",
+    "partitions": "个分区",
+    "loadError": "加载失败",
+    "retry": "重试"
   }
 }
 

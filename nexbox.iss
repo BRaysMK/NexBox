@@ -117,6 +117,7 @@ Source: "D:\NexBox\src-tauri\target\release\assets\*"; DestDir: "{app}\assets"; 
 Source: "D:\NexBox\power-plans\*"; DestDir: "{app}\power-plans"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "D:\NexBox\PawnIO_setup.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "D:\NexBox\monitor\bin\Release\net48\*"; DestDir: "{app}\monitor"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "D:\NexBox\R560-developer\amd64\nvapi64.lib"; DestDir: "{app}\R560-developer\amd64"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{autoprograms}\{#MyAppDisplayName}"; Filename: "{app}\{#MyAppExeName}"
@@ -135,6 +136,7 @@ Type: files; Name: "{app}\Reference.xml"
 Type: files; Name: "{app}\MiSans-Medium.ttf"
 Type: files; Name: "{app}\PawnIO_setup.exe"
 Type: filesandordirs; Name: "{app}\monitor"
+Type: filesandordirs; Name: "{app}\R560-developer"
 
 [Code]
 function InitializeSetup(): Boolean;

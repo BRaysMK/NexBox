@@ -49,7 +49,8 @@
         "dlssPreset": "Delta Force DLSS-Einstellungen",
         "epicFree": "Epic Gratis-Spiele",
         "dynamicIsland": "Dynamic Island",
-        "screenRecord": "Bildschirmaufnahme"
+        "screenRecord": "Bildschirmaufnahme",
+    "diskHealth": "Festplatten-Gesundheit"
     },
   "optimization": {
     "pageTitle": "Optimieren",
@@ -404,6 +405,11 @@
     "storage": "Speicher",
     "totalCapacity": "Gesamtkapazität",
     "count": "Module",
+    "soundCard": "Soundkarte",
+    "networkCard": "Netzwerkkarte",
+    "adapterType": "Adaptertyp",
+    "macAddress": "MAC-Adresse",
+    "linkSpeed": "Verbindungsgeschwindigkeit",
     "deltaPasswordFetched": "Abgerufen",
     "deltaPasswordNotFetched": "--"
   },
@@ -529,7 +535,13 @@
     "delete": "Löschen",
     "exportIcc": "Als ICC-Datei exportieren",
     "exportIccSuccess": "ICC-Datei exportiert",
-    "exportIccFailed": "ICC-Export fehlgeschlagen"
+    "exportIccFailed": "ICC-Export fehlgeschlagen",
+    "previewTitle": "Filter-Vorschau",
+    "previewOriginal": "Original",
+    "previewFiltered": "Filter",
+    "previewDisabledNote": "Filter inaktiv · Nur Vorschau",
+    "paramsUpdated": "Parameter aktualisiert",
+    "paramsUpdatedHint": "Filter-Schalter manuell aktivieren"
   },
 "floatingNav": {
     "title": "Schwebendes Navigationsfeld",
@@ -787,7 +799,8 @@
     "shaderCacheDesc": "NVIDIA/AMD Shader-Cache bereinigen, um Speicherplatz freizugeben",
     "dlssPresetDesc": "DLSS-Modell-Voreinstellungen wechseln, um Spielgrafiken zu optimieren",
         "dynamicIslandDesc": "Schwebende Insel oben auf dem Bildschirm, zeigt Netzwerkgeschwindigkeit/Hardware/Musik/Benachrichtigungen",
-        "screenRecordDesc": "Bildschirm oder Fenster aufnehmen mit einstellbarer Auflösung & Bildrate"
+        "screenRecordDesc": "Bildschirm oder Fenster aufnehmen mit einstellbarer Auflösung & Bildrate",
+    "diskHealthDesc": "Festplatten-Gesundheit und SMART-Informationen prüfen"
     },
   "gpuRename": {
     "title": "GPU-Umbenennung",
@@ -1013,6 +1026,10 @@
       "closeBehaviorDesc": "Wählen Sie, was beim Klicken auf den Schließen-Button passiert",
       "closeDirectly": "Direkt schließen",
       "minimizeToTray": "In Tray minimieren",
+      "navPositionLabel": "Navigationsposition",
+      "navPositionDesc": "Wählen Sie, ob die Navigation an der Seite oder oben angezeigt wird",
+      "navPositionLeft": "Seite",
+      "navPositionTop": "Oben",
       "sidebarShowLabel": "Sidebar-Beschriftungen",
       "sidebarShowLabelDesc": "Anzeigemodus der Seitenleiste wählen",
       "sidebarShowLabelNoText": "Nur Symbole",
@@ -1207,6 +1224,24 @@
     "selectWindow": "Bitte wählen Sie ein Fenster",
     "captureCursor": "Mauszeiger aufnehmen",
     "primaryMonitor": "Primärer Monitor"
+  },
+  "diskHealth": {
+    "title": "Festplatten-Gesundheit",
+    "refresh": "Aktualisieren",
+    "scanning": "Scannen...",
+    "total": "Festplatten gesamt",
+    "healthy": "Gesund",
+    "warning": "Warnung",
+    "unhealthy": "Fehlerhaft",
+    "temperature": "Temperatur",
+    "lifespan": "Lebensdauer",
+    "powerOnHours": "Betriebsstunden",
+    "operationalStatus": "Betriebsstatus",
+    "readErrors": "Lesefehler",
+    "writeErrors": "Schreibfehler",
+    "partitions": "Partitionen",
+    "loadError": "Laden fehlgeschlagen",
+    "retry": "Wiederholen"
   }
 }
 
