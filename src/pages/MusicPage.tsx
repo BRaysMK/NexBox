@@ -150,6 +150,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   const [localCurrentTime, setLocalCurrentTime] = useState(0);
   const [localDuration, setLocalDuration] = useState(0);
+  const [isClosing, setIsClosing] = useState(false);
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
   const isUserSeekingRef = useRef(false);
   const pendingSeekRef = useRef(0);
@@ -159,7 +160,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const contrastText = getContrastTextColor();
   const hoverBg = getHoverColor(false);
 
-  const bgColor = useColorModeValue("white", "#0d0d0d");
+  const bgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
@@ -245,6 +247,11 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   const isLiked = likedSongIds.has(currentSong.id);
 
+  const handleCloseWithAnimation = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => onClose(), 300);
+  }, [onClose]);
+
   return (
     <Box
       position="absolute"
@@ -254,18 +261,28 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       bottom={0}
       zIndex={9999}
       bg={bgColor}
+      backdropFilter="blur(20px)"
+      border="1px solid"
+      borderColor={glassBorderColor}
       borderRadius="xl"
       overflow="hidden"
       boxShadow="xl"
-      // 从底部向上展开的动画
-      animation="expandedPlayerSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)"
+      animation={isClosing
+        ? "expandedPlayerSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
+        : "expandedPlayerSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)"
+      }
       sx={{
         "@keyframes expandedPlayerSlideUp": {
           from: { transform: "translateY(100%)", opacity: 0 },
           to: { transform: "translateY(0)", opacity: 1 },
         },
+        "@keyframes expandedPlayerSlideDown": {
+          from: { transform: "translateY(0)", opacity: 1 },
+          to: { transform: "translateY(100%)", opacity: 0 },
+        },
         display: "flex",
         flexDirection: "column",
+        WebkitBackdropFilter: "blur(20px)",
       }}
     >
       {/* 顶部栏：关闭按钮 */}
@@ -277,7 +294,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               icon={<ChevronDown size={24} />}
               size="sm"
               variant="ghost"
-              onClick={onClose}
+              onClick={handleCloseWithAnimation}
               sx={{ color: textColor, _hover: { bg: hoverBg } }}
             />
           </Tooltip>
@@ -429,7 +446,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           <Text fontSize="sm" fontWeight="bold" color={subTextColor} mb={2} flexShrink={0}>
             歌词
           </Text>
-          <Box ref={lyricsScrollRef} flex={1} overflowY="auto" sx={scrollbarSx(activeColor)} pr={2}>
+          <Box ref={lyricsScrollRef} flex={1} overflowY="auto" overflowX="hidden" sx={{ ...scrollbarSx(activeColor), overflowX: "hidden" }} pr={2}>
             {loadingLyrics ? (
               <VStack py={12}><Spinner size="lg" sx={{ color: activeColor }} /></VStack>
             ) : lyricLines.length > 0 ? (
