@@ -281,10 +281,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   seekTo: (time) => {
-    const { audioRef } = get();
+    const { audioRef, isPlaying } = get();
     if (audioRef) {
       audioRef.currentTime = time;
       set({ currentTime: time });
+      // 在线音频 seek 后需要重新缓冲，浏览器可能自动暂停
+      // 如果之前是在播放状态，确保 seek 后继续播放
+      if (isPlaying) {
+        audioRef.play().catch(() => {});
+      }
     }
   },
 
