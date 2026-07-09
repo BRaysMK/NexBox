@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback, memo } from "react";
-import { useShallow } from "zustand/react/shallow";
 import {
   Box,
   VStack,
@@ -13,10 +12,6 @@ import {
   useColorModeValue,
   IconButton,
   Tooltip,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
   Menu,
   MenuButton,
   MenuList,
@@ -55,24 +50,28 @@ const scrollbarSx = (color: string) => ({
 });
 
 // ═══════════════════════════════════════════════
-// PlayerBar — 独立组件，订阅 currentTime/duration
-// 避免播放时主页面频繁重渲染
+// PlayerBar — 独立组件
+// 关键：用 local state 监听 timeupdate，播放期间不更新 store
+// 这样搜索框等组件完全不受播放影响
 // ═══════════════════════════════════════════════
 const PlayerBar = memo(function PlayerBar() {
-  // 只订阅播放器需要的字段，避免搜索等状态变化导致不必要的重渲染
-  const { currentSong, isPlaying, currentTime, duration, volume, playMode, playQueue, currentIndex, proxyPort } = useMusicStore(
-    useShallow((s) => ({
-      currentSong: s.currentSong,
-      isPlaying: s.isPlaying,
-      currentTime: s.currentTime,
-      duration: s.duration,
-      volume: s.volume,
-      playMode: s.playMode,
-      playQueue: s.playQueue,
-      currentIndex: s.currentIndex,
-      proxyPort: s.proxyPort,
-    }))
-  );
+  const currentSong = useMusicStore((s) => s.currentSong);
+  const isPlaying = useMusicStore((s) => s.isPlaying);
+  const volume = useMusicStore((s) => s.volume);
+  const playMode = useMusicStore((s) => s.playMode);
+  const playQueue = useMusicStore((s) => s.playQueue);
+  const currentIndex = useMusicStore((s) => s.currentIndex);
+  const proxyPort = useMusicStore((s) => s.proxyPort);
+  // storeDuration 只在 playSong 切歌时更新，不频繁
+  const storeDuration = useMusicStore((s) => s.duration);
+  // 订阅 audioRef，当 audio 元素创建后才能挂载监听器
+  const audioRef = useMusicStore((s) => s.audioRef);
+
+  // ── 本地 state：播放进度直接从 audio 元素读取 ──
+  // 不经过 Zustand store，播放时不触发任何其他组件重渲染
+  const [localCurrentTime, setLocalCurrentTime] = useState(0);
+  const [localDuration, setLocalDuration] = useState(0);
+
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
 
   const activeColor = getActiveColor();
@@ -83,8 +82,42 @@ const PlayerBar = memo(function PlayerBar() {
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const dropdownBg = useColorModeValue("white", "#1a1a1a");
+  // 进度条轨道颜色：浅色模式用白色，暗色模式用深灰
+  const sliderTrackBg = useColorModeValue("rgba(255,255,255,0.9)", "#333333");
 
   const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : Repeat;
+
+  // 从 store 同步 duration（loadedmetadata 时设置）
+  useEffect(() => {
+    setLocalDuration(storeDuration);
+  }, [storeDuration]);
+
+  // 直接监听 audio 元素的 timeupdate，用 local state 更新进度
+  // 不调用 store.setCurrentTime，避免触发其他组件重渲染
+  // 依赖 audioRef：当 audio 元素创建后重新挂载监听器
+  useEffect(() => {
+    if (!audioRef) return;
+
+    const onTimeUpdate = () => {
+      setLocalCurrentTime(audioRef.currentTime);
+    };
+    const onLoadedMetadata = () => {
+      setLocalDuration(audioRef.duration);
+    };
+
+    audioRef.addEventListener("timeupdate", onTimeUpdate);
+    audioRef.addEventListener("loadedmetadata", onLoadedMetadata);
+
+    return () => {
+      audioRef.removeEventListener("timeupdate", onTimeUpdate);
+      audioRef.removeEventListener("loadedmetadata", onLoadedMetadata);
+    };
+  }, [audioRef]);
+
+  // 切歌时重置本地进度
+  useEffect(() => {
+    setLocalCurrentTime(0);
+  }, [currentSong]);
 
   const formatTime = (time: number): string => {
     if (isNaN(time)) return "0:00";
@@ -92,6 +125,27 @@ const PlayerBar = memo(function PlayerBar() {
     const s = Math.floor(time % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
+
+  // seek 时更新本地 state + store
+  // 用 ref 标记是否为用户拖拽，避免 timeupdate 反馈循环
+  // 拖拽中只更新视觉（localCurrentTime），松手时才真正 seek 音频
+  const isUserSeekingRef = useRef(false);
+  const pendingSeekRef = useRef(0);
+
+  // 拖拽中：只更新视觉位置，不 seek 音频（避免频繁 seek 导致卡顿）
+  const handleSeekDrag = useCallback((v: number) => {
+    if (!isUserSeekingRef.current) return;
+    pendingSeekRef.current = v;
+    setLocalCurrentTime(v);
+  }, []);
+
+  // 松手时：真正 seek 音频
+  const handleSeekCommit = useCallback(() => {
+    if (pendingSeekRef.current !== 0 || isUserSeekingRef.current) {
+      useMusicStore.getState().seekTo(pendingSeekRef.current);
+      isUserSeekingRef.current = false;
+    }
+  }, []);
 
   if (!currentSong) {
     return (
@@ -179,12 +233,23 @@ const PlayerBar = memo(function PlayerBar() {
                 onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
               />
             </Tooltip>
-            <Slider value={volume} onChange={(v) => useMusicStore.getState().setVolume(v)} min={0} max={1} step={0.01} size="sm">
-              <SliderTrack bg={borderColor} h="4px" borderRadius="full">
-                <SliderFilledTrack bg={activeColor} borderRadius="full" />
-              </SliderTrack>
-              <SliderThumb w="10px" h="10px" bg={activeColor} />
-            </Slider>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={volume}
+              onChange={(e) => useMusicStore.getState().setVolume(parseFloat(e.target.value))}
+              tabIndex={-1}
+              style={{
+                width: "60px",
+                height: "4px",
+                borderRadius: "full",
+                background: sliderTrackBg,
+                accentColor: activeColor,
+                cursor: "pointer",
+              }}
+            />
           </HStack>
 
           <Menu>
@@ -210,24 +275,32 @@ const PlayerBar = memo(function PlayerBar() {
         {/* 进度条 */}
         <HStack spacing={2}>
           <Text color={subTextColor} fontSize="xs" w="40px" textAlign="center">
-            {formatTime(currentTime)}
+            {formatTime(localCurrentTime)}
           </Text>
-          <Slider
-            value={currentTime}
-            onChange={(v) => useMusicStore.getState().seekTo(v)}
+          <input
+            type="range"
             min={0}
-            max={duration || 100}
+            max={localDuration || 100}
             step={0.1}
-            size="sm"
-            flex={1}
-          >
-            <SliderTrack bg={borderColor} h="4px" borderRadius="full">
-              <SliderFilledTrack bg={activeColor} borderRadius="full" />
-            </SliderTrack>
-            <SliderThumb w="10px" h="10px" bg={activeColor} />
-          </Slider>
+            value={localCurrentTime}
+            onMouseDown={() => { isUserSeekingRef.current = true; }}
+            onTouchStart={() => { isUserSeekingRef.current = true; }}
+            onChange={(e) => handleSeekDrag(parseFloat(e.target.value))}
+            onMouseUp={handleSeekCommit}
+            onTouchEnd={handleSeekCommit}
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{
+              flex: 1,
+              height: "4px",
+              borderRadius: "full",
+              background: sliderTrackBg,
+              accentColor: activeColor,
+              cursor: "pointer",
+            }}
+          />
           <Text color={subTextColor} fontSize="xs" w="40px" textAlign="center">
-            {formatTime(duration)}
+            {formatTime(localDuration)}
           </Text>
         </HStack>
       </VStack>
@@ -354,55 +427,31 @@ const SongRow = memo(function SongRow({
 });
 
 // ═══════════════════════════════════════════════
-// Main MusicPage
+// SearchBox — 独立 memo 组件，管理搜索状态
+// 不订阅 currentTime/duration，播放时不会重渲染
 // ═══════════════════════════════════════════════
-export default function MusicPage() {
-  // ── 用 useShallow 精确订阅，排除 currentTime/duration ──
-  // 这样播放时 timeupdate 不会导致整个页面重渲染
-  const {
-    currentSong,
-    isPlaying,
-    searchResults,
-    userPlaylists,
-    currentPlaylistTracks,
-    currentPlaylistMeta,
-    likedSongIds,
-    recommendations,
-    loginInfo,
-    searching,
-    loadingPlaylists,
-    loadingTracks,
-    proxyPort,
-  } = useMusicStore(
-    useShallow((s) => ({
-      currentSong: s.currentSong,
-      isPlaying: s.isPlaying,
-      searchResults: s.searchResults,
-      userPlaylists: s.userPlaylists,
-      currentPlaylistTracks: s.currentPlaylistTracks,
-      currentPlaylistMeta: s.currentPlaylistMeta,
-      likedSongIds: s.likedSongIds,
-      recommendations: s.recommendations,
-      loginInfo: s.loginInfo,
-      searching: s.searching,
-      loadingPlaylists: s.loadingPlaylists,
-      loadingTracks: s.loadingTracks,
-      proxyPort: s.proxyPort,
-    }))
-  );
+interface SearchBoxProps {
+  onEnterSearchMode: (searchInput: string) => void;
+}
 
-  // actions 是稳定的，用 useRef 只获取一次，避免每次渲染重新创建导致 useCallback 失效
-  const storeActionsRef = useRef(useMusicStore.getState());
-  const storeActions = storeActionsRef.current;
-
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [searchInput, setSearchInput] = useState("");
-  const [searchMode, setSearchMode] = useState(false);
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
-  const [dropdownResults, setDropdownResults] = useState<Song[]>([]);
+const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps) {
+  // ── 非受控 input：用 ref 跟踪值，不使用 value prop ──
+  // 这样即使组件重渲染，input 也不会丢失焦点
+  const inputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef("");
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 只订阅 searching（布尔值，简单比较），不订阅 currentTime/duration 等
+  // 这样播放期间 timeupdate 不会触发 SearchBox 重渲染
+  const searching = useMusicStore((s) => s.searching);
+
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [dropdownResults, setDropdownResults] = useState<Song[]>([]);
+
+  // actions 是稳定的
+  const storeActionsRef = useRef(useMusicStore.getState());
+  const storeActions = storeActionsRef.current;
 
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
@@ -422,42 +471,6 @@ export default function MusicPage() {
   const glassInputBg = useColorModeValue("rgba(255,255,255,0.15)", "rgba(0,0,0,0.25)");
   const dropdownBorder = useColorModeValue("gray.200", "#333333");
 
-  useEffect(() => {
-    const audio = document.createElement("audio");
-    audio.style.display = "none";
-    document.body.appendChild(audio);
-    audioRef.current = audio;
-    storeActions.setAudioRef(audio);
-
-    audio.addEventListener("timeupdate", () => {
-      useMusicStore.getState().setCurrentTime(audio.currentTime);
-    });
-    audio.addEventListener("loadedmetadata", () => {
-      useMusicStore.getState().setDuration(audio.duration);
-    });
-    audio.addEventListener("ended", () => {
-      useMusicStore.getState().nextTrack();
-    });
-
-    storeActions.init();
-
-    return () => {
-      audio.pause();
-      audio.src = "";
-      audio.remove();
-      storeActions.setAudioRef(null);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 自动加载推荐歌单（登录后且无推荐数据时）
-  useEffect(() => {
-    if (loginInfo?.logged_in && recommendations.length === 0) {
-      storeActions.loadRecommendations();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loginInfo?.logged_in]);
-
   // 点击外部关闭搜索下拉
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -470,8 +483,9 @@ export default function MusicPage() {
   }, []);
 
   // ── 搜索：边输入边出预览（debounce 300ms）──
+  // 非受控：直接从 input ref 读取值，不触发 setState
   const handleInputChange = useCallback((value: string) => {
-    setSearchInput(value);
+    searchInputRef.current = value;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!value.trim()) {
       setDropdownResults([]);
@@ -493,26 +507,224 @@ export default function MusicPage() {
 
   // ── 回车：进入全屏搜索结果 ──
   const handleSearchEnter = useCallback(() => {
-    if (!searchInput.trim()) return;
+    const value = searchInputRef.current;
+    if (!value.trim()) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    storeActions.search(searchInput).then(() => {
-      setSearchMode(true);
+    storeActions.search(value).then(() => {
+      onEnterSearchMode(value);
       setShowSearchDropdown(false);
     });
-  }, [searchInput, storeActions]);
+  }, [storeActions, onEnterSearchMode]);
 
   // ── 搜索按钮：进入全屏搜索结果 ──
   const handleSearchButtonClick = useCallback(() => {
-    if (!searchInput.trim()) return;
+    const value = searchInputRef.current;
+    if (!value.trim()) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    storeActions.search(searchInput).then(() => {
-      setSearchMode(true);
+    storeActions.search(value).then(() => {
+      onEnterSearchMode(value);
       setShowSearchDropdown(false);
     });
-  }, [searchInput, storeActions]);
+  }, [storeActions, onEnterSearchMode]);
+
+  // ── 回调函数（稳定引用）──
+  const onPlay = useCallback((song: Song, queue: Song[]) => {
+    useMusicStore.getState().playSong(song, queue);
+  }, []);
+  const onTogglePlay = useCallback(() => {
+    useMusicStore.getState().togglePlay();
+  }, []);
+  const onToggleLike = useCallback((songId: string) => {
+    useMusicStore.getState().toggleLike(songId);
+  }, []);
+
+  // ── 渲染歌曲行 ──
+  // 使用 useMusicStore.getState() 按需获取，不订阅
+  const renderSongRow = (song: Song, index: number, queue: Song[]) => {
+    const state = useMusicStore.getState();
+    return (
+      <SongRow
+        key={`${song.provider}-${song.id}-${index}`}
+        song={song}
+        index={index}
+        queue={queue}
+        isCurrent={state.currentSong?.id === song.id}
+        isPlaying={state.isPlaying}
+        isLiked={state.likedSongIds.has(song.id)}
+        isLoggedIn={!!state.loginInfo?.logged_in}
+        proxyPort={state.proxyPort}
+        activeColor={activeColor}
+        hoverBg={hoverBg}
+        itemHoverBg={itemHoverBg}
+        itemActiveBg={itemActiveBg}
+        textColor={textColor}
+        subTextColor={subTextColor}
+        liquidGlassEnabled={liquidGlassEnabled}
+        onPlay={onPlay}
+        onTogglePlay={onTogglePlay}
+        onToggleLike={onToggleLike}
+      />
+    );
+  };
+
+  return (
+    <Box ref={searchBoxRef} position="relative" flexShrink={0}>
+      <HStack spacing={2}>
+        <InputGroup size="md">
+          <InputLeftElement pointerEvents="none">
+            <Search size={16} color={subTextColor} />
+          </InputLeftElement>
+          {/* 非受控 input：不使用 value prop，用 ref 跟踪值 */}
+          {/* 这样即使组件因任何原因重渲染，input 焦点也不会丢失 */}
+          <Input
+            ref={inputRef}
+            placeholder="搜索歌曲、歌手... (回车查看全部)"
+            defaultValue=""
+            onChange={handleSearchChange}
+            onKeyDown={(e) => e.key === "Enter" && handleSearchEnter()}
+            bg={liquidGlassEnabled ? glassInputBg : bgColor}
+            borderColor={liquidGlassEnabled ? themeBorder : borderColor}
+            borderRadius="xl"
+            _focus={{ borderColor: activeColor, boxShadow: `0 0 0 1px ${activeColor}` }}
+          />
+        </InputGroup>
+        <Button
+          leftIcon={<Search size={16} />}
+          onClick={handleSearchButtonClick}
+          isLoading={searching}
+          size="md"
+          borderRadius="xl"
+          flexShrink={0}
+          sx={{
+            bg: activeColor,
+            color: contrastText,
+            _hover: { bg: activeColor, filter: "brightness(0.9)" },
+            _active: { bg: activeColor, filter: "brightness(0.8)" },
+          }}
+        >
+          搜索
+        </Button>
+      </HStack>
+
+      {/* 搜索下拉预览 — 不使用液态玻璃 */}
+      {showSearchDropdown && dropdownResults.length > 0 && (
+        <Box
+          p={2}
+          position="absolute"
+          top="50px"
+          left={0}
+          right={0}
+          zIndex={30}
+          maxH="320px"
+          overflowY="auto"
+          bg={dropdownBg}
+          border="1px solid"
+          borderColor={dropdownBorder}
+          borderRadius="lg"
+          boxShadow="lg"
+          sx={scrollbarSx(activeColor)}
+        >
+          <VStack spacing={1} align="stretch">
+            {dropdownResults.slice(0, 6).map((song, i) => renderSongRow(song, i, dropdownResults))}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                onEnterSearchMode(searchInputRef.current);
+                setShowSearchDropdown(false);
+              }}
+              sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+            >
+              查看全部 ({dropdownResults.length})
+            </Button>
+          </VStack>
+        </Box>
+      )}
+    </Box>
+  );
+});
+
+// ═══════════════════════════════════════════════
+// Main MusicPage
+// ═══════════════════════════════════════════════
+export default function MusicPage() {
+  // ── 使用独立选择器，每个字段用 Object.is 比较 ──
+  // 比 useShallow 更可靠：播放时 timeupdate 只改 currentTime，
+  // 这些选择器都不会触发重渲染
+  const currentSong = useMusicStore((s) => s.currentSong);
+  const isPlaying = useMusicStore((s) => s.isPlaying);
+  const searchResults = useMusicStore((s) => s.searchResults);
+  const userPlaylists = useMusicStore((s) => s.userPlaylists);
+  const currentPlaylistTracks = useMusicStore((s) => s.currentPlaylistTracks);
+  const currentPlaylistMeta = useMusicStore((s) => s.currentPlaylistMeta);
+  const likedSongIds = useMusicStore((s) => s.likedSongIds);
+  const recommendations = useMusicStore((s) => s.recommendations);
+  const loginInfo = useMusicStore((s) => s.loginInfo);
+  const searching = useMusicStore((s) => s.searching);
+  const loadingPlaylists = useMusicStore((s) => s.loadingPlaylists);
+  const loadingTracks = useMusicStore((s) => s.loadingTracks);
+  const proxyPort = useMusicStore((s) => s.proxyPort);
+
+  // actions 是稳定的，用 useRef 只获取一次，避免每次渲染重新创建导致 useCallback 失效
+  const storeActionsRef = useRef(useMusicStore.getState());
+  const storeActions = storeActionsRef.current;
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [searchMode, setSearchMode] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
+
+  const { liquidGlassEnabled } = useBackground();
+  const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
+
+  const activeColor = getActiveColor();
+  const hoverBg = getHoverColor(false);
+
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const itemHoverBg = useColorModeValue("gray.50", "rgba(255,255,255,0.05)");
+  const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
+
+  useEffect(() => {
+    const audio = new Audio();
+    // 不添加到 DOM，完全避免焦点干扰
+    audioRef.current = audio;
+    storeActions.setAudioRef(audio);
+
+    // timeupdate 由 PlayerBar 内部用 local state 处理，不再更新 store
+    // 这样播放期间零 store 更新，搜索框等组件完全不受影响
+    audio.addEventListener("ended", () => {
+      useMusicStore.getState().nextTrack();
+    });
+
+    storeActions.init();
+
+    return () => {
+      audio.pause();
+      audio.src = "";
+      // audio 不在 DOM 中，无需 remove
+      storeActions.setAudioRef(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 自动加载推荐歌单（登录后且无推荐数据时）
+  useEffect(() => {
+    if (loginInfo?.logged_in && recommendations.length === 0) {
+      storeActions.loadRecommendations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loginInfo?.logged_in]);
 
   const handleBack = useCallback(() => {
     setSearchMode(false);
+  }, []);
+
+  // SearchBox 进入搜索结果模式的回调（稳定引用）
+  const handleEnterSearchMode = useCallback((input: string) => {
+    setSearchInput(input);
+    setSearchMode(true);
   }, []);
 
   // ── 歌单点击：切换到曲目视图 + 重新加载红心列表 ──
@@ -750,77 +962,8 @@ export default function MusicPage() {
 
         {/* ══ 右侧：搜索 + 推荐 ══ */}
         <VStack spacing={4} align="stretch" flex={1} minW={0} overflow="hidden">
-          {/* 搜索框 */}
-          <Box ref={searchBoxRef} position="relative" flexShrink={0}>
-            <HStack spacing={2}>
-              <InputGroup size="md">
-                <InputLeftElement pointerEvents="none">
-                  <Search size={16} color={subTextColor} />
-                </InputLeftElement>
-                <Input
-                  placeholder="搜索歌曲、歌手... (回车查看全部)"
-                  value={searchInput}
-                  onChange={handleSearchChange}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearchEnter()}
-                  bg={liquidGlassEnabled ? glassInputBg : bgColor}
-                  borderColor={liquidGlassEnabled ? themeBorder : borderColor}
-                  borderRadius="xl"
-                  _focus={{ borderColor: activeColor, boxShadow: `0 0 0 1px ${activeColor}` }}
-                />
-              </InputGroup>
-              <Button
-                leftIcon={<Search size={16} />}
-                onClick={handleSearchButtonClick}
-                isLoading={searching}
-                size="md"
-                borderRadius="xl"
-                flexShrink={0}
-                sx={{
-                  bg: activeColor,
-                  color: contrastText,
-                  _hover: { bg: activeColor, filter: "brightness(0.9)" },
-                  _active: { bg: activeColor, filter: "brightness(0.8)" },
-                }}
-              >
-                搜索
-              </Button>
-            </HStack>
-
-            {/* 搜索下拉预览 — 不使用液态玻璃 */}
-            {showSearchDropdown && dropdownResults.length > 0 && (
-              <Box
-                p={2}
-                position="absolute"
-                top="50px"
-                left={0}
-                right={0}
-                zIndex={30}
-                maxH="320px"
-                overflowY="auto"
-                bg={dropdownBg}
-                border="1px solid"
-                borderColor={dropdownBorder}
-                borderRadius="lg"
-                boxShadow="lg"
-                sx={scrollbarSx(activeColor)}
-              >
-                <VStack spacing={1} align="stretch">
-                  {dropdownResults.slice(0, 6).map((song, i) => renderSongRow(song, i, dropdownResults))}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setSearchMode(true);
-                      setShowSearchDropdown(false);
-                    }}
-                    sx={{ color: activeColor, _hover: { bg: hoverBg } }}
-                  >
-                    查看全部 ({dropdownResults.length})
-                  </Button>
-                </VStack>
-              </Box>
-            )}
-          </Box>
+          {/* 搜索框 — 独立 memo 组件，播放时不会因重渲染而失焦 */}
+          <SearchBox onEnterSearchMode={handleEnterSearchMode} />
 
           {/* 推荐歌单 */}
           <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
