@@ -38,8 +38,9 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
+import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import type { Song, Playlist } from "@/types/music";
+import type { Song, Playlist, SongUrlResult } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -188,6 +189,13 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   useEffect(() => {
     setLocalCurrentTime(0);
+  }, [currentSong]);
+
+  // 切换歌曲时自动加载新歌词
+  useEffect(() => {
+    if (currentSong) {
+      useMusicStore.getState().loadLyrics(currentSong.id);
+    }
   }, [currentSong]);
 
   // 歌词解析
@@ -380,7 +388,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 bg: activeColor,
                 color: contrastText,
                 _hover: { bg: activeColor, filter: "brightness(0.9)" },
-                borderRadius: "full",
+                borderRadius: "xl",
                 w: "56px",
                 h: "56px",
               }}
@@ -446,11 +454,11 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           <Text fontSize="sm" fontWeight="bold" color={subTextColor} mb={2} flexShrink={0}>
             歌词
           </Text>
-          <Box ref={lyricsScrollRef} flex={1} overflowY="auto" overflowX="hidden" sx={{ ...scrollbarSx(activeColor), overflowX: "hidden" }} pr={2}>
+          <Box ref={lyricsScrollRef} flex={1} overflowY="auto" overflowX="hidden" sx={{ ...scrollbarSx(activeColor), overflowX: "hidden", display: "flex", alignItems: "center" }} pr={2}>
             {loadingLyrics ? (
               <VStack py={12}><Spinner size="lg" sx={{ color: activeColor }} /></VStack>
             ) : lyricLines.length > 0 ? (
-              <VStack spacing={3} align="stretch" py="40%">
+              <VStack spacing={3} align="stretch" w="100%">
                 {lyricLines.map((line, i) => (
                   <Box
                     key={i}
@@ -1198,10 +1206,42 @@ export default function MusicPage() {
 
     storeActions.init();
 
+    // 重进页面后恢复播放：如果 store 中有 currentSong 但新 audio 没有 src
+    // 需要重新获取歌曲 URL 并恢复播放
+    const state = useMusicStore.getState();
+    if (state.currentSong && !audio.src) {
+      const song = state.currentSong;
+      // 不自动恢复播放，只恢复 src，用户点击播放时即可播放
+      (async () => {
+        try {
+          const result = await invoke<SongUrlResult>("music_song_url", {
+            id: song.id,
+            quality: state.playbackQuality,
+          });
+          if (result.playable && result.url) {
+            const port = state.proxyPort || await invoke<number>("cmd_get_proxy_port");
+            const audioUrl = `http://127.0.0.1:${port}/audio?url=${encodeURIComponent(result.url)}`;
+            audio.src = audioUrl;
+            audio.volume = state.volume;
+            // 恢复到上次的播放位置
+            if (state.currentTime > 0) {
+              audio.currentTime = state.currentTime;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to restore playback:", e);
+        }
+      })();
+    }
+
     return () => {
+      // 保存当前播放位置
+      const s = useMusicStore.getState();
+      if (audio.currentTime > 0) {
+        s.setCurrentTime(audio.currentTime);
+      }
       audio.pause();
       audio.src = "";
-      // audio 不在 DOM 中，无需 remove
       storeActions.setAudioRef(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
