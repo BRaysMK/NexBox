@@ -163,6 +163,16 @@ pub fn run() {
                 });
             }
 
+            // Tray menu: hide when losing focus (click outside)
+            if let Some(tray_menu) = app.get_webview_window("tray-menu") {
+                let menu_clone = tray_menu.clone();
+                tray_menu.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        let _ = menu_clone.hide();
+                    }
+                });
+            }
+
             // 预填显示器信息缓存，确保热键路径也能正确获取设备名
             display_filter::init();
 
@@ -498,6 +508,11 @@ pub fn run() {
         nvapi::list_nvidia_settings,
         nvapi::set_nvidia_setting,
         nvapi::reset_nvidia_settings,
+        nvapi::list_nvidia_displays,
+        nvapi::get_nvidia_display_modes,
+        nvapi::set_nvidia_display_resolution,
+        nvapi::get_injected_resolutions,
+        nvapi::remove_injected_resolution,
             storage_clean::scan_storage_items,
             storage_clean::clean_storage_items,
             storage_clean::empty_recycle_bin_cmd,
@@ -508,6 +523,8 @@ pub fn run() {
             tray::set_close_behavior,
             tray::get_dont_ask_again,
             tray::set_dont_ask_again,
+            tray::exit_app,
+            tray::check_update_and_show,
             // === Island (Dynamic Island) 命令 ===
             island::get_network_stats,
             island::get_network_latency,

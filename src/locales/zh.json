@@ -47,7 +47,7 @@
     "mood": "心境",
     "settings": "设置",
     "gpuRename": "显卡改写",
-    "resolutionConverter": "分辨率换算",
+    "resolutionConverter": "分辨率管理",
     "dlssPreset": "三角洲DLSS设置",
     "epicFree": "喜加一",
     "dynamicIsland": "灵动岛",
@@ -471,7 +471,11 @@
     "previewFiltered": "滤镜",
     "previewDisabledNote": "滤镜未启用 · 仅预览效果",
     "paramsUpdated": "参数已更新",
-    "paramsUpdatedHint": "请手动开启滤镜开关以生效"
+    "paramsUpdatedHint": "请手动开启滤镜开关以生效",
+    "rgbGamma": "RGB 通道伽马",
+    "rGamma": "红色",
+    "gGamma": "绿色",
+    "bGamma": "蓝色"
   },
   "floatingNav": {
     "title": "悬浮导航框",
@@ -744,13 +748,18 @@
     "crosshairDesc": "游戏屏幕准心辅助工具",
     "overlayPanelDesc": "显示系统硬件状态的悬浮框",
     "gpuRenameDesc": "改写显卡名称以优化游戏性能",
-    "resolutionConverterDesc": "换算不同分辨率下的画面比例",
+    "resolutionConverterDesc": "管理显示器分辨率与画面比例",
     "shaderCacheDesc": "强制清理 NVIDIA/AMD 着色器缓存释放磁盘空间",
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
     "dynamicIslandDesc": "屏幕顶部灵动岛，显示网速/硬件/音乐/通知",
     "nvidiaDriverDesc": "通过 NVAPI 直接控制 NVIDIA 驱动图形设置",
     "screenRecordDesc": "录制屏幕或窗口，支持分辨率与帧率调节",
-    "diskHealthDesc": "检测硬盘健康状态与SMART信息"
+    "diskHealthDesc": "检测硬盘健康状态与SMART信息",
+    "resolutionManagement": "显示器分辨率管理",
+    "selectDisplay": "选择显示器",
+    "selectResolution": "选择分辨率",
+    "applyResolution": "应用分辨率",
+    "resolutionApplied": "分辨率已应用"
   },
   "gpuRename": {
     "title": "显卡改写",
@@ -1053,7 +1062,7 @@
     }
   },
   "resolutionConverter": {
-    "title": "分辨率换算",
+    "title": "分辨率管理",
     "selectResolution": "选择分辨率",
     "resolution1K": "1K (1080p)",
     "resolution1_5K": "1.5K",
@@ -1069,7 +1078,14 @@
     "height": "高",
     "pixels": "像素",
     "standard": "标准",
-    "tip": "选择分辨率类型后，下方将显示三种常见画面比例的具体分辨率值，方便您在游戏中调整画面比例设置。"
+    "tip": "选择分辨率类型后，下方将显示三种常见画面比例的具体分辨率值，方便您在游戏中调整画面比例设置。",
+    "noModes": "无法获取可用分辨率列表",
+    "applying": "应用分辨率...",
+    "loadModesFailed": "加载分辨率失败",
+    "resolutionApplied": "分辨率已应用",
+    "applyFailed": "应用分辨率失败",
+    "applyCustom": "应用此分辨率",
+    "selectDisplayFirst": "请先在下方选择显示器"
   },
   "systemOptimizer": {
     "pageTitle": "系统优化",

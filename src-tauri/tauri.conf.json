@@ -5,7 +5,7 @@
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://127.0.0.1:1420",
+    "devUrl": "http://127.0.0.1:3000",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },
@@ -37,6 +37,21 @@
         "shadow": false,
         "label": "widget",
         "url": "/widget"
+      },
+      {
+        "title": "NexBox Tray Menu",
+        "width": 190,
+        "height": 140,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "tray-menu",
+        "url": "/tray-menu"
       }
     ],
     "security": {

@@ -9,15 +9,21 @@ import {
   SimpleGrid,
   IconButton,
   useBreakpointValue,
+  Button,
+  Spinner,
+  useToast,
+  Badge,
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { Monitor, ArrowLeft } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
+import { CustomSelect } from "@/components/special/custom-select";
 
 type ResolutionType = "1K" | "1.5K" | "2K" | "2.5K" | "3K" | "4K";
 
@@ -26,6 +32,32 @@ interface ResolutionInfo {
   height: number;
   ratio: string;
   ratioLabel: string;
+}
+
+interface NvidiaDisplay {
+  display_id: number;
+  device_name: string;
+  monitor_name: string;
+  is_primary: boolean;
+  current_width: number;
+  current_height: number;
+}
+
+interface DisplayMode {
+  width: number;
+  height: number;
+  refresh_rate: number;
+  is_current: boolean;
+}
+
+interface SetResolutionResult {
+  applied: boolean;
+  injected: boolean;
+}
+
+interface InjectedResolution {
+  width: number;
+  height: number;
 }
 
 const RESOLUTION_PRESETS: Record<ResolutionType, { width: number; height: number }> = {
@@ -55,10 +87,14 @@ function ResolutionCard({
   resolution,
   color,
   isActive,
+  onApply,
+  isApplying,
 }: {
   resolution: ResolutionInfo;
   color: string;
   isActive: boolean;
+  onApply?: () => void;
+  isApplying?: boolean;
 }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
@@ -152,6 +188,27 @@ function ResolutionCard({
           </Box>
         </Box>
       </Flex>
+
+      {onApply && (
+        <Button
+          mt={2}
+          size="sm"
+          width="full"
+          borderRadius="lg"
+          bg={`${color}15`}
+          color={color}
+          border="1px solid"
+          borderColor={`${color}40`}
+          isLoading={isApplying}
+          loadingText={t("resolutionConverter.applying")}
+          onClick={onApply}
+          _hover={{ bg: `${color}25` }}
+          fontWeight="600"
+          fontSize="sm"
+        >
+          {t("resolutionConverter.applyCustom")}
+        </Button>
+      )}
     </VStack>
   );
 
@@ -252,9 +309,20 @@ export default function ResolutionConverterPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { liquidGlassEnabled } = useBackground();
-  const { getActiveColor } = useThemeColor();
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
+  const toast = useToast();
   const [selectedResolution, setSelectedResolution] = useState<ResolutionType>("1K");
+
+  // 显示器分辨率管理状态
+  const [displays, setDisplays] = useState<NvidiaDisplay[]>([]);
+  const [selectedDisplayIdx, setSelectedDisplayIdx] = useState(0);
+  const [displayModes, setDisplayModes] = useState<DisplayMode[]>([]);
+  const [selectedModeKey, setSelectedModeKey] = useState<string>("");
+  const [isApplyingResolution, setIsApplyingResolution] = useState(false);
+  const [isLoadingModes, setIsLoadingModes] = useState(false);
+  const [applyingResKey, setApplyingResKey] = useState<string>("");
+  const [injectedResolutions, setInjectedResolutions] = useState<InjectedResolution[]>([]);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const textColor = useColorModeValue("gray.700", "#e0e0e0");
@@ -280,6 +348,126 @@ export default function ResolutionConverterPage() {
       };
     });
   }, [selectedResolution, t]);
+
+  // === 显示器分辨率管理 ===
+  async function loadDisplayModes(deviceName: string) {
+    setIsLoadingModes(true);
+    try {
+      const modes = await invoke<DisplayMode[]>("get_nvidia_display_modes", { deviceName });
+      setDisplayModes(modes);
+      if (modes.length > 0) {
+        setSelectedModeKey(`${modes[0].width}x${modes[0].height}@${modes[0].refresh_rate.toFixed(1)}`);
+      }
+    } catch (e) {
+      console.error("加载分辨率列表失败:", e);
+      toast({
+        title: t("resolutionConverter.loadModesFailed"),
+        description: String(e),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      setDisplayModes([]);
+    } finally {
+      setIsLoadingModes(false);
+    }
+  }
+
+  async function loadInjectedResolutions() {
+    try {
+      const list = await invoke<InjectedResolution[]>("get_injected_resolutions");
+      setInjectedResolutions(list);
+    } catch (e) {
+      console.error("加载注入分辨率列表失败:", e);
+    }
+  }
+
+  function handleDisplayChange(value: string) {
+    const idx = Number(value);
+    setSelectedDisplayIdx(idx);
+    const disp = displays[idx];
+    if (disp) {
+      loadDisplayModes(disp.device_name);
+    }
+  }
+
+  const applyCustomResolution = useCallback(async (width: number, height: number) => {
+    const disp = displays[selectedDisplayIdx];
+    if (!disp) {
+      toast({
+        title: t("resolutionConverter.applyFailed"),
+        description: t("resolutionConverter.selectDisplayFirst"),
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const resKey = `${width}x${height}`;
+    setApplyingResKey(resKey);
+    try {
+      const result = await invoke<SetResolutionResult>("set_nvidia_display_resolution", {
+        displayId: disp.display_id,
+        width,
+        height,
+        deviceName: disp.device_name,
+      });
+      if (result.injected) {
+        toast({
+          title: "注入完成",
+          description: "需要重启电脑，稍后在游戏里更改分辨率",
+          status: "info",
+          duration: 5000,
+          isClosable: true,
+        });
+        loadInjectedResolutions();
+      } else {
+        toast({
+          title: t("resolutionConverter.resolutionApplied"),
+          description: resKey,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (e) {
+      toast({
+        title: t("resolutionConverter.applyFailed"),
+        description: String(e),
+        status: "error",
+        duration: 4000,
+        isClosable: true,
+      });
+    } finally {
+      setApplyingResKey("");
+    }
+  }, [displays, selectedDisplayIdx, t, toast]);
+
+  function handleApplyResolution() {
+    const match = selectedModeKey.match(/^(\d+)x(\d+)@/);
+    if (!match) return;
+    setIsApplyingResolution(true);
+    applyCustomResolution(parseInt(match[1]), parseInt(match[2])).finally(() =>
+      setIsApplyingResolution(false)
+    );
+  }
+
+  // 加载 NVIDIA 显示器列表和已注入分辨率
+  useEffect(() => {
+    (async () => {
+      try {
+        const dispList = await invoke<NvidiaDisplay[]>("list_nvidia_displays");
+        setDisplays(dispList);
+        if (dispList.length > 0) {
+          await loadDisplayModes(dispList[0].device_name);
+        }
+      } catch (e) {
+        console.error("加载 NVIDIA 显示器列表失败:", e);
+      }
+      await loadInjectedResolutions();
+    })();
+  }, []);
 
   const content = (
     <VStack align="start" spacing={6}>
@@ -320,6 +508,8 @@ export default function ResolutionConverterPage() {
               resolution={res}
               color={res.color}
               isActive={res.isActive}
+              onApply={() => applyCustomResolution(res.width, res.height)}
+              isApplying={applyingResKey === `${res.width}x${res.height}`}
             />
           ))}
         </SimpleGrid>
@@ -337,6 +527,128 @@ export default function ResolutionConverterPage() {
           {t("resolutionConverter.tip")}
         </Text>
       </Box>
+
+      {/* 显示器分辨率管理 */}
+      <LiquidGlassCard w="full" p={5} boxShadow="2xl">
+        <HStack mb={4} spacing={2}>
+          <Monitor size={18} color={getActiveColor()} />
+          <Text fontWeight="semibold" color={headingColor} fontSize="md">
+            {t("builtinTools.resolutionManagement")}
+          </Text>
+        </HStack>
+
+        <VStack spacing={4} align="stretch">
+          {/* 显示器选择 */}
+          <Box>
+            <Text fontWeight="medium" fontSize="sm" color={textColor} mb={2}>
+              {t("builtinTools.selectDisplay")}
+            </Text>
+            <CustomSelect
+              value={selectedDisplayIdx.toString()}
+              onChange={handleDisplayChange}
+              direction="up"
+              options={displays.map((d, i) => ({
+                value: i.toString(),
+                label: d.monitor_name
+                  ? `${d.monitor_name} (${d.current_width}x${d.current_height})`
+                  : `${d.device_name} (${d.current_width}x${d.current_height})`,
+              }))}
+              width="100%"
+            />
+          </Box>
+
+          {/* 分辨率列表 */}
+          <Box>
+            <Text fontWeight="medium" fontSize="sm" color={textColor} mb={2}>
+              {t("builtinTools.selectResolution")}
+            </Text>
+            {isLoadingModes ? (
+              <Flex justify="center" py={4}>
+                <Spinner size="sm" color={getActiveColor()} />
+              </Flex>
+            ) : displayModes.length > 0 ? (
+              <CustomSelect
+                value={selectedModeKey}
+                onChange={setSelectedModeKey}
+                direction="up"
+                options={displayModes.map((m) => ({
+                  value: `${m.width}x${m.height}@${m.refresh_rate.toFixed(1)}`,
+                  label: `${m.width}x${m.height} @ ${m.refresh_rate.toFixed(1)} Hz`,
+                }))}
+                width="100%"
+              />
+            ) : (
+              <Text fontSize="sm" color={subTextColor}>
+                {t("resolutionConverter.noModes")}
+              </Text>
+            )}
+          </Box>
+
+          {/* 应用按钮 */}
+          <Button
+            bg={getActiveColor()}
+            color={getContrastTextColor()}
+            isDisabled={!selectedModeKey || isLoadingModes}
+            isLoading={isApplyingResolution}
+            loadingText={t("resolutionConverter.applying")}
+            onClick={handleApplyResolution}
+            w="full"
+            size="md"
+            borderRadius="lg"
+            _hover={{ filter: 'brightness(0.85)' }}
+          >
+            {t("builtinTools.applyResolution")}
+          </Button>
+        </VStack>
+      </LiquidGlassCard>
+
+      {/* 已注入的分辨率 */}
+      {injectedResolutions.length > 0 && (
+        <LiquidGlassCard w="full" p={5} boxShadow="2xl">
+          <HStack mb={4} spacing={2}>
+            <Monitor size={18} color={getActiveColor()} />
+            <Text fontWeight="semibold" color={headingColor} fontSize="md">
+              已注入的分辨率
+            </Text>
+          </HStack>
+          <VStack spacing={2} align="stretch">
+            {injectedResolutions.map((r) => (
+              <HStack
+                key={`${r.width}x${r.height}`}
+                justify="space-between"
+                p={3}
+                borderRadius="lg"
+                bg={useColorModeValue("gray.50", "#1a1a1a")}
+              >
+                <Text color={textColor} fontWeight="500" fontSize="sm">
+                  {r.width} × {r.height}
+                </Text>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  colorScheme="red"
+                  onClick={async () => {
+                    try {
+                      await invoke("remove_injected_resolution", {
+                        width: r.width,
+                        height: r.height,
+                      });
+                      loadInjectedResolutions();
+                    } catch (e) {
+                      console.error("删除注入记录失败:", e);
+                    }
+                  }}
+                >
+                  删除
+                </Button>
+              </HStack>
+            ))}
+            <Text fontSize="xs" color={subTextColor} mt={2}>
+              注：已注入的分辨率需重启电脑后方可使用，重启后可在游戏内设置
+            </Text>
+          </VStack>
+        </LiquidGlassCard>
+      )}
     </VStack>
   );
 
