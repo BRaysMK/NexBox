@@ -49,6 +49,40 @@ const scrollbarSx = (color: string) => ({
   "&::-webkit-scrollbar-track": { background: "transparent" },
 });
 
+// 原生 range slider 样式：用 CSS 变量传递颜色，伪元素控制轨道和滑块外观
+const rangeSliderSx = {
+  "&": {
+    appearance: "none",
+    WebkitAppearance: "none",
+    height: "6px",
+    borderRadius: "3px",
+    outline: "none",
+    cursor: "pointer",
+  },
+  "&::-webkit-slider-runnable-track": {
+    height: "6px",
+    borderRadius: "3px",
+  },
+  "&::-webkit-slider-thumb": {
+    WebkitAppearance: "none",
+    width: "12px",
+    height: "12px",
+    borderRadius: "50%",
+    marginTop: "-3px",
+    border: "none",
+  },
+  "&::-moz-range-track": {
+    height: "6px",
+    borderRadius: "3px",
+  },
+  "&::-moz-range-thumb": {
+    width: "12px",
+    height: "12px",
+    borderRadius: "50%",
+    border: "none",
+  },
+};
+
 // ═══════════════════════════════════════════════
 // PlayerBar — 独立组件
 // 关键：用 local state 监听 timeupdate，播放期间不更新 store
@@ -99,6 +133,9 @@ const PlayerBar = memo(function PlayerBar() {
     if (!audioRef) return;
 
     const onTimeUpdate = () => {
+      // 用户拖拽期间或 seek 后短暂等待期间，不更新进度
+      // 避免 timeupdate 用旧位置覆盖用户拖到的新位置导致闪回
+      if (isUserSeekingRef.current) return;
       setLocalCurrentTime(audioRef.currentTime);
     };
     const onLoadedMetadata = () => {
@@ -142,8 +179,14 @@ const PlayerBar = memo(function PlayerBar() {
   // 松手时：真正 seek 音频
   const handleSeekCommit = useCallback(() => {
     if (pendingSeekRef.current !== 0 || isUserSeekingRef.current) {
-      useMusicStore.getState().seekTo(pendingSeekRef.current);
-      isUserSeekingRef.current = false;
+      const targetTime = pendingSeekRef.current;
+      useMusicStore.getState().seekTo(targetTime);
+      // 延迟恢复 timeupdate 监听，等音频真正跳到新位置
+      // 避免 seek 过程中 timeupdate 用旧位置覆盖进度条导致闪回
+      setTimeout(() => {
+        isUserSeekingRef.current = false;
+        setLocalCurrentTime(targetTime);
+      }, 300);
     }
   }, []);
 
@@ -233,23 +276,37 @@ const PlayerBar = memo(function PlayerBar() {
                 onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
               />
             </Tooltip>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={volume}
-              onChange={(e) => useMusicStore.getState().setVolume(parseFloat(e.target.value))}
-              tabIndex={-1}
-              style={{
-                width: "60px",
-                height: "4px",
-                borderRadius: "full",
-                background: sliderTrackBg,
-                accentColor: activeColor,
-                cursor: "pointer",
-              }}
-            />
+            <Box
+            as="input"
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            onChange={(e) => useMusicStore.getState().setVolume(parseFloat((e.target as HTMLInputElement).value))}
+            tabIndex={-1}
+            w="60px"
+            sx={{
+              ...rangeSliderSx,
+              background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${volume * 100}%, ${sliderTrackBg} ${volume * 100}%, ${sliderTrackBg} 100%)`,
+              "&::-webkit-slider-thumb": {
+                ...rangeSliderSx["&::-webkit-slider-thumb"],
+                background: activeColor,
+              },
+              "&::-moz-range-thumb": {
+                ...rangeSliderSx["&::-moz-range-thumb"],
+                background: activeColor,
+              },
+              "&::-webkit-slider-runnable-track": {
+                ...rangeSliderSx["&::-webkit-slider-runnable-track"],
+                background: "transparent",
+              },
+              "&::-moz-range-track": {
+                ...rangeSliderSx["&::-moz-range-track"],
+                background: "transparent",
+              },
+            }}
+          />
           </HStack>
 
           <Menu>
@@ -277,7 +334,8 @@ const PlayerBar = memo(function PlayerBar() {
           <Text color={subTextColor} fontSize="xs" w="40px" textAlign="center">
             {formatTime(localCurrentTime)}
           </Text>
-          <input
+          <Box
+            as="input"
             type="range"
             min={0}
             max={localDuration || 100}
@@ -285,18 +343,31 @@ const PlayerBar = memo(function PlayerBar() {
             value={localCurrentTime}
             onMouseDown={() => { isUserSeekingRef.current = true; }}
             onTouchStart={() => { isUserSeekingRef.current = true; }}
-            onChange={(e) => handleSeekDrag(parseFloat(e.target.value))}
+            onChange={(e) => handleSeekDrag(parseFloat((e.target as HTMLInputElement).value))}
             onMouseUp={handleSeekCommit}
             onTouchEnd={handleSeekCommit}
             tabIndex={-1}
             aria-hidden="true"
-            style={{
-              flex: 1,
-              height: "4px",
-              borderRadius: "full",
-              background: sliderTrackBg,
-              accentColor: activeColor,
-              cursor: "pointer",
+            flex={1}
+            sx={{
+              ...rangeSliderSx,
+              background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
+              "&::-webkit-slider-thumb": {
+                ...rangeSliderSx["&::-webkit-slider-thumb"],
+                background: activeColor,
+              },
+              "&::-moz-range-thumb": {
+                ...rangeSliderSx["&::-moz-range-thumb"],
+                background: activeColor,
+              },
+              "&::-webkit-slider-runnable-track": {
+                ...rangeSliderSx["&::-webkit-slider-runnable-track"],
+                background: "transparent",
+              },
+              "&::-moz-range-track": {
+                ...rangeSliderSx["&::-moz-range-track"],
+                background: "transparent",
+              },
             }}
           />
           <Text color={subTextColor} fontSize="xs" w="40px" textAlign="center">
