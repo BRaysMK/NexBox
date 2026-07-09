@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import {
   Box,
   VStack,
@@ -35,6 +35,7 @@ import {
   Heart,
   ArrowLeft,
   Sparkles,
+  ChevronDown,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -84,11 +85,404 @@ const rangeSliderSx = {
 };
 
 // ═══════════════════════════════════════════════
-// PlayerBar — 独立组件
+// LRC 解析工具：将 [mm:ss.xx] 格式的歌词文本解析为行数组
+// ═══════════════════════════════════════════════
+interface LyricLine {
+  time: number; // 秒
+  text: string;
+  translation?: string;
+}
+
+function parseLrc(lyric: string, translation?: string): LyricLine[] {
+  if (!lyric) return [];
+  const lines: LyricLine[] = [];
+  const transMap = new Map<number, string>();
+
+  // 解析翻译歌词
+  if (translation) {
+    const transLines = translation.split("\n");
+    for (const line of transLines) {
+      const match = line.match(/\[(\d+):(\d+(?:\.\d+)?)\]/);
+      if (match) {
+        const time = parseInt(match[1]) * 60 + parseFloat(match[2]);
+        const text = line.replace(/\[\d+:\d+(?:\.\d+)?\]/, "").trim();
+        if (text) transMap.set(time, text);
+      }
+    }
+  }
+
+  // 解析主歌词
+  const mainLines = lyric.split("\n");
+  for (const line of mainLines) {
+    const matches = [...line.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+    if (matches.length === 0) continue;
+    const text = line.replace(/\[\d+:\d+(?:\.\d+)?\]/g, "").trim();
+    if (!text) continue;
+    for (const m of matches) {
+      const time = parseInt(m[1]) * 60 + parseFloat(m[2]);
+      lines.push({ time, text, translation: transMap.get(time) });
+    }
+  }
+
+  lines.sort((a, b) => a.time - b.time);
+  return lines;
+}
+
+// ═══════════════════════════════════════════════
+// ExpandedPlayer — 展开的全屏播放器
+// 点击播放器封面展开，左侧封面+信息，右侧歌词
+// ═══════════════════════════════════════════════
+interface ExpandedPlayerProps {
+  onClose: () => void;
+}
+
+const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerProps) {
+  const currentSong = useMusicStore((s) => s.currentSong);
+  const isPlaying = useMusicStore((s) => s.isPlaying);
+  const volume = useMusicStore((s) => s.volume);
+  const playMode = useMusicStore((s) => s.playMode);
+  const proxyPort = useMusicStore((s) => s.proxyPort);
+  const audioRef = useMusicStore((s) => s.audioRef);
+  const currentLyrics = useMusicStore((s) => s.currentLyrics);
+  const loadingLyrics = useMusicStore((s) => s.loadingLyrics);
+  const likedSongIds = useMusicStore((s) => s.likedSongIds);
+  const loginInfo = useMusicStore((s) => s.loginInfo);
+
+  const [localCurrentTime, setLocalCurrentTime] = useState(0);
+  const [localDuration, setLocalDuration] = useState(0);
+  const lyricsScrollRef = useRef<HTMLDivElement>(null);
+  const isUserSeekingRef = useRef(false);
+  const pendingSeekRef = useRef(0);
+
+  const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
+  const activeColor = getActiveColor();
+  const contrastText = getContrastTextColor();
+  const hoverBg = getHoverColor(false);
+
+  const bgColor = useColorModeValue("white", "#0d0d0d");
+  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
+
+  const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : Repeat;
+
+  // 监听 audio timeupdate
+  useEffect(() => {
+    if (!audioRef) return;
+    const onTimeUpdate = () => {
+      if (isUserSeekingRef.current) return;
+      setLocalCurrentTime(audioRef.currentTime);
+    };
+    const onLoadedMetadata = () => {
+      setLocalDuration(audioRef.duration);
+    };
+    audioRef.addEventListener("timeupdate", onTimeUpdate);
+    audioRef.addEventListener("loadedmetadata", onLoadedMetadata);
+    return () => {
+      audioRef.removeEventListener("timeupdate", onTimeUpdate);
+      audioRef.removeEventListener("loadedmetadata", onLoadedMetadata);
+    };
+  }, [audioRef]);
+
+  useEffect(() => {
+    setLocalCurrentTime(0);
+  }, [currentSong]);
+
+  // 歌词解析
+  const lyricLines = useMemo(() => {
+    if (!currentLyrics?.lyric) return [];
+    return parseLrc(currentLyrics.lyric, currentLyrics.translation);
+  }, [currentLyrics]);
+
+  // 当前歌词行索引 + 自动滚动
+  const activeLyricIndex = useMemo(() => {
+    if (lyricLines.length === 0) return -1;
+    let idx = -1;
+    for (let i = 0; i < lyricLines.length; i++) {
+      if (lyricLines[i].time <= localCurrentTime) idx = i;
+      else break;
+    }
+    return idx;
+  }, [lyricLines, localCurrentTime]);
+
+  useEffect(() => {
+    if (activeLyricIndex < 0 || !lyricsScrollRef.current) return;
+    const container = lyricsScrollRef.current;
+    const activeEl = container.querySelector(`[data-lyric-idx="${activeLyricIndex}"]`) as HTMLElement;
+    if (activeEl) {
+      container.scrollTo({
+        top: activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2,
+        behavior: "smooth",
+      });
+    }
+  }, [activeLyricIndex]);
+
+  const formatTime = (time: number): string => {
+    if (isNaN(time)) return "0:00";
+    const m = Math.floor(time / 60);
+    const s = Math.floor(time % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const handleSeekDrag = useCallback((v: number) => {
+    if (!isUserSeekingRef.current) return;
+    pendingSeekRef.current = v;
+    setLocalCurrentTime(v);
+  }, []);
+
+  const handleSeekCommit = useCallback(() => {
+    if (pendingSeekRef.current !== 0 || isUserSeekingRef.current) {
+      const targetTime = pendingSeekRef.current;
+      useMusicStore.getState().seekTo(targetTime);
+      setTimeout(() => {
+        isUserSeekingRef.current = false;
+        setLocalCurrentTime(targetTime);
+      }, 300);
+    }
+  }, []);
+
+  if (!currentSong) return null;
+
+  const isLiked = likedSongIds.has(currentSong.id);
+
+  return (
+    <Box
+      position="fixed"
+      top={0}
+      left={0}
+      right={0}
+      bottom={0}
+      zIndex={9999}
+      bg={bgColor}
+      // 从底部向上展开的动画
+      animation="expandedPlayerSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)"
+      sx={{
+        "@keyframes expandedPlayerSlideUp": {
+          from: { transform: "translateY(100%)", opacity: 0 },
+          to: { transform: "translateY(0)", opacity: 1 },
+        },
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* 顶部栏：关闭按钮 */}
+      <HStack justify="space-between" p={4} flexShrink={0}>
+        <HStack spacing={3}>
+          <Tooltip label="收起">
+            <IconButton
+              aria-label="Close"
+              icon={<ChevronDown size={24} />}
+              size="sm"
+              variant="ghost"
+              onClick={onClose}
+              sx={{ color: textColor, _hover: { bg: hoverBg } }}
+            />
+          </Tooltip>
+          <Text color={subTextColor} fontSize="sm">正在播放</Text>
+        </HStack>
+        {loginInfo?.logged_in && (
+          <Tooltip label={isLiked ? "取消红心" : "红心"}>
+            <IconButton
+              aria-label="Like"
+              icon={<Heart size={20} fill={isLiked ? "#e53e3e" : "none"} color={isLiked ? "#e53e3e" : subTextColor} />}
+              size="sm"
+              variant="ghost"
+              onClick={() => useMusicStore.getState().toggleLike(currentSong.id)}
+              _hover={{ bg: hoverBg }}
+            />
+          </Tooltip>
+        )}
+      </HStack>
+
+      {/* 主体：左右分栏 */}
+      <HStack flex={1} spacing={8} px={8} pb={4} align="stretch" overflow="hidden" minH={0}>
+        {/* 左侧：封面 + 歌曲信息 + 控制 */}
+        <VStack spacing={6} align="center" justify="center" flex={1} minW={0}>
+          <Box
+            position="relative"
+            borderRadius="2xl"
+            overflow="hidden"
+            boxShadow="2xl"
+            sx={{
+              transition: "transform 0.3s ease",
+              _hover: { transform: "scale(1.02)" },
+            }}
+          >
+            <ChakraImage
+              src={coverProxyUrl(currentSong.cover, proxyPort)}
+              alt=""
+              w={{ base: "200px", md: "280px", lg: "320px" }}
+              h={{ base: "200px", md: "280px", lg: "320px" }}
+              objectFit="cover"
+              fallback={<Box w="280px" h="280px" bg="gray.700" borderRadius="2xl" />}
+            />
+          </Box>
+
+          <VStack spacing={1} align="center" maxW="400px">
+            <Text color={textColor} fontSize="xl" fontWeight="bold" noOfLines={1} textAlign="center">
+              {currentSong.name}
+            </Text>
+            <Text color={subTextColor} fontSize="md" noOfLines={1} textAlign="center">
+              {currentSong.artist}
+            </Text>
+            {currentSong.album && (
+              <Text color={subTextColor} fontSize="sm" noOfLines={1} textAlign="center">
+                {currentSong.album}
+              </Text>
+            )}
+          </VStack>
+
+          {/* 播放控制 */}
+          <HStack spacing={4}>
+            <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : "列表循环"}>
+              <IconButton
+                aria-label="Play mode"
+                icon={<ModeIcon size={20} />}
+                size="md"
+                variant="ghost"
+                sx={{ color: playMode !== "list" ? activeColor : subTextColor, _hover: { bg: hoverBg } }}
+                onClick={() => useMusicStore.getState().togglePlayMode()}
+              />
+            </Tooltip>
+            <IconButton
+              aria-label="Prev"
+              icon={<SkipBack size={24} />}
+              size="md"
+              variant="ghost"
+              onClick={() => useMusicStore.getState().prevTrack()}
+              sx={{ color: textColor, _hover: { bg: hoverBg } }}
+            />
+            <IconButton
+              aria-label="Play/Pause"
+              icon={isPlaying ? <Pause size={32} /> : <Play size={32} />}
+              size="lg"
+              sx={{
+                bg: activeColor,
+                color: contrastText,
+                _hover: { bg: activeColor, filter: "brightness(0.9)" },
+                borderRadius: "full",
+                w: "56px",
+                h: "56px",
+              }}
+              onClick={() => useMusicStore.getState().togglePlay()}
+            />
+            <IconButton
+              aria-label="Next"
+              icon={<SkipForward size={24} />}
+              size="md"
+              variant="ghost"
+              onClick={() => useMusicStore.getState().nextTrack()}
+              sx={{ color: textColor, _hover: { bg: hoverBg } }}
+            />
+            <Tooltip label="静音">
+              <IconButton
+                aria-label="Mute"
+                icon={volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                size="md"
+                variant="ghost"
+                onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
+                sx={{ color: textColor, _hover: { bg: hoverBg } }}
+              />
+            </Tooltip>
+          </HStack>
+
+          {/* 进度条 */}
+          <HStack spacing={3} w="100%" maxW="500px">
+            <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
+              {formatTime(localCurrentTime)}
+            </Text>
+            <Box
+              as="input"
+              type="range"
+              min={0}
+              max={localDuration || 100}
+              step={0.1}
+              value={localCurrentTime}
+              onMouseDown={() => { isUserSeekingRef.current = true; }}
+              onTouchStart={() => { isUserSeekingRef.current = true; }}
+              onChange={(e) => handleSeekDrag(parseFloat((e.target as HTMLInputElement).value))}
+              onMouseUp={handleSeekCommit}
+              onTouchEnd={handleSeekCommit}
+              tabIndex={-1}
+              aria-hidden="true"
+              flex={1}
+              sx={{
+                ...rangeSliderSx,
+                background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
+                "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
+                "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
+                "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
+                "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
+              }}
+            />
+            <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
+              {formatTime(localDuration)}
+            </Text>
+          </HStack>
+        </VStack>
+
+        {/* 右侧：歌词 */}
+        <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden">
+          <Text fontSize="sm" fontWeight="bold" color={subTextColor} mb={2} flexShrink={0}>
+            歌词
+          </Text>
+          <Box ref={lyricsScrollRef} flex={1} overflowY="auto" sx={scrollbarSx(activeColor)} pr={2}>
+            {loadingLyrics ? (
+              <VStack py={12}><Spinner size="lg" sx={{ color: activeColor }} /></VStack>
+            ) : lyricLines.length > 0 ? (
+              <VStack spacing={3} align="stretch" py="40%">
+                {lyricLines.map((line, i) => (
+                  <Box
+                    key={i}
+                    data-lyric-idx={i}
+                    py={1}
+                    sx={{
+                      transition: "all 0.3s ease",
+                      opacity: activeLyricIndex === i ? 1 : 0.3,
+                      transform: activeLyricIndex === i ? "scale(1.05)" : "scale(1)",
+                    }}
+                  >
+                    <Text
+                      fontSize={activeLyricIndex === i ? "lg" : "md"}
+                      fontWeight={activeLyricIndex === i ? "bold" : "normal"}
+                      color={activeLyricIndex === i ? activeColor : textColor}
+                      textAlign="center"
+                      noOfLines={2}
+                    >
+                      {line.text}
+                    </Text>
+                    {line.translation && (
+                      <Text
+                        fontSize="sm"
+                        color={activeLyricIndex === i ? subTextColor : subTextColor}
+                        textAlign="center"
+                        noOfLines={2}
+                        opacity={activeLyricIndex === i ? 0.8 : 0.3}
+                      >
+                        {line.translation}
+                      </Text>
+                    )}
+                  </Box>
+                ))}
+              </VStack>
+            ) : (
+              <VStack py={12} spacing={3}>
+                <MusicIcon size={32} color={subTextColor} />
+                <Text color={subTextColor} fontSize="sm" textAlign="center">暂无歌词</Text>
+              </VStack>
+            )}
+          </Box>
+        </VStack>
+      </HStack>
+    </Box>
+  );
+});
+
+
 // 关键：用 local state 监听 timeupdate，播放期间不更新 store
 // 这样搜索框等组件完全不受播放影响
 // ═══════════════════════════════════════════════
-const PlayerBar = memo(function PlayerBar() {
+const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void }) {
   const currentSong = useMusicStore((s) => s.currentSong);
   const isPlaying = useMusicStore((s) => s.isPlaying);
   const volume = useMusicStore((s) => s.volume);
@@ -213,15 +607,26 @@ const PlayerBar = memo(function PlayerBar() {
       <VStack spacing={2} align="stretch">
         <HStack spacing={4} align="center">
           {/* 左侧：封面 + 标题 */}
-          <ChakraImage
-            src={coverProxyUrl(currentSong.cover, proxyPort)}
-            alt=""
-            w="48px"
-            h="48px"
+          <Box
+            as="button"
+            onClick={onExpand}
+            cursor={onExpand ? "pointer" : "default"}
             borderRadius="md"
-            objectFit="cover"
-            fallback={<Box w="48px" h="48px" borderRadius="md" bg="gray.700" />}
-          />
+            overflow="hidden"
+            flexShrink={0}
+            sx={{ border: "none", bg: "transparent", p: 0 }}
+            _hover={onExpand ? { transform: "scale(1.05)", transition: "transform 0.2s" } : {}}
+          >
+            <ChakraImage
+              src={coverProxyUrl(currentSong.cover, proxyPort)}
+              alt=""
+              w="48px"
+              h="48px"
+              borderRadius="md"
+              objectFit="cover"
+              fallback={<Box w="48px" h="48px" borderRadius="md" bg="gray.700" />}
+            />
+          </Box>
           <VStack spacing={0} align="start" flexShrink={0} minW={0} maxW="200px">
             <Text color={textColor} fontWeight="medium" fontSize="sm" noOfLines={1}>
               {currentSong.name}
@@ -745,6 +1150,7 @@ export default function MusicPage() {
   const [searchInput, setSearchInput] = useState("");
   const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
   const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks">("recommendations");
+  const [expandedPlayer, setExpandedPlayer] = useState(false);
 
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
@@ -791,6 +1197,19 @@ export default function MusicPage() {
 
   const handleBack = useCallback(() => {
     setSearchMode(false);
+  }, []);
+
+  // 展开播放器时加载歌词
+  const handleExpandPlayer = useCallback(() => {
+    const song = useMusicStore.getState().currentSong;
+    if (song) {
+      useMusicStore.getState().loadLyrics(song.id);
+    }
+    setExpandedPlayer(true);
+  }, []);
+
+  const handleCloseExpandedPlayer = useCallback(() => {
+    setExpandedPlayer(false);
   }, []);
 
   // SearchBox 进入搜索结果模式的回调（稳定引用）
@@ -948,7 +1367,10 @@ export default function MusicPage() {
           )}
         </LiquidGlassCard>
 
-        <PlayerBar />
+        <PlayerBar onExpand={handleExpandPlayer} />
+
+        {/* 展开的播放器 */}
+        {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
       </VStack>
     );
   }
@@ -1128,7 +1550,10 @@ export default function MusicPage() {
       </HStack>
 
       {/* 底部播放器 */}
-      <PlayerBar />
+      <PlayerBar onExpand={handleExpandPlayer} />
+
+      {/* 展开的播放器 */}
+      {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
     </VStack>
   );
 }
