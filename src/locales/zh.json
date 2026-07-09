@@ -243,8 +243,10 @@
         "affinitySuccess": "已限制 {{count}} 个 ACE 进程使用单核心"
       },
       "aceEfficiency": {
-        "title": "Windows 效能模式",
-        "description": "对 ACE 反作弊进程启用任务管理器式效能模式：优先级降为 Idle + 开启电源节流（EcoQoS），大幅减少后台资源占用"
+        "title": "调度优化",
+        "description": "对 ACE 反作弊进程启用后台节能调度：优先级降为低于正常 + 后台 I/O 节流 + 低内存优先级，大幅减少后台资源占用",
+        "success": "已为 {{count}} 个 ACE 进程开启调度优化",
+        "notRunning": "未找到运行中的 ACE 进程"
       },
       "optimizeAll": {
         "button": "一键全部优化",
@@ -273,6 +275,17 @@
         "notOptimized": "待优化",
         "processRunning": "进程运行中",
         "processNotRunning": "进程未运行"
+      },
+      "affinitySettings": {
+        "title": "核心选择",
+        "description": "选择要分配的 CPU 核心（共 {{count}} 个逻辑核心）",
+        "save": "保存",
+        "cancel": "取消",
+        "selectAll": "全选",
+        "clearAll": "清空",
+        "configSaved": "核心配置已保存",
+        "deltaDefault": "除 CPU0 外的所有核心（默认）",
+        "aceDefault": "仅 CPU0（默认）"
       },
       "apply": "应用",
       "applied": "已应用",
@@ -374,6 +387,11 @@
     "sjmclDesc": "上海交通大学开发的第三方我的世界启动器",
     "ddegameDesc": "游戏不仅仅是游戏，游戏可以走进生活改变生活",
     "huorongDesc": "畅享纯粹终端防护。轻快运行，静享守护，全面防御",
+    "steamDesc": "Steam 是畅玩游戏、讨论游戏、创造游戏的快乐所在。",
+    "epicGamesDesc": "年轻的游戏发行平台，不定时提供免费游戏。",
+    "nvidiaAppDesc": "获取最新N卡驱动，调节显卡3D设置。",
+    "pcl2Desc": "炒鸡好用的第三方Minecraft启动器",
+    "obsDesc": "专业的录制和推流软件",
     "descriptions": {
       "assistantCrosshair": "游戏屏幕准心辅助工具",
       "memreduct": "内存清理工具",
@@ -972,6 +990,7 @@
       "dynamicBackground": "动态背景",
       "dynamicBackgroundDesc": "启用后将显示动态背景效果",
       "uploadVideo": "上传视频",
+      "unsupportedVideoFormat": "不支持的视频格式，请使用 mp4 或 webm 文件",
       "themeColor": "主题色",
       "themeColorLabel": "自定义主题色",
       "themeColorDesc": "设置导航栏、按钮、菜单等元素的主题颜色",

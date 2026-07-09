@@ -28,6 +28,7 @@ import {
   Gauge,
   Gamepad2,
   Battery,
+  Music,
   HardDrive,
   Settings2,
   Shield,
@@ -125,6 +126,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["epic", "喜加一", "免费", "游戏", "free", "games", "白嫖"],
   },
   {
+    id: "music",
+    nameKey: "sidebar.music",
+    path: "/music",
+    icon: Music,
+    category: "page",
+    keywords: ["音乐", "播放器", "music", "player", "网易云", "netease"],
+  },
+  {
     id: "sponsor",
     nameKey: "settings.sponsor",
     path: "/settings",
@@ -178,7 +187,7 @@ export const searchIndex: SearchItem[] = [
     path: "/nvidia-driver",
     icon: Tv2,
     category: "builtin-tool",
-    keywords: ["显卡设置", "nvidia", "驱动", "垂直同步", "纹理", "抗锯齿", "fxaa", "帧率", "电源", "各向异性过滤", "nvapi", "3d设置", "g-sync", "vr"],
+    keywords: ["显卡设置", "nvidia", "驱动", "垂直同步", "纹理", "抗锯齿", "fxaa", "帧率", "电源", "各向异性过滤", "nvapi", "3d设置", "g-sync", "vr", "分辨率", "显示器", "切换分辨率", "resolution"],
   },
   {
     id: "resolution-converter",

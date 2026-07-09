@@ -357,7 +357,6 @@ pub fn run() {
         overlay_panel::get_overlay_hardware_data,
         overlay_panel::update_overlay_settings,
         overlay_panel::toggle_overlay_panel,
-        overlay_panel::get_misans_font_path,
         overlay_panel::set_overlay_drag_mode,
         overlay_panel::get_overlay_current_settings,
         overlay_panel::check_drag_mode_status,

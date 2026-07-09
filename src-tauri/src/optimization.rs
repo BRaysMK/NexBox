@@ -9,7 +9,7 @@ use std::time::Duration;
 use std::{env, fs, path::Path};
 use sysinfo::System;
 use tauri::Manager;
-use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE};
 use windows_sys::Win32::System::Threading::{OpenProcess, SetPriorityClass};
 
 pub(crate) const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -25,9 +25,25 @@ fn get_powershell_path() -> String {
 }
 
 const PROCESS_SET_INFORMATION: u32 = 0x0200;
+const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 const IDLE_PRIORITY_CLASS: u32 = 0x00000040;
+const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x00004000;
+const PROCESS_MODE_BACKGROUND_BEGIN: u32 = 0x00100000;
+const IO_PRIORITY_VERY_LOW: u32 = 0;
+const PROCESS_MEMORY_PRIORITY_NEW: u32 = 0;
+const PROCESS_MEMORY_PRIORITY_OLD: u32 = 11;
+const MEMORY_PRIORITY_VERY_LOW: u32 = 1;
 
-#[link(name = "kernel32")]
+#[link(name = "ntdll")]
+extern "system" {
+    fn NtSetInformationProcess(
+        ProcessHandle: HANDLE,
+        ProcessInformationClass: u32,
+        ProcessInformation: *const std::ffi::c_void,
+        ProcessInformationSize: u32,
+    ) -> i32;
+}
+
 extern "system" {
     fn SetProcessInformation(
         hProcess: HANDLE,
@@ -39,30 +55,62 @@ extern "system" {
 
 fn enable_process_efficiency_mode(pid: u32) -> bool {
     unsafe {
-        let handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid);
+        let handle = OpenProcess(
+            PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
+            0,
+            pid,
+        );
         if handle.is_null() {
             return false;
         }
 
-        let mut ok = true;
+        let mut applied = false;
 
-        if SetPriorityClass(handle, IDLE_PRIORITY_CLASS) == 0 {
-            ok = false;
+        // 1) CPU: BELOW_NORMAL 优先级
+        if SetPriorityClass(handle, BELOW_NORMAL_PRIORITY_CLASS) != 0 {
+            applied = true;
         }
 
-        let state: [u32; 3] = [1, 1, 1];
-        if SetProcessInformation(
-            handle,
-            12,
-            &state as *const _ as *const std::ffi::c_void,
-            std::mem::size_of::<[u32; 3]>() as u32,
-        ) == 0
-        {
-            ok = false;
+        // 2) 后台 I/O + 内存：先尝试 PROCESS_MODE_BACKGROUND_BEGIN（旧版 Win11）
+        if SetPriorityClass(handle, PROCESS_MODE_BACKGROUND_BEGIN) != 0 {
+            SetPriorityClass(handle, BELOW_NORMAL_PRIORITY_CLASS);
+        } else {
+            // Build 26200+：独立 API 逐项设置
+            // I/O 优先级 → VeryLow
+            let io: u32 = IO_PRIORITY_VERY_LOW;
+            let nt = NtSetInformationProcess(
+                handle,
+                33,
+                &io as *const _ as *const std::ffi::c_void,
+                std::mem::size_of::<u32>() as u32,
+            );
+            if nt != 0 {
+                log::warn!("I/O priority failed (pid={}, nt={})", pid, nt);
+            }
+
+            // 内存优先级 → VeryLow：新 SDK class=0，回退旧 SDK class=11
+            let mem: u32 = MEMORY_PRIORITY_VERY_LOW;
+            let mut mem_ok = false;
+            for cls in &[PROCESS_MEMORY_PRIORITY_NEW, PROCESS_MEMORY_PRIORITY_OLD] {
+                if SetProcessInformation(
+                    handle,
+                    *cls,
+                    &mem as *const _ as *const std::ffi::c_void,
+                    std::mem::size_of::<u32>() as u32,
+                ) != 0
+                {
+                    mem_ok = true;
+                    break;
+                }
+            }
+            if !mem_ok {
+                let err = GetLastError();
+                log::warn!("Memory priority failed (pid={}, err={})", pid, err);
+            }
         }
 
         CloseHandle(handle);
-        ok
+        applied
     }
 }
 
@@ -1299,8 +1347,8 @@ fn detect_and_optimize_ace_processes() -> Vec<String> {
         if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
             let mut this_optimized = false;
             
-            // 1. 限制优先级为 Idle
-            if set_process_low_priority(process.pid().as_u32()) {
+            // 1. 启用调度优化（BELOW_NORMAL 优先级 + I/O VeryLow + 低内存优先级）
+            if enable_process_efficiency_mode(process.pid().as_u32()) || set_process_low_priority(process.pid().as_u32()) {
                 this_optimized = true;
             }
             
@@ -1681,6 +1729,104 @@ pub async fn restrict_ace_affinity() -> Result<AcePartialResult, String> {
             Ok(AcePartialResult {
                 success: count > 0,
                 message: if count > 0 { format!("已限制 {} 个 ACE 进程使用单核心", count) } else { "未找到运行中的 ACE 进程".to_string() },
+                count,
+            })
+        }
+        Err(e) => Err(format!("限制 ACE 进程核心分配失败: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub async fn boost_delta_force_affinity_with_mask(mask: u64) -> Result<PriorityResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let ps_script = format!(
+        r#"
+        $proc = Get-Process -Name "DeltaForceClient-Win64-Shipping" -ErrorAction SilentlyContinue
+        if ($proc) {{
+            $proc.ProcessorAffinity = {}
+            Write-Host "AFFINITY_SET"
+            exit 0
+        }} else {{
+            Write-Host "NOT_FOUND"
+            exit 1
+        }}
+        "#,
+        mask
+    );
+
+    let result = Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            if stdout.contains("AFFINITY_SET") {
+                Ok(PriorityResult {
+                    success: true,
+                    message: "三角洲进程已设置为使用指定处理器核心".to_string(),
+                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
+                    was_running: true,
+                })
+            } else {
+                Ok(PriorityResult {
+                    success: false,
+                    message: "三角洲游戏未运行，请先启动游戏".to_string(),
+                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
+                    was_running: false,
+                })
+            }
+        }
+        Err(e) => Err(format!("设置三角洲进程核心分配失败: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub async fn restrict_ace_affinity_with_mask(mask: u64) -> Result<AcePartialResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let ps_script = format!(
+        r#"
+        $count = 0
+        $processNames = @("ACE-Tray", "SGuard64", "SGuardSvc64")
+        foreach ($name in $processNames) {{
+            $processes = Get-Process -Name $name -ErrorAction SilentlyContinue
+            if ($processes) {{
+                foreach ($proc in $processes) {{
+                    try {{
+                        $proc.ProcessorAffinity = {}
+                        $count++
+                    }} catch {{}}
+                }}
+            }}
+        }}
+        Write-Host "RESTRICTED:$count"
+        if ($count -gt 0) {{ exit 0 }} else {{ exit 1 }}
+        "#,
+        mask
+    );
+
+    let result = Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    match result {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let count: u32 = stdout.lines()
+                .find_map(|l| l.strip_prefix("RESTRICTED:"))
+                .and_then(|s| s.trim().parse().ok())
+                .unwrap_or(0);
+            Ok(AcePartialResult {
+                success: count > 0,
+                message: if count > 0 { format!("已限制 {} 个 ACE 进程使用指定核心", count) } else { "未找到运行中的 ACE 进程".to_string() },
                 count,
             })
         }

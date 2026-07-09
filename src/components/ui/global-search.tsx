@@ -226,7 +226,7 @@ export function GlobalSearch() {
   const totalResults = flatResults.length;
 
   return (
-    <Box position="relative" ref={containerRef}>
+    <Box id="global-search" position="relative" ref={containerRef}>
       <InputGroup size="sm" w="180px">
         <InputLeftElement pointerEvents="none">
           <Icon as={Search} boxSize={4} color={placeholderColor} />
@@ -247,7 +247,7 @@ export function GlobalSearch() {
             borderColor: activeBg,
             boxShadow: `0 0 0 1px ${activeBg}`,
           }}
-          backdropFilter={liquidGlassEnabled ? "blur(20px)" : "blur(12px)"}
+          backdropFilter="blur(1px)"
           pr="60px"
         />
         {!isOpen && (
@@ -277,7 +277,7 @@ export function GlobalSearch() {
           border="1px solid"
           borderColor={inputBorderColor}
           boxShadow="2xl"
-          backdropFilter={liquidGlassEnabled ? "blur(20px)" : "blur(12px)"}
+          backdropFilter="blur(1px)"
           zIndex={1000}
           py={2}
           sx={{

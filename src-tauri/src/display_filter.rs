@@ -172,6 +172,9 @@ struct DisplayState {
     brightness: i32,
     contrast: i32,
     saturation: i32,
+    r_gamma: f64,
+    g_gamma: f64,
+    b_gamma: f64,
     mode: i32,
     icc_ramp: Option<[[u16; 256]; 3]>,
     icc_active: bool,
@@ -186,6 +189,9 @@ impl Default for DisplayState {
             brightness: 100,
             contrast: 100,
             saturation: 100,
+            r_gamma: 1.0,
+            g_gamma: 1.0,
+            b_gamma: 1.0,
             mode: 0,
             icc_ramp: None,
             icc_active: false,
@@ -284,6 +290,9 @@ pub struct FilterSettings {
     pub brightness: i32,
     pub contrast: i32,
     pub saturation: i32,
+    pub r_gamma: f64,
+    pub g_gamma: f64,
+    pub b_gamma: f64,
     pub mode: i32,
     pub is_active: bool,
 }
@@ -316,7 +325,15 @@ pub struct CustomFilterSettings {
     pub brightness: i32,
     pub contrast: i32,
     pub saturation: i32,
+    #[serde(default = "default_one_f64")]
+    pub r_gamma: f64,
+    #[serde(default = "default_one_f64")]
+    pub g_gamma: f64,
+    #[serde(default = "default_one_f64")]
+    pub b_gamma: f64,
 }
+
+fn default_one_f64() -> f64 { 1.0 }
 
 impl Default for CustomFilterSettings {
     fn default() -> Self {
@@ -325,6 +342,9 @@ impl Default for CustomFilterSettings {
             brightness: 100,
             contrast: 100,
             saturation: 100,
+            r_gamma: 1.0,
+            g_gamma: 1.0,
+            b_gamma: 1.0,
         }
     }
 }
@@ -494,6 +514,7 @@ fn build_gamma_ramp(
     contrast: i32,
     saturation: i32,
     mode: FilterMode,
+    custom_gamma: Option<(f64, f64, f64)>,
 ) -> [[u16; 256]; 3] {
     let (r_temp_mult, g_temp_mult, b_temp_mult) = kelvin_to_rgb_multipliers(temperature);
     let brightness_factor = brightness as f64 / 100.0;
@@ -530,48 +551,109 @@ fn build_gamma_ramp(
         }
     };
 
+    // Per-channel gamma: if custom_gamma is Some, use it as (r_gamma, g_gamma, b_gamma)
+    let use_per_channel = custom_gamma.is_some()
+        && (custom_gamma.unwrap().0 - 1.0).abs() > 0.001
+        || (custom_gamma.unwrap_or((1.0, 1.0, 1.0)).1 - 1.0).abs() > 0.001
+        || (custom_gamma.unwrap_or((1.0, 1.0, 1.0)).2 - 1.0).abs() > 0.001;
+
+    let (r_gamma, g_gamma, b_gamma) = custom_gamma.unwrap_or((gamma, gamma, gamma));
+
     let mut ramp = [[0u16; 256]; 3];
 
-    for i in 0..256 {
-        let input = i as f64 / 255.0;
+    if use_per_channel {
+        // Per-channel gamma pipeline: each channel gets independent gamma + s_curve
+        for i in 0..256 {
+            let input = i as f64 / 255.0;
 
-        let mut adjusted = apply_gamma_curve(input, gamma);
+            let r_adj = apply_gamma_curve(input, r_gamma);
+            let g_adj = apply_gamma_curve(input, g_gamma);
+            let b_adj = apply_gamma_curve(input, b_gamma);
 
-        adjusted = apply_s_curve(adjusted, s_curve_strength);
+            let r_adj = apply_s_curve(r_adj, s_curve_strength);
+            let g_adj = apply_s_curve(g_adj, s_curve_strength);
+            let b_adj = apply_s_curve(b_adj, s_curve_strength);
 
-        adjusted = ((adjusted - 0.5) * contrast_factor + 0.5) * brightness_factor;
-        adjusted = adjusted.clamp(0.0, 1.0);
+            let r_adj = ((r_adj - 0.5) * contrast_factor + 0.5) * brightness_factor;
+            let g_adj = ((g_adj - 0.5) * contrast_factor + 0.5) * brightness_factor;
+            let b_adj = ((b_adj - 0.5) * contrast_factor + 0.5) * brightness_factor;
 
-        let base_output = adjusted * 65535.0;
+            let r_base = r_adj.clamp(0.0, 1.0) * 65535.0;
+            let g_base = g_adj.clamp(0.0, 1.0) * 65535.0;
+            let b_base = b_adj.clamp(0.0, 1.0) * 65535.0;
 
-        let r_final = (base_output * r_temp_mult * r_boost).min(65535.0);
-        let g_final = (base_output * g_temp_mult * g_boost).min(65535.0);
-        let b_final = (base_output * b_temp_mult * b_boost).min(65535.0);
+            let r_final = (r_base * r_temp_mult * r_boost).min(65535.0);
+            let g_final = (g_base * g_temp_mult * g_boost).min(65535.0);
+            let b_final = (b_base * b_temp_mult * b_boost).min(65535.0);
 
-        let r_luma = 0.299 * r_final;
-        let g_luma = 0.587 * g_final;
-        let b_luma = 0.114 * b_final;
-        let luma = r_luma + g_luma + b_luma;
+            let r_luma = 0.299 * r_final;
+            let g_luma = 0.587 * g_final;
+            let b_luma = 0.114 * b_final;
+            let luma = r_luma + g_luma + b_luma;
 
-        let r_out = if (sat_factor - 1.0).abs() > 0.001 {
-            luma + (r_final - luma) * sat_factor
-        } else {
-            r_final
-        };
-        let g_out = if (sat_factor - 1.0).abs() > 0.001 {
-            luma + (g_final - luma) * sat_factor
-        } else {
-            g_final
-        };
-        let b_out = if (sat_factor - 1.0).abs() > 0.001 {
-            luma + (b_final - luma) * sat_factor
-        } else {
-            b_final
-        };
+            let r_out = if (sat_factor - 1.0).abs() > 0.001 {
+                luma + (r_final - luma) * sat_factor
+            } else {
+                r_final
+            };
+            let g_out = if (sat_factor - 1.0).abs() > 0.001 {
+                luma + (g_final - luma) * sat_factor
+            } else {
+                g_final
+            };
+            let b_out = if (sat_factor - 1.0).abs() > 0.001 {
+                luma + (b_final - luma) * sat_factor
+            } else {
+                b_final
+            };
 
-        ramp[0][i] = r_out.clamp(0.0, 65535.0) as u16;
-        ramp[1][i] = g_out.clamp(0.0, 65535.0) as u16;
-        ramp[2][i] = b_out.clamp(0.0, 65535.0) as u16;
+            ramp[0][i] = r_out.clamp(0.0, 65535.0) as u16;
+            ramp[1][i] = g_out.clamp(0.0, 65535.0) as u16;
+            ramp[2][i] = b_out.clamp(0.0, 65535.0) as u16;
+        }
+    } else {
+        // Original unified gamma pipeline (unchanged for preset modes)
+        for i in 0..256 {
+            let input = i as f64 / 255.0;
+
+            let mut adjusted = apply_gamma_curve(input, gamma);
+
+            adjusted = apply_s_curve(adjusted, s_curve_strength);
+
+            adjusted = ((adjusted - 0.5) * contrast_factor + 0.5) * brightness_factor;
+            adjusted = adjusted.clamp(0.0, 1.0);
+
+            let base_output = adjusted * 65535.0;
+
+            let r_final = (base_output * r_temp_mult * r_boost).min(65535.0);
+            let g_final = (base_output * g_temp_mult * g_boost).min(65535.0);
+            let b_final = (base_output * b_temp_mult * b_boost).min(65535.0);
+
+            let r_luma = 0.299 * r_final;
+            let g_luma = 0.587 * g_final;
+            let b_luma = 0.114 * b_final;
+            let luma = r_luma + g_luma + b_luma;
+
+            let r_out = if (sat_factor - 1.0).abs() > 0.001 {
+                luma + (r_final - luma) * sat_factor
+            } else {
+                r_final
+            };
+            let g_out = if (sat_factor - 1.0).abs() > 0.001 {
+                luma + (g_final - luma) * sat_factor
+            } else {
+                g_final
+            };
+            let b_out = if (sat_factor - 1.0).abs() > 0.001 {
+                luma + (b_final - luma) * sat_factor
+            } else {
+                b_final
+            };
+
+            ramp[0][i] = r_out.clamp(0.0, 65535.0) as u16;
+            ramp[1][i] = g_out.clamp(0.0, 65535.0) as u16;
+            ramp[2][i] = b_out.clamp(0.0, 65535.0) as u16;
+        }
     }
 
     for channel in 0..3 {
@@ -744,7 +826,7 @@ fn set_gamma_ramp_for_display(display_index: usize, ramp: &[[u16; 256]; 3]) -> R
                 "可能是显卡驱动不支持",
                 display_index
             );
-            return Err("设置 Gamma Ramp 失败，可能是显卡驱动不支持".to_string());
+            return Err("您的设置太逆天啦，你的显卡可能不支持喔~".to_string());
         }
 
         log::warn!(
@@ -770,7 +852,7 @@ fn set_gamma_ramp_for_display(display_index: usize, ramp: &[[u16; 256]; 3]) -> R
                 "set_gamma_ramp_for_display[{}]: Strategy2 桌面 DC 回退也失败！显卡/驱动可能不支持 Gamma Ramp",
                 display_index
             );
-            return Err("设置 Gamma Ramp 失败，可能是显卡驱动不支持".to_string());
+            return Err("您的设置太逆天啦，你的显卡可能不支持喔~".to_string());
         }
 
         log::info!(
@@ -851,7 +933,7 @@ fn get_current_gamma_ramp_for_display(_display_index: usize) -> Result<[[u16; 25
 // ─── Filter application ───
 
 fn apply_filter_internal_for_display(display_index: usize) -> Result<(), String> {
-    let (icc_active, temperature, brightness, contrast, saturation, mode, icc_ramp_opt) =
+    let (icc_active, temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, mode, icc_ramp_opt) =
         with_display_state(display_index, |state| {
             (
                 state.icc_active,
@@ -859,6 +941,9 @@ fn apply_filter_internal_for_display(display_index: usize) -> Result<(), String>
                 state.brightness,
                 state.contrast,
                 state.saturation,
+                state.r_gamma,
+                state.g_gamma,
+                state.b_gamma,
                 state.mode,
                 state.icc_ramp,
             )
@@ -872,7 +957,8 @@ fn apply_filter_internal_for_display(display_index: usize) -> Result<(), String>
     }
 
     let mode_enum = FilterMode::from_i32(mode);
-    let ramp = build_gamma_ramp(temperature, brightness, contrast, saturation, mode_enum);
+    let custom_gamma = Some((r_gamma, g_gamma, b_gamma));
+    let ramp = build_gamma_ramp(temperature, brightness, contrast, saturation, mode_enum, custom_gamma);
     log::info!("Monitor[{}]: applying regular filter ramp", display_index);
     set_gamma_ramp_for_display(display_index, &ramp)
 }
@@ -884,7 +970,7 @@ fn restore_original_gamma_for_display(display_index: usize) -> Result<(), String
     if let Some(ref ramp) = original {
         set_gamma_ramp_for_display(display_index, ramp)?;
     } else {
-        let identity_ramp = build_gamma_ramp(6500, 100, 100, 100, FilterMode::Normal);
+        let identity_ramp = build_gamma_ramp(6500, 100, 100, 100, FilterMode::Normal, None);
         set_gamma_ramp_for_display(display_index, &identity_ramp)?;
     }
 
@@ -897,6 +983,19 @@ fn start_filter_monitor() {
     }
 
     thread::spawn(|| {
+        // Initialize a Windows message queue for this thread.
+        // SetDeviceGammaRamp / GDI display operations require the calling
+        // thread to have a message pump, otherwise they fail silently on
+        // modern GPU drivers (especially Optimus / switchable graphics).
+        #[cfg(target_os = "windows")]
+        {
+            use windows_sys::Win32::UI::WindowsAndMessaging::PeekMessageW;
+            unsafe {
+                let mut msg = std::mem::zeroed();
+                PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, 0); // PM_NOREMOVE = 0
+            }
+        }
+
         loop {
             // Collect active display indices (release all locks before applying)
             let active_indices: Vec<usize> = {
@@ -944,6 +1043,9 @@ pub async fn get_filter_settings(display_index: Option<usize>) -> Result<FilterS
         brightness: state.brightness,
         contrast: state.contrast,
         saturation: state.saturation,
+        r_gamma: state.r_gamma,
+        g_gamma: state.g_gamma,
+        b_gamma: state.b_gamma,
         mode: state.mode,
         is_active: state.filter_active,
     }))
@@ -958,6 +1060,9 @@ pub async fn set_filter_settings(
     saturation: i32,
     mode: i32,
     is_active: bool,
+    r_gamma: Option<f64>,
+    g_gamma: Option<f64>,
+    b_gamma: Option<f64>,
 ) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
@@ -967,12 +1072,18 @@ pub async fn set_filter_settings(
         let contrast = contrast.clamp(50, 150);
         let saturation = saturation.clamp(50, 150);
         let mode = mode.clamp(0, 8);
+        let r_gamma = r_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
+        let g_gamma = g_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
+        let b_gamma = b_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
 
         with_display_state(idx, |state| {
             state.temperature = temperature;
             state.brightness = brightness;
             state.contrast = contrast;
             state.saturation = saturation;
+            state.r_gamma = r_gamma;
+            state.g_gamma = g_gamma;
+            state.b_gamma = b_gamma;
             state.mode = mode;
             state.icc_active = false;
 
@@ -1002,6 +1113,9 @@ pub async fn set_filter_settings(
                 brightness,
                 contrast,
                 saturation,
+                r_gamma,
+                g_gamma,
+                b_gamma,
                 mode,
                 is_active: actually_active,
             }),
@@ -1046,6 +1160,9 @@ pub async fn enable_filter(display_index: Option<usize>) -> Result<FilterResult,
                     brightness: state.brightness,
                     contrast: state.contrast,
                     saturation: state.saturation,
+                    r_gamma: state.r_gamma,
+                    g_gamma: state.g_gamma,
+                    b_gamma: state.b_gamma,
                     mode: state.mode,
                     is_active: true,
                 }),
@@ -1066,6 +1183,9 @@ pub async fn enable_filter(display_index: Option<usize>) -> Result<FilterResult,
                 brightness: state.brightness,
                 contrast: state.contrast,
                 saturation: state.saturation,
+                r_gamma: state.r_gamma,
+                g_gamma: state.g_gamma,
+                b_gamma: state.b_gamma,
                 mode: state.mode,
                 is_active: true,
             }),
@@ -1106,6 +1226,9 @@ pub async fn disable_filter(display_index: Option<usize>) -> Result<FilterResult
                     brightness: state.brightness,
                     contrast: state.contrast,
                     saturation: state.saturation,
+                    r_gamma: state.r_gamma,
+                    g_gamma: state.g_gamma,
+                    b_gamma: state.b_gamma,
                     mode: state.mode,
                     is_active: false,
                 }),
@@ -1131,6 +1254,9 @@ pub async fn disable_filter(display_index: Option<usize>) -> Result<FilterResult
                 brightness: state.brightness,
                 contrast: state.contrast,
                 saturation: state.saturation,
+                r_gamma: state.r_gamma,
+                g_gamma: state.g_gamma,
+                b_gamma: state.b_gamma,
                 mode: state.mode,
                 is_active: false,
             }),
@@ -1209,6 +1335,9 @@ fn enable_filter_sync() -> Result<FilterResult, String> {
                 brightness: state.brightness,
                 contrast: state.contrast,
                 saturation: state.saturation,
+                r_gamma: state.r_gamma,
+                g_gamma: state.g_gamma,
+                b_gamma: state.b_gamma,
                 mode: state.mode,
                 is_active: true,
             }),
@@ -1229,6 +1358,9 @@ fn enable_filter_sync() -> Result<FilterResult, String> {
             brightness: state.brightness,
             contrast: state.contrast,
             saturation: state.saturation,
+            r_gamma: state.r_gamma,
+            g_gamma: state.g_gamma,
+            b_gamma: state.b_gamma,
             mode: state.mode,
             is_active: true,
         }),
@@ -1261,6 +1393,9 @@ fn disable_filter_sync() -> Result<FilterResult, String> {
                 brightness: state.brightness,
                 contrast: state.contrast,
                 saturation: state.saturation,
+                r_gamma: state.r_gamma,
+                g_gamma: state.g_gamma,
+                b_gamma: state.b_gamma,
                 mode: state.mode,
                 is_active: false,
             }),
@@ -1282,6 +1417,9 @@ fn disable_filter_sync() -> Result<FilterResult, String> {
             brightness: state.brightness,
             contrast: state.contrast,
             saturation: state.saturation,
+            r_gamma: state.r_gamma,
+            g_gamma: state.g_gamma,
+            b_gamma: state.b_gamma,
             mode: state.mode,
             is_active: false,
         }),
@@ -1404,6 +1542,9 @@ pub async fn apply_preset(
             preset.saturation,
             preset.mode,
             is_active,
+            None,
+            None,
+            None,
         )
         .await
     } else {
@@ -1452,6 +1593,9 @@ pub async fn save_custom_filter_settings(
     brightness: i32,
     contrast: i32,
     saturation: i32,
+    r_gamma: Option<f64>,
+    g_gamma: Option<f64>,
+    b_gamma: Option<f64>,
 ) -> Result<CustomFilterSettings, String> {
     let idx = resolve_display_index(display_index);
     let settings = CustomFilterSettings {
@@ -1459,6 +1603,9 @@ pub async fn save_custom_filter_settings(
         brightness: brightness.clamp(50, 150),
         contrast: contrast.clamp(50, 150),
         saturation: saturation.clamp(50, 150),
+        r_gamma: r_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
+        g_gamma: g_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
+        b_gamma: b_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
     };
 
     let mut all_settings = get_or_load_custom_settings();
@@ -1487,6 +1634,7 @@ pub async fn export_custom_filter(display_index: Option<usize>) -> Result<Option
             settings.contrast,
             settings.saturation,
             FilterMode::Normal,
+            Some((settings.r_gamma, settings.g_gamma, settings.b_gamma)),
         );
 
         let default_name = "NexBox_Custom.icc";
@@ -2133,6 +2281,9 @@ pub async fn apply_icc_preset(
                 brightness: state.brightness,
                 contrast: state.contrast,
                 saturation: state.saturation,
+                r_gamma: state.r_gamma,
+                g_gamma: state.g_gamma,
+                b_gamma: state.b_gamma,
                 mode: state.mode,
                 is_active: state.filter_active,
             }),
@@ -2399,6 +2550,7 @@ pub async fn export_preset_as_icc(preset_id: String) -> Result<Option<String>, S
             preset.contrast,
             preset.saturation,
             mode,
+            None,
         );
 
         // Show save file dialog

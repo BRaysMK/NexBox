@@ -3,7 +3,7 @@
 
 #define MyAppName "NexBox"
 #define MyAppDisplayName "新境盒"
-#define MyAppVersion "4.6.5"
+#define MyAppVersion "4.6.6"
 #define MyAppPublisher "MuLiu"
 #define MyAppURL "https://www.nexbox.top/"
 #define MyAppExeName "nexbox.exe"

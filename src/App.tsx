@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { MainLayout } from "./components/ui/main-layout";
 import { AnimatedPage, type TransitionMode, readTransitionMode } from "./components/ui/animated-page";
@@ -35,6 +35,7 @@ import TestsPage from "./pages/TestsPage";
 import EpicFreePage from "./pages/EpicFreePage";
 import ReactionTestPage from "./pages/ReactionTestPage";
 import WidgetIslandPage from "./pages/WidgetIslandPage";
+import TrayMenuPage from "./pages/TrayMenuPage";
 import DynamicIslandPage from "./pages/DynamicIslandPage";
 import AimTestPage from "./pages/AimTestPage";
 import FocusTestPage from "./pages/FocusTestPage";
@@ -70,16 +71,22 @@ import { LuDownload, LuRefreshCw } from "react-icons/lu";
 import { SplashScreen } from "./components/SplashScreen";
 import { useAppStartup } from "./contexts/app-startup-context";
 import { MusicProvider } from "./contexts/music-context";
-import { MiniMusicPlayer } from "./components/MiniMusicPlayer";
+import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "4.6.5";
+const CURRENT_VERSION = "4.6.6";
 
 function App() {
   const { t } = useTranslation();
   const { isStartupComplete } = useAppStartup();
   const location = useLocation();
+  const navigate = useNavigate();
   const toast = useToast();
+
+  // Tray menu: render standalone, no main layout
+  if (location.pathname === "/tray-menu") {
+    return <TrayMenuPage />;
+  }
 
   // Widget window: render WidgetIslandPage standalone, no main layout
   if (location.pathname === "/widget") {
@@ -116,7 +123,33 @@ function App() {
     return () => window.removeEventListener("page-transition-setting-changed", handler);
   }, []);
 
+  useEffect(() => {
+    const unlisten = listen("check-update", async () => {
+      navigate("/settings?section=about");
 
+      setTimeout(async () => {
+        try {
+          const release = await fetchLatestRelease();
+          if (release) {
+            const hasUpdate = compareVersions(CURRENT_VERSION, release.tag_name);
+            if (hasUpdate) {
+              setLatestRelease(release);
+              setIsModalOpen(true);
+            } else {
+              toast({ title: "已是最新版本", status: "success", duration: 2000, isClosable: true });
+            }
+          }
+        } catch (error) {
+          console.error("Failed to check for updates:", error);
+          toast({ title: "检查更新失败", status: "error", duration: 2000, isClosable: true });
+        }
+      }, 500);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [navigate, toast]);
 
   useEffect(() => {
     const checkUpdateOnStartup = async () => {
@@ -266,6 +299,7 @@ function App() {
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
+              <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
         </Routes>
       </AnimatePresence>
     ) : (
@@ -309,6 +343,7 @@ function App() {
             <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
             <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
+            <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
       </Routes>
     )}
 

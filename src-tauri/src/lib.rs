@@ -1,5 +1,6 @@
 mod announcement;
 mod auto_start;
+mod music_api;
 mod crosshair;
 mod delta_force;
 mod display_filter;
@@ -67,6 +68,19 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
+// 初始化音乐 API cookie 缓存
+let app_handle_for_music = app.handle().clone();
+// 设置 AppHandle 供代理服务器使用
+music_api::audio_proxy::set_app_handle(app_handle_for_music.clone());
+tauri::async_runtime::spawn(async move {
+    music_api::init_cookie_cache(&app_handle_for_music).await;
+    // 启动音频代理服务器
+    match music_api::audio_proxy::start_audio_proxy().await {
+        Ok(port) => log::info!("[MusicAPI] audio proxy started on port {port}"),
+                    Err(e) => log::error!("[MusicAPI] failed to start audio proxy: {e}"),
+                }
+            });
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -101,6 +115,7 @@ pub fn run() {
             }
             sensor::start_sensor_process(app);
             utils::sys_info::check_and_send_statistics(app);
+            overlay_panel::start_hardware_poller();
 
             // 初始化 ACE 自动检测（读取持久化配置并启动后台任务）
             let app_handle = app.handle().clone();
@@ -202,6 +217,24 @@ pub fn run() {
         hardware::get_os_version,
         hardware::get_disk_health_info,
         music::get_music_files,
+            // === 音乐播放器 API ===
+            music_api::music_search,
+            music_api::music_song_url,
+            music_api::music_login_qr_key,
+            music_api::music_login_qr_create,
+            music_api::music_login_qr_check,
+            music_api::music_login_status,
+            music_api::music_login_cookie,
+            music_api::music_logout,
+            music_api::music_user_playlist,
+            music_api::music_playlist_tracks,
+            music_api::music_likelist,
+            music_api::music_like,
+            music_api::music_lyric,
+            music_api::music_personalized,
+            music_api::music_recommend_songs,
+            music_api::music_open_login_window,
+            music_api::audio_proxy::cmd_get_proxy_port,
         downloader::download_file,
         downloader::open_installer,
         downloader::download_update,
@@ -227,8 +260,10 @@ pub fn run() {
         optimization::get_auto_clean_config,
         optimization::boost_delta_force_priority,
         optimization::boost_delta_force_affinity,
+        optimization::boost_delta_force_affinity_with_mask,
         optimization::limit_ace_priority,
         optimization::restrict_ace_affinity,
+        optimization::restrict_ace_affinity_with_mask,
         optimization::set_ace_efficiency_mode,
         optimization::optimize_all_game_processes,
         optimization::set_ace_auto_detect,
@@ -447,7 +482,6 @@ pub fn run() {
         overlay_panel::get_overlay_hardware_data,
         overlay_panel::update_overlay_settings,
         overlay_panel::toggle_overlay_panel,
-        overlay_panel::get_misans_font_path,
         overlay_panel::set_overlay_drag_mode,
         overlay_panel::get_overlay_current_settings,
         overlay_panel::check_drag_mode_status,

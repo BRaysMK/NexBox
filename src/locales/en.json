@@ -389,8 +389,10 @@
         "affinitySuccess": "Restricted {{count}} ACE process(es) to single core"
       },
       "aceEfficiency": {
-        "title": "Windows Efficiency Mode",
-        "description": "Enable task manager style efficiency mode for ACE processes: set priority to Idle + enable power throttling (EcoQoS), significantly reducing background resource usage"
+        "title": "Scheduling Optimization",
+        "description": "Enable background power-saving scheduling for ACE processes: Below Normal priority + background I/O throttle + low memory priority, significantly reducing background resource usage",
+        "success": "Scheduling optimization enabled for {{count}} ACE process(es)",
+        "notRunning": "No running ACE processes found"
       },
       "optimizeAll": {
         "button": "Optimize All",
@@ -419,6 +421,17 @@
         "notOptimized": "Not Optimized",
         "processRunning": "Process Running",
         "processNotRunning": "Process Not Running"
+      },
+      "affinitySettings": {
+        "title": "Core Selection",
+        "description": "Select CPU cores to assign ({{count}} logical cores available)",
+        "save": "Save",
+        "cancel": "Cancel",
+        "selectAll": "Select All",
+        "clearAll": "Clear",
+        "configSaved": "Core configuration saved",
+        "deltaDefault": "All cores except CPU0 (default)",
+        "aceDefault": "CPU0 only (default)"
       },
       "apply": "Apply",
       "applied": "Applied",
@@ -514,6 +527,11 @@
     "sjmclDesc": "Third-party Minecraft launcher developed by Shanghai Jiao Tong University",
     "ddegameDesc": "Games are not just games, they can enter life and change life",
     "huorongDesc": "Pure endpoint protection. Lightweight, quiet, comprehensive defense",
+    "steamDesc": "The ultimate destination for playing, discussing, and creating games",
+    "epicGamesDesc": "A young game distribution platform that offers free games from time to time",
+    "nvidiaAppDesc": "Get the latest NVIDIA drivers and adjust GPU 3D settings",
+    "pcl2Desc": "A super easy-to-use third-party Minecraft launcher",
+    "obsDesc": "Professional recording and streaming software",
     "descriptions": {
       "assistantCrosshair": "Game screen crosshair assistant tool",
       "memreduct": "Memory cleaning tool",
@@ -1101,6 +1119,7 @@
       "dynamicBackground": "Dynamic Background",
       "dynamicBackgroundDesc": "When enabled, dynamic background effect will be displayed",
       "uploadVideo": "Upload Video",
+      "unsupportedVideoFormat": "Unsupported video format. Please use mp4 or webm files.",
       "themeColor": "Theme Color",
       "themeColorLabel": "Custom Theme Color",
       "themeColorDesc": "Set the theme color for navigation bar, buttons, menus and other elements",

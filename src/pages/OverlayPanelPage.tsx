@@ -112,7 +112,6 @@ const DEFAULT_SETTINGS: OverlaySettings = {
 };
 
 const BUILTIN_CHINESE_FONTS = [
-  "MiSans Medium",
   "Microsoft YaHei",
   "Microsoft YaHei UI",
   "SimSun",
@@ -290,7 +289,6 @@ export default function OverlayPanelPage() {
   useEffect(() => {
     loadStatus();
     loadHardwareData(0);
-    invoke("get_misans_font_path").catch(() => {});
     invoke<boolean>("is_nvidia_gpu").then(setIsNvidia).catch(() => setIsNvidia(false));
   }, []);
 

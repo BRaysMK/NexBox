@@ -113,7 +113,7 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   custom_items: [],
   opacity: 255,
   style: "default",
-  font: "MiSans Medium",
+  font: "Microsoft YaHei",
   position_x: null,
   position_y: null,
 };

@@ -107,10 +107,9 @@ export function TitleBar() {
       localStorage.setItem("nexbox_close_behavior", "close");
     }
     try {
-      const appWindow = getCurrentWindow();
-      await appWindow.close();
+      await invoke("exit_app");
     } catch (error) {
-      console.error("Failed to close window:", error);
+      console.error("Failed to exit app:", error);
     }
     setShowCloseDialog(false);
   };
@@ -134,7 +133,7 @@ export function TitleBar() {
           >
             {searchBarVisible && <GlobalSearch />}
           </Box>
-          <HStack spacing={1} h="40px" align="center">
+          <HStack id="window-controls" spacing={1} h="40px" align="center">
             <IconButton
               icon={<LuMinus size={18} />}
               aria-label="最小化"

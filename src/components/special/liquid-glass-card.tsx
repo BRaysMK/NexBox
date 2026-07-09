@@ -25,44 +25,21 @@ export function LiquidGlassCard({
   const defaultBg = useColorModeValue("white", "#111111");
   const defaultBorder = useColorModeValue("gray.200", "#333333");
 
-  const cardStyles = useMemo(() => {
-    if (!liquidGlassEnabled) {
-      return {
-        bg: defaultBg,
-        borderRadius: "xl",
-        border: isDashed ? "1px dashed" : "1px solid",
-        borderColor: defaultBorder,
-        boxShadow: "sm",
-      };
-    }
-
-    return {
-      bg: glassBgColor,
-      borderRadius: "xl",
-        border: isDashed ? "1px dashed" : "1px solid",
-      borderColor: glassBorderColor,
-      backdropFilter: "blur(1px)",
-      boxShadow: "sm",
-      sx: {
-        transform: "translateZ(0)",
-        WebkitTransform: "translateZ(0)",
-        WebkitBackfaceVisibility: "hidden",
-        backfaceVisibility: "hidden",
-      },
-    };
-  }, [liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder, isDashed]);
-
-  if (!liquidGlassEnabled) {
-    return (
-      <Box
-        className={className}
-        {...cardStyles}
-        {...props}
-      >
-        {children}
-      </Box>
-    );
-  }
+  const cardStyles = useMemo(() => ({
+    bg: liquidGlassEnabled ? glassBgColor : defaultBg,
+    borderRadius: "xl",
+    border: isDashed ? "1px dashed" : "1px solid",
+    borderColor: liquidGlassEnabled ? glassBorderColor : defaultBorder,
+    backdropFilter: liquidGlassEnabled ? "blur(1px)" : "blur(0px)",
+    boxShadow: "sm",
+    transition: "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
+    sx: {
+      transform: "translateZ(0)",
+      WebkitTransform: "translateZ(0)",
+      WebkitBackfaceVisibility: "hidden",
+      backfaceVisibility: "hidden",
+    },
+  }), [liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder, isDashed]);
 
   return (
     <Box
@@ -73,6 +50,8 @@ export function LiquidGlassCard({
     >
       <Box
         style={getBorderGlowStyle(glowColor)}
+        opacity={liquidGlassEnabled ? 1 : 0}
+        transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
       />
       {children}
     </Box>

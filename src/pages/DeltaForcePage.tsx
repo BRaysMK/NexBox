@@ -482,7 +482,7 @@ const LoadoutCard = memo(function LoadoutCard({
       <Box position="relative">
         <Text
           fontSize="sm"
-          fontFamily="'MiSans Medium', monospace"
+          fontFamily="monospace"
           bg={useColorModeValue("gray.100", "#2a2a2a")}
           p={3}
           borderRadius="lg"
@@ -1034,14 +1034,6 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
 export default function DeltaForcePage() {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-
-  useEffect(() => {
-    if (document.getElementById("misans-font-face")) return;
-    const style = document.createElement("style");
-    style.id = "misans-font-face";
-    style.textContent = "@font-face{font-family:'MiSans Medium';src:url('/fonts/MiSans-Medium.ttf') format('truetype');font-weight:500;font-style:normal}";
-    document.head.appendChild(style);
-  }, []);
 
   return (
     <Box pt={8} pb={8}>

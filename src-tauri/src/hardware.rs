@@ -159,6 +159,7 @@ struct GpuStaticInfo {
 }
 
 static STATIC_HARDWARE_CACHE: Mutex<Option<StaticHardwareInfo>> = Mutex::new(None);
+static HARDWARE_INIT_LOCK: Mutex<()> = Mutex::new(());
 static CPU_SYSTEM: Mutex<Option<System>> = Mutex::new(None);
 
 fn detect_gpu_vendor(name: &str) -> GpuVendor {
@@ -444,7 +445,19 @@ fn get_cpu_dynamic_info() -> Option<u16> {
 }
 
 fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
-    // 首先尝试从缓存获取
+    // Fast path: 先检查缓存，不加初始化锁
+    {
+        let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
+        if let Some(ref info) = *cache {
+            log::info!("从缓存获取静态硬件信息");
+            return Ok(info.clone());
+        }
+    }
+
+    // 序列化首次初始化，防止并发重复获取
+    let _init_guard = HARDWARE_INIT_LOCK.lock().unwrap();
+
+    // Double-check: 获取锁后再次检查缓存
     {
         let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
         if let Some(ref info) = *cache {

@@ -2,9 +2,8 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{
-    menu::{Menu, MenuItem},
     tray::{TrayIcon, TrayIconBuilder},
-    AppHandle, Manager, Runtime, Window,
+    AppHandle, Emitter, Manager, Runtime, Window,
 };
 
 static TRAY_INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -16,61 +15,58 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
         return Err("Tray already initialized".into());
     }
 
-    let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-    let exit_item = MenuItem::with_id(app, "exit", "退出", true, None::<&str>)?;
-    
-    let menu = Menu::with_items(app, &[&show_item, &exit_item])?;
-    
     let tray = TrayIconBuilder::new()
         .icon(app.default_window_icon().unwrap().clone())
-        .menu(&menu)
-        .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| {
-            match event.id.as_ref() {
-                "show" => {
+        .on_tray_icon_event(|tray, event| {
+            let app = tray.app_handle();
+            match event {
+                tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left,
+                    ..
+                } => {
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.show();
                         let _ = window.unminimize();
                         let _ = window.set_focus();
-                        
-                        // Ensure widget window doesn't block main window
+
                         if let Some(widget) = app.get_webview_window("widget") {
                             let _ = widget.set_always_on_top(false);
-                            let _ = widget.set_focus(); // temporarily focus widget then back to main
+                            let _ = widget.set_focus();
                         }
                         let _ = window.set_focus();
                     }
                 }
-                "exit" => {
-                    app.exit(0);
+                tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Right,
+                    rect,
+                    ..
+                } => {
+                    if let Some(menu_window) = app.get_webview_window("tray-menu") {
+                        let (px, py) = match rect.position {
+                            tauri::Position::Physical(p) => (p.x, p.y),
+                            tauri::Position::Logical(p) => (p.x as i32, p.y as i32),
+                        };
+                        let (sw, _sh) = match rect.size {
+                            tauri::Size::Physical(s) => (s.width as i32, s.height as i32),
+                            tauri::Size::Logical(s) => (s.width as i32, s.height as i32),
+                        };
+                        let x = (px + sw / 2 - 95).max(0);
+                        let y = (py - 140).max(0);
+                        let _ = menu_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                            x,
+                            y,
+                        }));
+                        let _ = menu_window.show();
+                        let _ = menu_window.set_focus();
+                    }
                 }
                 _ => {}
             }
         })
-        .on_tray_icon_event(|tray, event| {
-            if let tauri::tray::TrayIconEvent::Click {
-                button: tauri::tray::MouseButton::Left,
-                ..
-            } = event {
-                let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.unminimize();
-                    let _ = window.set_focus();
-                    
-                    // Ensure widget window doesn't block main window
-                    if let Some(widget) = app.get_webview_window("widget") {
-                        let _ = widget.set_always_on_top(false);
-                        let _ = widget.set_focus();
-                    }
-                    let _ = window.set_focus();
-                }
-            }
-        })
         .build(app)?;
-    
+
     TRAY_INITIALIZED.store(true, Ordering::SeqCst);
-    
+
     Ok(tray)
 }
 
@@ -86,14 +82,13 @@ pub async fn show_window<R: Runtime>(window: Window<R>) -> Result<(), String> {
     window.show().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
-    
-    // Ensure widget window doesn't block main window
+
     if let Some(widget) = app.get_webview_window("widget") {
         let _ = widget.set_always_on_top(false);
         let _ = widget.set_focus();
     }
     let _ = window.set_focus();
-    
+
     Ok(())
 }
 
@@ -117,6 +112,21 @@ pub fn get_dont_ask_again() -> bool {
 #[tauri::command]
 pub fn set_dont_ask_again(value: bool) {
     DONT_ASK_AGAIN.store(value, Ordering::SeqCst);
+}
+
+#[tauri::command]
+pub fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
+pub fn check_update_and_show(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit("check-update", ());
 }
 
 pub fn cleanup() {

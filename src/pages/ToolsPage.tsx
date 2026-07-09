@@ -1,4 +1,4 @@
-﻿import {
+﻿﻿import {
   Box,
   Flex,
   Grid,
@@ -462,6 +462,7 @@ function OfficialToolSection({
   activeCategory: string;
 }) {
   const { t } = useTranslation();
+  const { getActiveColor } = useThemeColor();
   const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
   const dividerColor = useColorModeValue("gray.200", "#333333");
   const iconColor = useColorModeValue("gray.700", "#cccccc");
@@ -503,13 +504,53 @@ function OfficialToolSection({
     });
   };
 
+  const handleOpenSteam = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://store.steampowered.com/");
+    }).catch(() => {
+      window.open("https://store.steampowered.com/", "_blank");
+    });
+  };
+
+  const handleOpenEpicGames = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://www.epicgames.com/");
+    }).catch(() => {
+      window.open("https://www.epicgames.com/", "_blank");
+    });
+  };
+
+  const handleOpenNvidiaApp = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://www.nvidia.cn/software/nvidia-app/");
+    }).catch(() => {
+      window.open("https://www.nvidia.cn/software/nvidia-app/", "_blank");
+    });
+  };
+
+  const handleOpenPCL2 = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://ifdian.net/a/LTcat");
+    }).catch(() => {
+      window.open("https://ifdian.net/a/LTcat", "_blank");
+    });
+  };
+
+  const handleOpenOBS = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://obsproject.com/download");
+    }).catch(() => {
+      window.open("https://obsproject.com/download", "_blank");
+    });
+  };
+
   return (
     <Box mb={8}>
       <HStack mb={4} spacing={3}>
         <Text fontSize={"lg"} fontWeight={"bold"} color={sectionTitleColor}>
           {t("tools.officialTools")}
         </Text>
-        <Badge fontSize={"xs"} colorScheme={"blue"}>
+        <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
           {t("tools.recommended")}
         </Badge>
       </HStack>
@@ -547,7 +588,7 @@ function OfficialToolSection({
                 <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
                   MCTier
                 </Text>
-                <Badge colorScheme={"blue"} fontSize={"xs"} variant={"subtle"}>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
                   {t("tools.recommended")}
                 </Badge>
               </HStack>
@@ -583,7 +624,7 @@ function OfficialToolSection({
                 <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
                   SJMCL
                 </Text>
-                <Badge colorScheme={"blue"} fontSize={"xs"} variant={"subtle"}>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
                   {t("tools.recommended")}
                 </Badge>
               </HStack>
@@ -619,7 +660,7 @@ function OfficialToolSection({
                 <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
                   东东电竞
                 </Text>
-                <Badge colorScheme={"blue"} fontSize={"xs"} variant={"subtle"}>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
                   {t("tools.recommended")}
                 </Badge>
               </HStack>
@@ -655,12 +696,192 @@ function OfficialToolSection({
                 <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
                   火绒安全
                 </Text>
-                <Badge colorScheme={"blue"} fontSize={"xs"} variant={"subtle"}>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
                   {t("tools.recommended")}
                 </Badge>
               </HStack>
               <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
                 {t("tools.huorongDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenSteam}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("steam") || ""}
+                alt={"Steam"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  Steam
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.steamDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenEpicGames}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("epic-games") || ""}
+                alt={"Epic Games"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  Epic Games
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.epicGamesDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenNvidiaApp}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("nvidia-app") || ""}
+                alt={"NVIDIA APP"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  NVIDIA APP
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.nvidiaAppDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenPCL2}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("pcl2") || ""}
+                alt={"PCL2"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  PCL2
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.pcl2Desc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenOBS}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("obs") || ""}
+                alt={"OBS Studio"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  OBS Studio
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.obsDesc")}
               </Text>
             </Box>
           </VStack>

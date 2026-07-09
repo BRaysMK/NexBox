@@ -8,6 +8,7 @@ static OVERLAY_ACTIVE: AtomicBool = AtomicBool::new(false);
 static OVERLAY_HANDLE: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
 static DRAG_MODE: AtomicBool = AtomicBool::new(false);
 static POSITION_CHANGED: AtomicBool = AtomicBool::new(false);
+static BACKGROUND_POLLER_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DisplayItem {
@@ -23,7 +24,7 @@ fn default_style() -> String {
 }
 
 fn default_font() -> String {
-    "MiSans Medium".to_string()
+    "Microsoft YaHei".to_string()
 }
 
 fn default_display_items() -> DisplayItems {
@@ -83,7 +84,7 @@ impl Default for OverlaySettings {
             custom_items: Vec::new(),
             opacity: 255,
             style: "default".to_string(),
-            font: "MiSans Medium".to_string(),
+            font: "Microsoft YaHei".to_string(),
             position_x: None,
             position_y: None,
         }
@@ -157,7 +158,6 @@ impl Default for OverlayHardwareData {
 
 static CURRENT_SETTINGS: Mutex<Option<OverlaySettings>> = Mutex::new(None);
 static CURRENT_HARDWARE_DATA: Mutex<Option<OverlayHardwareData>> = Mutex::new(None);
-static MISANS_FONT_PATH: Mutex<Option<String>> = Mutex::new(None);
 
 fn get_or_init_settings() -> OverlaySettings {
     let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
@@ -346,14 +346,14 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     .filter(|s| s.hardware_type.eq_ignore_ascii_case("Memory"))
                     .map(|s| format!("{}|{}|{}={}", s.hardware_type, s.sensor_type, s.name, s.value))
                     .collect();
-                log::info!("LHML Memory sensors: {:?}", memory_sensors);
+                log::debug!("LHML Memory sensors: {:?}", memory_sensors);
 
                 // 调试：打印所有 CPU 和主板传感器
                 let cpu_sensors: Vec<_> = response.sensors.iter()
                     .filter(|s| s.hardware_type.eq_ignore_ascii_case("CPU"))
                     .map(|s| format!("{}|{}|{}={}", s.hardware_type, s.sensor_type, s.name, s.value))
                     .collect();
-                log::info!("LHML CPU sensors: {:?}", cpu_sensors);
+                log::debug!("LHML CPU sensors: {:?}", cpu_sensors);
                 // 打印所有非 GPU/CPU/HDD 的硬件类型（用于排查主板传感器）
                 let other_types: std::collections::BTreeSet<_> = response.sensors.iter()
                     .filter(|s| !s.hardware_type.to_lowercase().starts_with("gpu")
@@ -362,14 +362,14 @@ fn collect_hardware_data() -> OverlayHardwareData {
                         && !s.hardware_type.eq_ignore_ascii_case("RAM"))
                     .map(|s| format!("{}|{}|{}={}", s.hardware_type, s.sensor_type, s.name, s.value))
                     .collect();
-                log::info!("LHML other sensors: {:?}", other_types);
+                log::debug!("LHML other sensors: {:?}", other_types);
 
                 // 调试：打印所有 GPU 传感器
                 let gpu_sensors: Vec<_> = response.sensors.iter()
                     .filter(|s| s.hardware_type.to_lowercase().starts_with("gpu"))
                     .map(|s| format!("{}|{}|{}={}", s.hardware_type, s.sensor_type, s.name, s.value))
                     .collect();
-                log::info!("LHML GPU sensors: {:?}", gpu_sensors);
+                log::debug!("LHML GPU sensors: {:?}", gpu_sensors);
 
                 // GPU 温度
                 let gpu_temp_result = extract_sensor(
@@ -482,7 +482,7 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     .or_else(|| extract_sensor(&response.sensors, "Voltage", "GpuIntel", &["GPU Core Voltage", "GPU Core"], false));
                 let gpu_voltage = gpu_voltage_result.as_ref().map(|(v, _)| *v);
 
-                log::info!(
+                log::debug!(
                     "LHML: CPU占用={:?}({}) CPU温度={:?}({}) CPU频率={:?}({}) CPU电压={:?}V CPU功耗={:?}W SSD温度={:?}({}) 内存占用={:?}% GPU温度={:?}({}) GPU占用={:?}({}) GPU风扇={:?}RPM GPU功耗={:?}({}) GPU频率={:?}({}) 显存={:?}/{:?}MB 显存频率={:?}MHz GPU电压={:?}V",
                     cpu_usage,
                     cpu_usage_name.as_deref().unwrap_or("N/A"),
@@ -888,18 +888,6 @@ mod win32 {
             (DEFAULT_PITCH | FF_DONTCARE) as u32,
             wide_name.as_ptr(),
         )
-    }
-
-    pub unsafe fn register_custom_font(path: &str) -> bool {
-        let wide_path: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
-        let result = AddFontResourceExW(wide_path.as_ptr(), FR_PRIVATE, std::ptr::null_mut());
-        result > 0
-    }
-
-    pub unsafe fn unregister_custom_font(path: &str) -> bool {
-        let wide_path: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
-        let result = RemoveFontResourceExW(wide_path.as_ptr(), FR_PRIVATE, std::ptr::null_mut());
-        result > 0
     }
 
     unsafe fn measure_text_width(hdc: HDC, hfont: HFONT, text: &str) -> i32 {
@@ -1673,17 +1661,6 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
         *settings_lock = Some(settings.clone());
     }
 
-    // Register MiSans font if selected
-    if settings.font == "MiSans Medium" {
-        if let Ok(path_lock) = MISANS_FONT_PATH.lock() {
-            if let Some(ref path) = *path_lock {
-                unsafe {
-                    win32::register_custom_font(path);
-                }
-            }
-        }
-    }
-
     thread::spawn(move || {
         use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 
@@ -1701,13 +1678,10 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
                     OVERLAY_HANDLE.store(hwnd, Ordering::SeqCst);
                     crate::game_fps::set_overlay_hwnd(hwnd as u64);
 
-                    let data = OverlayHardwareData::default();
-                    *CURRENT_HARDWARE_DATA.lock().unwrap() = Some(data.clone());
-
                     if settings.style == "dynamic_island" {
-                        win32::draw_overlay_content_dynamic_island(hwnd, &settings, &data);
+                        win32::draw_overlay_content_dynamic_island(hwnd, &settings, &CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default());
                     } else {
-                        win32::draw_overlay_content(hwnd, &settings, &data);
+                        win32::draw_overlay_content(hwnd, &settings, &CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default());
                     }
 
                     SetTimer(hwnd, 1, 100, None);
@@ -2047,7 +2021,26 @@ pub async fn reset_overlay_position() -> Result<OverlayResult, String> {
     })
 }
 
+pub fn stop_hardware_poller() {
+    BACKGROUND_POLLER_ACTIVE.store(false, Ordering::SeqCst);
+}
+
+pub fn start_hardware_poller() {
+    if BACKGROUND_POLLER_ACTIVE.load(Ordering::SeqCst) {
+        return;
+    }
+    BACKGROUND_POLLER_ACTIVE.store(true, Ordering::SeqCst);
+    thread::spawn(|| {
+        while BACKGROUND_POLLER_ACTIVE.load(Ordering::SeqCst) {
+            let data = collect_hardware_data();
+            *CURRENT_HARDWARE_DATA.lock().unwrap() = Some(data);
+            thread::sleep(Duration::from_millis(1000));
+        }
+    });
+}
+
 pub fn cleanup() {
+    stop_hardware_poller();
     if OVERLAY_ACTIVE.load(Ordering::SeqCst) {
         let _ = stop_overlay();
     }
@@ -2056,12 +2049,6 @@ pub fn cleanup() {
     crate::heart_rate::cleanup();
     #[cfg(target_os = "windows")]
     unsafe {
-        // Unregister MiSans font
-        if let Ok(path_lock) = MISANS_FONT_PATH.lock() {
-            if let Some(ref path) = *path_lock {
-                win32::unregister_custom_font(path);
-            }
-        }
         win32::shutdown_gdiplus();
     }
 }
@@ -2090,27 +2077,7 @@ pub async fn run_pawnio_setup() -> Result<String, String> {
     Err("未找到 PawnIO_setup.exe，请确保已将其放在程序目录下".to_string())
 }
 
-#[tauri::command]
-pub async fn get_misans_font_path(app_handle: tauri::AppHandle) -> Result<String, String> {
-    #[cfg(target_os = "windows")]
-    {
-        let resource_dir = app_handle
-            .path()
-            .resource_dir()
-            .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-        let font_path = resource_dir.join("MiSans-Medium.ttf");
-        let path_str = font_path.to_string_lossy().to_string();
 
-        // Cache the path for later use by start_overlay/cleanup
-        if let Ok(mut lock) = MISANS_FONT_PATH.lock() {
-            *lock = Some(path_str.clone());
-        }
 
-        Ok(path_str)
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Ok(String::new())
-    }
-}
+

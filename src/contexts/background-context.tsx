@@ -96,9 +96,10 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         // 检测是否首次启动
         if (!hasLaunched) {
           setIsFirstLaunch(true);
-          // 首次启动默认启用预设背景
+          // 首次启动默认启用预设背景和自动轮播
           setBackgroundMode("preset");
           setActivePresetIndex(0);
+          setCarouselEnabled(true);
           await store.set("has-launched", true);
           await store.save();
         } else {

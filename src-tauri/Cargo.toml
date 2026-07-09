@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "4.6.5"
+version = "4.6.6"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -67,6 +67,7 @@ libloading = "0.8"
 md-5 = "0.10"
 aes = "0.8"
 cipher = "0.4"
+hex = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

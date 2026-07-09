@@ -4,7 +4,9 @@
   "description": "enables the default permissions",
   "windows": [
     "main",
-    "widget"
+    "widget",
+    "tray-menu",
+    "netease-login"
   ],
   "permissions": [
     "core:default",

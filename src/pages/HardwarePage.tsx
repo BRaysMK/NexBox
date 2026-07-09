@@ -93,7 +93,6 @@ function StatCard({
   sparklineData,
   icon: IconComponent,
   cardBg,
-  borderColor,
   textColor,
   subTextColor,
   liquidGlassEnabled,
@@ -105,7 +104,6 @@ function StatCard({
   sparklineData: number[];
   icon: React.ElementType;
   cardBg: string;
-  borderColor: string;
   textColor: string;
   subTextColor: string;
   liquidGlassEnabled: boolean;
@@ -142,11 +140,7 @@ function StatCard({
         borderRadius="xl"
         overflow="hidden"
         position="relative"
-        transition="all 0.2s"
-        _hover={{
-          borderColor: color,
-          boxShadow: `0 0 20px -5px ${color}40`,
-        }}
+        borderColor="white"
       >
         {cardContent}
       </LiquidGlassCard>
@@ -158,14 +152,9 @@ function StatCard({
       bg={cardBg}
       borderRadius="xl"
       border="1px solid"
-      borderColor={borderColor}
+      borderColor="white"
       overflow="hidden"
       position="relative"
-      transition="all 0.2s"
-      _hover={{
-        borderColor: color,
-        boxShadow: `0 0 20px -5px ${color}40`,
-      }}
     >
       {cardContent}
     </Box>
@@ -238,7 +227,6 @@ function DetailCard({
   info,
   type,
   cardBg,
-  borderColor,
   textColor,
   subTextColor,
   liquidGlassEnabled,
@@ -248,7 +236,6 @@ function DetailCard({
   info: DisplayInfo[];
   type: string;
   cardBg: string;
-  borderColor: string;
   textColor: string;
   subTextColor: string;
   liquidGlassEnabled: boolean;
@@ -298,11 +285,7 @@ function DetailCard({
         borderRadius="xl"
         overflow="hidden"
         position="relative"
-        transition="all 0.2s"
-        _hover={{
-          borderColor: iconColor,
-          boxShadow: `0 0 20px -5px ${iconColor}40`,
-        }}
+        borderColor="white"
       >
         {cardContent}
       </LiquidGlassCard>
@@ -314,14 +297,9 @@ function DetailCard({
       bg={cardBg}
       borderRadius="xl"
       border="1px solid"
-      borderColor={borderColor}
+      borderColor="white"
       overflow="hidden"
       position="relative"
-      transition="all 0.2s"
-      _hover={{
-        borderColor: iconColor,
-        boxShadow: `0 0 20px -5px ${iconColor}40`,
-      }}
     >
       {cardContent}
     </Box>
@@ -334,7 +312,6 @@ export default function HardwarePage() {
   const { liquidGlassEnabled } = useBackground();
   
   const cardBg = useColorModeValue("white", "#111111");
-  const borderColor = useColorModeValue("gray.200", "#333333");
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
@@ -506,7 +483,6 @@ export default function HardwarePage() {
             sparklineData={cpuSparkline}
             icon={Cpu}
             cardBg={cardBg}
-            borderColor={borderColor}
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
@@ -519,7 +495,6 @@ export default function HardwarePage() {
             sparklineData={gpuSparkline}
             icon={Monitor}
             cardBg={cardBg}
-            borderColor={borderColor}
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
@@ -532,7 +507,6 @@ export default function HardwarePage() {
             sparklineData={memSparkline}
             icon={Ram}
             cardBg={cardBg}
-            borderColor={borderColor}
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
@@ -545,7 +519,6 @@ export default function HardwarePage() {
             sparklineData={storageSparkline}
             icon={Database}
             cardBg={cardBg}
-            borderColor={borderColor}
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
@@ -566,7 +539,6 @@ export default function HardwarePage() {
             info={cpuDisplayInfo}
             type="cpu"
             cardBg={cardBg}
-            borderColor={borderColor}
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
@@ -579,7 +551,6 @@ export default function HardwarePage() {
               info={gpuInfo}
               type="gpu"
               cardBg={cardBg}
-              borderColor={borderColor}
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}
@@ -591,7 +562,6 @@ export default function HardwarePage() {
             info={memoryDisplayInfo}
             type="memory"
             cardBg={cardBg}
-            borderColor={borderColor}
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
@@ -602,7 +572,6 @@ export default function HardwarePage() {
             info={motherboardDisplayInfo}
             type="motherboard"
             cardBg={cardBg}
-            borderColor={borderColor}
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
@@ -614,7 +583,6 @@ export default function HardwarePage() {
               info={storageDisplayInfo}
               type="storage"
               cardBg={cardBg}
-              borderColor={borderColor}
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}
@@ -628,7 +596,6 @@ export default function HardwarePage() {
               info={info}
               type="sound"
               cardBg={cardBg}
-              borderColor={borderColor}
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}
@@ -642,7 +609,6 @@ export default function HardwarePage() {
               info={info}
               type="network"
               cardBg={cardBg}
-              borderColor={borderColor}
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}

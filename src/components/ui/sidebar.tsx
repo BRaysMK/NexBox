@@ -1,5 +1,5 @@
 import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Crosshair } from "lucide-react";
+import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Crosshair, Music } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -166,6 +166,7 @@ export function Sidebar() {
     { path: "/delta-force", icon: null, customIcon: deltaForceIcon, ariaLabel: t("sidebar.deltaForce") },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
+    { path: "/music", icon: Music, ariaLabel: "音乐" },
     { path: "/settings", icon: Settings, ariaLabel: t("sidebar.settings") },
   ];
 
@@ -221,28 +222,21 @@ export function Sidebar() {
 
   const containerStyles = isTop ? topContainerStyles : leftContainerStyles;
 
-  if (liquidGlassEnabled) {
-    return (
-      <ChakraBox
-        {...containerStyles}
-        bg={isTop ? glassBgColor : glassBgColor}
-        border="1px solid"
-        borderColor={glassBorderColor}
-        backdropFilter="blur(1px)"
-      >
-        <ChakraBox style={getBorderGlowStyle(glowColor)} />
-        {sidebarContent}
-      </ChakraBox>
-    );
-  }
-
   return (
     <ChakraBox
+      id="main-sidebar"
       {...containerStyles}
-      bg={defaultBgColor}
+      bg={liquidGlassEnabled ? glassBgColor : defaultBgColor}
       border="1px solid"
       borderColor={glassBorderColor}
+      backdropFilter={liquidGlassEnabled ? "blur(1px)" : "blur(0px)"}
+      transition="max-width 0.25s cubic-bezier(0.95, 0, 1, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
     >
+      <ChakraBox
+        style={getBorderGlowStyle(glowColor)}
+        opacity={liquidGlassEnabled ? 1 : 0}
+        transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+      />
       {sidebarContent}
     </ChakraBox>
   );

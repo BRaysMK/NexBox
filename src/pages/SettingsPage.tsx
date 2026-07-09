@@ -913,6 +913,17 @@ function AppearanceSettings() {
     try {
       const filePath = await invoke<string | null>("pick_video_file");
       if (filePath) {
+        const ext = filePath.split(".").pop()?.toLowerCase();
+        const supportedFormats = ["mp4", "webm"];
+        if (ext && !supportedFormats.includes(ext)) {
+          toast({
+            title: t("settings.appearanceSettings.unsupportedVideoFormat"),
+            status: "warning",
+            duration: 3000,
+            isClosable: true,
+          });
+          return;
+        }
         setDynamicBgVideo(filePath);
       }
     } catch (error) {

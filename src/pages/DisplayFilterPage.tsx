@@ -14,6 +14,10 @@ import {
   SimpleGrid,
   Button,
   Input,
+  Slider,
+  SliderTrack,
+  SliderFilledTrack,
+  SliderThumb,
   AlertDialog,
   AlertDialogBody,
   AlertDialogFooter,
@@ -46,6 +50,9 @@ interface FilterSettings {
   brightness: number;
   contrast: number;
   saturation: number;
+  r_gamma: number;
+  g_gamma: number;
+  b_gamma: number;
   mode: number;
   is_active: boolean;
 }
@@ -116,6 +123,9 @@ export default function DisplayFilterPage() {
     brightness: 100,
     contrast: 100,
     saturation: 100,
+    r_gamma: 1.0,
+    g_gamma: 1.0,
+    b_gamma: 1.0,
     mode: 0,
     is_active: false,
   });
@@ -127,6 +137,9 @@ export default function DisplayFilterPage() {
     brightness: number;
     contrast: number;
     saturation: number;
+    r_gamma: number;
+    g_gamma: number;
+    b_gamma: number;
   } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [inputVersion, setInputVersion] = useState(0);
@@ -153,6 +166,9 @@ export default function DisplayFilterPage() {
     brightness: 100,
     contrast: 100,
     saturation: 100,
+    r_gamma: 1.0,
+    g_gamma: 1.0,
+    b_gamma: 1.0,
   });
   
   const { t } = useTranslation();
@@ -195,12 +211,15 @@ export default function DisplayFilterPage() {
 
   const loadCustomSettings = useCallback(async () => {
     try {
-      const result = await invoke<{ temperature: number; brightness: number; contrast: number; saturation: number }>("get_custom_filter_settings", { displayIndex: activeDisplayIndexRef.current });
+      const result = await invoke<{ temperature: number; brightness: number; contrast: number; saturation: number; r_gamma: number; g_gamma: number; b_gamma: number }>("get_custom_filter_settings", { displayIndex: activeDisplayIndexRef.current });
       editValuesRef.current = {
         temperature: result.temperature,
         brightness: result.brightness,
         contrast: result.contrast,
         saturation: result.saturation,
+        r_gamma: result.r_gamma ?? 1.0,
+        g_gamma: result.g_gamma ?? 1.0,
+        b_gamma: result.b_gamma ?? 1.0,
       };
       setSavedCustom(result);
     } catch (error) {
@@ -210,6 +229,9 @@ export default function DisplayFilterPage() {
         brightness: 100,
         contrast: 100,
         saturation: 100,
+        r_gamma: 1.0,
+        g_gamma: 1.0,
+        b_gamma: 1.0,
       };
       editValuesRef.current = defaults;
       setSavedCustom(defaults);
@@ -360,6 +382,9 @@ export default function DisplayFilterPage() {
           brightness: preset.brightness,
           contrast: preset.contrast,
           saturation: preset.saturation,
+          r_gamma: 1.0,
+          g_gamma: 1.0,
+          b_gamma: 1.0,
           mode: preset.mode,
           is_active: settings.is_active,
         });
@@ -403,7 +428,10 @@ export default function DisplayFilterPage() {
         r.temperature !== savedCustom.temperature ||
           r.brightness !== savedCustom.brightness ||
           r.contrast !== savedCustom.contrast ||
-          r.saturation !== savedCustom.saturation
+          r.saturation !== savedCustom.saturation ||
+          r.r_gamma !== savedCustom.r_gamma ||
+          r.g_gamma !== savedCustom.g_gamma ||
+          r.b_gamma !== savedCustom.b_gamma
       );
       
       // 应用已保存的自定义滤镜设置
@@ -416,6 +444,9 @@ export default function DisplayFilterPage() {
           saturation: savedCustom.saturation,
           mode: 0,
           isActive: settings.is_active,
+          rGamma: savedCustom.r_gamma ?? 1.0,
+          gGamma: savedCustom.g_gamma ?? 1.0,
+          bGamma: savedCustom.b_gamma ?? 1.0,
         });
         if (result.success) {
           setSettings(prev => ({
@@ -423,6 +454,9 @@ export default function DisplayFilterPage() {
             brightness: savedCustom.brightness,
             contrast: savedCustom.contrast,
             saturation: savedCustom.saturation,
+            r_gamma: savedCustom.r_gamma ?? 1.0,
+            g_gamma: savedCustom.g_gamma ?? 1.0,
+            b_gamma: savedCustom.b_gamma ?? 1.0,
             mode: 0,
             is_active: prev.is_active,
           }));
@@ -460,6 +494,20 @@ export default function DisplayFilterPage() {
     }
   };
 
+  const resetCustomValues = () => {
+    editValuesRef.current = {
+      temperature: 6500,
+      brightness: 100,
+      contrast: 100,
+      saturation: 100,
+      r_gamma: 1.0,
+      g_gamma: 1.0,
+      b_gamma: 1.0,
+    };
+    setInputVersion((v) => v + 1);
+    setHasChanges(true);
+  };
+
   const saveAndApply = async () => {
     setIsLoading(true);
     setManualPresetChange(true);
@@ -469,6 +517,9 @@ export default function DisplayFilterPage() {
     const brightness = Math.max(50, Math.min(150, editValuesRef.current.brightness));
     const contrast = Math.max(50, Math.min(150, editValuesRef.current.contrast));
     const saturation = Math.max(50, Math.min(150, editValuesRef.current.saturation));
+    const r_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.r_gamma));
+    const g_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.g_gamma));
+    const b_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.b_gamma));
     
     try {
       const result: any = await invoke("set_filter_settings", {
@@ -479,6 +530,9 @@ export default function DisplayFilterPage() {
         saturation: saturation,
         mode: 0,
         isActive: settings.is_active,
+        rGamma: r_gamma,
+        gGamma: g_gamma,
+        bGamma: b_gamma,
       });
       if (result.success) {
         setSettings(prev => ({
@@ -486,6 +540,9 @@ export default function DisplayFilterPage() {
           brightness: brightness,
           contrast: contrast,
           saturation: saturation,
+          r_gamma: r_gamma,
+          g_gamma: g_gamma,
+          b_gamma: b_gamma,
           mode: 0,
           is_active: prev.is_active,
         }));
@@ -496,6 +553,9 @@ export default function DisplayFilterPage() {
           brightness: brightness,
           contrast: contrast,
           saturation: saturation,
+          rGamma: r_gamma,
+          gGamma: g_gamma,
+          bGamma: b_gamma,
         });
 
         setSavedCustom({
@@ -503,6 +563,9 @@ export default function DisplayFilterPage() {
           brightness: brightness,
           contrast: contrast,
           saturation: saturation,
+          r_gamma: r_gamma,
+          g_gamma: g_gamma,
+          b_gamma: b_gamma,
         });
         
         setHasChanges(false);
@@ -541,6 +604,9 @@ export default function DisplayFilterPage() {
           brightness: 100,
           contrast: 100,
           saturation: 100,
+          r_gamma: 1.0,
+          g_gamma: 1.0,
+          b_gamma: 1.0,
           mode: 0,
           is_active: prev.is_active,
         }));
@@ -549,6 +615,9 @@ export default function DisplayFilterPage() {
           brightness: 100,
           contrast: 100,
           saturation: 100,
+          r_gamma: 1.0,
+          g_gamma: 1.0,
+          b_gamma: 1.0,
         };
         editValuesRef.current = normal;
         if (savedCustom) {
@@ -556,7 +625,10 @@ export default function DisplayFilterPage() {
             normal.temperature !== savedCustom.temperature ||
               normal.brightness !== savedCustom.brightness ||
               normal.contrast !== savedCustom.contrast ||
-              normal.saturation !== savedCustom.saturation
+              normal.saturation !== savedCustom.saturation ||
+              normal.r_gamma !== savedCustom.r_gamma ||
+              normal.g_gamma !== savedCustom.g_gamma ||
+              normal.b_gamma !== savedCustom.b_gamma
           );
         } else {
           setHasChanges(false);
@@ -715,6 +787,36 @@ export default function DisplayFilterPage() {
     return "#ffb040";
   };
 
+  // RGB 通道独立 Gamma 的 SVG 滤镜（自定义模式下逐通道模拟伽马效果）
+  const rgbGammaSvgFilter = useMemo(() => {
+    const isCustom = settings.mode === 0;
+    const hasPerChannel = isCustom && (
+      Math.abs(settings.r_gamma - 1.0) > 0.001 ||
+      Math.abs(settings.g_gamma - 1.0) > 0.001 ||
+      Math.abs(settings.b_gamma - 1.0) > 0.001
+    );
+    if (!hasPerChannel) return null;
+
+    // Rust 端 apply_gamma_curve: output = input ^ (1/gamma)
+    // SVG feComponentTransfer gamma: C' = amplitude * C^exponent + offset
+    // 所以 exponent = 1/gamma
+    const rExp = (1.0 / settings.r_gamma).toFixed(4);
+    const gExp = (1.0 / settings.g_gamma).toFixed(4);
+    const bExp = (1.0 / settings.b_gamma).toFixed(4);
+
+    return (
+      <svg width="0" height="0" style={{ position: "absolute", pointerEvents: "none" }}>
+        <filter id="nexbox-rgb-gamma" colorInterpolationFilters="sRGB">
+          <feComponentTransfer>
+            <feFuncR type="gamma" amplitude="1" exponent={rExp} offset="0" />
+            <feFuncG type="gamma" amplitude="1" exponent={gExp} offset="0" />
+            <feFuncB type="gamma" amplitude="1" exponent={bExp} offset="0" />
+          </feComponentTransfer>
+        </filter>
+      </svg>
+    );
+  }, [settings.mode, settings.r_gamma, settings.g_gamma, settings.b_gamma]);
+
   // 计算 CSS filter 近似值（缓存结果，避免每次渲染触发浏览器重绘）
   const filterStyle = useMemo((): React.CSSProperties => {
     const t = settings.temperature;
@@ -722,20 +824,37 @@ export default function DisplayFilterPage() {
     const c = settings.contrast / 100;
     const s = settings.saturation / 100;
     const params = modeParams[settings.mode] || modeParams[0];
-    
-    // Gamma 近似：gamma < 1 = 更亮, gamma > 1 = 更暗
-    const gammaBrightness = 1 / params.gamma;
+
+    // 判断是否使用逐通道 gamma（自定义模式且至少一个通道 gamma ≠ 1.0）
+    const isCustom = settings.mode === 0;
+    const hasPerChannelGamma = isCustom && (
+      Math.abs(settings.r_gamma - 1.0) > 0.001 ||
+      Math.abs(settings.g_gamma - 1.0) > 0.001 ||
+      Math.abs(settings.b_gamma - 1.0) > 0.001
+    );
+
+    // 非自定义模式：gamma 通过加权亮度近似
+    // 自定义模式：逐通道 gamma 由 SVG feComponentTransfer 处理，
+    //            不再用 brightness 近似（否则无法呈现色彩偏移）
+    const gammaBrightness = hasPerChannelGamma
+      ? 1.0
+      : 1.0 / params.gamma;
+
     // S-Curve 近似：增加或减少对比度
     const sCurveContrast = 1 + params.sCurve * 0.5;
-    
-    const filterParts: string[] = [
+
+    const filterParts: string[] = [];
+    if (hasPerChannelGamma) {
+      filterParts.push("url(#nexbox-rgb-gamma)");
+    }
+    filterParts.push(
       `brightness(${(b * gammaBrightness).toFixed(3)})`,
       `contrast(${(c * sCurveContrast).toFixed(3)})`,
       `saturate(${s.toFixed(3)})`,
-    ];
-    
+    );
+
     return { filter: filterParts.join(" ") } as React.CSSProperties;
-  }, [settings.temperature, settings.brightness, settings.contrast, settings.saturation, settings.mode]);
+  }, [settings.temperature, settings.brightness, settings.contrast, settings.saturation, settings.mode, settings.r_gamma, settings.g_gamma, settings.b_gamma]);
 
   // 色温覆盖层颜色（缓存结果）
   const temperatureOverlay = useMemo((): React.CSSProperties => {
@@ -817,7 +936,8 @@ export default function DisplayFilterPage() {
   const currentModeParams = modeParams[settings.mode] || modeParams[0];
 
   const handleInputChange = (key: keyof typeof editValuesRef.current, value: string) => {
-    const numValue = parseInt(value) || 0;
+    const isGamma = key === "r_gamma" || key === "g_gamma" || key === "b_gamma";
+    const numValue = isGamma ? (parseFloat(value) || 1.0) : (parseInt(value) || 0);
     editValuesRef.current[key] = numValue;
     setHasChanges(true);
   };
@@ -829,6 +949,229 @@ export default function DisplayFilterPage() {
     await invoke("set_active_display", { displayIndex: idx });
     loadSettings();
     loadCustomSettings();
+  };
+
+  const gammaChannelColors: Record<string, string> = {
+    r_gamma: "#FF4444",
+    g_gamma: "#44CC44",
+    b_gamma: "#4488FF",
+  };
+
+  const GammaSliderItem = ({
+    channelKey,
+    label,
+    value,
+    onChange,
+    resetKey,
+  }: {
+    channelKey: string;
+    label: string;
+    value: number;
+    onChange: (val: number) => void;
+    resetKey: number;
+  }) => {
+    const dotColor = gammaChannelColors[channelKey] || "#888888";
+    const [localValue, setLocalValue] = useState(value);
+
+    // Sync with external value changes (reset)
+    useEffect(() => {
+      setLocalValue(value);
+    }, [value, resetKey]);
+
+    const handleChange = (v: number) => {
+      setLocalValue(v);
+      onChange(v);
+    };
+
+    return (
+      <Box position="relative" borderRadius="lg">
+        {liquidGlassEnabled && (
+          <Box style={getBorderGlowStyle(miniGlassGlow)} />
+        )}
+        <VStack
+          spacing={1}
+          py={2}
+          px={3}
+          borderRadius="lg"
+          overflow="hidden"
+          bg={liquidGlassEnabled ? miniGlassBg : infoBg}
+          backdropFilter={liquidGlassEnabled ? "blur(6px)" : "none"}
+          sx={liquidGlassEnabled ? {
+            transform: "translateZ(0)",
+            WebkitTransform: "translateZ(0)",
+            WebkitBackfaceVisibility: "hidden",
+            backfaceVisibility: "hidden",
+          } : undefined}
+          border={liquidGlassEnabled ? "1px solid" : "none"}
+          borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
+        >
+          <HStack w="full" justify="space-between">
+            <HStack spacing={1.5}>
+              <Box w={2.5} h={2.5} borderRadius="full" bg={dotColor} />
+              <Text color={subTextColor} fontSize="xs" fontWeight="500">
+                {label}
+              </Text>
+            </HStack>
+            <Input
+              type="number"
+              min={0.50}
+              max={2.00}
+              step={0.01}
+              value={localValue.toFixed(2)}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                if (!isNaN(v)) handleChange(v);
+              }}
+              size="xs"
+              w="56px"
+              h="22px"
+              textAlign="right"
+              fontWeight="600"
+              fontSize="xs"
+              color={textColor}
+              bg={inputBg}
+              borderColor={cardBorder}
+              borderRadius="md"
+              px={1.5}
+              _focus={{ borderColor: dotColor, boxShadow: "none" }}
+            />
+          </HStack>
+          <Slider
+            aria-label={label}
+            min={0.50}
+            max={2.00}
+            step={0.01}
+            value={localValue}
+            onChange={handleChange}
+            focusThumbOnChange={false}
+            size="sm"
+          >
+            <SliderTrack bg={sliderBg} h="3px" borderRadius="full">
+              <SliderFilledTrack bg={dotColor} />
+            </SliderTrack>
+            <SliderThumb boxSize="12px" bg={dotColor} />
+          </Slider>
+        </VStack>
+      </Box>
+    );
+  };
+
+  const SliderInputItem = ({
+    label,
+    value,
+    onChange,
+    min,
+    max,
+    step,
+    unit,
+    colorValue,
+    resetKey,
+  }: {
+    label: string;
+    value: number;
+    onChange: (val: number) => void;
+    min: number;
+    max: number;
+    step: number;
+    unit: string;
+    colorValue?: number;
+    resetKey: number;
+  }) => {
+    const [localValue, setLocalValue] = useState(value);
+
+    useEffect(() => {
+      setLocalValue(value);
+    }, [value, resetKey]);
+
+    const handleChange = (v: number) => {
+      setLocalValue(v);
+      onChange(v);
+    };
+
+    const dotColor = colorValue !== undefined ? getTemperatureColor(colorValue) : undefined;
+
+    return (
+      <Box position="relative" borderRadius="lg">
+        {liquidGlassEnabled && (
+          <Box style={getBorderGlowStyle(miniGlassGlow)} />
+        )}
+        <VStack
+          spacing={1}
+          py={2}
+          px={3}
+          borderRadius="lg"
+          overflow="hidden"
+          bg={liquidGlassEnabled ? miniGlassBg : infoBg}
+          backdropFilter={liquidGlassEnabled ? "blur(6px)" : "none"}
+          sx={liquidGlassEnabled ? {
+            transform: "translateZ(0)",
+            WebkitTransform: "translateZ(0)",
+            WebkitBackfaceVisibility: "hidden",
+            backfaceVisibility: "hidden",
+          } : undefined}
+          border={liquidGlassEnabled ? "1px solid" : "none"}
+          borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
+        >
+          <HStack w="full" justify="space-between">
+            <HStack spacing={1.5}>
+              <Text color={subTextColor} fontSize="xs" fontWeight="500">
+                {label}
+              </Text>
+              {dotColor && (
+                <Box
+                  w={2.5} h={2.5}
+                  borderRadius="full"
+                  bg={dotColor}
+                  border="1px solid"
+                  borderColor={cardBorder}
+                />
+              )}
+            </HStack>
+            <HStack spacing={1}>
+              <Input
+                type="number"
+                min={min}
+                max={max}
+                step={step}
+                value={localValue}
+                onChange={(e) => {
+                  const v = step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value);
+                  if (!isNaN(v)) handleChange(v);
+                }}
+                size="xs"
+                w="60px"
+                h="22px"
+                textAlign="right"
+                fontWeight="600"
+                fontSize="xs"
+                color={textColor}
+                bg={inputBg}
+                borderColor={cardBorder}
+                borderRadius="md"
+                px={1.5}
+                _focus={{ borderColor: primaryColor, boxShadow: "none" }}
+              />
+              <Text color={subTextColor} fontSize="xs" minW="16px">{unit}</Text>
+            </HStack>
+          </HStack>
+          <Slider
+            aria-label={label}
+            min={min}
+            max={max}
+            step={step}
+            value={localValue}
+            onChange={handleChange}
+            focusThumbOnChange={false}
+            size="sm"
+          >
+            <SliderTrack bg={sliderBg} h="3px" borderRadius="full">
+              <SliderFilledTrack bg={primaryColor} />
+            </SliderTrack>
+            <SliderThumb boxSize="12px" bg={primaryColor} />
+          </Slider>
+        </VStack>
+      </Box>
+    );
   };
 
   const EditableItem = ({ 
@@ -1200,7 +1543,9 @@ export default function DisplayFilterPage() {
             size="sm"
             leftIcon={<Upload size={16} />}
             variant="outline"
-            colorScheme="blue"
+            borderColor={primaryColor}
+            color={primaryColor}
+            _hover={{ bg: `${primaryColor}15` }}
             onClick={handleImportIcc}
             isLoading={isLoading}
           >
@@ -1313,6 +1658,9 @@ export default function DisplayFilterPage() {
           border="1px solid"
           borderColor={cardBorder}
         >
+          {/* RGB 通道独立 Gamma SVG 滤镜定义 */}
+          {rgbGammaSvgFilter}
+
           <HStack justify="space-between" px={4} pt={3} pb={1}>
             <Text color={textColor} fontSize="sm" fontWeight="600">
               {t("displayFilter.previewTitle")}
@@ -1487,19 +1835,35 @@ export default function DisplayFilterPage() {
               )}
             </HStack>
             {activePresetId === "custom" && (
-              <Button
-                size="xs"
-                leftIcon={<Save size={12} />}
-                bg={primaryColor}
-                color={contrastText}
-                onClick={saveAndApply}
-                isLoading={isLoading}
-                isDisabled={!hasChanges}
-                _hover={{ bg: getHoverColor() }}
-                fontSize="xs"
-              >
-                {t("displayFilter.saveAndApply")}
-              </Button>
+              <VStack spacing={1} align="stretch">
+                <Button
+                  size="xs"
+                  leftIcon={<Save size={12} />}
+                  bg={primaryColor}
+                  color={contrastText}
+                  onClick={saveAndApply}
+                  isLoading={isLoading}
+                  isDisabled={!hasChanges}
+                  _hover={{ bg: getHoverColor() }}
+                  fontSize="xs"
+                  w="full"
+                >
+                  {t("displayFilter.saveAndApply")}
+                </Button>
+                <Button
+                  size="xs"
+                  leftIcon={<RotateCcw size={12} />}
+                  variant="ghost"
+                  color={subTextColor}
+                  onClick={resetCustomValues}
+                  isDisabled={isLoading}
+                  _hover={{ color: textColor, bg: sliderBg }}
+                  fontSize="xs"
+                  w="full"
+                >
+                  {t("displayFilter.resetDefault")}
+                </Button>
+              </VStack>
             )}
           </HStack>
 
@@ -1515,31 +1879,89 @@ export default function DisplayFilterPage() {
             <VStack spacing={1} align="stretch" flex={1} justify="center">
               {activePresetId === "custom" ? (
                 <>
-                  <EditableItem 
-                    label={t("displayFilter.colorTemperature")} 
+                  <SliderInputItem
+                    label={t("displayFilter.colorTemperature")}
                     value={editValuesRef.current.temperature}
-                    onChange={(val) => handleInputChange("temperature", val)}
+                    onChange={(v) => {
+                      editValuesRef.current.temperature = v;
+                      setHasChanges(true);
+                    }}
+                    min={1000} max={10000} step={100}
                     unit="K"
                     colorValue={editValuesRef.current.temperature}
+                    resetKey={inputVersion}
                   />
-                  <EditableItem 
-                    label={t("displayFilter.brightness")} 
+                  <SliderInputItem
+                    label={t("displayFilter.brightness")}
                     value={editValuesRef.current.brightness}
-                    onChange={(val) => handleInputChange("brightness", val)}
+                    onChange={(v) => {
+                      editValuesRef.current.brightness = v;
+                      setHasChanges(true);
+                    }}
+                    min={50} max={150} step={1}
                     unit="%"
+                    resetKey={inputVersion}
                   />
-                  <EditableItem 
-                    label={t("displayFilter.contrast")} 
+                  <SliderInputItem
+                    label={t("displayFilter.contrast")}
                     value={editValuesRef.current.contrast}
-                    onChange={(val) => handleInputChange("contrast", val)}
+                    onChange={(v) => {
+                      editValuesRef.current.contrast = v;
+                      setHasChanges(true);
+                    }}
+                    min={50} max={150} step={1}
                     unit="%"
+                    resetKey={inputVersion}
                   />
-                  <EditableItem 
-                    label={t("displayFilter.saturation")} 
+                  <SliderInputItem
+                    label={t("displayFilter.saturation")}
                     value={editValuesRef.current.saturation}
-                    onChange={(val) => handleInputChange("saturation", val)}
+                    onChange={(v) => {
+                      editValuesRef.current.saturation = v;
+                      setHasChanges(true);
+                    }}
+                    min={50} max={150} step={1}
                     unit="%"
+                    resetKey={inputVersion}
                   />
+                  {/* RGB Gamma Section */}
+                  <Box pt={2} mt={1} borderTop="1px solid" borderColor={cardBorder}>
+                    <Text color={subTextColor} fontSize="10px" fontWeight="600" mb={2}>
+                      {t("displayFilter.rgbGamma")}
+                    </Text>
+                    <VStack spacing={1.5} align="stretch">
+                      <GammaSliderItem
+                        channelKey="r_gamma"
+                        label={t("displayFilter.rGamma")}
+                        value={editValuesRef.current.r_gamma}
+                        resetKey={inputVersion}
+                        onChange={(v) => {
+                          editValuesRef.current.r_gamma = v;
+                          setHasChanges(true);
+                        }}
+                      />
+                      <GammaSliderItem
+                        channelKey="g_gamma"
+                        label={t("displayFilter.gGamma")}
+                        value={editValuesRef.current.g_gamma}
+                        resetKey={inputVersion}
+                        onChange={(v) => {
+                          editValuesRef.current.g_gamma = v;
+                          setHasChanges(true);
+                        }}
+                      />
+                      <GammaSliderItem
+                        channelKey="b_gamma"
+                        label={t("displayFilter.bGamma")}
+                        value={editValuesRef.current.b_gamma}
+                        resetKey={inputVersion}
+                        onChange={(v) => {
+                          editValuesRef.current.b_gamma = v;
+                          setHasChanges(true);
+                        }}
+                      />
+                    </VStack>
+                  </Box>
                 </>
               ) : (
                 <>
@@ -1564,21 +1986,21 @@ export default function DisplayFilterPage() {
                     value={settings.saturation} 
                     unit="%"
                   />
+                  {/* 模式参数 */}
+                  <Box mt={2} pt={2} borderTop="1px solid" borderColor={cardBorder}>
+                    <Text color={subTextColor} fontSize="10px" fontWeight="600" mb={1}>
+                      {presets.find(p => p.id === activePresetId)?.name || "Normal"}
+                    </Text>
+                    <Box fontSize="11px" color={subTextColor} lineHeight="1.6">
+                      <Flex justify="space-between"><Text>Gamma</Text><Text color={textColor}>{currentModeParams.gamma.toFixed(2)}</Text></Flex>
+                      <Flex justify="space-between"><Text>S-Curve</Text><Text color={textColor}>{currentModeParams.sCurve.toFixed(2)}</Text></Flex>
+                      <Flex justify="space-between"><Text>R Boost</Text><Text color={textColor}>{(currentModeParams.rBoost * 100).toFixed(0)}%</Text></Flex>
+                      <Flex justify="space-between"><Text>G Boost</Text><Text color={textColor}>{(currentModeParams.gBoost * 100).toFixed(0)}%</Text></Flex>
+                      <Flex justify="space-between"><Text>B Boost</Text><Text color={textColor}>{(currentModeParams.bBoost * 100).toFixed(0)}%</Text></Flex>
+                    </Box>
+                  </Box>
                 </>
               )}
-              {/* 模式参数 */}
-              <Box mt={2} pt={2} borderTop="1px solid" borderColor={cardBorder}>
-                <Text color={subTextColor} fontSize="10px" fontWeight="600" mb={1}>
-                  {presets.find(p => p.id === activePresetId)?.name || "Normal"}
-                </Text>
-                <Box fontSize="11px" color={subTextColor} lineHeight="1.6">
-                  <Flex justify="space-between"><Text>Gamma</Text><Text color={textColor}>{currentModeParams.gamma.toFixed(2)}</Text></Flex>
-                  <Flex justify="space-between"><Text>S-Curve</Text><Text color={textColor}>{currentModeParams.sCurve.toFixed(2)}</Text></Flex>
-                  <Flex justify="space-between"><Text>R Boost</Text><Text color={textColor}>{(currentModeParams.rBoost * 100).toFixed(0)}%</Text></Flex>
-                  <Flex justify="space-between"><Text>G Boost</Text><Text color={textColor}>{(currentModeParams.gBoost * 100).toFixed(0)}%</Text></Flex>
-                  <Flex justify="space-between"><Text>B Boost</Text><Text color={textColor}>{(currentModeParams.bBoost * 100).toFixed(0)}%</Text></Flex>
-                </Box>
-              </Box>
             </VStack>
           )}
         </VStack>

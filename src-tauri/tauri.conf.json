@@ -70,7 +70,6 @@
       "../nvidiaProfileInspector.exe.config",
       "../Reference.xml",
       "../power-plans/*",
-      "../MiSans-Medium.ttf",
       "../monitor/bin/Release/net48/*"
     ],
     "icon": [

@@ -156,8 +156,17 @@ function CleanItemCard({
           <Checkbox
             isChecked={isSelected}
             onChange={onToggleSelect}
-            colorScheme={primaryColor === "#3182CE" ? "blue" : "teal"}
             isDisabled={!hasContent}
+            sx={{
+              "& .chakra-checkbox__control": {
+                borderColor: isSelected ? primaryColor : undefined,
+              },
+              "& .chakra-checkbox__control[data-checked]": {
+                bg: primaryColor,
+                borderColor: primaryColor,
+                color: "white",
+              },
+            }}
           />
           <Box
             w={10}
@@ -193,9 +202,10 @@ function CleanItemCard({
           )}
           <Badge
             size="sm"
-            colorScheme={hasContent ? "blue" : "gray"}
             variant="subtle"
             fontSize="xs"
+            bg={hasContent ? `${primaryColor}20` : undefined}
+            color={hasContent ? primaryColor : undefined}
           >
             {formatSize(item.size_bytes)}
           </Badge>
@@ -428,10 +438,10 @@ export default function StorageCleanPage() {
 
       <HStack spacing={3} justify="space-between">
         <HStack spacing={2}>
-          <Button size="sm" variant="outline" onClick={handleSelectAll}>
+          <Button size="sm" variant="outline" onClick={handleSelectAll} borderColor={themeConfig.primaryColor} color={themeConfig.primaryColor}>
             {t("storageClean.selectAll")}
           </Button>
-          <Button size="sm" variant="ghost" onClick={handleDeselectAll}>
+          <Button size="sm" variant="ghost" onClick={handleDeselectAll} color={themeConfig.primaryColor}>
             {t("storageClean.deselectAll")}
           </Button>
         </HStack>

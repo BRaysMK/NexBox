@@ -210,6 +210,7 @@ export default function NvidiaDriverPage() {
       // 4. 读取所有设置
       const allSettings = await invoke<NvidiaSetting[]>("list_nvidia_settings");
       setSettings(allSettings);
+
     } catch (e) {
       console.error("加载 NVIDIA 设置失败:", e);
       setLoadError(`加载 NVIDIA 设置时出错: ${String(e)}`);
@@ -727,6 +728,7 @@ export default function NvidiaDriverPage() {
             </Box>
           </HStack>
         </LiquidGlassCard>
+
 
         {/* 同步与显示 */}
         {renderSettingGroup(

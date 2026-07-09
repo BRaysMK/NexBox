@@ -23,7 +23,7 @@ fn default_style() -> String {
 }
 
 fn default_font() -> String {
-    "MiSans Medium".to_string()
+    "Microsoft YaHei".to_string()
 }
 
 fn default_display_items() -> DisplayItems {
@@ -82,7 +82,7 @@ impl Default for OverlaySettings {
             custom_items: Vec::new(),
             opacity: 255,
             style: "default".to_string(),
-            font: "MiSans Medium".to_string(),
+            font: "Microsoft YaHei".to_string(),
             position_x: None,
             position_y: None,
         }
@@ -150,7 +150,6 @@ impl Default for OverlayHardwareData {
 
 static CURRENT_SETTINGS: Mutex<Option<OverlaySettings>> = Mutex::new(None);
 static CURRENT_HARDWARE_DATA: Mutex<Option<OverlayHardwareData>> = Mutex::new(None);
-static MISANS_FONT_PATH: Mutex<Option<String>> = Mutex::new(None);
 
 fn get_or_init_settings() -> OverlaySettings {
     let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
@@ -781,17 +780,6 @@ mod win32 {
         )
     }
 
-    pub unsafe fn register_custom_font(path: &str) -> bool {
-        let wide_path: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
-        let result = AddFontResourceExW(wide_path.as_ptr(), FR_PRIVATE, std::ptr::null_mut());
-        result > 0
-    }
-
-    pub unsafe fn unregister_custom_font(path: &str) -> bool {
-        let wide_path: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
-        let result = RemoveFontResourceExW(wide_path.as_ptr(), FR_PRIVATE, std::ptr::null_mut());
-        result > 0
-    }
 
     unsafe fn measure_text_width(hdc: HDC, hfont: HFONT, text: &str) -> i32 {
         let old_font = SelectObject(hdc, hfont as _);
@@ -1549,17 +1537,6 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
         *settings_lock = Some(settings.clone());
     }
 
-    // Register MiSans font if selected
-    if settings.font == "MiSans Medium" {
-        if let Ok(path_lock) = MISANS_FONT_PATH.lock() {
-            if let Some(ref path) = *path_lock {
-                unsafe {
-                    win32::register_custom_font(path);
-                }
-            }
-        }
-    }
-
     thread::spawn(move || {
         crate::game_ping::start_ping_thread();
         crate::game_fps::start_fps_monitor();
@@ -1919,12 +1896,6 @@ pub fn cleanup() {
     crate::heart_rate::cleanup();
     #[cfg(target_os = "windows")]
     unsafe {
-        // Unregister MiSans font
-        if let Ok(path_lock) = MISANS_FONT_PATH.lock() {
-            if let Some(ref path) = *path_lock {
-                win32::unregister_custom_font(path);
-            }
-        }
         win32::shutdown_gdiplus();
     }
 }
@@ -1953,27 +1924,4 @@ pub async fn run_pawnio_setup() -> Result<String, String> {
     Err("未找到 PawnIO_setup.exe，请确保已将其放在程序目录下".to_string())
 }
 
-#[tauri::command]
-pub async fn get_misans_font_path(app_handle: tauri::AppHandle) -> Result<String, String> {
-    #[cfg(target_os = "windows")]
-    {
-        let resource_dir = app_handle
-            .path()
-            .resource_dir()
-            .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-        let font_path = resource_dir.join("MiSans-Medium.ttf");
-        let path_str = font_path.to_string_lossy().to_string();
-
-        // Cache the path for later use by start_overlay/cleanup
-        if let Ok(mut lock) = MISANS_FONT_PATH.lock() {
-            *lock = Some(path_str.clone());
-        }
-
-        Ok(path_str)
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Ok(String::new())
-    }
-}
