@@ -247,13 +247,16 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   return (
     <Box
-      position="fixed"
+      position="absolute"
       top={0}
       left={0}
       right={0}
       bottom={0}
       zIndex={9999}
       bg={bgColor}
+      borderRadius="xl"
+      overflow="hidden"
+      boxShadow="xl"
       // 从底部向上展开的动画
       animation="expandedPlayerSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)"
       sx={{
@@ -1322,7 +1325,7 @@ export default function MusicPage() {
         w="100%"
         h="calc(100vh - 120px)"
         overflow="hidden"
-        sx={{ maxWidth: "100%", overflowX: "hidden" }}
+        sx={{ maxWidth: "100%", overflowX: "hidden", position: "relative" }}
       >
         <HStack spacing={3} flexShrink={0}>
           <Tooltip label="返回">
@@ -1385,7 +1388,7 @@ export default function MusicPage() {
       w="100%"
       h="calc(100vh - 120px)"
       overflow="hidden"
-      sx={{ maxWidth: "100%", overflowX: "hidden" }}
+      sx={{ maxWidth: "100%", overflowX: "hidden", position: "relative" }}
     >
       {/* 标题 + 登录 */}
       <HStack justify="space-between" w="100%" flexShrink={0}>
