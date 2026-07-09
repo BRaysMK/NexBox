@@ -486,6 +486,11 @@ export default function MusicPage() {
     }, 300);
   }, [storeActions]);
 
+  // 为了让 Input 有稳定的 onChange handler（防止失焦），将它提取为 useCallback
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    handleInputChange(e.currentTarget.value);
+  }, [handleInputChange]);
+
   // ── 回车：进入全屏搜索结果 ──
   const handleSearchEnter = useCallback(() => {
     if (!searchInput.trim()) return;
@@ -519,7 +524,9 @@ export default function MusicPage() {
 
   const handleBackToPlaylists = useCallback(() => {
     setLeftPanelView("playlists");
-  }, []);
+    // 切回歌单列表时也要刷新红心
+    storeActions.loadLikedList();
+  }, [storeActions]);
 
   // ── 回调函数 ──
   const onPlay = useCallback((song: Song, queue: Song[]) => {
@@ -753,7 +760,7 @@ export default function MusicPage() {
                 <Input
                   placeholder="搜索歌曲、歌手... (回车查看全部)"
                   value={searchInput}
-                  onChange={(e) => handleInputChange(e.target.value)}
+                  onChange={handleSearchChange}
                   onKeyDown={(e) => e.key === "Enter" && handleSearchEnter()}
                   bg={liquidGlassEnabled ? glassInputBg : bgColor}
                   borderColor={liquidGlassEnabled ? themeBorder : borderColor}
