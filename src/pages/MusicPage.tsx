@@ -744,6 +744,7 @@ export default function MusicPage() {
   const [searchMode, setSearchMode] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
+  const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks">("recommendations");
 
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
@@ -798,18 +799,29 @@ export default function MusicPage() {
     setSearchMode(true);
   }, []);
 
-  // ── 歌单点击：切换到曲目视图 + 重新加载红心列表 ──
+  // ── 我的歌单点击：在左侧面板切换到曲目视图 ──
   const handlePlaylistClick = useCallback((pl: Playlist) => {
     storeActions.loadPlaylistTracks(pl.id);
     storeActions.loadLikedList();
     setLeftPanelView("tracks");
+    setRightPanelView("recommendations"); // 右侧回到推荐
   }, [storeActions]);
 
   const handleBackToPlaylists = useCallback(() => {
     setLeftPanelView("playlists");
-    // 切回歌单列表时也要刷新红心
     storeActions.loadLikedList();
   }, [storeActions]);
+
+  // ── 推荐歌单点击：在右侧面板切换到曲目视图 ──
+  const handleRecPlaylistClick = useCallback((pl: Playlist) => {
+    storeActions.loadPlaylistTracks(pl.id);
+    storeActions.loadLikedList();
+    setRightPanelView("tracks");
+  }, [storeActions]);
+
+  const handleBackToRecommendations = useCallback(() => {
+    setRightPanelView("recommendations");
+  }, []);
 
   // ── 回调函数 ──
   const onPlay = useCallback((song: Song, queue: Song[]) => {
@@ -847,8 +859,8 @@ export default function MusicPage() {
     />
   );
 
-  // ── 渲染歌单行 ──
-  const renderPlaylistRow = (pl: Playlist, prefix?: string) => (
+  // ── 渲染歌单行（可自定义 onClick）──
+  const renderPlaylistRow = (pl: Playlist, prefix?: string, onClick?: (pl: Playlist) => void) => (
     <HStack
       key={`${prefix || ""}${pl.id}`}
       spacing={3}
@@ -856,7 +868,7 @@ export default function MusicPage() {
       borderRadius="lg"
       cursor="pointer"
       _hover={{ bg: liquidGlassEnabled ? hoverBg : itemHoverBg }}
-      onClick={() => handlePlaylistClick(pl)}
+      onClick={() => (onClick || handlePlaylistClick)(pl)}
       transition="background 0.15s"
       bg={currentPlaylistMeta?.id === pl.id ? itemActiveBg : "transparent"}
     >
@@ -1036,44 +1048,81 @@ export default function MusicPage() {
           {/* 搜索框 — 独立 memo 组件，播放时不会因重渲染而失焦 */}
           <SearchBox onEnterSearchMode={handleEnterSearchMode} />
 
-          {/* 推荐歌单 */}
+          {/* 推荐歌单 / 推荐歌单曲目 */}
           <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
-            <HStack justify="space-between" mb={3} flexShrink={0}>
-              <HStack spacing={2}>
-                <Sparkles size={16} color={activeColor} />
-                <Text fontSize="sm" fontWeight="bold" color={textColor}>
-                  推荐歌单
-                </Text>
-              </HStack>
-              {loginInfo?.logged_in && (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => storeActions.loadRecommendations()}
-                  sx={{ color: activeColor, _hover: { bg: hoverBg } }}
-                >
-                  刷新
-                </Button>
-              )}
-            </HStack>
+            {rightPanelView === "tracks" ? (
+              <>
+                {/* 推荐歌单曲目视图 */}
+                <HStack spacing={2} mb={3} flexShrink={0}>
+                  <Tooltip label="返回推荐歌单">
+                    <IconButton
+                      aria-label="Back"
+                      icon={<ArrowLeft size={16} />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleBackToRecommendations}
+                      sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                    />
+                  </Tooltip>
+                  <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
+                    {currentPlaylistMeta?.name || "曲目列表"}
+                  </Text>
+                  <Text color={subTextColor} fontSize="xs" flexShrink={0}>
+                    ({currentPlaylistTracks.length} 首)
+                  </Text>
+                </HStack>
+                <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
+                  {loadingTracks ? (
+                    <VStack py={6}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
+                  ) : currentPlaylistTracks.length > 0 ? (
+                    <VStack spacing={1} align="stretch">
+                      {currentPlaylistTracks.map((song, i) => renderSongRow(song, i, currentPlaylistTracks))}
+                    </VStack>
+                  ) : (
+                    <Text color={subTextColor} fontSize="xs" py={4} textAlign="center">暂无曲目</Text>
+                  )}
+                </Box>
+              </>
+            ) : (
+              <>
+                <HStack justify="space-between" mb={3} flexShrink={0}>
+                  <HStack spacing={2}>
+                    <Sparkles size={16} color={activeColor} />
+                    <Text fontSize="sm" fontWeight="bold" color={textColor}>
+                      推荐歌单
+                    </Text>
+                  </HStack>
+                  {loginInfo?.logged_in && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => storeActions.loadRecommendations()}
+                      sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                    >
+                      刷新
+                    </Button>
+                  )}
+                </HStack>
 
-            <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
-              {!loginInfo?.logged_in ? (
-                <VStack py={8} spacing={3}>
-                  <MusicIcon size={32} color={subTextColor} />
-                  <Text color={subTextColor} fontSize="sm" textAlign="center">登录后查看推荐内容</Text>
-                </VStack>
-              ) : recommendations.length === 0 ? (
-                <VStack py={8} spacing={3}>
-                  <Sparkles size={32} color={subTextColor} />
-                  <Text color={subTextColor} fontSize="sm" textAlign="center">点击刷新加载推荐</Text>
-                </VStack>
-              ) : (
-                <VStack spacing={2} align="stretch">
-                  {recommendations.map((pl) => renderPlaylistRow(pl, "rec-"))}
-                </VStack>
-              )}
-            </Box>
+                <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
+                  {!loginInfo?.logged_in ? (
+                    <VStack py={8} spacing={3}>
+                      <MusicIcon size={32} color={subTextColor} />
+                      <Text color={subTextColor} fontSize="sm" textAlign="center">登录后查看推荐内容</Text>
+                    </VStack>
+                  ) : recommendations.length === 0 ? (
+                    <VStack py={8} spacing={3}>
+                      <Sparkles size={32} color={subTextColor} />
+                      <Text color={subTextColor} fontSize="sm" textAlign="center">点击刷新加载推荐</Text>
+                    </VStack>
+                  ) : (
+                    <VStack spacing={2} align="stretch">
+                      {recommendations.map((pl) => renderPlaylistRow(pl, "rec-", handleRecPlaylistClick))}
+                    </VStack>
+                  )}
+                </Box>
+              </>
+            )}
           </LiquidGlassCard>
         </VStack>
       </HStack>
