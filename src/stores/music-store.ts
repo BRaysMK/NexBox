@@ -29,8 +29,12 @@ interface MusicState {
   // 数据
   searchResults: Song[];
   userPlaylists: Playlist[];
-  currentPlaylistTracks: Song[];
-  currentPlaylistMeta: Playlist | null;
+  // 左侧「我的歌单」面板的曲目
+  leftPlaylistTracks: Song[];
+  leftPlaylistMeta: Playlist | null;
+  // 右侧「推荐歌单」面板的曲目
+  rightPlaylistTracks: Song[];
+  rightPlaylistMeta: Playlist | null;
   likedSongIds: Set<string>;
   currentLyrics: Lyrics | null;
   recommendations: Playlist[];
@@ -46,11 +50,14 @@ interface MusicState {
 
   // 歌词字体大小
   lyricsFontSize: number;
+  // 歌词高亮颜色
+  lyricsHighlightColor: string;
 
   // UI 状态
   searching: boolean;
   loadingPlaylists: boolean;
-  loadingTracks: boolean;
+  loadingLeftTracks: boolean;
+  loadingRightTracks: boolean;
   loadingLyrics: boolean;
 
   // 音频元素引用
@@ -70,6 +77,7 @@ interface MusicState {
   togglePlayMode: () => void;
   setPlaybackQuality: (quality: PlaybackQuality) => Promise<void>;
   setLyricsFontSize: (size: number) => Promise<void>;
+  setLyricsHighlightColor: (color: string) => Promise<void>;
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
 
@@ -79,7 +87,8 @@ interface MusicState {
   openLoginWindow: () => Promise<void>;
 
   loadUserPlaylists: () => Promise<void>;
-  loadPlaylistTracks: (id: string) => Promise<void>;
+  loadLeftPlaylistTracks: (id: string) => Promise<void>;
+  loadRightPlaylistTracks: (id: string) => Promise<void>;
   loadLikedList: () => Promise<void>;
   toggleLike: (songId: string) => Promise<void>;
   loadLyrics: (songId: string) => Promise<void>;
@@ -122,8 +131,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   searchResults: [],
   userPlaylists: [],
-  currentPlaylistTracks: [],
-  currentPlaylistMeta: null,
+  leftPlaylistTracks: [],
+  leftPlaylistMeta: null,
+  rightPlaylistTracks: [],
+  rightPlaylistMeta: null,
   likedSongIds: new Set(),
   currentLyrics: null,
   recommendations: [],
@@ -133,11 +144,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   currentQuality: "",
   currentBitrate: 0,
   lyricsFontSize: 18,
+  lyricsHighlightColor: "#fff0b8",
   proxyPort: 0,
 
   searching: false,
   loadingPlaylists: false,
-  loadingTracks: false,
+  loadingLeftTracks: false,
+  loadingRightTracks: false,
   loadingLyrics: false,
 
   audioRef: null,
@@ -157,10 +170,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const mode = await store.get<PlayMode>("playMode");
       const quality = await store.get<PlaybackQuality>("quality");
       const fontSize = await store.get<number>("lyricsFontSize");
+      const highlightColor = await store.get<string>("lyricsHighlightColor");
       if (vol != null) set({ volume: vol });
       if (mode) set({ playMode: mode });
       if (quality) set({ playbackQuality: quality });
       if (fontSize != null) set({ lyricsFontSize: fontSize });
+      if (highlightColor) set({ lyricsHighlightColor: highlightColor });
     } catch {
       // ignore
     }
@@ -266,8 +281,17 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   nextTrack: () => {
-    const { playQueue, currentIndex, playMode } = get();
+    const { playQueue, currentIndex, playMode, audioRef } = get();
     if (playQueue.length === 0) return;
+
+    // 单曲循环：重新播放当前歌曲
+    if (playMode === "one") {
+      if (audioRef) {
+        audioRef.currentTime = 0;
+        audioRef.play().catch(() => {});
+      }
+      return;
+    }
 
     let next: number;
     if (playMode === "shuffle") {
@@ -356,6 +380,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     getStore().then((s) => s.set("lyricsFontSize", size).then(() => s.save()));
   },
 
+  setLyricsHighlightColor: async (color) => {
+    set({ lyricsHighlightColor: color });
+    getStore().then((s) => s.set("lyricsHighlightColor", color).then(() => s.save()));
+  },
+
   loginStatus: async () => {
     try {
       const info = await invoke<LoginInfo>("music_login_status");
@@ -389,6 +418,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   openLoginWindow: async () => {
+    // 如果已登录，先清除 cookie，让登录页显示全新的登录界面
+    if (get().loginInfo?.logged_in) {
+      await get().logout();
+    }
     try {
       await invoke("music_open_login_window");
     } catch (e) {
@@ -408,15 +441,27 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
-  loadPlaylistTracks: async (id) => {
-    set({ loadingTracks: true });
+  loadLeftPlaylistTracks: async (id) => {
+    set({ loadingLeftTracks: true });
     try {
       const result = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id });
-      set({ currentPlaylistMeta: result[0], currentPlaylistTracks: result[1] });
+      set({ leftPlaylistMeta: result[0], leftPlaylistTracks: result[1] });
     } catch {
-      set({ currentPlaylistTracks: [] });
+      set({ leftPlaylistTracks: [] });
     } finally {
-      set({ loadingTracks: false });
+      set({ loadingLeftTracks: false });
+    }
+  },
+
+  loadRightPlaylistTracks: async (id) => {
+    set({ loadingRightTracks: true });
+    try {
+      const result = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id });
+      set({ rightPlaylistMeta: result[0], rightPlaylistTracks: result[1] });
+    } catch {
+      set({ rightPlaylistTracks: [] });
+    } finally {
+      set({ loadingRightTracks: false });
     }
   },
 

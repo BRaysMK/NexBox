@@ -214,6 +214,7 @@ fn map_song_record(s: &Value) -> Song {
             .unwrap_or(0),
         fee: s.get("fee").and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0),
         playable: true,
+        language: s.get("language").and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0),
     }
 }
 
@@ -613,18 +614,23 @@ pub async fn user_playlist(uid: &str, cookie: &str) -> Result<Vec<Playlist>, Str
 }
 
 /// 获取歌单内曲目
+/// 用 /api/v6/playlist/detail 获取歌单信息 + trackIds（全部曲目ID），
+/// 如果 tracks 字段已包含全部曲目则直接返回，
+/// 否则用 trackIds + song_detail 批量获取完整曲目信息。
 pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<Song>), String> {
     let client = build_client();
-    let n_str = "500".to_string();
+
+    // ── 第一步：获取歌单信息 ──
+    let n_str = "1000".to_string();
     let s_str = "0".to_string();
-    let result = post_api(&client, "/api/v6/playlist/detail", &[
+    let detail = post_api(&client, "/api/v6/playlist/detail", &[
         ("id", id),
         ("n", &n_str),
         ("s", &s_str),
         ("csrf_token", ""),
     ], cookie).await?;
 
-    let pl = result.get("playlist").ok_or("No playlist in result")?;
+    let pl = detail.get("playlist").ok_or("No playlist in result")?;
     let playlist = Playlist {
         provider: "netease".into(),
         id: pl.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_default(),
@@ -634,7 +640,8 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
         creator: pl.get("creator").and_then(|c| c.get("nickname")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
     };
 
-    let tracks: Vec<Song> = pl
+    // detail 中的 tracks（可能不完整，推荐歌单可能只返回 20 首）
+    let detail_tracks: Vec<Song> = pl
         .get("tracks")
         .and_then(|t| t.as_array())
         .cloned()
@@ -643,7 +650,50 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
         .map(map_song_record)
         .collect();
 
-    Ok((playlist, tracks))
+    // 提取 trackIds（包含歌单所有曲目 ID）
+    let track_ids: Vec<String> = pl
+        .get("trackIds")
+        .and_then(|t| t.as_array())
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|v| v.get("id").and_then(|id| id.as_i64()).map(|n| n.to_string()))
+        .collect();
+
+    // 如果 detail tracks 已经包含全部曲目，直接返回
+    let total = if !track_ids.is_empty() {
+        track_ids.len()
+    } else {
+        playlist.track_count as usize
+    };
+
+    if detail_tracks.len() >= total || track_ids.is_empty() {
+        return Ok((playlist, detail_tracks));
+    }
+
+    // ── 第二步：用 trackIds 批量获取完整曲目信息 ──
+    // song_detail 每次最多约 1000 首
+    let mut all_tracks: Vec<Song> = Vec::with_capacity(total);
+    let batch_size = 1000;
+
+    for chunk in track_ids.chunks(batch_size) {
+        match song_detail(&client, chunk, cookie).await {
+            Ok(songs) => all_tracks.extend(songs),
+            Err(_) => {
+                // 如果批量获取失败，回退到 detail tracks
+                if all_tracks.len() < detail_tracks.len() {
+                    return Ok((playlist, detail_tracks));
+                }
+                break;
+            }
+        }
+    }
+
+    if all_tracks.len() >= detail_tracks.len() {
+        Ok((playlist, all_tracks))
+    } else {
+        Ok((playlist, detail_tracks))
+    }
 }
 
 /// 获取喜欢列表
@@ -718,10 +768,18 @@ pub async fn lyric(id: &str, cookie: &str) -> Result<Lyrics, String> {
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
 
+    let yrc = result
+        .get("yrc")
+        .and_then(|l| l.get("lyric"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
     Ok(Lyrics {
         lyric,
         translation,
         roma,
+        yrc,
     })
 }
 

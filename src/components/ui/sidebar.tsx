@@ -1,5 +1,5 @@
 import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Crosshair, Music } from "lucide-react";
+import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Music } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -161,12 +161,11 @@ export function Sidebar() {
     { path: "/hardware", icon: Cpu, ariaLabel: t("sidebar.hardware") },
     { path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") },
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },
-    { path: "/tests", icon: Crosshair, ariaLabel: t("sidebar.tests") },
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
+    { path: "/music", icon: Music, ariaLabel: t("sidebar.music") },
     { path: "/delta-force", icon: null, customIcon: deltaForceIcon, ariaLabel: t("sidebar.deltaForce") },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
-    { path: "/music", icon: Music, ariaLabel: "音乐" },
     { path: "/settings", icon: Settings, ariaLabel: t("sidebar.settings") },
   ];
 

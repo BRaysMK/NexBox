@@ -164,7 +164,7 @@ export default function StartupManagerPage() {
           onClick={() => navigate("/optimization")}
           color={headingColor}
         >
-          {t("tests.back") || "返回"}
+                        返回
         </Button>
         <Heading size="lg" color={headingColor} fontWeight="700">
           {t("optimization.startupManager.title")}

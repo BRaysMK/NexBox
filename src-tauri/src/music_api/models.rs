@@ -17,6 +17,8 @@ pub struct Song {
     pub duration: u64,
     pub fee: i32,
     pub playable: bool,
+    #[serde(default)]
+    pub language: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -78,6 +80,8 @@ pub struct Lyrics {
     pub translation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub roma: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub yrc: Option<String>,
 }
 
 /// 二维码检查结果
@@ -98,18 +102,16 @@ pub struct QrCheckResult {
 #[derive(Debug, Clone)]
 pub struct QualityCandidate {
     pub level: String,
-    pub br: u64,
     pub label: String,
-    pub svip: bool,
 }
 
 pub fn netease_quality_candidates() -> Vec<QualityCandidate> {
     vec![
-        QualityCandidate { level: "jymaster".into(), br: 1999000, label: "超清母带".into(), svip: true },
-        QualityCandidate { level: "hires".into(),    br: 1999000, label: "高清臻音".into(), svip: false },
-        QualityCandidate { level: "lossless".into(), br: 1411000, label: "无损".into(),    svip: false },
-        QualityCandidate { level: "exhigh".into(),   br: 999000,  label: "极高".into(),    svip: false },
-        QualityCandidate { level: "standard".into(), br: 128000,  label: "标准".into(),    svip: false },
+        QualityCandidate { level: "jymaster".into(), label: "超清母带".into() },
+        QualityCandidate { level: "hires".into(),    label: "高清臻音".into() },
+        QualityCandidate { level: "lossless".into(), label: "无损".into()    },
+        QualityCandidate { level: "exhigh".into(),   label: "极高".into()    },
+        QualityCandidate { level: "standard".into(), label: "标准".into()    },
     ]
 }
 

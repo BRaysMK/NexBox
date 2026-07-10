@@ -1,18 +1,21 @@
 use std::sync::atomic::{AtomicU16, Ordering};
 
 use axum::{
+    body::Body,
     extract::Query,
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Router,
 };
+use futures_util::StreamExt;
 use serde::Deserialize;
 use std::sync::OnceLock;
 use tauri::AppHandle;
 
 static PROXY_PORT: AtomicU16 = AtomicU16::new(0);
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+static STREAM_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -33,6 +36,17 @@ fn get_client() -> &'static reqwest::Client {
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("Failed to build proxy client")
+    })
+}
+
+/// 流式传输专用 client —— 无整体超时，仅设连接超时
+/// 避免长曲目中途被 timeout 掐断
+fn get_stream_client() -> &'static reqwest::Client {
+    STREAM_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(15))
+            .build()
+            .expect("Failed to build stream proxy client")
     })
 }
 
@@ -74,7 +88,8 @@ async fn audio_proxy(Query(query): Query<ProxyQuery>, headers: HeaderMap) -> Res
     }
 
     let referer = referer_for(audio_url);
-    let client = get_client();
+    // 流式传输专用 client —— 无整体超时，避免长曲目中途断开
+    let client = get_stream_client();
 
     let mut req = client
         .get(audio_url)
@@ -110,15 +125,16 @@ async fn audio_proxy(Query(query): Query<ProxyQuery>, headers: HeaderMap) -> Res
         out_headers.insert("Content-Range", convert_header_value(cr));
     }
 
-    let body = match resp.bytes().await {
-        Ok(b) => b,
-        Err(e) => {
-            log::warn!("[AudioProxy] read body failed: {e}");
-            return (StatusCode::BAD_GATEWAY, "Body read error").into_response();
-        }
-    };
+    // 流式传输：边下边播，不再等全量下载完才响应
+    let stream = resp.bytes_stream().map(|result| {
+        result.map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    });
+    let body = Body::from_stream(stream);
 
-    (status, out_headers, body).into_response()
+    let mut response = Response::new(body);
+    *response.status_mut() = status;
+    response.headers_mut().extend(out_headers);
+    response
 }
 
 /// 封面代理 - 添加 CORS 头

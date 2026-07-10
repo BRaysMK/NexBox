@@ -261,7 +261,7 @@ export default function MemoryLimitPage() {
           onClick={() => navigate("/optimize")}
           color={headingColor}
         >
-          {t("tests.back") || "返回"}
+                        返回
         </Button>
         <Heading size="lg" color={headingColor} fontWeight="700">
           {t("optimization.memoryLimit.title")}

@@ -350,7 +350,7 @@ export default function MemoryCleanupPage() {
               onClick={() => navigate("/optimize")}
               color={headingColor}
             >
-              {t("tests.back") || "返回"}
+                            返回
             </Button>
             <HStack spacing={3}>
               <Button

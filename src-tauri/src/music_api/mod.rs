@@ -5,6 +5,7 @@ pub mod models;
 pub mod netease;
 
 use tauri::{AppHandle, Emitter, Manager};
+use url::Url;
 use models::*;
 
 // ============================================================
@@ -109,9 +110,6 @@ pub async fn music_playlist_tracks(id: String) -> Result<(Playlist, Vec<Song>), 
 pub async fn music_likelist(app: AppHandle) -> Result<Vec<String>, String> {
     let app_cookie = load_app_cookie(&app).await;
     let info = netease::login_status(&app_cookie).await?;
-    if !info.logged_in || info.user_id.is_empty() {
-        return Ok(vec![]);
-    }
     netease::likelist(&info.user_id, &app_cookie).await
 }
 
@@ -170,22 +168,32 @@ pub async fn music_open_login_window(app: AppHandle) -> Result<String, String> {
     let url = "https://music.163.com/#/login";
     let label = "netease-login";
 
-    // 如果窗口已存在，聚焦它
+    // 如果窗口已存在，清除 cookie 后刷新登录页（切换账号场景）
     if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.clear_all_browsing_data();
+        let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
+        let _ = existing.navigate(login_url);
         let _ = existing.set_focus();
-        return Ok("window_exists".into());
+        return Ok("window_refreshed".into());
     }
 
+    // 新窗口：先以 about:blank 创建，清除 cookie 后再导航到登录页
     let login_window = tauri::WebviewWindowBuilder::new(
         &app,
         label,
-        WebviewUrl::External(url.parse().map_err(|e: url::ParseError| e.to_string())?),
+        WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
     )
     .title("网易云音乐登录")
     .inner_size(940.0, 760.0)
     .min_inner_size(780.0, 580.0)
     .build()
     .map_err(|e| format!("Failed to create login window: {e}"))?;
+
+    // 清除残留 cookie，确保登录页不会自动登录
+    let _ = login_window.clear_all_browsing_data();
+    // 导航到登录页
+    let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
+    let _ = login_window.navigate(login_url);
 
     // 轮询读取 webview 的 cookie (包括 HttpOnly 的 MUSIC_U)
     // 这是关键: document.cookie 无法读取 HttpOnly cookie,

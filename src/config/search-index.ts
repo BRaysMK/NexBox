@@ -86,14 +86,6 @@ export const searchIndex: SearchItem[] = [
     keywords: ["内置", "工具", "builtin", "tools"],
   },
   {
-    id: "tests",
-    nameKey: "sidebar.tests",
-    path: "/tests",
-    icon: Crosshair,
-    category: "page",
-    keywords: ["测试", "tests", "训练"],
-  },
-  {
     id: "optimization",
     nameKey: "sidebar.optimization",
     path: "/optimization",

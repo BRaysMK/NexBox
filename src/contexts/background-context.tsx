@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback, useMemo } from "react";
 import { LazyStore } from "@tauri-apps/plugin-store";
 
 type BackgroundMode = "none" | "preset" | "image" | "dynamic";
@@ -195,44 +195,45 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     };
   }, [backgroundMode, carouselEnabled, setActivePresetIndex]);
 
-  const addCustomBgImage = (image: string): boolean => {
+  const addCustomBgImage = useCallback((image: string): boolean => {
     if (customBgImages.length >= MAX_BG_IMAGES) {
       return false;
     }
     setCustomBgImages([...customBgImages, image]);
     return true;
-  };
+  }, [customBgImages]);
 
-  const removeCustomBgImage = (index: number) => {
+  const removeCustomBgImage = useCallback((index: number) => {
     const newImages = customBgImages.filter((_, i) => i !== index);
     setCustomBgImages(newImages);
     if (activeBgIndex >= newImages.length) {
       setActiveBgIndex(Math.max(0, newImages.length - 1));
     }
-  };
+  }, [customBgImages, activeBgIndex]);
+
+  // useMemo 稳定 context value，避免每次渲染创建新对象导致所有消费者重渲染
+  const value = useMemo(() => ({
+    backgroundMode,
+    customBgImages,
+    activeBgIndex,
+    dynamicBgVideo,
+    liquidGlassEnabled,
+    activePresetIndex,
+    presetBackgrounds: PRESET_BACKGROUNDS,
+    carouselEnabled,
+    setBackgroundMode,
+    setCustomBgImages,
+    addCustomBgImage,
+    removeCustomBgImage,
+    setActiveBgIndex,
+    setDynamicBgVideo,
+    setLiquidGlassEnabled,
+    setActivePresetIndex,
+    setCarouselEnabled,
+  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, activePresetIndex, carouselEnabled, addCustomBgImage, removeCustomBgImage]);
 
   return (
-    <BackgroundContext.Provider
-      value={{
-        backgroundMode,
-        customBgImages,
-        activeBgIndex,
-        dynamicBgVideo,
-        liquidGlassEnabled,
-        activePresetIndex,
-        presetBackgrounds: PRESET_BACKGROUNDS,
-        carouselEnabled,
-        setBackgroundMode,
-        setCustomBgImages,
-        addCustomBgImage,
-        removeCustomBgImage,
-        setActiveBgIndex,
-        setDynamicBgVideo,
-        setLiquidGlassEnabled,
-        setActivePresetIndex,
-        setCarouselEnabled,
-      }}
-    >
+    <BackgroundContext.Provider value={value}>
       {children}
     </BackgroundContext.Provider>
   );

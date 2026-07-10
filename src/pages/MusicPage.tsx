@@ -22,10 +22,6 @@ import {
 } from "@chakra-ui/react";
 import {
   Search,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
   Volume2,
   VolumeX,
   ListMusic,
@@ -44,6 +40,10 @@ import type { Song, Playlist } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
+import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
+import { CustomColorPicker } from "@/components/special/custom-color-picker";
+import { VirtualizedSongList } from "@/components/VirtualizedSongList";
 
 const scrollbarSx = (color: string) => ({
   "&::-webkit-scrollbar": { width: "4px" },
@@ -84,6 +84,36 @@ const rangeSliderSx = {
     border: "none",
   },
 };
+
+// ── 圆角播放控制图标 ──
+// 用 SVG path + Q 曲线实现圆角三角形，避免有棱有角
+
+const PlayBtn = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M 8 5 Q 7 4 6 5 L 6 19 Q 7 20 8 19 L 19 13 Q 20 12 19 11 Z" />
+  </svg>
+);
+
+const PauseIcon = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <rect x="6" y="4" width="4" height="16" rx="2" />
+    <rect x="14" y="4" width="4" height="16" rx="2" />
+  </svg>
+);
+
+const SkipBackBtn = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <rect x="4" y="5" width="3" height="14" rx="1.5" />
+    <polygon points="16,6 8,12 16,18" stroke="currentColor" strokeWidth={2.5} strokeLinejoin="round" />
+  </svg>
+);
+
+const SkipForwardBtn = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <polygon points="8,6 16,12 8,18" stroke="currentColor" strokeWidth={2.5} strokeLinejoin="round" />
+    <rect x="17" y="5" width="3" height="14" rx="1.5" />
+  </svg>
+);
 
 // ═══════════════════════════════════════════════
 // 音质选项配置
@@ -202,6 +232,119 @@ function LyricMarquee({ text, isActive, isTranslation, fontSize, activeColor, te
 }
 
 // ═══════════════════════════════════════════════
+// ProgressSection — 独立的进度条组件
+// 自己管理 timeupdate 监听，不触发 ExpandedPlayer 重渲染
+// ═══════════════════════════════════════════════
+const ProgressSection = memo(function ProgressSection({
+  activeColor,
+  subTextColor,
+  sliderTrackBg,
+  audioRef,
+  currentSongId,
+}: {
+  activeColor: string;
+  subTextColor: string;
+  sliderTrackBg: string;
+  audioRef: HTMLAudioElement | null;
+  currentSongId?: string | number;
+}) {
+  const [localCurrentTime, setLocalCurrentTime] = useState(0);
+  const [localDuration, setLocalDuration] = useState(0);
+  const isUserSeekingRef = useRef(false);
+  const pendingSeekRef = useRef(0);
+
+  // 切歌时重置
+  useEffect(() => {
+    setLocalCurrentTime(0);
+    setLocalDuration(audioRef?.duration && isFinite(audioRef.duration) ? audioRef.duration : 0);
+  }, [currentSongId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 监听 audio timeupdate（含挂载时同步当前时间）
+  useEffect(() => {
+    if (!audioRef) return;
+    if (audioRef.duration && isFinite(audioRef.duration)) {
+      setLocalDuration(audioRef.duration);
+    }
+    // 挂载时同步当前时间（修复暂停后收起/展开进度条归零的问题）
+    if (!isUserSeekingRef.current) {
+      setLocalCurrentTime(audioRef.currentTime);
+    }
+    const onTimeUpdate = () => {
+      if (isUserSeekingRef.current) return;
+      setLocalCurrentTime(audioRef.currentTime);
+    };
+    const onLoadedMetadata = () => {
+      if (isFinite(audioRef.duration)) setLocalDuration(audioRef.duration);
+    };
+    audioRef.addEventListener("timeupdate", onTimeUpdate);
+    audioRef.addEventListener("loadedmetadata", onLoadedMetadata);
+    return () => {
+      audioRef.removeEventListener("timeupdate", onTimeUpdate);
+      audioRef.removeEventListener("loadedmetadata", onLoadedMetadata);
+    };
+  }, [audioRef]);
+
+  const handleSeekDrag = useCallback((v: number) => {
+    if (!isUserSeekingRef.current) return;
+    pendingSeekRef.current = v;
+    setLocalCurrentTime(v);
+  }, []);
+
+  const handleSeekCommit = useCallback(() => {
+    if (pendingSeekRef.current !== 0 || isUserSeekingRef.current) {
+      const targetTime = pendingSeekRef.current;
+      useMusicStore.getState().seekTo(targetTime);
+      setTimeout(() => {
+        isUserSeekingRef.current = false;
+        setLocalCurrentTime(targetTime);
+      }, 300);
+    }
+  }, []);
+
+  const formatTime = (time: number): string => {
+    if (isNaN(time)) return "0:00";
+    const m = Math.floor(time / 60);
+    const s = Math.floor(time % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  return (
+    <HStack spacing={3} w="100%" maxW="600px">
+      <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
+        {formatTime(localCurrentTime)}
+      </Text>
+      <Box
+        as="input"
+        type="range"
+        min={0}
+        max={localDuration || 100}
+        step={0.1}
+        value={localCurrentTime}
+        onMouseDown={() => { isUserSeekingRef.current = true; }}
+        onTouchStart={() => { isUserSeekingRef.current = true; }}
+        onChange={(e) => handleSeekDrag(parseFloat((e.target as HTMLInputElement).value))}
+        onMouseUp={handleSeekCommit}
+        onTouchEnd={handleSeekCommit}
+        tabIndex={-1}
+        aria-hidden="true"
+        flex={1}
+        sx={{
+          ...rangeSliderSx,
+          background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
+          "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
+          "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
+          "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
+          "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
+        }}
+      />
+      <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
+        {formatTime(localDuration)}
+      </Text>
+    </HStack>
+  );
+});
+
+// ═══════════════════════════════════════════════
 // ExpandedPlayer — 展开的全屏播放器
 // 点击播放器封面展开，左侧封面+信息，右侧歌词
 // ═══════════════════════════════════════════════
@@ -224,13 +367,9 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const currentQuality = useMusicStore((s) => s.currentQuality);
   const currentBitrate = useMusicStore((s) => s.currentBitrate);
   const lyricsFontSize = useMusicStore((s) => s.lyricsFontSize);
+  const lyricsHighlightColor = useMusicStore((s) => s.lyricsHighlightColor);
 
-  const [localCurrentTime, setLocalCurrentTime] = useState(0);
-  const [localDuration, setLocalDuration] = useState(0);
   const [isClosing, setIsClosing] = useState(false);
-  const lyricsScrollRef = useRef<HTMLDivElement>(null);
-  const isUserSeekingRef = useRef(false);
-  const pendingSeekRef = useRef(0);
 
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const activeColor = getActiveColor();
@@ -247,88 +386,20 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : Repeat;
 
-  // 监听 audio timeupdate
-  useEffect(() => {
-    if (!audioRef) return;
-    // 已加载时直接取 duration（展开播放器晚于音频加载的常见场景）
-    if (audioRef.duration && isFinite(audioRef.duration)) {
-      setLocalDuration(audioRef.duration);
-    }
-    const onTimeUpdate = () => {
-      if (isUserSeekingRef.current) return;
-      setLocalCurrentTime(audioRef.currentTime);
-    };
-    const onLoadedMetadata = () => {
-      if (isFinite(audioRef.duration)) setLocalDuration(audioRef.duration);
-    };
-    audioRef.addEventListener("timeupdate", onTimeUpdate);
-    audioRef.addEventListener("loadedmetadata", onLoadedMetadata);
-    return () => {
-      audioRef.removeEventListener("timeupdate", onTimeUpdate);
-      audioRef.removeEventListener("loadedmetadata", onLoadedMetadata);
-    };
-  }, [audioRef]);
+  // memoize scrollbarSx，避免每次渲染创建新对象导致 KaraokeLyricsView 不必要重渲染
+  const memoScrollbarSx = useMemo(() => scrollbarSx(activeColor), [activeColor]);
 
+  // 切歌时加载歌词（不再管理 timeupdate，由 ProgressSection 独立处理）
   useEffect(() => {
-    setLocalCurrentTime(0);
-    setLocalDuration(audioRef?.duration && isFinite(audioRef.duration) ? audioRef.duration : 0);
     if (currentSong) {
       useMusicStore.getState().loadLyrics(currentSong.id);
     }
   }, [currentSong]);
 
-  // 歌词解析
-  const lyricLines = useMemo(() => {
-    if (!currentLyrics?.lyric) return [];
-    return parseLrc(currentLyrics.lyric, currentLyrics.translation);
+  // 歌词解析：优先 YRC 逐字歌词，降级为 LRC 逐行歌词
+  const karaokeLines = useMemo(() => {
+    return buildKaraokeLines(currentLyrics);
   }, [currentLyrics]);
-
-  // 当前歌词行索引 + 自动滚动
-  const activeLyricIndex = useMemo(() => {
-    if (lyricLines.length === 0) return -1;
-    let idx = -1;
-    for (let i = 0; i < lyricLines.length; i++) {
-      if (lyricLines[i].time <= localCurrentTime) idx = i;
-      else break;
-    }
-    return idx;
-  }, [lyricLines, localCurrentTime]);
-
-  useEffect(() => {
-    if (activeLyricIndex < 0 || !lyricsScrollRef.current) return;
-    const container = lyricsScrollRef.current;
-    const activeEl = container.querySelector(`[data-lyric-idx="${activeLyricIndex}"]`) as HTMLElement;
-    if (activeEl) {
-      container.scrollTo({
-        top: activeEl.offsetTop - (container.clientHeight + activeEl.clientHeight * 2) / 2,
-        behavior: "smooth",
-      });
-    }
-  }, [activeLyricIndex]);
-
-  const formatTime = (time: number): string => {
-    if (isNaN(time)) return "0:00";
-    const m = Math.floor(time / 60);
-    const s = Math.floor(time % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
-  const handleSeekDrag = useCallback((v: number) => {
-    if (!isUserSeekingRef.current) return;
-    pendingSeekRef.current = v;
-    setLocalCurrentTime(v);
-  }, []);
-
-  const handleSeekCommit = useCallback(() => {
-    if (pendingSeekRef.current !== 0 || isUserSeekingRef.current) {
-      const targetTime = pendingSeekRef.current;
-      useMusicStore.getState().seekTo(targetTime);
-      setTimeout(() => {
-        isUserSeekingRef.current = false;
-        setLocalCurrentTime(targetTime);
-      }, 300);
-    }
-  }, []);
 
   if (!currentSong) return null;
 
@@ -442,64 +513,19 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </VStack>
         </VStack>
 
-        {/* 右侧：歌词 - 与封面对齐 */}
+        {/* 右侧：歌词 - 卡拉OK逐字高亮 */}
         <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden" justify="flex-start">
-          <Box ref={lyricsScrollRef} flex={1} maxH="65vh" overflowY="auto" overflowX="hidden" sx={{
-            ...scrollbarSx(activeColor), overflowX: "hidden",
-            maskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
-            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
-          }} pr={2}>
-            {loadingLyrics ? (
-              <VStack py={12}><Spinner size="lg" sx={{ color: activeColor }} /></VStack>
-            ) : lyricLines.length > 0 ? (
-              <Box
-                minH="100%"
-                display="flex"
-                flexDirection="column"
-                justifyContent="center"
-              >
-                <VStack spacing={3} align="stretch">
-                  {lyricLines.map((line, i) => (
-                  <Box
-                    key={i}
-                    data-lyric-idx={i}
-                    py={1}
-                    sx={{
-                      transition: "all 0.3s ease",
-                      opacity: activeLyricIndex === i ? 1 : 0.3,
-                      transform: activeLyricIndex === i ? "scale(1.05)" : "scale(1)",
-                    }}
-                  >
-                    <LyricMarquee
-                      text={line.text}
-                      isActive={activeLyricIndex === i}
-                      fontSize={lyricsFontSize}
-                      activeColor={activeColor}
-                      textColor={textColor}
-                      subTextColor={subTextColor}
-                    />
-                    {line.translation && (
-                      <LyricMarquee
-                        text={line.translation}
-                        isActive={activeLyricIndex === i}
-                        isTranslation
-                        fontSize={lyricsFontSize}
-                        activeColor={activeColor}
-                        textColor={textColor}
-                        subTextColor={subTextColor}
-                      />
-                    )}
-                  </Box>
-                ))}
-              </VStack>
-              </Box>
-            ) : (
-              <VStack py={12} spacing={3}>
-                <MusicIcon size={32} color={subTextColor} />
-                <Text color={subTextColor} fontSize="sm" textAlign="center">暂无歌词</Text>
-              </VStack>
-            )}
-          </Box>
+          <KaraokeLyricsView
+            lines={karaokeLines}
+            loading={loadingLyrics}
+            fontSize={lyricsFontSize}
+            activeColor={activeColor}
+            highlightColor={lyricsHighlightColor}
+            textColor={textColor}
+            subTextColor={subTextColor}
+            scrollbarSx={memoScrollbarSx}
+            audioRef={audioRef}
+          />
         </VStack>
       </HStack>
 
@@ -520,7 +546,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </Tooltip>
           <IconButton
             aria-label="Prev"
-            icon={<SkipBack size={24} />}
+            icon={<SkipBackBtn size={24} />}
             size="md"
             variant="ghost"
             onClick={() => useMusicStore.getState().prevTrack()}
@@ -528,7 +554,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           />
           <IconButton
             aria-label="Play/Pause"
-            icon={isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            icon={isPlaying ? <PauseIcon size={24} /> : <PlayBtn size={24} />}
             size="md"
             variant="ghost"
             sx={{ color: textColor, _hover: { bg: activeColor, color: contrastText } }}
@@ -536,13 +562,24 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           />
           <IconButton
             aria-label="Next"
-            icon={<SkipForward size={24} />}
+            icon={<SkipForwardBtn size={24} />}
             size="md"
             variant="ghost"
             onClick={() => useMusicStore.getState().nextTrack()}
             sx={{ color: textColor, _hover: { bg: hoverBg } }}
           />
-          <Tooltip label="静音">
+          {/* 音量控制：悬停向右展开滑块 */}
+          <Box
+            role="group"
+            position="relative"
+            sx={{
+              "&:hover .volume-slider": {
+                width: "80px",
+                opacity: 1,
+                ml: "6px",
+              },
+            }}
+          >
             <IconButton
               aria-label="Mute"
               icon={volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
@@ -551,19 +588,69 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
               sx={{ color: textColor, _hover: { bg: hoverBg } }}
             />
-          </Tooltip>
+            <Box
+              className="volume-slider"
+              as="input"
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={volume}
+              onChange={(e) => useMusicStore.getState().setVolume(parseFloat((e.target as HTMLInputElement).value))}
+              tabIndex={-1}
+              sx={{
+                ...rangeSliderSx,
+                position: "absolute",
+                left: "100%",
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: "0px",
+                opacity: 0,
+                ml: "0px",
+                transition: "width 0.25s ease, opacity 0.2s ease, margin-left 0.25s ease",
+                background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${volume * 100}%, ${sliderTrackBg} ${volume * 100}%, ${sliderTrackBg} 100%)`,
+                cursor: "pointer",
+                "&::-webkit-slider-thumb": {
+                  ...rangeSliderSx["&::-webkit-slider-thumb"],
+                  background: activeColor,
+                },
+                "&::-moz-range-thumb": {
+                  ...rangeSliderSx["&::-moz-range-thumb"],
+                  background: activeColor,
+                },
+                "&::-webkit-slider-runnable-track": {
+                  ...rangeSliderSx["&::-webkit-slider-runnable-track"],
+                  background: "transparent",
+                },
+                "&::-moz-range-track": {
+                  ...rangeSliderSx["&::-moz-range-track"],
+                  background: "transparent",
+                },
+              }}
+            />
+          </Box>
         </HStack>
 
-          {/* 歌词字体大小 + 音质选择 - 右侧 */}
+          {/* 歌词高亮颜色 + 歌词字体大小 + 音质选择 - 右侧 */}
           <Box position="absolute" right={0} top="50%" transform="translateY(-50%)">
             <HStack spacing={2} align="center">
+              {/* 歌词高亮颜色选择器 */}
+              <Tooltip label="歌词高亮颜色">
+                <Box>
+                  <CustomColorPicker
+                    color={lyricsHighlightColor}
+                    onChange={(c) => useMusicStore.getState().setLyricsHighlightColor(c)}
+                    compact
+                  />
+                </Box>
+              </Tooltip>
               <Tooltip label={`歌词字号: ${lyricsFontSize}px`}>
                 <HStack spacing={1} align="center">
                   <Text fontSize="xs" color={subTextColor} fontWeight="bold" flexShrink={0}>A</Text>
                   <Box
                     as="input"
                     type="range"
-                    min={12}
+                    min={17}
                     max={28}
                     step={1}
                     value={lyricsFontSize}
@@ -572,7 +659,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                     w="60px"
                     sx={{
                       ...rangeSliderSx,
-                      background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${((lyricsFontSize - 12) / 16) * 100}%, ${sliderTrackBg} ${((lyricsFontSize - 12) / 16) * 100}%, ${sliderTrackBg} 100%)`,
+                      background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${((lyricsFontSize - 17) / 11) * 100}%, ${sliderTrackBg} ${((lyricsFontSize - 17) / 11) * 100}%, ${sliderTrackBg} 100%)`,
                       "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
                       "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
                       "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
@@ -633,44 +720,136 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </Box>
         </Box>
 
-        {/* 进度条 */}
-        <HStack spacing={3} w="100%" maxW="600px">
-          <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
-            {formatTime(localCurrentTime)}
-          </Text>
-          <Box
-            as="input"
-            type="range"
-            min={0}
-            max={localDuration || 100}
-            step={0.1}
-            value={localCurrentTime}
-            onMouseDown={() => { isUserSeekingRef.current = true; }}
-            onTouchStart={() => { isUserSeekingRef.current = true; }}
-            onChange={(e) => handleSeekDrag(parseFloat((e.target as HTMLInputElement).value))}
-            onMouseUp={handleSeekCommit}
-            onTouchEnd={handleSeekCommit}
-            tabIndex={-1}
-            aria-hidden="true"
-            flex={1}
-            sx={{
-              ...rangeSliderSx,
-              background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
-              "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
-              "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
-              "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
-              "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
-            }}
-          />
-          <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
-            {formatTime(localDuration)}
-          </Text>
-        </HStack>
+        {/* 进度条 — 独立组件，自己管理 timeupdate，不触发 ExpandedPlayer 重渲染 */}
+        <ProgressSection
+          activeColor={activeColor}
+          subTextColor={subTextColor}
+          sliderTrackBg={sliderTrackBg}
+          audioRef={audioRef}
+          currentSongId={currentSong.id}
+        />
       </VStack>
     </Box>
   );
 });
 
+
+// ═══════════════════════════════════════════════
+// 播放时间格式化工具
+// ═══════════════════════════════════════════════
+const formatTime = (time: number): string => {
+  if (isNaN(time)) return "0:00";
+  const m = Math.floor(time / 60);
+  const s = Math.floor(time % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+};
+
+// ═══════════════════════════════════════════════
+// 播放器进度条 — 独立迷你组件
+// 自己管理 timeupdate，播放期间只有本组件随进度重渲染
+// PlayerBar 本体不会被 timeupdate 触发重渲染
+// ═══════════════════════════════════════════════
+const PlayerProgress = memo(function PlayerProgress({
+  activeColor,
+  subTextColor,
+  sliderTrackBg,
+  currentSong,
+}: {
+  activeColor: string;
+  subTextColor: string;
+  sliderTrackBg: string;
+  currentSong: Song | null;
+}) {
+  const audioRef = useMusicStore((s) => s.audioRef);
+  const storeDuration = useMusicStore((s) => s.duration);
+  const [localCurrentTime, setLocalCurrentTime] = useState(0);
+  const [localDuration, setLocalDuration] = useState(0);
+  const isUserSeekingRef = useRef(false);
+  const pendingSeekRef = useRef(0);
+
+  useEffect(() => {
+    setLocalDuration(storeDuration);
+  }, [storeDuration]);
+
+  useEffect(() => {
+    if (!audioRef) return;
+    if (audioRef.duration && isFinite(audioRef.duration)) {
+      setLocalDuration(audioRef.duration);
+    }
+    if (!isUserSeekingRef.current) {
+      setLocalCurrentTime(audioRef.currentTime);
+    }
+    const onTimeUpdate = () => {
+      if (isUserSeekingRef.current) return;
+      setLocalCurrentTime(audioRef.currentTime);
+    };
+    const onLoadedMetadata = () => {
+      setLocalDuration(audioRef.duration);
+    };
+    audioRef.addEventListener("timeupdate", onTimeUpdate);
+    audioRef.addEventListener("loadedmetadata", onLoadedMetadata);
+    return () => {
+      audioRef.removeEventListener("timeupdate", onTimeUpdate);
+      audioRef.removeEventListener("loadedmetadata", onLoadedMetadata);
+    };
+  }, [audioRef]);
+
+  useEffect(() => {
+    setLocalCurrentTime(0);
+  }, [currentSong]);
+
+  const handleSeekDrag = useCallback((v: number) => {
+    if (!isUserSeekingRef.current) return;
+    pendingSeekRef.current = v;
+    setLocalCurrentTime(v);
+  }, []);
+
+  const handleSeekCommit = useCallback(() => {
+    if (pendingSeekRef.current !== 0 || isUserSeekingRef.current) {
+      const targetTime = pendingSeekRef.current;
+      useMusicStore.getState().seekTo(targetTime);
+      setTimeout(() => {
+        isUserSeekingRef.current = false;
+        setLocalCurrentTime(targetTime);
+      }, 300);
+    }
+  }, []);
+
+  return (
+    <HStack spacing={2}>
+      <Text color={subTextColor} fontSize="xs" w="40px" textAlign="center">
+        {formatTime(localCurrentTime)}
+      </Text>
+      <Box
+        as="input"
+        type="range"
+        min={0}
+        max={localDuration || 100}
+        step={0.1}
+        value={localCurrentTime}
+        onMouseDown={() => { isUserSeekingRef.current = true; }}
+        onTouchStart={() => { isUserSeekingRef.current = true; }}
+        onChange={(e) => handleSeekDrag(parseFloat((e.target as HTMLInputElement).value))}
+        onMouseUp={handleSeekCommit}
+        onTouchEnd={handleSeekCommit}
+        tabIndex={-1}
+        aria-hidden="true"
+        flex={1}
+        sx={{
+          ...rangeSliderSx,
+          background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
+          "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
+          "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
+          "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
+          "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
+        }}
+      />
+      <Text color={subTextColor} fontSize="xs" w="40px" textAlign="center">
+        {formatTime(localDuration)}
+      </Text>
+    </HStack>
+  );
+});
 
 // 关键：用 local state 监听 timeupdate，播放期间不更新 store
 // 这样搜索框等组件完全不受播放影响
@@ -687,15 +866,6 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
   const currentQuality = useMusicStore((s) => s.currentQuality);
   const currentBitrate = useMusicStore((s) => s.currentBitrate);
   const loginInfo = useMusicStore((s) => s.loginInfo);
-  // storeDuration 只在 playSong 切歌时更新，不频繁
-  const storeDuration = useMusicStore((s) => s.duration);
-  // 订阅 audioRef，当 audio 元素创建后才能挂载监听器
-  const audioRef = useMusicStore((s) => s.audioRef);
-
-  // ── 本地 state：播放进度直接从 audio 元素读取 ──
-  // 不经过 Zustand store，播放时不触发任何其他组件重渲染
-  const [localCurrentTime, setLocalCurrentTime] = useState(0);
-  const [localDuration, setLocalDuration] = useState(0);
 
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
 
@@ -707,79 +877,9 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const dropdownBg = useColorModeValue("white", "#1a1a1a");
-  // 进度条轨道颜色：浅色模式用白色，暗色模式用深灰
   const sliderTrackBg = useColorModeValue("rgba(255,255,255,0.9)", "#333333");
 
   const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : Repeat;
-
-  // 从 store 同步 duration（loadedmetadata 时设置）
-  useEffect(() => {
-    setLocalDuration(storeDuration);
-  }, [storeDuration]);
-
-  // 直接监听 audio 元素的 timeupdate，用 local state 更新进度
-  // 不调用 store.setCurrentTime，避免触发其他组件重渲染
-  // 依赖 audioRef：当 audio 元素创建后重新挂载监听器
-  useEffect(() => {
-    if (!audioRef) return;
-
-    const onTimeUpdate = () => {
-      // 用户拖拽期间或 seek 后短暂等待期间，不更新进度
-      // 避免 timeupdate 用旧位置覆盖用户拖到的新位置导致闪回
-      if (isUserSeekingRef.current) return;
-      setLocalCurrentTime(audioRef.currentTime);
-    };
-    const onLoadedMetadata = () => {
-      setLocalDuration(audioRef.duration);
-    };
-
-    audioRef.addEventListener("timeupdate", onTimeUpdate);
-    audioRef.addEventListener("loadedmetadata", onLoadedMetadata);
-
-    return () => {
-      audioRef.removeEventListener("timeupdate", onTimeUpdate);
-      audioRef.removeEventListener("loadedmetadata", onLoadedMetadata);
-    };
-  }, [audioRef]);
-
-  // 切歌时重置本地进度
-  useEffect(() => {
-    setLocalCurrentTime(0);
-  }, [currentSong]);
-
-  const formatTime = (time: number): string => {
-    if (isNaN(time)) return "0:00";
-    const m = Math.floor(time / 60);
-    const s = Math.floor(time % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
-  // seek 时更新本地 state + store
-  // 用 ref 标记是否为用户拖拽，避免 timeupdate 反馈循环
-  // 拖拽中只更新视觉（localCurrentTime），松手时才真正 seek 音频
-  const isUserSeekingRef = useRef(false);
-  const pendingSeekRef = useRef(0);
-
-  // 拖拽中：只更新视觉位置，不 seek 音频（避免频繁 seek 导致卡顿）
-  const handleSeekDrag = useCallback((v: number) => {
-    if (!isUserSeekingRef.current) return;
-    pendingSeekRef.current = v;
-    setLocalCurrentTime(v);
-  }, []);
-
-  // 松手时：真正 seek 音频
-  const handleSeekCommit = useCallback(() => {
-    if (pendingSeekRef.current !== 0 || isUserSeekingRef.current) {
-      const targetTime = pendingSeekRef.current;
-      useMusicStore.getState().seekTo(targetTime);
-      // 延迟恢复 timeupdate 监听，等音频真正跳到新位置
-      // 避免 seek 过程中 timeupdate 用旧位置覆盖进度条导致闪回
-      setTimeout(() => {
-        isUserSeekingRef.current = false;
-        setLocalCurrentTime(targetTime);
-      }, 300);
-    }
-  }, []);
 
   if (!currentSong) {
     return (
@@ -836,12 +936,12 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
           {/* 中间：播放控制按钮组（绝对居中） */}
           <HStack spacing={1} position="absolute" left="50%" transform="translateX(-50%)">
             <Tooltip label="上一首">
-              <IconButton aria-label="Prev" icon={<SkipBack size={18} />} size="sm" variant="ghost" onClick={() => useMusicStore.getState().prevTrack()} />
+              <IconButton aria-label="Prev" icon={<SkipBackBtn size={18} />} size="sm" variant="ghost" onClick={() => useMusicStore.getState().prevTrack()} />
             </Tooltip>
             <Tooltip label={isPlaying ? "暂停" : "播放"}>
                <IconButton
                 aria-label="Play/Pause"
-                icon={isPlaying ? <Pause size={18} /> : <Play size={18} />}
+                icon={isPlaying ? <PauseIcon size={18} /> : <PlayBtn size={18} />}
                 size="sm"
                 variant="ghost"
                 sx={{ color: textColor, _hover: { bg: activeColor, color: contrastText } }}
@@ -849,7 +949,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
               />
             </Tooltip>
             <Tooltip label="下一首">
-              <IconButton aria-label="Next" icon={<SkipForward size={18} />} size="sm" variant="ghost" onClick={() => useMusicStore.getState().nextTrack()} />
+              <IconButton aria-label="Next" icon={<SkipForwardBtn size={18} />} size="sm" variant="ghost" onClick={() => useMusicStore.getState().nextTrack()} />
             </Tooltip>
             <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : "列表循环"}>
               <IconButton
@@ -975,51 +1075,13 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
           </Menu>
         </HStack>
 
-        {/* 进度条 */}
-        <HStack spacing={2}>
-          <Text color={subTextColor} fontSize="xs" w="40px" textAlign="center">
-            {formatTime(localCurrentTime)}
-          </Text>
-          <Box
-            as="input"
-            type="range"
-            min={0}
-            max={localDuration || 100}
-            step={0.1}
-            value={localCurrentTime}
-            onMouseDown={() => { isUserSeekingRef.current = true; }}
-            onTouchStart={() => { isUserSeekingRef.current = true; }}
-            onChange={(e) => handleSeekDrag(parseFloat((e.target as HTMLInputElement).value))}
-            onMouseUp={handleSeekCommit}
-            onTouchEnd={handleSeekCommit}
-            tabIndex={-1}
-            aria-hidden="true"
-            flex={1}
-            sx={{
-              ...rangeSliderSx,
-              background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
-              "&::-webkit-slider-thumb": {
-                ...rangeSliderSx["&::-webkit-slider-thumb"],
-                background: activeColor,
-              },
-              "&::-moz-range-thumb": {
-                ...rangeSliderSx["&::-moz-range-thumb"],
-                background: activeColor,
-              },
-              "&::-webkit-slider-runnable-track": {
-                ...rangeSliderSx["&::-webkit-slider-runnable-track"],
-                background: "transparent",
-              },
-              "&::-moz-range-track": {
-                ...rangeSliderSx["&::-moz-range-track"],
-                background: "transparent",
-              },
-            }}
-          />
-          <Text color={subTextColor} fontSize="xs" w="40px" textAlign="center">
-            {formatTime(localDuration)}
-          </Text>
-        </HStack>
+        {/* 进度条 — 独立迷你组件，播放期间只有本组件随 timeupdate 重渲染 */}
+        <PlayerProgress
+          activeColor={activeColor}
+          subTextColor={subTextColor}
+          sliderTrackBg={sliderTrackBg}
+          currentSong={currentSong}
+        />
       </VStack>
     </LiquidGlassCard>
   );
@@ -1108,6 +1170,22 @@ const SongRow = memo(function SongRow({
       <Text color={subTextColor} fontSize="xs" flexShrink={0}>
         {formatTime(song.duration / 1000)}
       </Text>
+      {/* 语言标签 */}
+      {song.language > 0 && song.language <= 4 && (
+        <Box
+          as="span"
+          fontSize="10px"
+          color={subTextColor}
+          bg={useColorModeValue("gray.100", "rgba(255,255,255,0.08)")}
+          px={1.5}
+          py={0.5}
+          borderRadius="sm"
+          flexShrink={0}
+          lineHeight="1.2"
+        >
+          {["", "华语", "日语", "韩语", "欧美"][song.language]}
+        </Box>
+      )}
       {isLoggedIn && (
         <Tooltip label={isLiked ? "取消红心" : "红心"}>
           <IconButton
@@ -1125,7 +1203,7 @@ const SongRow = memo(function SongRow({
       <Tooltip label="播放">
         <IconButton
           aria-label="Play"
-          icon={isCurrent && isPlaying ? <Pause size={14} /> : <Play size={14} />}
+          icon={isCurrent && isPlaying ? <PauseIcon size={14} /> : <PlayBtn size={14} />}
           size="xs"
           variant="ghost"
           sx={{ color: activeColor, _hover: { bg: hoverBg } }}
@@ -1371,14 +1449,17 @@ export default function MusicPage() {
   const isPlaying = useMusicStore((s) => s.isPlaying);
   const searchResults = useMusicStore((s) => s.searchResults);
   const userPlaylists = useMusicStore((s) => s.userPlaylists);
-  const currentPlaylistTracks = useMusicStore((s) => s.currentPlaylistTracks);
-  const currentPlaylistMeta = useMusicStore((s) => s.currentPlaylistMeta);
+  const leftPlaylistTracks = useMusicStore((s) => s.leftPlaylistTracks);
+  const leftPlaylistMeta = useMusicStore((s) => s.leftPlaylistMeta);
+  const rightPlaylistTracks = useMusicStore((s) => s.rightPlaylistTracks);
+  const rightPlaylistMeta = useMusicStore((s) => s.rightPlaylistMeta);
   const likedSongIds = useMusicStore((s) => s.likedSongIds);
   const recommendations = useMusicStore((s) => s.recommendations);
   const loginInfo = useMusicStore((s) => s.loginInfo);
   const searching = useMusicStore((s) => s.searching);
   const loadingPlaylists = useMusicStore((s) => s.loadingPlaylists);
-  const loadingTracks = useMusicStore((s) => s.loadingTracks);
+  const loadingLeftTracks = useMusicStore((s) => s.loadingLeftTracks);
+  const loadingRightTracks = useMusicStore((s) => s.loadingRightTracks);
   const proxyPort = useMusicStore((s) => s.proxyPort);
 
   // actions 是稳定的，用 useRef 只获取一次，避免每次渲染重新创建导致 useCallback 失效
@@ -1467,25 +1548,25 @@ export default function MusicPage() {
     setSearchMode(true);
   }, []);
 
-  // ── 我的歌单点击：在左侧面板切换到曲目视图 ──
-  const handlePlaylistClick = useCallback((pl: Playlist) => {
-    storeActions.loadPlaylistTracks(pl.id);
-    storeActions.loadLikedList();
-    setLeftPanelView("tracks");
-    setRightPanelView("recommendations"); // 右侧回到推荐
-  }, [storeActions]);
+// ── 我的歌单点击：在左侧面板切换到曲目视图 ──
+const handlePlaylistClick = useCallback((pl: Playlist) => {
+storeActions.loadLeftPlaylistTracks(pl.id);
+storeActions.loadLikedList();
+setLeftPanelView("tracks");
+setRightPanelView("recommendations"); // 右侧回到推荐
+}, [storeActions]);
 
   const handleBackToPlaylists = useCallback(() => {
     setLeftPanelView("playlists");
     storeActions.loadLikedList();
   }, [storeActions]);
 
-  // ── 推荐歌单点击：在右侧面板切换到曲目视图 ──
-  const handleRecPlaylistClick = useCallback((pl: Playlist) => {
-    storeActions.loadPlaylistTracks(pl.id);
-    storeActions.loadLikedList();
-    setRightPanelView("tracks");
-  }, [storeActions]);
+// ── 推荐歌单点击：在右侧面板切换到曲目视图 ──
+const handleRecPlaylistClick = useCallback((pl: Playlist) => {
+storeActions.loadRightPlaylistTracks(pl.id);
+storeActions.loadLikedList();
+setRightPanelView("tracks");
+}, [storeActions]);
 
   const handleBackToRecommendations = useCallback(() => {
     setRightPanelView("recommendations");
@@ -1538,7 +1619,7 @@ export default function MusicPage() {
       _hover={{ bg: liquidGlassEnabled ? hoverBg : itemHoverBg }}
       onClick={() => (onClick || handlePlaylistClick)(pl)}
       transition="background 0.15s"
-      bg={currentPlaylistMeta?.id === pl.id ? itemActiveBg : "transparent"}
+      bg={leftPlaylistMeta?.id === pl.id || rightPlaylistMeta?.id === pl.id ? itemActiveBg : "transparent"}
     >
       <ChakraImage
         src={coverProxyUrl(pl.cover, proxyPort)}
@@ -1599,15 +1680,13 @@ export default function MusicPage() {
               <Text color={subTextColor} fontSize="sm">搜索中...</Text>
             </VStack>
           ) : searchResults.length > 0 ? (
-            <VStack
-              spacing={1}
-              align="stretch"
-              overflowY="auto"
-              flex={1}
-              sx={scrollbarSx(activeColor)}
-            >
-              {searchResults.map((song, i) => renderSongRow(song, i, searchResults))}
-            </VStack>
+            <VirtualizedSongList
+              items={searchResults}
+              renderItem={(song, i) => renderSongRow(song, i, searchResults)}
+              emptyText="没有找到相关音乐"
+              resetKey={searchInput}
+              scrollbarSx={scrollbarSx(activeColor)}
+            />
           ) : (
             <VStack py={12} spacing={2}>
               <MusicIcon size={32} color={subTextColor} />
@@ -1667,23 +1746,21 @@ export default function MusicPage() {
                     />
                   </Tooltip>
                   <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
-                    {currentPlaylistMeta?.name || "曲目列表"}
+                    {leftPlaylistMeta?.name || "曲目列表"}
                   </Text>
                   <Text color={subTextColor} fontSize="xs" flexShrink={0}>
-                    ({currentPlaylistTracks.length} 首)
+                    ({leftPlaylistTracks.length} 首)
                   </Text>
                 </HStack>
-                <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
-                  {loadingTracks ? (
-                    <VStack py={6}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
-                  ) : currentPlaylistTracks.length > 0 ? (
-                    <VStack spacing={1} align="stretch">
-                      {currentPlaylistTracks.map((song, i) => renderSongRow(song, i, currentPlaylistTracks))}
-                    </VStack>
-                  ) : (
-                    <Text color={subTextColor} fontSize="xs" py={4} textAlign="center">暂无曲目</Text>
-                  )}
-                </Box>
+                <VirtualizedSongList
+                  items={leftPlaylistTracks}
+                  renderItem={(song, i) => renderSongRow(song, i, leftPlaylistTracks)}
+                  loading={loadingLeftTracks}
+                  loadingText="加载曲目中..."
+                  emptyText="暂无曲目"
+                  resetKey={leftPlaylistMeta?.id}
+                  scrollbarSx={scrollbarSx(activeColor)}
+                />
               </>
             ) : (
               <>
@@ -1736,23 +1813,21 @@ export default function MusicPage() {
                     />
                   </Tooltip>
                   <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
-                    {currentPlaylistMeta?.name || "曲目列表"}
+                    {rightPlaylistMeta?.name || "曲目列表"}
                   </Text>
                   <Text color={subTextColor} fontSize="xs" flexShrink={0}>
-                    ({currentPlaylistTracks.length} 首)
+                    ({rightPlaylistTracks.length} 首)
                   </Text>
                 </HStack>
-                <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
-                  {loadingTracks ? (
-                    <VStack py={6}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
-                  ) : currentPlaylistTracks.length > 0 ? (
-                    <VStack spacing={1} align="stretch">
-                      {currentPlaylistTracks.map((song, i) => renderSongRow(song, i, currentPlaylistTracks))}
-                    </VStack>
-                  ) : (
-                    <Text color={subTextColor} fontSize="xs" py={4} textAlign="center">暂无曲目</Text>
-                  )}
-                </Box>
+                <VirtualizedSongList
+                  items={rightPlaylistTracks}
+                  renderItem={(song, i) => renderSongRow(song, i, rightPlaylistTracks)}
+                  loading={loadingRightTracks}
+                  loadingText="加载曲目中..."
+                  emptyText="暂无曲目"
+                  resetKey={rightPlaylistMeta?.id}
+                  scrollbarSx={scrollbarSx(activeColor)}
+                />
               </>
             ) : (
               <>

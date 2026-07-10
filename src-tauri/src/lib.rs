@@ -68,15 +68,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
-// 初始化音乐 API cookie 缓存
-let app_handle_for_music = app.handle().clone();
-// 设置 AppHandle 供代理服务器使用
-music_api::audio_proxy::set_app_handle(app_handle_for_music.clone());
-tauri::async_runtime::spawn(async move {
-    music_api::init_cookie_cache(&app_handle_for_music).await;
-    // 启动音频代理服务器
-    match music_api::audio_proxy::start_audio_proxy().await {
-        Ok(port) => log::info!("[MusicAPI] audio proxy started on port {port}"),
+            // 初始化音乐 API 和音频代理
+            let app_handle_for_music = app.handle().clone();
+            music_api::audio_proxy::set_app_handle(app_handle_for_music.clone());
+            tauri::async_runtime::spawn(async move {
+                music_api::init_cookie_cache(&app_handle_for_music).await;
+                match music_api::audio_proxy::start_audio_proxy().await {
+                    Ok(port) => log::info!("[MusicAPI] audio proxy started on port {port}"),
                     Err(e) => log::error!("[MusicAPI] failed to start audio proxy: {e}"),
                 }
             });
@@ -178,11 +176,12 @@ tauri::async_runtime::spawn(async move {
                 });
             }
 
-            // Tray menu: hide when losing focus (click outside)
+            // Tray menu: hide when losing focus (click outside), reset always-on-top
             if let Some(tray_menu) = app.get_webview_window("tray-menu") {
                 let menu_clone = tray_menu.clone();
                 tray_menu.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {
+                        let _ = menu_clone.set_always_on_top(false);
                         let _ = menu_clone.hide();
                     }
                 });
@@ -217,24 +216,24 @@ tauri::async_runtime::spawn(async move {
         hardware::get_os_version,
         hardware::get_disk_health_info,
         music::get_music_files,
-            // === 音乐播放器 API ===
-            music_api::music_search,
-            music_api::music_song_url,
-            music_api::music_login_qr_key,
-            music_api::music_login_qr_create,
-            music_api::music_login_qr_check,
-            music_api::music_login_status,
-            music_api::music_login_cookie,
-            music_api::music_logout,
-            music_api::music_user_playlist,
-            music_api::music_playlist_tracks,
-            music_api::music_likelist,
-            music_api::music_like,
-            music_api::music_lyric,
-            music_api::music_personalized,
-            music_api::music_recommend_songs,
-            music_api::music_open_login_window,
-            music_api::audio_proxy::cmd_get_proxy_port,
+        // === 音乐播放器 API ===
+        music_api::music_search,
+        music_api::music_song_url,
+        music_api::music_login_qr_key,
+        music_api::music_login_qr_create,
+        music_api::music_login_qr_check,
+        music_api::music_login_status,
+        music_api::music_login_cookie,
+        music_api::music_logout,
+        music_api::music_user_playlist,
+        music_api::music_playlist_tracks,
+        music_api::music_likelist,
+        music_api::music_like,
+        music_api::music_lyric,
+        music_api::music_personalized,
+        music_api::music_recommend_songs,
+        music_api::music_open_login_window,
+        music_api::audio_proxy::cmd_get_proxy_port,
         downloader::download_file,
         downloader::open_installer,
         downloader::download_update,

@@ -325,7 +325,7 @@ function CoreSelectionModal({
     onClose();
   };
 
-  const isDefaultForDelta = coreCount > 0 && currentSavedMask === ((1 << coreCount) - 1) ^ 1;
+  const isDefaultForDelta = coreCount > 0 && currentSavedMask === ((1 << coreCount) - 2);
   const isDefaultForAce = currentSavedMask === 1;
 
   return (
@@ -437,7 +437,7 @@ export default function AceOptimizePage() {
   const [settingsTarget, setSettingsTarget] = useState<"delta" | "ace">("delta");
   const { isOpen: isSettingsOpen, onOpen: onSettingsOpen, onClose: onSettingsClose } = useDisclosure();
 
-  const getDefaultDeltaMask = useCallback((cores: number) => cores > 0 ? ((1 << cores) - 1) ^ 1 : 0, []);
+  const getDefaultDeltaMask = useCallback((cores: number) => cores > 0 ? (1 << cores) - 2 : 0, []);
   const getDefaultAceMask = useCallback(() => 1, []);
 
   // 从 Store 加载已保存的配置

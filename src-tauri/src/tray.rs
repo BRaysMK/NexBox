@@ -56,6 +56,7 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                             x,
                             y,
                         }));
+                        let _ = menu_window.set_always_on_top(true);
                         let _ = menu_window.show();
                         let _ = menu_window.set_focus();
                     }

@@ -12,6 +12,7 @@ export interface Song {
   duration: number;
   fee: number;
   playable: boolean;
+  language: number;
 }
 
 export interface Artist {
@@ -57,6 +58,27 @@ export interface Lyrics {
   lyric: string;
   translation?: string;
   roma?: string;
+  yrc?: string; // YRC 逐字歌词
+}
+
+/** 逐词数据 */
+export interface LyricWord {
+  text: string;
+  t: number;     // 开始时间（秒）
+  d: number;     // 持续时间（秒）
+  c0: number;    // 在整行文本中的起始字符索引
+  c1: number;    // 在整行文本中的结束字符索引
+}
+
+/** 卡拉OK歌词行 */
+export interface KaraokeLine {
+  time: number;          // 行开始时间（秒）
+  duration: number;      // 行持续时间（秒）
+  text: string;          // 整行文本
+  translation?: string;  // 翻译
+  words?: LyricWord[];   // 逐词数据（有 YRC 时存在）
+  charCount: number;     // 字符数
+  hasKaraoke: boolean;   // 是否有逐字数据
 }
 
 export interface QrCheckResult {

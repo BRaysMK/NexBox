@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from "react";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { hexToRgba, getContrastColor, isValidHexColor, normalizeHexColor } from "@/lib/color-utils";
 
@@ -104,60 +104,61 @@ export function ThemeColorProvider({ children }: { children: ReactNode }) {
     saveSettings();
   }, [config, isLoaded]);
 
-  const setPrimaryColor = (color: string) => {
+  const setPrimaryColor = useCallback((color: string) => {
     if (isValidHexColor(color)) {
       setConfig(prev => ({ ...prev, primaryColor: normalizeHexColor(color) }));
     }
-  };
+  }, []);
 
-  const setHoverOpacity = (opacity: number) => {
+  const setHoverOpacity = useCallback((opacity: number) => {
     setConfig(prev => ({ ...prev, hoverOpacity: Math.max(0, Math.min(1, opacity)) }));
-  };
+  }, []);
 
-  const setActiveOpacity = (opacity: number) => {
+  const setActiveOpacity = useCallback((opacity: number) => {
     setConfig(prev => ({ ...prev, activeOpacity: Math.max(0, Math.min(1, opacity)) }));
-  };
+  }, []);
 
-  const setBorderOpacity = (opacity: number) => {
+  const setBorderOpacity = useCallback((opacity: number) => {
     setConfig(prev => ({ ...prev, borderOpacity: Math.max(0, Math.min(1, opacity)) }));
-  };
+  }, []);
 
-  const resetToDefault = () => {
+  const resetToDefault = useCallback(() => {
     setConfig(DEFAULT_THEME_COLOR_CONFIG);
-  };
+  }, []);
 
-  const getHoverColor = (isDark: boolean = true) => {
+  const getHoverColor = useCallback((isDark: boolean = true) => {
     const opacity = isDark ? config.hoverOpacity + 0.1 : config.hoverOpacity;
     return hexToRgba(config.primaryColor, opacity);
-  };
+  }, [config.hoverOpacity, config.primaryColor]);
 
-  const getActiveColor = () => {
+  const getActiveColor = useCallback(() => {
     return config.primaryColor;
-  };
+  }, [config.primaryColor]);
 
-  const getBorderColor = () => {
+  const getBorderColor = useCallback(() => {
     return hexToRgba(config.primaryColor, config.borderOpacity);
-  };
+  }, [config.primaryColor, config.borderOpacity]);
 
-  const getContrastTextColor = () => {
+  const getContrastTextColor = useCallback(() => {
     return getContrastColor(config.primaryColor);
-  };
+  }, [config.primaryColor]);
+
+  // useMemo 稳定 context value，避免每次渲染创建新对象导致所有消费者重渲染
+  const value = useMemo(() => ({
+    config,
+    setPrimaryColor,
+    setHoverOpacity,
+    setActiveOpacity,
+    setBorderOpacity,
+    resetToDefault,
+    getHoverColor,
+    getActiveColor,
+    getBorderColor,
+    getContrastTextColor,
+  }), [config, setPrimaryColor, setHoverOpacity, setActiveOpacity, setBorderOpacity, resetToDefault, getHoverColor, getActiveColor, getBorderColor, getContrastTextColor]);
 
   return (
-    <ThemeColorContext.Provider
-      value={{
-        config,
-        setPrimaryColor,
-        setHoverOpacity,
-        setActiveOpacity,
-        setBorderOpacity,
-        resetToDefault,
-        getHoverColor,
-        getActiveColor,
-        getBorderColor,
-        getContrastTextColor,
-      }}
-    >
+    <ThemeColorContext.Provider value={value}>
       {children}
     </ThemeColorContext.Provider>
   );

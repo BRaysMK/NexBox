@@ -31,18 +31,10 @@ import PeripheralOptimizePage from "./pages/PeripheralOptimizePage";
 import WindowsUpdatePage from "./pages/WindowsUpdatePage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
 import NvidiaDriverPage from "./pages/NvidiaDriverPage";
-import TestsPage from "./pages/TestsPage";
 import EpicFreePage from "./pages/EpicFreePage";
-import ReactionTestPage from "./pages/ReactionTestPage";
 import WidgetIslandPage from "./pages/WidgetIslandPage";
 import TrayMenuPage from "./pages/TrayMenuPage";
 import DynamicIslandPage from "./pages/DynamicIslandPage";
-import AimTestPage from "./pages/AimTestPage";
-import FocusTestPage from "./pages/FocusTestPage";
-import ChoiceTestPage from "./pages/ChoiceTestPage";
-import InhibitTestPage from "./pages/InhibitTestPage";
-import SchulteTestPage from "./pages/SchulteTestPage";
-import CpsTestPage from "./pages/CpsTestPage";
 import { useState, useEffect } from "react";
 
 import {
@@ -74,7 +66,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "4.6.6";
+const CURRENT_VERSION = "5.0.0";
 
 function App() {
   const { t } = useTranslation();
@@ -277,14 +269,6 @@ function App() {
               <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
               <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
               <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
-              <Route path="/tests" element={<AnimatedPage><TestsPage /></AnimatedPage>} />
-              <Route path="/tests/reaction" element={<AnimatedPage><ReactionTestPage /></AnimatedPage>} />
-              <Route path="/tests/aim" element={<AnimatedPage><AimTestPage /></AnimatedPage>} />
-              <Route path="/tests/focus" element={<AnimatedPage><FocusTestPage /></AnimatedPage>} />
-              <Route path="/tests/choice" element={<AnimatedPage><ChoiceTestPage /></AnimatedPage>} />
-              <Route path="/tests/inhibit" element={<AnimatedPage><InhibitTestPage /></AnimatedPage>} />
-              <Route path="/tests/schulte" element={<AnimatedPage><SchulteTestPage /></AnimatedPage>} />
-              <Route path="/tests/cps" element={<AnimatedPage><CpsTestPage /></AnimatedPage>} />
               <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
               <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
               <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
@@ -320,14 +304,6 @@ function App() {
             <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
             <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
             <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
-            <Route path="/tests" element={<AnimatedPage><TestsPage /></AnimatedPage>} />
-            <Route path="/tests/reaction" element={<AnimatedPage><ReactionTestPage /></AnimatedPage>} />
-            <Route path="/tests/aim" element={<AnimatedPage><AimTestPage /></AnimatedPage>} />
-            <Route path="/tests/focus" element={<AnimatedPage><FocusTestPage /></AnimatedPage>} />
-            <Route path="/tests/choice" element={<AnimatedPage><ChoiceTestPage /></AnimatedPage>} />
-            <Route path="/tests/inhibit" element={<AnimatedPage><InhibitTestPage /></AnimatedPage>} />
-            <Route path="/tests/schulte" element={<AnimatedPage><SchulteTestPage /></AnimatedPage>} />
-            <Route path="/tests/cps" element={<AnimatedPage><CpsTestPage /></AnimatedPage>} />
             <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
             <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
             <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
