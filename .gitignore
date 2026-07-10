@@ -7,6 +7,8 @@ out/
 
 # Tauri / Rust
 src-tauri/target/
+installer/src-tauri/target/
+uninstaller/src-tauri/target/
 
 # C#（传感器服务位于 tools/ 根目录，与 csproj 同级）
 tools/bin/
