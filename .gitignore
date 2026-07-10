@@ -68,6 +68,12 @@ nvidiaProfileInspector.exe
 Reference.xml
 nvidiaProfileInspector.exe.config
 
+# OpenCode
+.opencode/
+
+# CodeFlicker
+.codeflicker/
+
 # Video directory
 video/
 
