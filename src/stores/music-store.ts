@@ -38,9 +38,14 @@ interface MusicState {
 
   // 音质
   playbackQuality: PlaybackQuality;
+  currentQuality: string;
+  currentBitrate: number;
 
   // 代理端口
   proxyPort: number;
+
+  // 歌词字体大小
+  lyricsFontSize: number;
 
   // UI 状态
   searching: boolean;
@@ -63,6 +68,8 @@ interface MusicState {
   seekTo: (time: number) => void;
   setVolume: (v: number) => void;
   togglePlayMode: () => void;
+  setPlaybackQuality: (quality: PlaybackQuality) => Promise<void>;
+  setLyricsFontSize: (size: number) => Promise<void>;
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
 
@@ -123,6 +130,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   recommendSongs: [],
 
   playbackQuality: "hires",
+  currentQuality: "",
+  currentBitrate: 0,
+  lyricsFontSize: 18,
   proxyPort: 0,
 
   searching: false,
@@ -146,9 +156,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const vol = await store.get<number>("volume");
       const mode = await store.get<PlayMode>("playMode");
       const quality = await store.get<PlaybackQuality>("quality");
+      const fontSize = await store.get<number>("lyricsFontSize");
       if (vol != null) set({ volume: vol });
       if (mode) set({ playMode: mode });
       if (quality) set({ playbackQuality: quality });
+      if (fontSize != null) set({ lyricsFontSize: fontSize });
     } catch {
       // ignore
     }
@@ -211,8 +223,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (queue) {
       const idx = queue.findIndex((s) => s.id === song.id);
       set({ playQueue: queue, currentIndex: idx >= 0 ? idx : 0 });
-    } else if (state.playQueue.length === 0) {
-      set({ playQueue: [song], currentIndex: 0 });
+    } else {
+      // 手动切歌/上下首：在已有队列中找到对应位置
+      const idx = state.playQueue.findIndex((s) => s.id === song.id);
+      if (idx >= 0) set({ currentIndex: idx });
     }
 
     set({ currentSong: song, currentTime: 0, duration: 0, isPlaying: false });
@@ -233,7 +247,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       audio.src = audioUrl;
       audio.volume = state.volume;
       await audio.play();
-      set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort });
+      set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort, currentQuality: result.quality, currentBitrate: result.br });
     } catch (e) {
       console.error("Play failed:", e);
     }
@@ -311,6 +325,37 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   setCurrentTime: (t) => set({ currentTime: t }),
   setDuration: (d) => set({ duration: d }),
 
+  setPlaybackQuality: async (quality) => {
+    const state = get();
+    set({ playbackQuality: quality });
+    getStore().then((s) => s.set("quality", quality).then(() => s.save()));
+
+    if (state.currentSong && state.audioRef && state.audioRef.src) {
+      try {
+        const result = await invoke<SongUrlResult>("music_song_url", {
+          id: state.currentSong.id,
+          quality,
+        });
+        if (result.playable && result.url) {
+          const resumeAt = state.audioRef.currentTime;
+          const wasPlaying = state.isPlaying;
+          const audioUrl = await getProxyAudioUrl(result.url, state.proxyPort);
+          state.audioRef.src = audioUrl;
+          state.audioRef.currentTime = resumeAt;
+          if (wasPlaying) state.audioRef.play().catch(() => {});
+          set({ currentQuality: result.quality, currentBitrate: result.br });
+        }
+      } catch (e) {
+        console.error("Failed to switch quality:", e);
+      }
+    }
+  },
+
+  setLyricsFontSize: async (size) => {
+    set({ lyricsFontSize: size });
+    getStore().then((s) => s.set("lyricsFontSize", size).then(() => s.save()));
+  },
+
   loginStatus: async () => {
     try {
       const info = await invoke<LoginInfo>("music_login_status");
@@ -378,9 +423,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   loadLikedList: async () => {
     try {
       const ids = await invoke<string[]>("music_likelist");
+      console.log("[Music] liked songs loaded:", ids.length);
       set({ likedSongIds: new Set(ids) });
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error("[Music] loadLikedList failed:", e);
     }
   },
 

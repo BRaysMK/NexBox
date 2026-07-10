@@ -18,6 +18,7 @@ import {
   MenuItem,
   Image as ChakraImage,
   Heading,
+  Portal,
 } from "@chakra-ui/react";
 import {
   Search,
@@ -38,9 +39,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
-import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import type { Song, Playlist, SongUrlResult } from "@/types/music";
+import type { Song, Playlist } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -84,6 +84,17 @@ const rangeSliderSx = {
     border: "none",
   },
 };
+
+// ═══════════════════════════════════════════════
+// 音质选项配置
+// ═══════════════════════════════════════════════
+const QUALITY_OPTIONS: { value: string; label: string; desc: string; svip: boolean }[] = [
+  { value: "jymaster", label: "超清母带", desc: "SVIP 专属", svip: true },
+  { value: "hires",    label: "高清臻音", desc: "1999k", svip: false },
+  { value: "lossless", label: "无损",     desc: "1411k", svip: false },
+  { value: "exhigh",   label: "极高",     desc: "999k", svip: false },
+  { value: "standard", label: "标准",     desc: "128k", svip: false },
+];
 
 // ═══════════════════════════════════════════════
 // LRC 解析工具：将 [mm:ss.xx] 格式的歌词文本解析为行数组
@@ -130,6 +141,67 @@ function parseLrc(lyric: string, translation?: string): LyricLine[] {
 }
 
 // ═══════════════════════════════════════════════
+// 歌词滚动组件：超长歌词轮播显示
+// ═══════════════════════════════════════════════
+function LyricMarquee({ text, isActive, isTranslation, fontSize, activeColor, textColor, subTextColor }: {
+  text: string; isActive: boolean; isTranslation?: boolean; fontSize: number;
+  activeColor: string; textColor: string; subTextColor: string;
+}) {
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [overflows, setOverflows] = useState(false);
+
+  useEffect(() => {
+    if (textRef.current) {
+      const parent = textRef.current.parentElement;
+      if (parent) setOverflows(textRef.current.scrollWidth > parent.clientWidth);
+    }
+  }, [text]);
+
+  return (
+    <Box
+      overflow="hidden"
+      whiteSpace="nowrap"
+      textAlign="center"
+      w="100%"
+    >
+      {isActive && overflows ? (
+        <Box
+          as="span"
+          display="inline-block"
+          whiteSpace="nowrap"
+          fontSize={`${fontSize}px`}
+          fontWeight="bold"
+          color={isTranslation ? subTextColor : activeColor}
+          textAlign="center"
+          sx={{
+            animation: `lyricScroll ${Math.max(text.length * 0.08, 3)}s linear infinite`,
+            "@keyframes lyricScroll": {
+              "0%": { transform: "translateX(0)" },
+              "100%": { transform: "translateX(-50%)" },
+            },
+          }}
+        >
+          {text}&nbsp;&nbsp;&nbsp;{text}
+        </Box>
+      ) : (
+        <Box
+          as="span"
+          ref={textRef}
+          display="inline-block"
+          whiteSpace="nowrap"
+          fontSize={`${isTranslation ? fontSize - 2 : fontSize}px`}
+          fontWeight={isActive ? "bold" : "normal"}
+          color={isTranslation ? subTextColor : (isActive ? activeColor : textColor)}
+          sx={overflows ? { textOverflow: "ellipsis", overflow: "hidden", maxWidth: "100%" } : {}}
+        >
+          {text}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// ═══════════════════════════════════════════════
 // ExpandedPlayer — 展开的全屏播放器
 // 点击播放器封面展开，左侧封面+信息，右侧歌词
 // ═══════════════════════════════════════════════
@@ -148,6 +220,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const loadingLyrics = useMusicStore((s) => s.loadingLyrics);
   const likedSongIds = useMusicStore((s) => s.likedSongIds);
   const loginInfo = useMusicStore((s) => s.loginInfo);
+  const playbackQuality = useMusicStore((s) => s.playbackQuality);
+  const currentQuality = useMusicStore((s) => s.currentQuality);
+  const currentBitrate = useMusicStore((s) => s.currentBitrate);
+  const lyricsFontSize = useMusicStore((s) => s.lyricsFontSize);
 
   const [localCurrentTime, setLocalCurrentTime] = useState(0);
   const [localDuration, setLocalDuration] = useState(0);
@@ -166,18 +242,24 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
+  const expDropdownBg = useColorModeValue("white", "#1a1a1a");
+  const expBorderColor = useColorModeValue("gray.200", "#333333");
 
   const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : Repeat;
 
   // 监听 audio timeupdate
   useEffect(() => {
     if (!audioRef) return;
+    // 已加载时直接取 duration（展开播放器晚于音频加载的常见场景）
+    if (audioRef.duration && isFinite(audioRef.duration)) {
+      setLocalDuration(audioRef.duration);
+    }
     const onTimeUpdate = () => {
       if (isUserSeekingRef.current) return;
       setLocalCurrentTime(audioRef.currentTime);
     };
     const onLoadedMetadata = () => {
-      setLocalDuration(audioRef.duration);
+      if (isFinite(audioRef.duration)) setLocalDuration(audioRef.duration);
     };
     audioRef.addEventListener("timeupdate", onTimeUpdate);
     audioRef.addEventListener("loadedmetadata", onLoadedMetadata);
@@ -189,10 +271,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   useEffect(() => {
     setLocalCurrentTime(0);
-  }, [currentSong]);
-
-  // 切换歌曲时自动加载新歌词
-  useEffect(() => {
+    setLocalDuration(audioRef?.duration && isFinite(audioRef.duration) ? audioRef.duration : 0);
     if (currentSong) {
       useMusicStore.getState().loadLyrics(currentSong.id);
     }
@@ -221,7 +300,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
     const activeEl = container.querySelector(`[data-lyric-idx="${activeLyricIndex}"]`) as HTMLElement;
     if (activeEl) {
       container.scrollTo({
-        top: activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2,
+        top: activeEl.offsetTop - (container.clientHeight + activeEl.clientHeight * 2) / 2,
         behavior: "smooth",
       });
     }
@@ -308,23 +387,25 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </Tooltip>
           <Text color={subTextColor} fontSize="sm">正在播放</Text>
         </HStack>
-        {loginInfo?.logged_in && (
-          <Tooltip label={isLiked ? "取消红心" : "红心"}>
-            <IconButton
-              aria-label="Like"
-              icon={<Heart size={20} fill={isLiked ? "#e53e3e" : "none"} color={isLiked ? "#e53e3e" : subTextColor} />}
-              size="sm"
-              variant="ghost"
-              onClick={() => useMusicStore.getState().toggleLike(currentSong.id)}
-              _hover={{ bg: hoverBg }}
-            />
-          </Tooltip>
-        )}
+        <HStack spacing={2}>
+          {loginInfo?.logged_in && (
+            <Tooltip label={isLiked ? "取消红心" : "红心"}>
+              <IconButton
+                aria-label="Like"
+                icon={<Heart size={20} fill={isLiked ? "#e53e3e" : "none"} color={isLiked ? "#e53e3e" : subTextColor} />}
+                size="sm"
+                variant="ghost"
+                onClick={() => useMusicStore.getState().toggleLike(currentSong.id)}
+                _hover={{ bg: hoverBg }}
+              />
+            </Tooltip>
+          )}
+        </HStack>
       </HStack>
 
-      {/* 主体：左右分栏 */}
-      <HStack flex={1} spacing={8} px={8} pb={4} align="stretch" overflow="hidden" minH={0}>
-        {/* 左侧：封面 + 歌曲信息 + 控制 */}
+      {/* 主体：左（封面+信息）+ 右（歌词） */}
+      <HStack flex={1} spacing={8} px={8} pb={2} align="stretch" overflow="hidden" minH={0}>
+        {/* 左侧：封面 + 歌曲信息 */}
         <VStack spacing={6} align="center" justify="center" flex={1} minW={0}>
           <Box
             position="relative"
@@ -359,107 +440,26 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               </Text>
             )}
           </VStack>
-
-          {/* 播放控制 */}
-          <HStack spacing={4}>
-            <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : "列表循环"}>
-              <IconButton
-                aria-label="Play mode"
-                icon={<ModeIcon size={20} />}
-                size="md"
-                variant="ghost"
-                sx={{ color: playMode !== "list" ? activeColor : subTextColor, _hover: { bg: hoverBg } }}
-                onClick={() => useMusicStore.getState().togglePlayMode()}
-              />
-            </Tooltip>
-            <IconButton
-              aria-label="Prev"
-              icon={<SkipBack size={24} />}
-              size="md"
-              variant="ghost"
-              onClick={() => useMusicStore.getState().prevTrack()}
-              sx={{ color: textColor, _hover: { bg: hoverBg } }}
-            />
-            <IconButton
-              aria-label="Play/Pause"
-              icon={isPlaying ? <Pause size={32} /> : <Play size={32} />}
-              size="lg"
-              sx={{
-                bg: activeColor,
-                color: contrastText,
-                _hover: { bg: activeColor, filter: "brightness(0.9)" },
-                borderRadius: "xl",
-                w: "56px",
-                h: "56px",
-              }}
-              onClick={() => useMusicStore.getState().togglePlay()}
-            />
-            <IconButton
-              aria-label="Next"
-              icon={<SkipForward size={24} />}
-              size="md"
-              variant="ghost"
-              onClick={() => useMusicStore.getState().nextTrack()}
-              sx={{ color: textColor, _hover: { bg: hoverBg } }}
-            />
-            <Tooltip label="静音">
-              <IconButton
-                aria-label="Mute"
-                icon={volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                size="md"
-                variant="ghost"
-                onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
-                sx={{ color: textColor, _hover: { bg: hoverBg } }}
-              />
-            </Tooltip>
-          </HStack>
-
-          {/* 进度条 */}
-          <HStack spacing={3} w="100%" maxW="500px">
-            <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
-              {formatTime(localCurrentTime)}
-            </Text>
-            <Box
-              as="input"
-              type="range"
-              min={0}
-              max={localDuration || 100}
-              step={0.1}
-              value={localCurrentTime}
-              onMouseDown={() => { isUserSeekingRef.current = true; }}
-              onTouchStart={() => { isUserSeekingRef.current = true; }}
-              onChange={(e) => handleSeekDrag(parseFloat((e.target as HTMLInputElement).value))}
-              onMouseUp={handleSeekCommit}
-              onTouchEnd={handleSeekCommit}
-              tabIndex={-1}
-              aria-hidden="true"
-              flex={1}
-              sx={{
-                ...rangeSliderSx,
-                background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
-                "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
-                "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
-                "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
-                "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
-              }}
-            />
-            <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
-              {formatTime(localDuration)}
-            </Text>
-          </HStack>
         </VStack>
 
-        {/* 右侧：歌词 */}
-        <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden">
-          <Text fontSize="sm" fontWeight="bold" color={subTextColor} mb={2} flexShrink={0}>
-            歌词
-          </Text>
-          <Box ref={lyricsScrollRef} flex={1} overflowY="auto" overflowX="hidden" sx={{ ...scrollbarSx(activeColor), overflowX: "hidden", display: "flex", alignItems: "center" }} pr={2}>
+        {/* 右侧：歌词 - 与封面对齐 */}
+        <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden" justify="flex-start">
+          <Box ref={lyricsScrollRef} flex={1} maxH="65vh" overflowY="auto" overflowX="hidden" sx={{
+            ...scrollbarSx(activeColor), overflowX: "hidden",
+            maskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)",
+          }} pr={2}>
             {loadingLyrics ? (
               <VStack py={12}><Spinner size="lg" sx={{ color: activeColor }} /></VStack>
             ) : lyricLines.length > 0 ? (
-              <VStack spacing={3} align="stretch" w="100%">
-                {lyricLines.map((line, i) => (
+              <Box
+                minH="100%"
+                display="flex"
+                flexDirection="column"
+                justifyContent="center"
+              >
+                <VStack spacing={3} align="stretch">
+                  {lyricLines.map((line, i) => (
                   <Box
                     key={i}
                     data-lyric-idx={i}
@@ -470,29 +470,29 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                       transform: activeLyricIndex === i ? "scale(1.05)" : "scale(1)",
                     }}
                   >
-                    <Text
-                      fontSize={activeLyricIndex === i ? "lg" : "md"}
-                      fontWeight={activeLyricIndex === i ? "bold" : "normal"}
-                      color={activeLyricIndex === i ? activeColor : textColor}
-                      textAlign="center"
-                      noOfLines={2}
-                    >
-                      {line.text}
-                    </Text>
+                    <LyricMarquee
+                      text={line.text}
+                      isActive={activeLyricIndex === i}
+                      fontSize={lyricsFontSize}
+                      activeColor={activeColor}
+                      textColor={textColor}
+                      subTextColor={subTextColor}
+                    />
                     {line.translation && (
-                      <Text
-                        fontSize="sm"
-                        color={activeLyricIndex === i ? subTextColor : subTextColor}
-                        textAlign="center"
-                        noOfLines={2}
-                        opacity={activeLyricIndex === i ? 0.8 : 0.3}
-                      >
-                        {line.translation}
-                      </Text>
+                      <LyricMarquee
+                        text={line.translation}
+                        isActive={activeLyricIndex === i}
+                        isTranslation
+                        fontSize={lyricsFontSize}
+                        activeColor={activeColor}
+                        textColor={textColor}
+                        subTextColor={subTextColor}
+                      />
                     )}
                   </Box>
                 ))}
               </VStack>
+              </Box>
             ) : (
               <VStack py={12} spacing={3}>
                 <MusicIcon size={32} color={subTextColor} />
@@ -502,6 +502,171 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </Box>
         </VStack>
       </HStack>
+
+      {/* 底部：播放控制 + 进度条（全宽居中） */}
+      <VStack spacing={4} w="100%" flexShrink={0} pb={4} px={8}>
+        {/* 控制按钮：主按钮居中，音质在右侧 */}
+        <Box position="relative" w="100%">
+          <HStack spacing={4} justify="center">
+          <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : "列表循环"}>
+            <IconButton
+              aria-label="Play mode"
+              icon={<ModeIcon size={20} />}
+              size="md"
+              variant="ghost"
+              sx={{ color: playMode !== "list" ? activeColor : subTextColor, _hover: { bg: hoverBg } }}
+              onClick={() => useMusicStore.getState().togglePlayMode()}
+            />
+          </Tooltip>
+          <IconButton
+            aria-label="Prev"
+            icon={<SkipBack size={24} />}
+            size="md"
+            variant="ghost"
+            onClick={() => useMusicStore.getState().prevTrack()}
+            sx={{ color: textColor, _hover: { bg: hoverBg } }}
+          />
+          <IconButton
+            aria-label="Play/Pause"
+            icon={isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            size="md"
+            variant="ghost"
+            sx={{ color: textColor, _hover: { bg: activeColor, color: contrastText } }}
+            onClick={() => useMusicStore.getState().togglePlay()}
+          />
+          <IconButton
+            aria-label="Next"
+            icon={<SkipForward size={24} />}
+            size="md"
+            variant="ghost"
+            onClick={() => useMusicStore.getState().nextTrack()}
+            sx={{ color: textColor, _hover: { bg: hoverBg } }}
+          />
+          <Tooltip label="静音">
+            <IconButton
+              aria-label="Mute"
+              icon={volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
+              size="md"
+              variant="ghost"
+              onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
+              sx={{ color: textColor, _hover: { bg: hoverBg } }}
+            />
+          </Tooltip>
+        </HStack>
+
+          {/* 歌词字体大小 + 音质选择 - 右侧 */}
+          <Box position="absolute" right={0} top="50%" transform="translateY(-50%)">
+            <HStack spacing={2} align="center">
+              <Tooltip label={`歌词字号: ${lyricsFontSize}px`}>
+                <HStack spacing={1} align="center">
+                  <Text fontSize="xs" color={subTextColor} fontWeight="bold" flexShrink={0}>A</Text>
+                  <Box
+                    as="input"
+                    type="range"
+                    min={12}
+                    max={28}
+                    step={1}
+                    value={lyricsFontSize}
+                    onChange={(e) => useMusicStore.getState().setLyricsFontSize(parseInt((e.target as HTMLInputElement).value))}
+                    tabIndex={-1}
+                    w="60px"
+                    sx={{
+                      ...rangeSliderSx,
+                      background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${((lyricsFontSize - 12) / 16) * 100}%, ${sliderTrackBg} ${((lyricsFontSize - 12) / 16) * 100}%, ${sliderTrackBg} 100%)`,
+                      "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
+                      "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
+                      "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
+                      "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
+                    }}
+                  />
+                </HStack>
+              </Tooltip>
+              <Menu>
+              <Tooltip label="音质选择">
+                <MenuButton
+                  as={IconButton}
+                  aria-label="Quality"
+                  size="md"
+                  variant="ghost"
+                  sx={{
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    color: activeColor,
+                    minW: "auto",
+                    px: 2,
+                    _hover: { bg: hoverBg },
+                  }}
+                >
+                  {currentQuality || QUALITY_OPTIONS.find((o) => o.value === playbackQuality)?.label || "高清臻音"}
+                </MenuButton>
+              </Tooltip>
+              <Portal>
+                <MenuList minW="180px" bg={expDropdownBg} borderColor={expBorderColor}>
+                  {QUALITY_OPTIONS.map((opt) => {
+                    const isSvip = loginInfo?.is_svip ?? false;
+                    const locked = opt.svip && !isSvip;
+                    return (
+                      <MenuItem
+                        key={opt.value}
+                        onClick={() => {
+                          if (!locked) useMusicStore.getState().setPlaybackQuality(opt.value as any);
+                        }}
+                        bg={opt.value === playbackQuality ? `${activeColor}33` : undefined}
+                        opacity={locked ? 0.4 : 1}
+                        cursor={locked ? "not-allowed" : "pointer"}
+                      >
+                        <HStack spacing={3} w="100%" justify="space-between">
+                          <Text fontSize="sm" fontWeight={opt.value === playbackQuality ? "bold" : "normal"} color={textColor}>
+                            {opt.label}
+                          </Text>
+                          <Text fontSize="xs" color={subTextColor}>
+                            {opt.desc}
+                          </Text>
+                        </HStack>
+                      </MenuItem>
+                    );
+                  })}
+                </MenuList>
+              </Portal>
+            </Menu>
+            </HStack>
+          </Box>
+        </Box>
+
+        {/* 进度条 */}
+        <HStack spacing={3} w="100%" maxW="600px">
+          <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
+            {formatTime(localCurrentTime)}
+          </Text>
+          <Box
+            as="input"
+            type="range"
+            min={0}
+            max={localDuration || 100}
+            step={0.1}
+            value={localCurrentTime}
+            onMouseDown={() => { isUserSeekingRef.current = true; }}
+            onTouchStart={() => { isUserSeekingRef.current = true; }}
+            onChange={(e) => handleSeekDrag(parseFloat((e.target as HTMLInputElement).value))}
+            onMouseUp={handleSeekCommit}
+            onTouchEnd={handleSeekCommit}
+            tabIndex={-1}
+            aria-hidden="true"
+            flex={1}
+            sx={{
+              ...rangeSliderSx,
+              background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
+              "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
+              "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
+              "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
+              "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
+            }}
+          />
+          <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
+            {formatTime(localDuration)}
+          </Text>
+        </HStack>
+      </VStack>
     </Box>
   );
 });
@@ -518,6 +683,10 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
   const playQueue = useMusicStore((s) => s.playQueue);
   const currentIndex = useMusicStore((s) => s.currentIndex);
   const proxyPort = useMusicStore((s) => s.proxyPort);
+  const playbackQuality = useMusicStore((s) => s.playbackQuality);
+  const currentQuality = useMusicStore((s) => s.currentQuality);
+  const currentBitrate = useMusicStore((s) => s.currentBitrate);
+  const loginInfo = useMusicStore((s) => s.loginInfo);
   // storeDuration 只在 playSong 切歌时更新，不频繁
   const storeDuration = useMusicStore((s) => s.duration);
   // 订阅 audioRef，当 audio 元素创建后才能挂载监听器
@@ -670,16 +839,12 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
               <IconButton aria-label="Prev" icon={<SkipBack size={18} />} size="sm" variant="ghost" onClick={() => useMusicStore.getState().prevTrack()} />
             </Tooltip>
             <Tooltip label={isPlaying ? "暂停" : "播放"}>
-              <IconButton
+               <IconButton
                 aria-label="Play/Pause"
-                icon={isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                icon={isPlaying ? <Pause size={18} /> : <Play size={18} />}
                 size="sm"
-                sx={{
-                  bg: activeColor,
-                  color: contrastText,
-                  _hover: { bg: activeColor, filter: "brightness(0.9)" },
-                  borderRadius: "md",
-                }}
+                variant="ghost"
+                sx={{ color: textColor, _hover: { bg: activeColor, color: contrastText } }}
                 onClick={() => useMusicStore.getState().togglePlay()}
               />
             </Tooltip>
@@ -698,8 +863,56 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
             </Tooltip>
           </HStack>
 
-          {/* 右侧：音量 + 播放队列 */}
-          <HStack spacing={2} w="120px" ml="auto">
+          {/* 右侧：音质 + 音量 + 播放队列 */}
+          <HStack spacing={1} w="180px" ml="auto">
+            <Menu>
+              <Tooltip label="音质选择">
+                <MenuButton
+                  as={IconButton}
+                  aria-label="Quality"
+                  size="sm"
+                  variant="ghost"
+                  sx={{
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    color: activeColor,
+                    minW: "auto",
+                    px: 1,
+                    _hover: { bg: hoverBg },
+                  }}
+                >
+                  {currentQuality || QUALITY_OPTIONS.find((o) => o.value === playbackQuality)?.label || "高清臻音"}
+                </MenuButton>
+              </Tooltip>
+              <Portal>
+                <MenuList minW="180px" bg={dropdownBg} borderColor={borderColor}>
+                  {QUALITY_OPTIONS.map((opt) => {
+                    const isSvip = loginInfo?.is_svip ?? false;
+                    const locked = opt.svip && !isSvip;
+                    return (
+                      <MenuItem
+                        key={opt.value}
+                        onClick={() => {
+                          if (!locked) useMusicStore.getState().setPlaybackQuality(opt.value as any);
+                        }}
+                        bg={opt.value === playbackQuality ? `${activeColor}33` : undefined}
+                        opacity={locked ? 0.4 : 1}
+                        cursor={locked ? "not-allowed" : "pointer"}
+                      >
+                        <HStack spacing={3} w="100%" justify="space-between">
+                          <Text fontSize="sm" fontWeight={opt.value === playbackQuality ? "bold" : "normal"} color={textColor}>
+                            {opt.label}
+                          </Text>
+                          <Text fontSize="xs" color={subTextColor}>
+                            {opt.desc}
+                          </Text>
+                        </HStack>
+                      </MenuItem>
+                    );
+                  })}
+                </MenuList>
+              </Portal>
+            </Menu>
             <Tooltip label="静音">
               <IconButton
                 aria-label="Mute"
@@ -946,8 +1159,8 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 只订阅 searching（布尔值，简单比较），不订阅 currentTime/duration 等
-  // 这样播放期间 timeupdate 不会触发 SearchBox 重渲染
+  // 订阅 searching + likedSongIds，让爱心状态实时更新；不订阅 currentTime/duration
+  const likedSongIds = useMusicStore((s) => s.likedSongIds);
   const searching = useMusicStore((s) => s.searching);
 
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -1043,7 +1256,6 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
   }, []);
 
   // ── 渲染歌曲行 ──
-  // 使用 useMusicStore.getState() 按需获取，不订阅
   const renderSongRow = (song: Song, index: number, queue: Song[]) => {
     const state = useMusicStore.getState();
     return (
@@ -1054,7 +1266,7 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
         queue={queue}
         isCurrent={state.currentSong?.id === song.id}
         isPlaying={state.isPlaying}
-        isLiked={state.likedSongIds.has(song.id)}
+        isLiked={likedSongIds.has(song.id)}
         isLoggedIn={!!state.loginInfo?.logged_in}
         proxyPort={state.proxyPort}
         activeColor={activeColor}
@@ -1193,56 +1405,33 @@ export default function MusicPage() {
   const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
 
   useEffect(() => {
-    const audio = new Audio();
-    // 不添加到 DOM，完全避免焦点干扰
+    const storeState = useMusicStore.getState();
+    const audio = storeState.audioRef ?? new Audio();
+    const isExisting = !!storeState.audioRef;
+
     audioRef.current = audio;
     storeActions.setAudioRef(audio);
 
-    // timeupdate 由 PlayerBar 内部用 local state 处理，不再更新 store
-    // 这样播放期间零 store 更新，搜索框等组件完全不受影响
-    audio.addEventListener("ended", () => {
-      useMusicStore.getState().nextTrack();
-    });
-
-    storeActions.init();
-
-    // 重进页面后恢复播放：如果 store 中有 currentSong 但新 audio 没有 src
-    // 需要重新获取歌曲 URL 并恢复播放
-    const state = useMusicStore.getState();
-    if (state.currentSong && !audio.src) {
-      const song = state.currentSong;
-      // 不自动恢复播放，只恢复 src，用户点击播放时即可播放
-      (async () => {
-        try {
-          const result = await invoke<SongUrlResult>("music_song_url", {
-            id: song.id,
-            quality: state.playbackQuality,
-          });
-          if (result.playable && result.url) {
-            const port = state.proxyPort || await invoke<number>("cmd_get_proxy_port");
-            const audioUrl = `http://127.0.0.1:${port}/audio?url=${encodeURIComponent(result.url)}`;
-            audio.src = audioUrl;
-            audio.volume = state.volume;
-            // 恢复到上次的播放位置
-            if (state.currentTime > 0) {
-              audio.currentTime = state.currentTime;
-            }
-          }
-        } catch (e) {
-          console.error("Failed to restore playback:", e);
-        }
-      })();
+    if (!isExisting) {
+      audio.addEventListener("ended", () => {
+        useMusicStore.getState().nextTrack();
+      });
     }
 
-    return () => {
-      // 保存当前播放位置
-      const s = useMusicStore.getState();
-      if (audio.currentTime > 0) {
-        s.setCurrentTime(audio.currentTime);
+    const initAndResume = async () => {
+      await storeActions.init();
+      const state = useMusicStore.getState();
+      if (state.loginInfo?.logged_in) {
+        state.loadLikedList();
       }
-      audio.pause();
-      audio.src = "";
-      storeActions.setAudioRef(null);
+      if (state.currentSong && !isExisting) {
+        state.playSong(state.currentSong);
+      }
+    };
+    initAndResume();
+
+    return () => {
+      // 离开页面不暂停 — Audio 留在 store 中继续播放
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
