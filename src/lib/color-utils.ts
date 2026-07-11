@@ -29,11 +29,32 @@ export function normalizeHexColor(hex: string): string {
   return hex;
 }
 
+function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
+  const rgbaMatch = color.match(/^rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgbaMatch) {
+    return {
+      r: parseInt(rgbaMatch[1], 10) / 255,
+      g: parseInt(rgbaMatch[2], 10) / 255,
+      b: parseInt(rgbaMatch[3], 10) / 255,
+    };
+  }
+  const hex = color.replace("#", "");
+  if (/^[A-Fa-f0-9]{6}$/.test(hex)) {
+    return {
+      r: parseInt(hex.slice(0, 2), 16) / 255,
+      g: parseInt(hex.slice(2, 4), 16) / 255,
+      b: parseInt(hex.slice(4, 6), 16) / 255,
+    };
+  }
+  return null;
+}
+
 export function hexToHsv(hex: string): { h: number; s: number; v: number } {
-  const clean = hex.replace("#", "");
-  const r = parseInt(clean.slice(0, 2), 16) / 255;
-  const g = parseInt(clean.slice(2, 4), 16) / 255;
-  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  const rgb = parseColorToRgb(hex);
+  if (!rgb) {
+    return { h: 0, s: 0, v: 0 };
+  }
+  const { r, g, b } = rgb;
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const d = max - min;
@@ -67,6 +88,18 @@ export function hsvToHex(h: number, s: number, v: number): string {
   }
   const toHex = (n: number) => Math.round(n * 255).toString(16).padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+}
+
+export function colorToHex(color: string): string {
+  if (/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color)) {
+    return normalizeHexColor(color);
+  }
+  const rgbaMatch = color.match(/^rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgbaMatch) {
+    const toHex = (n: string) => parseInt(n, 10).toString(16).padStart(2, "0");
+    return `#${toHex(rgbaMatch[1])}${toHex(rgbaMatch[2])}${toHex(rgbaMatch[3])}`.toUpperCase();
+  }
+  return "#FFFFFF";
 }
 
 export const PRESET_COLORS = [

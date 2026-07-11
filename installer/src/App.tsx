@@ -12,17 +12,15 @@ import FinishPage from "./pages/FinishPage";
 export default function App() {
   const { t } = useTranslation();
   const [step, setStep] = useState(1);
-  const [licenseAgreed, setLicenseAgreed] = useState(false);
   const [targetDir, setTargetDir] = useState("");
   const [dirValid, setDirValid] = useState(false);
   const [createDesktopShortcut, setCreateDesktopShortcut] = useState(true);
   const [error, setError] = useState("");
 
   const handleNext = useCallback(() => {
-    if (step === 2 && !licenseAgreed) return;
     if (step === 3 && !dirValid) return;
     if (step < 5) setStep((s) => s + 1);
-  }, [step, licenseAgreed, dirValid]);
+  }, [step, dirValid]);
 
   const handleBack = useCallback(() => {
     if (step > 1) setStep((s) => s - 1);
@@ -39,10 +37,10 @@ export default function App() {
 
   const canGoNext = useCallback(() => {
     if (step === 1) return true;
-    if (step === 2) return licenseAgreed;
+    if (step === 2) return true;
     if (step === 3) return dirValid;
     return false;
-  }, [step, licenseAgreed, dirValid]);
+  }, [step, dirValid]);
 
   const nextLabel = step === 1 ? "开始安装" : step === 3 ? t("btn_install") : undefined;
 
@@ -60,7 +58,7 @@ export default function App() {
       >
         <AnimatePresence mode="wait">
           {step === 1 && <WelcomePage key="welcome" />}
-          {step === 2 && <LicensePage key="license" onAgreed={setLicenseAgreed} />}
+          {step === 2 && <LicensePage key="license" onAgreed={() => {}} />}
           {step === 3 && (
             <SelectDirPage
               key="dir"

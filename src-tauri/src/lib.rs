@@ -578,8 +578,13 @@ pub fn run() {
             screen_record::resume_screen_recording,
             screen_record::stop_screen_recording,
             screen_record::get_screen_recording_status,
-            screen_record::get_recordings_folder,
-            screen_record::pick_recording_save_path,
+        screen_record::get_recordings_folder,
+        screen_record::pick_recording_save_path,
+        utils::cursor::get_cursor_position,
+        utils::cursor::set_desktop_lyrics_click_through,
+        utils::lyrics_btn::show_lyrics_unlock_btn,
+        utils::lyrics_btn::hide_lyrics_unlock_btn,
+        utils::lyrics_btn::unlock_lyrics,
 
     ])
         .build(tauri::generate_context!())

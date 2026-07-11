@@ -167,7 +167,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }
   }, [playMode, currentIndex, musicFiles.length, switchToIndex]);
 
-  const togglePlay = useCallback(() => {
+  const togglePlay = useCallback(async () => {
     if (!audioRef.current || musicFiles.length === 0) return;
 
     const currentFile = musicFiles[currentIndex];
@@ -187,8 +187,12 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         audio.volume = isMuted ? 0 : volume;
         audio.load();
       }
-      audio.play().catch(() => {});
-      setIsPlaying(true);
+      try {
+        await audio.play();
+        setIsPlaying(true);
+      } catch {
+        setIsPlaying(false);
+      }
     }
   }, [isPlaying, currentIndex, musicFiles, volume, isMuted, switchToIndex]);
 

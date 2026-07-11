@@ -35,6 +35,8 @@ import EpicFreePage from "./pages/EpicFreePage";
 import WidgetIslandPage from "./pages/WidgetIslandPage";
 import TrayMenuPage from "./pages/TrayMenuPage";
 import DynamicIslandPage from "./pages/DynamicIslandPage";
+import DesktopLyricsPage from "./pages/DesktopLyricsPage";
+import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import { useState, useEffect } from "react";
 
 import {
@@ -83,6 +85,16 @@ function App() {
   // Widget window: render WidgetIslandPage standalone, no main layout
   if (location.pathname === "/widget") {
     return <WidgetIslandPage />;
+  }
+
+  // Desktop lyrics window: render standalone, no main layout
+  if (location.pathname === "/desktop-lyrics") {
+    return <DesktopLyricsPage />;
+  }
+
+  // Lyrics unlock button window: tiny standalone overlay
+  if (location.pathname === "/lyrics-unlock-btn") {
+    return <LyricsUnlockBtnPage />;
   }
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

@@ -8,7 +8,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { isValidHexColor, hexToHsv, hsvToHex } from "@/lib/color-utils";
+import { isValidHexColor, hexToHsv, hsvToHex, colorToHex } from "@/lib/color-utils";
 
 const SV_PANEL_W = 200;
 const SV_PANEL_H = 150;
@@ -35,9 +35,9 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const panelBg = useColorModeValue("white", "#1a1a1a");
   const panelShadow = useColorModeValue("0 4px 20px rgba(0,0,0,0.15)", "0 4px 20px rgba(0,0,0,0.4)");
-  const [hexInput, setHexInput] = useState(color);
+  const [hexInput, setHexInput] = useState(colorToHex(color));
 
-  useEffect(() => { setHexInput(color); }, [color]);
+  useEffect(() => { setHexInput(colorToHex(color)); }, [color]);
 
   // Use a custom mousedown handler instead of useOutsideClick because
   // the picker panel is rendered via Portal (outside panelRef in the DOM),
@@ -174,7 +174,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
             position="fixed"
             top={`${popoverPos.top}px`}
             left={`${popoverPos.left}px`}
-            zIndex={999}
+            zIndex={9999}
             bg={panelBg}
             borderRadius="xl"
             boxShadow={panelShadow}
@@ -239,7 +239,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
               <HStack spacing={2}>
                 <Box w="24px" h="24px" borderRadius="md" bg={color} flexShrink={0} />
                 <Text fontSize="xs" fontWeight="semibold" letterSpacing="0.03em" color={useColorModeValue("gray.700", "#e0e0e0")}>
-                  {color.toUpperCase()}
+                  {colorToHex(color)}
                 </Text>
               </HStack>
             </VStack>

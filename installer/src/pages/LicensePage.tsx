@@ -1,16 +1,13 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 
 export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => void }) {
   const { t } = useTranslation();
-  const [checked, setChecked] = useState(false);
 
-  const handleCheck = () => {
-    const next = !checked;
-    setChecked(next);
-    onAgreed(next);
-  };
+  useEffect(() => {
+    onAgreed(true);
+  }, [onAgreed]);
 
   return (
     <motion.div
@@ -132,16 +129,6 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
 
         <p style={{ fontWeight: 600 }}>继续安装即表示您已阅读并同意本协议的全部条款。</p>
       </div>
-
-      <label className="checkbox-label" style={{ marginTop: 16 }}>
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={handleCheck}
-        />
-        <span className="checkbox-mark" />
-        {t("license_agree")}
-      </label>
     </motion.div>
   );
 }

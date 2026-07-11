@@ -66,12 +66,18 @@ pub fn install(
 ) -> Result<(), String> {
     let target = PathBuf::from(&target_dir);
 
+    // Cleanup old Inno Setup artifacts before installing
+    cleanup_old_innosetup(&target);
+
     // Create target directory
     fs::create_dir_all(&target)
         .map_err(|e| format!("无法创建目标目录: {}", e))?;
 
     // Extract payload ZIP to target directory
     extract_payload(&target)?;
+
+    // Remove any existing shortcuts to avoid duplicates from old version
+    delete_existing_shortcuts("新境盒");
 
     // Create Start Menu shortcut
     let exe_path = target.join("nexbox.exe");
@@ -244,6 +250,34 @@ fn register_uninstall(install_dir: &str, version: &str) -> Result<(), String> {
 }
 
 // === Disk space check ===
+
+/// Remove old Inno Setup uninstaller files (unins000.exe / unins000.dat)
+fn cleanup_old_innosetup(target: &Path) {
+    for name in &["unins000.exe", "unins000.dat"] {
+        let path = target.join(name);
+        if path.exists() {
+            let _ = fs::remove_file(&path);
+        }
+    }
+}
+
+/// Delete existing shortcuts before creating new ones to avoid duplicates
+fn delete_existing_shortcuts(name: &str) {
+    // Delete from Desktop
+    if let Some(desktop) = get_special_folder_path("Desktop") {
+        let path = format!("{}\\{}.lnk", desktop, name);
+        if Path::new(&path).exists() {
+            let _ = fs::remove_file(&path);
+        }
+    }
+    // Delete from Start Menu
+    if let Some(start_menu) = get_special_folder_path("StartMenu") {
+        let path = format!("{}\\{}.lnk", start_menu, name);
+        if Path::new(&path).exists() {
+            let _ = fs::remove_file(&path);
+        }
+    }
+}
 
 fn fs2_available_space(path: &Path) -> Result<u64, std::io::Error> {
     let path_str = path.to_string_lossy();

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import { Store } from "@tauri-apps/plugin-store";
 import type {
   Song,
@@ -10,7 +10,9 @@ import type {
   PlayMode,
   PlaybackQuality,
   SongUrlResult,
+  KaraokeLine,
 } from "@/types/music";
+import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 
 interface MusicState {
   // 播放状态
@@ -53,6 +55,14 @@ interface MusicState {
   // 歌词高亮颜色
   lyricsHighlightColor: string;
 
+  // 桌面歌词设置
+  desktopLyricsVisible: boolean;
+  desktopLyricsFontSize: number;
+  desktopLyricsHighlightColor: string;
+  desktopLyricsBaseColor: string;
+  desktopLyricsLineCount: 1 | 2;
+  desktopLyricsLocked: boolean;
+
   // UI 状态
   searching: boolean;
   loadingPlaylists: boolean;
@@ -81,6 +91,17 @@ interface MusicState {
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
 
+  // 桌面歌词 Actions
+  toggleDesktopLyrics: () => Promise<void>;
+  setDesktopLyricsVisible: (visible: boolean) => Promise<void>;
+  setDesktopLyricsFontSize: (size: number) => Promise<void>;
+  setDesktopLyricsHighlightColor: (color: string) => Promise<void>;
+  setDesktopLyricsBaseColor: (color: string) => Promise<void>;
+  setDesktopLyricsLineCount: (count: 1 | 2) => Promise<void>;
+  setDesktopLyricsLocked: (locked: boolean) => void;
+  emitDesktopLyricsSettings: () => void;
+  emitDesktopLyricsData: () => void;
+
   loginStatus: () => Promise<void>;
   loginWithCookie: (cookie: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -102,6 +123,29 @@ const getStore = async (): Promise<Store> => {
   }
   return storeInstance;
 };
+
+// 桌面歌词时间同步定时器
+let timeSyncTimer: ReturnType<typeof setInterval> | null = null;
+// 防止 React Strict Mode 双重调用 init 导致重复注册 listener
+let listenersRegistered = false;
+function startTimeSync() {
+  if (timeSyncTimer) return;
+  timeSyncTimer = setInterval(() => {
+    const state = useMusicStore.getState();
+    if (state.audioRef && state.desktopLyricsVisible) {
+      emit("desktop-lyrics:time", {
+        currentTime: state.audioRef.currentTime,
+        isPlaying: state.isPlaying,
+      });
+    }
+  }, 100);
+}
+function stopTimeSync() {
+  if (timeSyncTimer) {
+    clearInterval(timeSyncTimer);
+    timeSyncTimer = null;
+  }
+}
 
 async function getProxyAudioUrl(rawUrl: string, proxyPort: number): Promise<string> {
   if (!proxyPort) {
@@ -147,6 +191,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   lyricsHighlightColor: "#fff0b8",
   proxyPort: 0,
 
+  desktopLyricsVisible: false,
+  desktopLyricsFontSize: 36,
+  desktopLyricsHighlightColor: "#FFD700",
+  desktopLyricsBaseColor: "rgba(255,255,255,0.35)",
+  desktopLyricsLineCount: 2,
+  desktopLyricsLocked: false,
+
   searching: false,
   loadingPlaylists: false,
   loadingLeftTracks: false,
@@ -171,14 +222,68 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const quality = await store.get<PlaybackQuality>("quality");
       const fontSize = await store.get<number>("lyricsFontSize");
       const highlightColor = await store.get<string>("lyricsHighlightColor");
+      const dlFontSize = await store.get<number>("desktopLyricsFontSize");
+      const dlHighlightColor = await store.get<string>("desktopLyricsHighlightColor");
+      const dlBaseColor = await store.get<string>("desktopLyricsBaseColor");
+      const dlLineCount = await store.get<1 | 2>("desktopLyricsLineCount");
+      const dlLocked = await store.get<boolean>("desktopLyricsLocked");
       if (vol != null) set({ volume: vol });
       if (mode) set({ playMode: mode });
       if (quality) set({ playbackQuality: quality });
       if (fontSize != null) set({ lyricsFontSize: fontSize });
       if (highlightColor) set({ lyricsHighlightColor: highlightColor });
+      if (dlFontSize != null) set({ desktopLyricsFontSize: dlFontSize });
+      if (dlHighlightColor) set({ desktopLyricsHighlightColor: dlHighlightColor });
+      if (dlBaseColor) set({ desktopLyricsBaseColor: dlBaseColor });
+      if (dlLineCount) set({ desktopLyricsLineCount: dlLineCount });
+      if (dlLocked != null) set({ desktopLyricsLocked: dlLocked });
     } catch {
       // ignore
     }
+
+    // 防止 React Strict Mode 双重调用导致重复注册
+    if (listenersRegistered) return;
+    listenersRegistered = true;
+
+    // 桌面歌词控制事件监听
+    listen<{ action: string }>("desktop-lyrics:control", (event) => {
+      const { action } = event.payload;
+      switch (action) {
+        case "play-pause":
+          get().togglePlay();
+          break;
+        case "prev":
+          get().prevTrack();
+          break;
+        case "next":
+          get().nextTrack();
+          break;
+        case "toggle-shuffle":
+          get().togglePlayMode();
+          break;
+        case "lock":
+          get().setDesktopLyricsLocked(true);
+          break;
+        case "unlock":
+          get().setDesktopLyricsLocked(false);
+          break;
+      }
+    });
+
+    // 桌面歌词窗口就绪后请求数据
+    // 解决窗口首次打开时 emit 早于 listen 注册的时序问题
+    listen("desktop-lyrics:request-data", () => {
+      // 小延时确保请求方 listener 完全就绪
+      setTimeout(() => {
+        get().emitDesktopLyricsData();
+        get().emitDesktopLyricsSettings();
+        emit("desktop-lyrics:state", {
+          isPlaying: get().isPlaying,
+          playMode: get().playMode,
+          volume: get().volume,
+        });
+      }, 50);
+    });
 
     // 监听登录成功事件 (来自网页登录窗口的 cookie 捕获)
     // 后端会附带 LoginInfo 数据
@@ -244,7 +349,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (idx >= 0) set({ currentIndex: idx });
     }
 
-    set({ currentSong: song, currentTime: 0, duration: 0, isPlaying: false });
+    set({ currentSong: song, currentTime: 0, duration: 0, isPlaying: false, currentLyrics: null });
 
     try {
       const result = await invoke<SongUrlResult>("music_song_url", {
@@ -263,20 +368,60 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       audio.volume = state.volume;
       await audio.play();
       set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort, currentQuality: result.quality, currentBitrate: result.br });
+      // 推送歌曲数据到桌面歌词
+      if (get().desktopLyricsVisible) {
+        get().emitDesktopLyricsData();
+        emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
+      }
+      // 异步加载歌词（不阻塞播放）
+      get().loadLyrics(song.id);
     } catch (e) {
       console.error("Play failed:", e);
     }
   },
 
-  togglePlay: () => {
+  togglePlay: async () => {
     const { audioRef, isPlaying } = get();
     if (!audioRef) return;
     if (isPlaying) {
       audioRef.pause();
       set({ isPlaying: false });
+      if (get().desktopLyricsVisible) {
+        emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
+      }
     } else {
-      audioRef.play().catch(() => {});
-      set({ isPlaying: true });
+      try {
+        await audioRef.play();
+        set({ isPlaying: true });
+        if (get().desktopLyricsVisible) {
+          emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
+        }
+      } catch {
+        // 播放失败，URL 可能已过期，尝试重新获取
+        const state = get();
+        const song = state.currentSong;
+        if (song) {
+          const savedTime = audioRef.currentTime;
+          try {
+            const result = await invoke<SongUrlResult>("music_song_url", {
+              id: song.id,
+              quality: state.playbackQuality,
+            });
+            if (result.playable && result.url) {
+              const audioUrl = await getProxyAudioUrl(result.url, state.proxyPort);
+              audioRef.src = audioUrl;
+              audioRef.currentTime = savedTime;
+              await audioRef.play();
+              set({ isPlaying: true });
+              return;
+            }
+          } catch {}
+        }
+        set({ isPlaying: false });
+        if (get().desktopLyricsVisible) {
+          emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
+        }
+      }
     }
   },
 
@@ -344,6 +489,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     const next = modes[(current + 1) % modes.length];
     set({ playMode: next });
     getStore().then((s) => s.set("playMode", next).then(() => s.save()));
+    if (get().desktopLyricsVisible) {
+      emit("desktop-lyrics:state", { isPlaying: get().isPlaying, playMode: next, volume: get().volume });
+    }
   },
 
   setCurrentTime: (t) => set({ currentTime: t }),
@@ -383,6 +531,103 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   setLyricsHighlightColor: async (color) => {
     set({ lyricsHighlightColor: color });
     getStore().then((s) => s.set("lyricsHighlightColor", color).then(() => s.save()));
+  },
+
+  // ══ 桌面歌词 Actions ══
+  toggleDesktopLyrics: async () => {
+    const visible = !get().desktopLyricsVisible;
+    await get().setDesktopLyricsVisible(visible);
+  },
+
+  setDesktopLyricsVisible: async (visible) => {
+    set({ desktopLyricsVisible: visible });
+    try {
+      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      const win = await WebviewWindow.getByLabel("desktop-lyrics");
+      if (win) {
+        if (visible) {
+          await win.show();
+          await win.setFocus();
+          startTimeSync();
+          // 发送当前歌曲数据（此时新窗口可能还没挂载，listener 尚未注册）
+          get().emitDesktopLyricsData();
+          get().emitDesktopLyricsSettings();
+          emit("desktop-lyrics:state", {
+            isPlaying: get().isPlaying,
+            playMode: get().playMode,
+            volume: get().volume,
+          });
+          // 延迟重推：给桌面歌词窗口足够时间完成 React 挂载和 listener 注册
+          [1500, 3000].forEach((ms) => {
+            setTimeout(() => {
+              if (get().desktopLyricsVisible) {
+                get().emitDesktopLyricsData();
+                get().emitDesktopLyricsSettings();
+                emit("desktop-lyrics:state", {
+                  isPlaying: get().isPlaying,
+                  playMode: get().playMode,
+                  volume: get().volume,
+                });
+              }
+            }, ms);
+          });
+        } else {
+          await win.hide();
+          stopTimeSync();
+        }
+      }
+    } catch (e) {
+      console.error("[DesktopLyrics] toggle failed:", e);
+    }
+  },
+
+  setDesktopLyricsFontSize: async (size) => {
+    set({ desktopLyricsFontSize: size });
+    getStore().then((s) => s.set("desktopLyricsFontSize", size).then(() => s.save()));
+    get().emitDesktopLyricsSettings();
+  },
+
+  setDesktopLyricsHighlightColor: async (color) => {
+    set({ desktopLyricsHighlightColor: color });
+    getStore().then((s) => s.set("desktopLyricsHighlightColor", color).then(() => s.save()));
+    get().emitDesktopLyricsSettings();
+  },
+
+  setDesktopLyricsBaseColor: async (color) => {
+    set({ desktopLyricsBaseColor: color });
+    getStore().then((s) => s.set("desktopLyricsBaseColor", color).then(() => s.save()));
+    get().emitDesktopLyricsSettings();
+  },
+
+  setDesktopLyricsLineCount: async (count) => {
+    set({ desktopLyricsLineCount: count });
+    getStore().then((s) => s.set("desktopLyricsLineCount", count).then(() => s.save()));
+    get().emitDesktopLyricsSettings();
+  },
+
+  setDesktopLyricsLocked: (locked) => {
+    set({ desktopLyricsLocked: locked });
+    getStore().then((s) => s.set("desktopLyricsLocked", locked).then(() => s.save()));
+  },
+
+  emitDesktopLyricsSettings: () => {
+    const s = get();
+    emit("desktop-lyrics:settings", {
+      fontSize: s.desktopLyricsFontSize,
+      highlightColor: s.desktopLyricsHighlightColor,
+      baseColor: s.desktopLyricsBaseColor,
+      lineCount: s.desktopLyricsLineCount,
+      isLocked: s.desktopLyricsLocked,
+    });
+  },
+
+  emitDesktopLyricsData: () => {
+    const s = get();
+    const karaokeLines = buildKaraokeLines(s.currentLyrics);
+    emit("desktop-lyrics:data", {
+      song: s.currentSong,
+      karaokeLines,
+    });
   },
 
   loginStatus: async () => {
@@ -496,8 +741,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
       const lyrics = await invoke<Lyrics>("music_lyric", { id: songId });
       set({ currentLyrics: lyrics });
+      // 桌面歌词可见时推送歌词数据
+      if (get().desktopLyricsVisible) {
+        get().emitDesktopLyricsData();
+      }
     } catch {
       set({ currentLyrics: null });
+      if (get().desktopLyricsVisible) {
+        get().emitDesktopLyricsData();
+      }
     } finally {
       set({ loadingLyrics: false });
     }

@@ -27,32 +27,62 @@ pub struct GpuOption {
     pub category: String,
 }
 
-fn get_backup_path() -> Result<PathBuf, String> {
-    let exe_dir = std::env::current_exe()
-        .map_err(|e| format!("获取程序路径失败: {}", e))?;
-    let parent_dir = exe_dir.parent().ok_or("无法获取父目录")?;
-    Ok(parent_dir.join("gpu_rename_backup.json"))
+fn get_appdata_backup_path() -> Result<PathBuf, String> {
+    let appdata_dir = dirs::config_dir()
+        .ok_or("无法获取 APPDATA 目录")?
+        .join("NexBox");
+    std::fs::create_dir_all(&appdata_dir)
+        .map_err(|e| format!("创建数据目录失败: {}", e))?;
+    Ok(appdata_dir.join("gpu_rename_backup.json"))
+}
+
+fn get_install_dir_backup_path() -> Option<PathBuf> {
+    std::env::current_exe().ok()?.parent().map(|p| p.join("gpu_rename_backup.json"))
+}
+
+fn read_backup_from(path: &std::path::Path) -> Option<GpuInfo> {
+    if !path.exists() {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
 }
 
 fn save_backup(info: &GpuInfo) -> Result<(), String> {
-    let path = get_backup_path()?;
     let json = serde_json::to_string_pretty(info)
         .map_err(|e| format!("序列化备份数据失败: {}", e))?;
-    fs::write(&path, json)
+
+    // 写入 %APPDATA%/NexBox/ — 持久保留
+    let appdata_path = get_appdata_backup_path()?;
+    fs::write(&appdata_path, &json)
         .map_err(|e| format!("写入备份文件失败: {}", e))?;
+
+    // 同时也写一份到安装目录 — 方便用户直接查看
+    if let Some(install_path) = get_install_dir_backup_path() {
+        let _ = fs::write(&install_path, &json);
+    }
+
     Ok(())
 }
 
 fn load_backup() -> Result<Option<GpuInfo>, String> {
-    let path = get_backup_path()?;
-    if !path.exists() {
-        return Ok(None);
+    // 优先从 %APPDATA% 读取
+    if let Ok(appdata_path) = get_appdata_backup_path() {
+        if let Some(info) = read_backup_from(&appdata_path) {
+            return Ok(Some(info));
+        }
     }
-    let content = fs::read_to_string(&path)
-        .map_err(|e| format!("读取备份文件失败: {}", e))?;
-    let info: GpuInfo = serde_json::from_str(&content)
-        .map_err(|e| format!("解析备份数据失败: {}", e))?;
-    Ok(Some(info))
+
+    // 回退到安装目录（兼容旧版本）
+    if let Some(install_path) = get_install_dir_backup_path() {
+        if let Some(info) = read_backup_from(&install_path) {
+            // 自动迁移到 %APPDATA%
+            let _ = save_backup(&info);
+            return Ok(Some(info));
+        }
+    }
+
+    Ok(None)
 }
 
 #[cfg(target_os = "windows")]
@@ -493,10 +523,15 @@ pub async fn restore_gpu_name() -> Result<GpuRenameResult, String> {
     match backup {
         Some(info) => {
             rename_gpu(&info.original_name)?;
-            
-            let backup_path = get_backup_path()?;
-            let _ = fs::remove_file(backup_path);
-            
+
+            // 删除两处的备份文件
+            if let Ok(appdata_path) = get_appdata_backup_path() {
+                let _ = fs::remove_file(appdata_path);
+            }
+            if let Some(install_path) = get_install_dir_backup_path() {
+                let _ = fs::remove_file(install_path);
+            }
+
             Ok(GpuRenameResult {
                 success: true,
                 message: format!("显卡名称已恢复为: {}", info.original_name),

@@ -52,6 +52,38 @@
         "shadow": false,
         "label": "tray-menu",
         "url": "/tray-menu"
+      },
+      {
+        "title": "NexBox Desktop Lyrics",
+        "width": 800,
+        "height": 200,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "desktop-lyrics",
+        "url": "/desktop-lyrics"
+      },
+      {
+        "title": "Lyrics Unlock",
+        "width": 48,
+        "height": 48,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "lyrics-unlock-btn",
+        "url": "/lyrics-unlock-btn"
       }
     ],
     "security": {

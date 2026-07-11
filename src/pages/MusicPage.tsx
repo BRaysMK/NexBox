@@ -33,6 +33,8 @@ import {
   ArrowLeft,
   Sparkles,
   ChevronDown,
+  MonitorSpeaker,
+  Settings,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -44,6 +46,7 @@ import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { VirtualizedSongList } from "@/components/VirtualizedSongList";
+import { DesktopLyricsSettingsModal } from "@/components/DesktopLyricsSettingsModal";
 
 const scrollbarSx = (color: string) => ({
   "&::-webkit-scrollbar": { width: "4px" },
@@ -866,6 +869,8 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
   const currentQuality = useMusicStore((s) => s.currentQuality);
   const currentBitrate = useMusicStore((s) => s.currentBitrate);
   const loginInfo = useMusicStore((s) => s.loginInfo);
+  const desktopLyricsVisible = useMusicStore((s) => s.desktopLyricsVisible);
+  const [dlSettingsOpen, setDlSettingsOpen] = useState(false);
 
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
 
@@ -896,6 +901,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
   }
 
   return (
+    <>
     <LiquidGlassCard
       p={3}
       flexShrink={0}
@@ -1055,6 +1061,33 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
           />
           </HStack>
 
+          {/* 桌面歌词开关 + 设置 */}
+          <HStack spacing={1} flexShrink={0}>
+            <Tooltip label={desktopLyricsVisible ? "关闭桌面歌词" : "打开桌面歌词"}>
+              <IconButton
+                aria-label="Desktop Lyrics"
+                icon={<MonitorSpeaker size={16} />}
+                size="sm"
+                variant="ghost"
+                sx={{
+                  color: desktopLyricsVisible ? activeColor : subTextColor,
+                  _hover: { bg: hoverBg },
+                }}
+                onClick={() => useMusicStore.getState().toggleDesktopLyrics()}
+              />
+            </Tooltip>
+            <Tooltip label="桌面歌词设置">
+              <IconButton
+                aria-label="Lyrics Settings"
+                icon={<Settings size={16} />}
+                size="sm"
+                variant="ghost"
+                sx={{ color: textColor, _hover: { bg: hoverBg } }}
+                onClick={() => setDlSettingsOpen(true)}
+              />
+            </Tooltip>
+          </HStack>
+
           <Menu>
             <Tooltip label="播放队列">
               <MenuButton as={IconButton} aria-label="Queue" icon={<ListMusic size={18} />} size="sm" variant="ghost" />
@@ -1084,8 +1117,10 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
         />
       </VStack>
     </LiquidGlassCard>
-  );
-});
+    <DesktopLyricsSettingsModal isOpen={dlSettingsOpen} onClose={() => setDlSettingsOpen(false)} />
+    </>
+    );
+  });
 
 // ═══════════════════════════════════════════════
 // SongRow — memoized，避免不必要重渲染
@@ -1496,6 +1531,21 @@ export default function MusicPage() {
     if (!isExisting) {
       audio.addEventListener("ended", () => {
         useMusicStore.getState().nextTrack();
+      });
+
+      let recovering = false;
+      audio.addEventListener("error", async () => {
+        if (recovering) return;
+        recovering = true;
+        const state = useMusicStore.getState();
+        if (state.currentSong && state.isPlaying) {
+          const savedTime = audio.currentTime;
+          try {
+            await state.playSong(state.currentSong);
+            audio.currentTime = savedTime;
+          } catch {}
+        }
+        recovering = false;
       });
     }
 
