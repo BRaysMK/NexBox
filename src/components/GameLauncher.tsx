@@ -337,7 +337,7 @@ export default function GameLauncher() {
     <LiquidGlassCard
       p={3}
       w={`${cardSize.width}px`}
-      h={`${cardSize.height}px`}
+      {...(games.length === 0 ? { minH: `${MIN_HEIGHT}px` } : { h: `${cardSize.height}px` })}
       position="relative"
       overflow="hidden"
       display="flex"

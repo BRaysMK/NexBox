@@ -311,6 +311,7 @@ function DetailCard({
 }
 
 export default function HardwarePage() {
+  const toast = useToast();
   const { hardwareInfo } = useAppStartup();
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
