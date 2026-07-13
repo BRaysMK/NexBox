@@ -1,6 +1,6 @@
 {
   "name": "nexbox",
-  "version": "5.0.0",
+  "version": "5.2.0",
   "private": true,
   "type": "module",
   "license": "GPL-3.0",
@@ -24,6 +24,7 @@
     "@emotion/styled": "^11.14.1",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",

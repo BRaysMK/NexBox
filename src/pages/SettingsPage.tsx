@@ -20,6 +20,10 @@ import {
   ModalFooter,
   Progress,
   useToast,
+  Slider,
+  SliderTrack,
+  SliderFilledTrack,
+  SliderThumb,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
@@ -72,7 +76,20 @@ const settingItems = [
 function GeneralSettings() {
   const { t, i18n } = useTranslation();
   const { config, getContrastTextColor } = useThemeColor();
-  const { liquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
+  const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (liquidGlassEnabled) {
+      const timer = setTimeout(() => setShowBlur(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBlur(false);
+    }
+  }, [liquidGlassEnabled]);
+
+  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+
   const [language, setLanguage] = useState(i18n.language || "zh");
   const [todayPopularityEnabled, setTodayPopularityEnabled] = useState(true);
   const [announcementEnabled, setAnnouncementEnabled] = useState(true);
@@ -80,6 +97,7 @@ function GeneralSettings() {
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
+  const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
   const [closeBehavior, setCloseBehavior] = useState<string>(() => {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
@@ -174,6 +192,11 @@ function GeneralSettings() {
       setHomeHardwareModelEnabled(savedHomeHardwareModel === "true");
     }
 
+    const savedFeedback = localStorage.getItem("nexbox_feedback_enabled");
+    if (savedFeedback !== null) {
+      setFeedbackEnabled(savedFeedback === "true");
+    }
+
     const savedSplashLogo = localStorage.getItem("nexbox_splash_logo");
     if (savedSplashLogo) {
       setSplashLogo(savedSplashLogo);
@@ -259,6 +282,13 @@ function GeneralSettings() {
     setSearchBarEnabled(newValue);
     localStorage.setItem("nexbox_search_bar_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("search-bar-setting-changed", { detail: newValue }));
+  };
+
+  const handleFeedbackToggle = () => {
+    const newValue = !feedbackEnabled;
+    setFeedbackEnabled(newValue);
+    localStorage.setItem("nexbox_feedback_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("feedback-setting-changed", { detail: newValue }));
   };
 
   const handleSplashLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -487,6 +517,22 @@ function GeneralSettings() {
                 onChange={handleSearchBarToggle}
               />
             </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.feedbackLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.feedbackDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={feedbackEnabled}
+                onChange={handleFeedbackToggle}
+              />
+            </HStack>
           </VStack>
         </LiquidGlassCard>
       </Box>
@@ -567,7 +613,8 @@ function GeneralSettings() {
                 borderColor={segmentedControlBorder}
                 bg={segmentedControlBg}
                 boxShadow={segmentedControlShadow}
-                backdropFilter={liquidGlassEnabled ? "blur(18px) saturate(160%)" : "blur(14px)"}
+                backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px) saturate(160%)` : "blur(14px)"}
+                transition="backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
                 position="relative"
                 overflow="hidden"
               >
@@ -843,6 +890,7 @@ function ThemeColorSettings() {
 function AppearanceSettings() {
   const { t } = useTranslation();
   const { colorMode, toggleColorMode } = useColorMode();
+  const { getActiveColor } = useThemeColor();
   const {
     backgroundMode,
     customBgImages,
@@ -855,6 +903,10 @@ function AppearanceSettings() {
     setDynamicBgVideo,
     liquidGlassEnabled,
     setLiquidGlassEnabled,
+    liquidGlassBlur,
+    setLiquidGlassBlur,
+    backgroundBlur,
+    setBackgroundBlur,
     activePresetIndex,
     presetBackgrounds,
     setActivePresetIndex,
@@ -1019,6 +1071,28 @@ function AppearanceSettings() {
               onChange={() => setLiquidGlassEnabled(!liquidGlassEnabled)}
             />
           </HStack>
+          {liquidGlassEnabled && (
+            <Box mt={4} pt={3} borderTop="1px solid" borderColor={useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)")}>
+              <HStack justify="space-between" mb={2}>
+                <Text fontSize="sm" color={labelColor}>
+                  {t("settings.appearanceSettings.liquidGlassBlurLabel")}
+                </Text>
+                <Text fontSize="sm" color={getActiveColor()} fontWeight="bold">{liquidGlassBlur}</Text>
+              </HStack>
+              <Slider
+                value={liquidGlassBlur}
+                min={1}
+                max={100}
+                step={1}
+                onChange={(val) => setLiquidGlassBlur(val)}
+              >
+                <SliderTrack bg={useColorModeValue("gray.200", "gray.700")}>
+                  <SliderFilledTrack bg={getActiveColor()} />
+                </SliderTrack>
+                <SliderThumb />
+              </Slider>
+            </Box>
+          )}
         </LiquidGlassCard>
       </Box>
 
@@ -1336,6 +1410,29 @@ function AppearanceSettings() {
                 )}
               </>
             )}
+
+            <Divider borderColor={cardBorder} />
+            <HStack justify="space-between">
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("settings.appearanceSettings.backgroundBlurLabel")}
+              </Text>
+              <Text fontSize="sm" color={getActiveColor()} fontWeight="bold">{backgroundBlur}px</Text>
+            </HStack>
+            <Slider
+              value={backgroundBlur}
+              min={0}
+              max={30}
+              step={1}
+              onChange={(val) => setBackgroundBlur(val)}
+            >
+              <SliderTrack bg={useColorModeValue("gray.200", "gray.700")}>
+                <SliderFilledTrack bg={getActiveColor()} />
+              </SliderTrack>
+              <SliderThumb />
+            </Slider>
+            <Text fontSize="xs" color={subLabelColor}>
+              {t("settings.appearanceSettings.backgroundBlurHint")}
+            </Text>
           </VStack>
         </LiquidGlassCard>
       </Box>
@@ -1687,7 +1784,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "5.0.0";
+  const currentVersion = "5.2.0";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);

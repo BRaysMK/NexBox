@@ -4,6 +4,7 @@ import { Box, HStack, Text, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useGlowEffect, getBorderGlowStyle } from "@/hooks/use-glow-effect";
+import { useState, useEffect } from "react";
 
 interface LiquidGlassMenuItemProps {
   children: React.ReactNode;
@@ -18,7 +19,7 @@ export function LiquidGlassMenuItem({
   onClick,
   icon: Icon 
 }: LiquidGlassMenuItemProps) {
-  const { liquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { getActiveColor, getBorderColor, getContrastTextColor } = useThemeColor();
   const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
   
@@ -36,6 +37,19 @@ export function LiquidGlassMenuItem({
   const outlineColor = getActiveColor();
   const glowColor = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.5)");
 
+  const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (liquidGlassEnabled) {
+      const timer = setTimeout(() => setShowBlur(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBlur(false);
+    }
+  }, [liquidGlassEnabled]);
+
+  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+
   const transition = "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)";
 
   return (
@@ -48,7 +62,7 @@ export function LiquidGlassMenuItem({
       bg={isActive ? activeBg : (liquidGlassEnabled ? (isHovering ? glassHoverBg : glassInactiveBg) : (isHovering ? hoverBg : defaultInactiveBg))}
       border="1px solid"
       borderColor={isActive ? (liquidGlassEnabled ? glassActiveBorder : activeBg) : (liquidGlassEnabled ? glassBorderColor : "transparent")}
-      backdropFilter={liquidGlassEnabled ? "blur(1px)" : "blur(0px)"}
+      backdropFilter={`blur(${effectiveBlur}px)`}
       position="relative"
       color={isActive ? activeTextFinal : (liquidGlassEnabled ? glassInactiveText : inactiveText)}
       onMouseMove={handleMouseMove}
@@ -59,6 +73,7 @@ export function LiquidGlassMenuItem({
         WebkitTransform: "translateZ(0)",
         WebkitBackfaceVisibility: "hidden",
         backfaceVisibility: "hidden",
+        willChange: "backdrop-filter, transform",
         transition,
       }}
       _focusVisible={{

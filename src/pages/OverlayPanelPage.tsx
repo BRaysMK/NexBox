@@ -22,10 +22,11 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, ArrowLeft, Trash2, Plus, Move, RotateCcw } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Trash2, Plus, Move, RotateCcw, Download } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
+import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
 import { useNavigate } from "react-router-dom";
 import { CustomSelect } from "@/components/special/custom-select";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
@@ -140,7 +141,7 @@ function SettingCard({
     return (
       <LiquidGlassCard p={5}>
         <VStack align="stretch" spacing={4}>
-          <Text fontWeight="medium" color="white">{title}</Text>
+          <Text fontWeight="medium" color={headerColor}>{title}</Text>
           {children}
         </VStack>
       </LiquidGlassCard>
@@ -252,6 +253,7 @@ export default function OverlayPanelPage() {
   const { t } = useTranslation();
   const toast = useToast();
   const { overlaySettings, saveOverlaySettings, overlayHotkey, saveOverlayHotkey } = useAppStartup();
+  const { exportReport, isExporting } = useHardwareReportExport();
   const navigate = useNavigate();
 
   const [hardwareData, setHardwareData] = useState<HardwareData>({
@@ -573,6 +575,48 @@ export default function OverlayPanelPage() {
           <Heading size="lg" color={headingColor}>
             {t("overlayPanel.title") || "悬浮框"}
           </Heading>
+        </HStack>
+        <HStack gap={2}>
+          <Button
+            leftIcon={<Trash2 size={15} />}
+            size="sm"
+            variant="outline"
+            color="#e74c3c"
+            borderColor="rgba(231,76,60,0.3)"
+            _hover={{ bg: "rgba(231,76,60,0.1)" }}
+            onClick={async () => {
+              try {
+                await invoke("clear_hardware_data");
+                toast({
+                  title: "硬件数据已清除",
+                  status: "success",
+                  duration: 3000,
+                  isClosable: true,
+                });
+              } catch (e) {
+                toast({
+                  title: "清除失败",
+                  description: String(e),
+                  status: "error",
+                  duration: 3000,
+                  isClosable: true,
+                });
+              }
+            }}
+          >
+            清除数据
+          </Button>
+          <Button
+            leftIcon={<Download size={16} />}
+            size="sm"
+            variant="outline"
+            color={getActiveColor()}
+            borderColor={getActiveColor()}
+            onClick={exportReport}
+            isLoading={isExporting}
+          >
+            {t("hardwareReport.export") || "导出报告"}
+          </Button>
         </HStack>
       </HStack>
 

@@ -137,6 +137,18 @@ pub async fn music_recommend_songs() -> Result<Vec<Song>, String> {
     netease::recommend_songs(&app_cookie).await
 }
 
+#[tauri::command]
+pub async fn music_artist_search(keywords: String, limit: Option<u32>) -> Result<Vec<Artist>, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::artist_search(&keywords, limit.unwrap_or(30), &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_artist_songs(artist_id: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Song>, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::artist_songs(&artist_id, limit.unwrap_or(50), offset.unwrap_or(0), &app_cookie).await
+}
+
 /// 网易云登录 cookie 优先级 (参考 Mineradio)
 const NETEASE_COOKIE_PRIORITY: &[&str] = &[
     "MUSIC_U",

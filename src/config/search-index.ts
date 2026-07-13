@@ -11,15 +11,9 @@ import {
   Palette,
   Layout,
   Zap,
-  Target,
-  Focus,
-  MousePointerClick,
-  Ban,
-  Grid3X3,
   MousePointer2,
   Monitor,
   Download,
-  Play,
   Network,
   Bot,
   Volume2,
@@ -31,14 +25,12 @@ import {
   Music,
   HardDrive,
   Settings2,
-  Shield,
-  Video,
   Tv2,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { IslandIcon } from "@/components/special/island-icon";
 
-export type SearchCategory = "page" | "builtin-tool" | "test" | "optimization" | "thirdparty-tool";
+export type SearchCategory = "page" | "builtin-tool" | "optimization" | "thirdparty-tool";
 
 export interface SearchItem {
   id: string;
@@ -198,76 +190,12 @@ export const searchIndex: SearchItem[] = [
       keywords: ["dlss", "预设", "preset", "三角洲", "delta", "force", "nvidia", "模型"],
     },
     {
-      id: "screen-record",
-      nameKey: "sidebar.screenRecord",
-      path: "/screen-record",
-      icon: Video,
-      category: "builtin-tool",
-      keywords: ["录屏", "录制", "屏幕", "视频", "record", "screen", "capture", "video", "录像"],
-    },
-    {
     id: "dynamic-island",
     nameKey: "sidebar.dynamicIsland",
     path: "/dynamic-island",
     icon: IslandIcon,
     category: "builtin-tool",
     keywords: ["灵动岛", "dynamic", "island", "悬浮", "网速", "监控", "音乐", "通知", "widget"],
-  },
-  {
-    id: "reaction-test",
-    nameKey: "tests.reactionTitle",
-    path: "/tests/reaction",
-    icon: Zap,
-    category: "test",
-    keywords: ["反应", "反射弧", "reaction", "测试"],
-  },
-  {
-    id: "aim-test",
-    nameKey: "tests.aimTitle",
-    path: "/tests/aim",
-    icon: Target,
-    category: "test",
-    keywords: ["瞄准", "aim", "点击", "测试"],
-  },
-  {
-    id: "focus-test",
-    nameKey: "tests.focusTitle",
-    path: "/tests/focus",
-    icon: Focus,
-    category: "test",
-    keywords: ["专注", "focus", "追踪", "测试"],
-  },
-  {
-    id: "choice-test",
-    nameKey: "tests.choiceTitle",
-    path: "/tests/choice",
-    icon: MousePointerClick,
-    category: "test",
-    keywords: ["选择", "choice", "测试", "反应"],
-  },
-  {
-    id: "inhibit-test",
-    nameKey: "tests.inhibitTitle",
-    path: "/tests/inhibit",
-    icon: Ban,
-    category: "test",
-    keywords: ["抑制", "inhibit", "冲动", "测试"],
-  },
-  {
-    id: "schulte-test",
-    nameKey: "tests.schulteTitle",
-    path: "/tests/schulte",
-    icon: Grid3X3,
-    category: "test",
-    keywords: ["舒尔特", "schulte", "方格", "专注", "测试"],
-  },
-  {
-    id: "cps-test",
-    nameKey: "tests.cpsTitle",
-    path: "/tests/cps",
-    icon: MousePointer2,
-    category: "test",
-    keywords: ["手速", "cps", "click", "点击", "测试", "速度"],
   },
   {
     id: "memory-limit",
@@ -378,7 +306,6 @@ export function getThirdPartyToolIcon(toolId: string): ComponentType<{ size?: nu
 export const categoryLabels: Record<SearchCategory, string> = {
   "page": "search.categories.pages",
   "builtin-tool": "search.categories.builtinTools",
-  "test": "search.categories.tests",
   "optimization": "search.categories.optimization",
   "thirdparty-tool": "search.categories.thirdpartyTools",
 };
@@ -386,7 +313,6 @@ export const categoryLabels: Record<SearchCategory, string> = {
 export const categoryOrder: SearchCategory[] = [
   "page",
   "builtin-tool",
-  "test",
   "optimization",
   "thirdparty-tool",
 ];

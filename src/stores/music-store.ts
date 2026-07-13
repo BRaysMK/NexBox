@@ -4,6 +4,7 @@ import { listen, emit } from "@tauri-apps/api/event";
 import { Store } from "@tauri-apps/plugin-store";
 import type {
   Song,
+  Artist,
   Playlist,
   LoginInfo,
   Lyrics,
@@ -42,6 +43,13 @@ interface MusicState {
   recommendations: Playlist[];
   recommendSongs: Song[];
 
+  // 歌手搜索
+  artistSearchResults: Artist[];
+  artistSongs: Song[];
+  selectedArtist: Artist | null;
+  searchingArtists: boolean;
+  loadingArtistSongs: boolean;
+
   // 音质
   playbackQuality: PlaybackQuality;
   currentQuality: string;
@@ -69,6 +77,8 @@ interface MusicState {
   loadingLeftTracks: boolean;
   loadingRightTracks: boolean;
   loadingLyrics: boolean;
+  expandedStyle: "glass" | "modern";
+  dynamicEnabled: boolean;
 
   // 音频元素引用
   audioRef: HTMLAudioElement | null;
@@ -78,6 +88,9 @@ interface MusicState {
   setAudioRef: (audio: HTMLAudioElement | null) => void;
 
   search: (keywords: string) => Promise<void>;
+  searchArtists: (keywords: string) => Promise<void>;
+  loadArtistSongs: (artistId: string, offset?: number) => Promise<void>;
+  clearArtistState: () => void;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -88,6 +101,8 @@ interface MusicState {
   setPlaybackQuality: (quality: PlaybackQuality) => Promise<void>;
   setLyricsFontSize: (size: number) => Promise<void>;
   setLyricsHighlightColor: (color: string) => Promise<void>;
+  setExpandedStyle: (style: "glass" | "modern") => Promise<void>;
+  setDynamicEnabled: (enabled: boolean) => Promise<void>;
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
 
@@ -184,11 +199,19 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   recommendations: [],
   recommendSongs: [],
 
+  artistSearchResults: [],
+  artistSongs: [],
+  selectedArtist: null,
+  searchingArtists: false,
+  loadingArtistSongs: false,
+
   playbackQuality: "hires",
   currentQuality: "",
   currentBitrate: 0,
   lyricsFontSize: 18,
   lyricsHighlightColor: "#fff0b8",
+  expandedStyle: "modern",
+  dynamicEnabled: false,
   proxyPort: 0,
 
   desktopLyricsVisible: false,
@@ -231,7 +254,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (mode) set({ playMode: mode });
       if (quality) set({ playbackQuality: quality });
       if (fontSize != null) set({ lyricsFontSize: fontSize });
+      const expStyle = await store.get<string>("expandedStyle");
       if (highlightColor) set({ lyricsHighlightColor: highlightColor });
+      if (expStyle === "modern") set({ expandedStyle: "modern" });
+      const dynamic = await store.get<boolean>("dynamicEnabled");
+      if (dynamic) set({ dynamicEnabled: true });
       if (dlFontSize != null) set({ desktopLyricsFontSize: dlFontSize });
       if (dlHighlightColor) set({ desktopLyricsHighlightColor: dlHighlightColor });
       if (dlBaseColor) set({ desktopLyricsBaseColor: dlBaseColor });
@@ -332,6 +359,38 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     } finally {
       set({ searching: false });
     }
+  },
+
+  searchArtists: async (keywords) => {
+    if (!keywords.trim()) return;
+    set({ searchingArtists: true, artistSearchResults: [], selectedArtist: null, artistSongs: [] });
+    try {
+      const results = await invoke<Artist[]>("music_artist_search", { keywords, limit: 30 });
+      set({ artistSearchResults: results });
+    } catch (e) {
+      console.error("Artist search failed:", e);
+      set({ artistSearchResults: [] });
+    } finally {
+      set({ searchingArtists: false });
+    }
+  },
+
+  loadArtistSongs: async (artistId, offset = 0) => {
+    set({ loadingArtistSongs: true });
+    try {
+      const songs = await invoke<Song[]>("music_artist_songs", { artistId, limit: 50, offset });
+      set((state) => ({
+        artistSongs: offset === 0 ? songs : [...state.artistSongs, ...songs],
+      }));
+    } catch (e) {
+      console.error("Load artist songs failed:", e);
+    } finally {
+      set({ loadingArtistSongs: false });
+    }
+  },
+
+  clearArtistState: () => {
+    set({ artistSearchResults: [], artistSongs: [], selectedArtist: null });
   },
 
   playSong: async (song, queue) => {
@@ -531,6 +590,16 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   setLyricsHighlightColor: async (color) => {
     set({ lyricsHighlightColor: color });
     getStore().then((s) => s.set("lyricsHighlightColor", color).then(() => s.save()));
+  },
+
+  setExpandedStyle: async (style) => {
+    set({ expandedStyle: style });
+    getStore().then((s) => s.set("expandedStyle", style).then(() => s.save()));
+  },
+
+  setDynamicEnabled: async (enabled) => {
+    set({ dynamicEnabled: enabled });
+    getStore().then((s) => s.set("dynamicEnabled", enabled).then(() => s.save()));
   },
 
   // ══ 桌面歌词 Actions ══

@@ -330,7 +330,7 @@ static CUSTOM_SETTINGS: Mutex<Option<HashMap<usize, CustomFilterSettings>>> = Mu
 
 fn get_settings_file_path() -> PathBuf {
     let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-    config_dir.join("NexBox").join("settings.json")
+    config_dir.join("NexBox").join("filter-settings.json")
 }
 
 fn load_custom_settings_from_file() -> HashMap<usize, CustomFilterSettings> {

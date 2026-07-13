@@ -6,6 +6,7 @@ import { AnnouncementCard, useAnnouncementEnabled } from "@/components/Announcem
 import { RandomQuote, useRandomQuoteEnabled } from "@/components/RandomQuote";
 import { useState, useEffect } from "react";
 import HardwareModelCard from "@/components/HardwareModelCard";
+import { FeedbackBanner, useFeedbackEnabled } from "@/components/FeedbackBanner";
 
 export default function HomePage() {
   const { t } = useTranslation();
@@ -13,6 +14,7 @@ export default function HomePage() {
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const todayPopularityEnabled = useTodayPopularityEnabled();
+  const feedbackEnabled = useFeedbackEnabled();
   const announcementEnabled = useAnnouncementEnabled();
   const randomQuoteEnabled = useRandomQuoteEnabled();
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function HomePage() {
 
   return (
     <Box pt={8} pr={4} pb={4} pl={4} h="calc(100vh - 120px)" position="relative">
-      <Flex gap={6} h="100%">
+      <Flex gap={6} h="100%" align="flex-start">
         <Box flex={1}>
           <Text fontSize="3xl" fontWeight="bold" color={textColor}>
             {t("home.title")}
@@ -61,6 +63,11 @@ export default function HomePage() {
             </HStack>
           )}
         </Box>
+        {feedbackEnabled && (
+          <Box pt={12}>
+            <FeedbackBanner />
+          </Box>
+        )}
       </Flex>
 
       {homeHardwareModelEnabled && (

@@ -114,7 +114,7 @@ function SettingCard({
     return (
       <LiquidGlassCard p={5}>
         <VStack align="stretch" spacing={4}>
-          <Text fontWeight="medium" color="white">{title}</Text>
+          <Text fontWeight="medium" color={headerColor}>{title}</Text>
           {children}
         </VStack>
       </LiquidGlassCard>

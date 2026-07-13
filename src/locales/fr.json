@@ -49,8 +49,8 @@
         "dlssPreset": "Paramètres DLSS Delta Force",
         "epicFree": "Jeux gratuits Epic",
         "dynamicIsland": "Dynamic Island",
-        "screenRecord": "Enregistrement d'écran",
-    "diskHealth": "Santé du disque"
+    "diskHealth": "Santé du disque",
+"screenRecord": "Enregistrement d'écran"
     },
   "optimization": {
     "pageTitle": "Optimiser",
@@ -548,7 +548,16 @@
     "previewFiltered": "Filtre",
     "previewDisabledNote": "Filtre inactif · Aperçu uniquement",
     "paramsUpdated": "Paramètres mis à jour",
-    "paramsUpdatedHint": "Activer manuellement le filtre"
+    "paramsUpdatedHint": "Activer manuellement le filtre",
+    "myPresets": "Mes préréglages",
+    "noPresets": "Aucun préréglage personnalisé\nAjustez les paramètres et cliquez sur « Enregistrer comme préréglage »",
+    "saveAsPreset": "Enregistrer comme préréglage",
+    "presetNamePlaceholder": "Entrez le nom du préréglage...",
+    "savePresetSuccess": "Préréglage enregistré",
+    "deletePreset": "Supprimer le préréglage",
+    "deletePresetConfirm": "Supprimer ce préréglage ?",
+    "deletePresetSuccess": "Préréglage supprimé",
+    "save": "Enregistrer"
   },
 "floatingNav": {
     "title": "Boîte de navigation flottante",
@@ -603,6 +612,14 @@
       "crossDot": "Croix+Point",
       "circleCross": "Cercle+Croix"
     }
+  },
+  "hardwareReport": {
+    "export": "Exporter le rapport",
+    "selectPath": "Sélectionner l'emplacement d'export",
+    "exporting": "Génération du rapport...",
+    "exportSuccess": "Rapport exporté avec succès",
+    "exportFailed": "Échec de l'exportation",
+    "recorderNotStarted": "L'enregistreur n'est pas démarré, veuillez réessayer plus tard"
   },
   "overlayPanel": {
     "title": "Panneau superposé",
@@ -806,8 +823,8 @@
     "shaderCacheDesc": "Nettoyer le cache des shaders NVIDIA/AMD pour libérer de l'espace disque",
     "dlssPresetDesc": "Changer les préréglages de modèle DLSS pour optimiser les graphismes du jeu",
         "dynamicIslandDesc": "Île flottante en haut de l'écran, affiche la vitesse réseau/le matériel/la musique/les notifications",
-        "screenRecordDesc": "Enregistrer l'écran ou une fenêtre avec résolution et FPS réglables",
-    "diskHealthDesc": "Vérifier l'état de santé du disque et les informations SMART"
+    "diskHealthDesc": "Vérifier l'état de santé du disque et les informations SMART",
+    "screenRecordDesc": "Enregistrement d'écran haute performance (encodage matériel)"
     },
   "gpuRename": {
     "title": "Renommage GPU",
@@ -917,6 +934,8 @@
       "randomQuoteDesc": "Afficher la carte de citation aléatoire sur la page d'accueil",
       "gameLauncherLabel": "Lancement rapide",
       "gameLauncherDesc": "Afficher la carte de lancement rapide sur la page d'accueil",
+      "feedbackLabel": "Bannière de commentaires",
+      "feedbackDesc": "Afficher la bannière de commentaires en bas de la page d'accueil",
       "splash": "Animation",
       "splashLogoLabel": "Logo de démarrage",
       "splashLogoDesc": "Personnalisez l'image du logo affichée au démarrage",
@@ -970,6 +989,7 @@
       "liquidGlass": "Verre liquide",
       "liquidGlassLabel": "Verre liquide",
       "liquidGlassDesc": "Lorsque activé, certaines interfaces utiliseront l'effet \"Verre liquide\", ce qui peut affecter les performances",
+      "liquidGlassBlurLabel": "Intensité du flou",
       "customBackground": "Arrière-plan personnalisé",
       "customBackgroundLabel": "Activer l'arrière-plan personnalisé",
       "imageUrlPlaceholder": "Entrez l'URL de l'image ou cliquez pour télécharger",
@@ -989,6 +1009,8 @@
         "hoverOpacity": "Opacité au survol",
         "activeOpacity": "Opacité active",
         "borderOpacity": "Opacité de la bordure",
+        "backgroundBlurLabel": "Flou d'arrière-plan",
+        "backgroundBlurHint": "S'applique à tous les modes (préréglé / image / vidéo)",
         "resetToDefault": "Réinitialiser par défaut",
         "uploadVideo": "Télécharger une vidéo",
         "presetColors": {
@@ -1114,37 +1136,6 @@
     "filterToggleDesc": "Utiliser un raccourci pour activer ou désactiver le filtre d'affichage",
     "saved": "Raccourci enregistré"
   },
-  "screenRecord": {
-    "title": "Enregistrement d'écran",
-    "mode": "Mode d'enregistrement",
-    "mode.fullscreen": "Plein écran",
-    "mode.window": "Fenêtre",
-    "targetDisplay": "Écran cible",
-    "targetWindow": "Fenêtre cible",
-    "noWindow": "Aucune fenêtre sélectionnée",
-    "resolution": "Résolution",
-    "resolution.original": "Originale",
-    "fps": "Images par seconde",
-    "format": "Format de sortie",
-    "quality": "Qualité",
-    "savePath": "Emplacement",
-    "browse": "Parcourir...",
-    "startRecording": "Démarrer",
-    "pauseRecording": "Pause",
-    "resumeRecording": "Reprendre",
-    "stopRecording": "Arrêter",
-    "recording": "Enregistrement...",
-    "paused": "En pause",
-    "duration": "Durée",
-    "fileSize": "Taille du fichier",
-    "currentFps": "FPS actuel",
-    "saveSuccess": "Enregistrement sauvegardé dans :",
-    "saveFailed": "Échec de l'enregistrement",
-    "noDisplays": "Aucun écran détecté",
-    "selectWindow": "Veuillez sélectionner une fenêtre",
-    "captureCursor": "Capturer le curseur",
-    "primaryMonitor": "Écran principal"
-  },
   "diskHealth": {
     "title": "Santé du disque",
     "refresh": "Actualiser",
@@ -1162,6 +1153,61 @@
     "partitions": "partitions",
     "loadError": "Échec du chargement",
     "retry": "Réessayer"
+  },
+  "screenRecord": {
+    "title": "Enregistrement d'écran",
+    "description": "Enregistrement d'écran accéléré par matériel avec capture haute fréquence",
+    "loading": "Chargement...",
+    "previewWaiting": "En attente du démarrage de l'enregistrement...",
+    "recording": "Enregistrement",
+    "idle": "Inactif",
+    "openPreview": "Ouvrir la fenêtre d'aperçu",
+    "closePreview": "Fermer l'aperçu",
+    "settings": {
+      "title": "Paramètres d'enregistrement",
+      "source": "Source de capture",
+      "display": "Affichage",
+      "window": "Fenêtre",
+      "windowSrc": "Fenêtre d'application",
+      "fps": "Fréquence d'images",
+      "resolution": "Résolution",
+      "original": "Original",
+      "bitrate": "Débit",
+      "codec": "Encodeur",
+      "container": "Format",
+      "captureCursor": "Capturer le curseur",
+      "savePath": "Chemin d'enregistrement",
+      "selectPath": "Choisir l'emplacement"
+    },
+    "controls": {
+      "start": "Démarrer l'enregistrement",
+      "stop": "Arrêter l'enregistrement",
+      "recording": "Enregistrement",
+      "paused": "En pause"
+    },
+    "stats": {
+      "title": "Statistiques",
+      "lastRecording": "Dernier enregistrement",
+      "elapsed": "Temps écoulé",
+      "targetFps": "FPS cible",
+      "captureFps": "FPS de capture",
+      "outputFps": "FPS de sortie",
+      "droppedFrames": "Images perdues",
+      "totalFrames": "Total d'images",
+      "fileSize": "Taille du fichier",
+      "currentBitrate": "Débit actuel"
+    },
+    "warnings": {
+      "refreshRateLow": "La fréquence de rafraîchissement ({{hz}}Hz) est inférieure au FPS cible ({{fps}}fps). La duplication d'images sera utilisée.",
+      "noDisplayFound": "Aucun affichage capturable trouvé",
+      "savePathRequired": "Veuillez d'abord sélectionner un chemin d'enregistrement",
+      "encodingError": "Erreur d'encodage: {{message}}"
+    },
+    "messages": {
+      "recordingStarted": "Enregistrement démarré",
+      "recordingStopped": "Enregistrement arrêté, fichier enregistré sous: {{path}}",
+      "recordingError": "Erreur d'enregistrement: {{message}}"
+    }
   }
 }
 

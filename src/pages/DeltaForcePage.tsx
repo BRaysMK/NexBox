@@ -115,6 +115,7 @@ function PasswordCard() {
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const subTextColor = useColorModeValue("#000000", "#888888");
+  const textColor = useColorModeValue("#000000", "#e0e0e0");
   const cardItemBg = useColorModeValue("gray.50", "#1a1a1a");
   const cardItemHoverBg = useColorModeValue("gray.100", "#222222");
   const { liquidGlassEnabled } = useBackground();
@@ -159,7 +160,7 @@ function PasswordCard() {
 
   const content = (
     <VStack align="stretch" spacing={4}>
-      <Text fontWeight="semibold" fontSize="md" color="white">
+      <Text fontWeight="semibold" fontSize="md" color={textColor}>
         {t("deltaForce.dailyPassword")}
       </Text>
       {isLoading ? (
@@ -571,7 +572,20 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const { t } = useTranslation();
   const toast = useToast();
   const { getActiveColor } = useThemeColor();
-  const { liquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
+  const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (liquidGlassEnabled) {
+      const timer = setTimeout(() => setShowBlur(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBlur(false);
+    }
+  }, [liquidGlassEnabled]);
+
+  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+
   const primaryColor = getActiveColor();
   const textColor = useColorModeValue("#000000", "#e0e0e0");
   const subTextColor = useColorModeValue("#000000", "#888888");
@@ -955,10 +969,10 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
       )}
 
       <Modal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} isCentered size="md">
-        <ModalOverlay backdropFilter={liquidGlassEnabled ? "blur(8px)" : "blur(4px)"} />
+        <ModalOverlay backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px)` : "blur(4px)"} />
         <ModalContent
           bg={liquidGlassEnabled ? useColorModeValue("rgba(255,255,255,0.2)", "rgba(0,0,0,0.25)") : useColorModeValue("white", "#1a1a1a")}
-          backdropFilter={liquidGlassEnabled ? "blur(16px)" : undefined}
+          backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px)` : undefined}
           borderColor={liquidGlassEnabled ? useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.08)") : undefined}
           color={useColorModeValue("#000", "#fff")}
         >

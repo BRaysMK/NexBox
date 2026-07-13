@@ -15,7 +15,7 @@
  * 三层完全独立，播放期间 ExpandedPlayer 零 re-render
  */
 
-import { useEffect, useRef, useMemo, useState, memo, useCallback } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 import { Box, VStack, Spinner, Text } from "@chakra-ui/react";
 import { Music as MusicIcon } from "lucide-react";
 import type { KaraokeLine } from "@/types/music";
@@ -32,8 +32,6 @@ interface KaraokeLyricsViewProps {
   scrollbarSx: Record<string, unknown>;
   audioRef?: HTMLAudioElement | null;
 }
-
-const RENDER_RANGE = 8;
 
 /**
  * 根据当前播放时间计算 activeIndex
@@ -134,20 +132,6 @@ function KaraokeLyricsViewInner({
     }
   }, [activeIndex]);
 
-  // 虚拟化：只渲染当前行 ± RENDER_RANGE 行
-  const { visibleLines, startIdx, endIdx } = useMemo(() => {
-    if (lines.length === 0) return { visibleLines: [], startIdx: 0, endIdx: 0 };
-    const start = Math.max(0, activeIndex - RENDER_RANGE);
-    const end = Math.min(lines.length, activeIndex + RENDER_RANGE + 1);
-    return {
-      visibleLines: lines.slice(start, end),
-      startIdx: start,
-      endIdx: end,
-    };
-  }, [lines, activeIndex]);
-
-  const getItemHeight = useMemo(() => fontSize + 16, [fontSize]);
-
   if (loading) {
     return (
       <VStack py={12}>
@@ -190,28 +174,24 @@ function KaraokeLyricsViewInner({
         flexDirection="column"
         justifyContent="center"
       >
-        {/* 顶部占位 */}
-        {startIdx > 0 && <Box h={`${startIdx * getItemHeight}px`} flexShrink={0} />}
-
         <VStack spacing={3} align="stretch">
-          {visibleLines.map((line, i) => {
-            const actualIdx = startIdx + i;
-            const isActive = actualIdx === activeIndex;
+          {lines.map((line, idx) => {
+            const isActive = idx === activeIndex;
             return (
               <Box
-                key={actualIdx}
-                data-lyric-idx={actualIdx}
+                key={idx}
+                data-lyric-idx={idx}
                 py={1}
                 flexShrink={0}
                 sx={{
                   transition: "all 0.3s ease",
-                  opacity: isActive ? 1 : 0.4,
+                  opacity: isActive ? 1 : 0.55,
                   transform: isActive ? "scale(1.02)" : "scale(1)",
                 }}
               >
                 <KaraokeLyricLine
                   line={line}
-                  nextLine={lines[actualIdx + 1]}
+                  nextLine={lines[idx + 1]}
                   isActive={isActive}
                   fontSize={fontSize}
                   activeColor={activeColor}
@@ -224,11 +204,6 @@ function KaraokeLyricsViewInner({
             );
           })}
         </VStack>
-
-        {/* 底部占位 */}
-        {endIdx < lines.length && (
-          <Box h={`${(lines.length - endIdx) * getItemHeight}px`} flexShrink={0} />
-        )}
       </Box>
     </Box>
   );

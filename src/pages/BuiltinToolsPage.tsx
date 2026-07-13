@@ -12,7 +12,6 @@ import {
   Layout,
   Cpu,
   Zap,
-  Video,
   Monitor,
   HardDrive,
 } from "lucide-react";
@@ -105,14 +104,6 @@ const tools: ViewItem[] = [
     color: "#76B900",
     beta: true,
   },
-  // {
-  //   id: "screen-record",
-  //   path: "/screen-record",
-  //   icon: Video,
-  //   titleKey: "sidebar.screenRecord",
-  //   descriptionKey: "builtinTools.screenRecordDesc",
-  //   color: "#E74C3C",
-  //   },
 ];
 
 export default function BuiltinToolsPage() {

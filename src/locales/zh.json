@@ -52,8 +52,8 @@
     "epicFree": "喜加一",
     "dynamicIsland": "灵动岛",
     "nvidiaDriver": "显卡设置（仅NVIDIA）",
-    "screenRecord": "屏幕录制",
-    "diskHealth": "磁盘健康"
+    "diskHealth": "磁盘健康",
+"screenRecord": "屏幕录制"
   },
   "optimization": {
     "pageTitle": "优化",
@@ -495,7 +495,16 @@
     "rgbGamma": "RGB 通道伽马",
     "rGamma": "红色",
     "gGamma": "绿色",
-    "bGamma": "蓝色"
+    "bGamma": "蓝色",
+    "myPresets": "我的滤镜预设",
+    "noPresets": "还没有自定义预设\n调整参数后点击「另存为预设」保存",
+    "saveAsPreset": "另存为预设",
+    "presetNamePlaceholder": "输入预设名称...",
+    "savePresetSuccess": "预设已保存",
+    "deletePreset": "删除预设",
+    "deletePresetConfirm": "确定删除此预设？",
+    "deletePresetSuccess": "预设已删除",
+    "save": "保存"
   },
   "floatingNav": {
     "title": "悬浮导航框",
@@ -550,6 +559,14 @@
       "crossDot": "十字+点",
       "circleCross": "圆形+十字"
     }
+  },
+  "hardwareReport": {
+    "export": "导出报告",
+    "selectPath": "选择导出位置",
+    "exporting": "正在生成报告...",
+    "exportSuccess": "报告导出成功",
+    "exportFailed": "导出失败",
+    "recorderNotStarted": "记录器未启动，请稍后重试"
   },
   "overlayPanel": {
     "title": "悬浮框",
@@ -773,8 +790,8 @@
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
     "dynamicIslandDesc": "屏幕顶部灵动岛，显示网速/硬件/音乐/通知",
     "nvidiaDriverDesc": "通过 NVAPI 直接控制 NVIDIA 驱动图形设置",
-    "screenRecordDesc": "录制屏幕或窗口，支持分辨率与帧率调节",
     "diskHealthDesc": "检测硬盘健康状态与SMART信息",
+"screenRecordDesc": "高性能屏幕录制（硬件编码）",
     "resolutionManagement": "显示器分辨率管理",
     "selectDisplay": "选择显示器",
     "selectResolution": "选择分辨率",
@@ -840,6 +857,8 @@
       "homeHardwareModelDesc": "在主页显示 CPU/GPU/内存/主板/硬盘的型号摘要",
       "searchBarLabel": "搜索框",
       "searchBarDesc": "在标题栏显示全局搜索框",
+      "feedbackLabel": "问题反馈卡片",
+      "feedbackDesc": "在首页底部显示问题反馈卡片",
       "splash": "动画",
       "splashLogoLabel": "启动动画 Logo",
       "splashLogoDesc": "自定义启动动画中显示的 Logo 图片",
@@ -893,6 +912,7 @@
       "liquidGlass": "液态玻璃",
       "liquidGlassLabel": "液态玻璃",
       "liquidGlassDesc": "启用后，部分界面将使用「液态玻璃」效果，这可能会影响性能",
+      "liquidGlassBlurLabel": "模糊程度",
       "customBackground": "自定义背景",
       "customBackgroundLabel": "启用自定义背景",
       "imageUrlPlaceholder": "输入图片URL或点击上传",
@@ -914,6 +934,8 @@
       "hoverOpacity": "悬停透明度",
       "activeOpacity": "激活透明度",
       "borderOpacity": "边框透明度",
+      "backgroundBlurLabel": "背景模糊",
+      "backgroundBlurHint": "对所有背景模式生效（预设 / 图片 / 视频）",
       "resetToDefault": "恢复默认",
       "presetColors": {
         "cyan": "青色",
@@ -1447,37 +1469,6 @@
     "islandToggleDesc": "使用快捷键显示或隐藏灵动岛",
     "saved": "快捷键已保存"
   },
-  "screenRecord": {
-    "title": "屏幕录制",
-    "mode": "录制模式",
-    "mode.fullscreen": "全屏录制",
-    "mode.window": "窗口录制",
-    "targetDisplay": "目标显示器",
-    "targetWindow": "目标窗口",
-    "noWindow": "未选择窗口",
-    "resolution": "分辨率",
-    "resolution.original": "原始分辨率",
-    "fps": "帧率",
-    "format": "输出格式",
-    "quality": "画质",
-    "savePath": "保存位置",
-    "browse": "浏览...",
-    "startRecording": "开始录制",
-    "pauseRecording": "暂停录制",
-    "resumeRecording": "继续录制",
-    "stopRecording": "停止录制",
-    "recording": "录制中...",
-    "paused": "已暂停",
-    "duration": "录制时长",
-    "fileSize": "文件大小",
-    "currentFps": "实时帧率",
-    "saveSuccess": "录制完成，文件已保存至：",
-    "saveFailed": "录制保存失败",
-    "noDisplays": "未检测到显示器",
-    "selectWindow": "请选择一个窗口",
-    "captureCursor": "捕获鼠标光标",
-    "primaryMonitor": "主显示器"
-  },
   "diskHealth": {
     "title": "磁盘健康检测",
     "refresh": "刷新",
@@ -1495,6 +1486,61 @@
     "partitions": "个分区",
     "loadError": "加载失败",
     "retry": "重试"
+  },
+  "screenRecord": {
+    "title": "屏幕录制",
+    "description": "硬件加速屏幕录制，支持高帧率捕获",
+    "loading": "加载中...",
+    "previewWaiting": "等待录制开始...",
+    "recording": "录制中",
+    "idle": "待机",
+    "openPreview": "打开预览窗口",
+    "closePreview": "关闭预览",
+    "settings": {
+      "title": "录制设置",
+      "source": "采集源",
+      "display": "显示器",
+      "window": "窗口",
+      "windowSrc": "应用窗口",
+      "fps": "帧率",
+      "resolution": "分辨率",
+      "original": "原始",
+      "bitrate": "码率",
+      "codec": "编码器",
+      "container": "格式",
+      "captureCursor": "采集光标",
+      "savePath": "保存路径",
+      "selectPath": "选择保存位置"
+    },
+    "controls": {
+      "start": "开始录制",
+      "stop": "停止录制",
+      "recording": "录制中",
+      "paused": "已暂停"
+    },
+    "stats": {
+      "title": "录制统计",
+      "lastRecording": "上次录制",
+      "elapsed": "已录制时长",
+      "targetFps": "目标帧率",
+      "captureFps": "采集帧率",
+      "outputFps": "输出帧率",
+      "droppedFrames": "丢帧数",
+      "totalFrames": "总帧数",
+      "fileSize": "文件大小",
+      "currentBitrate": "当前码率"
+    },
+    "warnings": {
+      "refreshRateLow": "显示器刷新率 ({{hz}}Hz) 低于目标帧率 ({{fps}}fps)，将通过补帧达到目标帧率",
+      "noDisplayFound": "未找到可采集的显示器",
+      "savePathRequired": "请先选择保存路径",
+      "encodingError": "编码错误: {{message}}"
+    },
+    "messages": {
+      "recordingStarted": "录制已开始",
+      "recordingStopped": "录制已停止，文件已保存到: {{path}}",
+      "recordingError": "录制出错: {{message}}"
+    }
   }
 }
 

@@ -49,8 +49,8 @@
         "dlssPreset": "デルタフォースDLSS設定",
         "epicFree": "Epic 無料ゲーム",
         "dynamicIsland": "ダイナミックアイランド",
-        "screenRecord": "画面録画",
-    "diskHealth": "ディスク健全性"
+    "diskHealth": "ディスク健全性",
+"screenRecord": "画面録画"
     },
   "optimization": {
     "pageTitle": "最適化",
@@ -548,7 +548,16 @@
     "previewFiltered": "フィルター",
     "previewDisabledNote": "フィルター無効 · プレビューのみ",
     "paramsUpdated": "パラメータを更新しました",
-    "paramsUpdatedHint": "フィルタースイッチを手動で有効にしてください"
+    "paramsUpdatedHint": "フィルタースイッチを手動で有効にしてください",
+    "myPresets": "マイプリセット",
+    "noPresets": "カスタムプリセットはまだありません\nパラメータを調整して「プリセットとして保存」をクリック",
+    "saveAsPreset": "プリセットとして保存",
+    "presetNamePlaceholder": "プリセット名を入力...",
+    "savePresetSuccess": "プリセットを保存しました",
+    "deletePreset": "プリセットを削除",
+    "deletePresetConfirm": "このプリセットを削除しますか？",
+    "deletePresetSuccess": "プリセットを削除しました",
+    "save": "保存"
   },
 "floatingNav": {
     "title": "フローティングナビゲーションボックス",
@@ -603,6 +612,14 @@
       "crossDot": "十字+ドット",
       "circleCross": "円+十字"
     }
+  },
+  "hardwareReport": {
+    "export": "レポートをエクスポート",
+    "selectPath": "エクスポート先を選択",
+    "exporting": "レポートを生成中...",
+    "exportSuccess": "レポートのエクスポートに成功しました",
+    "exportFailed": "エクスポートに失敗しました",
+    "recorderNotStarted": "レコーダーが起動していません。後でもう一度お試しください"
   },
   "overlayPanel": {
     "title": "オーバーレイパネル",
@@ -806,8 +823,8 @@
     "shaderCacheDesc": "NVIDIA/AMDのシェーダーキャッシュをクリーンアップしてディスクスペースを解放",
     "dlssPresetDesc": "DLSSモデルプリセットを切り替えてゲームグラフィックを最適化",
         "dynamicIslandDesc": "画面上部に表示されるフローティングアイランド、ネット速度/ハードウェア/音楽/通知を表示",
-        "screenRecordDesc": "画面またはウィンドウを録画、解像度とフレームレート調整可能",
-    "diskHealthDesc": "ディスクの健全性とSMART情報を確認"
+    "diskHealthDesc": "ディスクの健全性とSMART情報を確認",
+    "screenRecordDesc": "高性能画面録画（ハードウェアエンコード）"
     },
   "gpuRename": {
     "title": "GPU名前変更",
@@ -917,6 +934,8 @@
       "randomQuoteDesc": "ホームページにランダム名言カードを表示",
       "gameLauncherLabel": "クイック起動",
       "gameLauncherDesc": "ホームページにクイック起動カードを表示",
+      "feedbackLabel": "フィードバックバナー",
+      "feedbackDesc": "ホームページの下部にフィードバックバナーを表示",
       "splash": "アニメーション",
       "splashLogoLabel": "スプラッシュロゴ",
       "splashLogoDesc": "起動時に表示されるロゴ画像をカスタマイズ",
@@ -970,6 +989,7 @@
       "liquidGlass": "リキッドガラス",
       "liquidGlassLabel": "リキッドガラス",
       "liquidGlassDesc": "有効にすると、一部のインターフェースで「リキッドガラス」効果を使用します。これによりパフォーマンスに影響する可能性があります",
+      "liquidGlassBlurLabel": "ぼかし強度",
       "customBackground": "カスタム背景",
       "customBackgroundLabel": "カスタム背景を有効化",
       "imageUrlPlaceholder": "画像URLを入力するか、クリックしてアップロード",
@@ -989,6 +1009,8 @@
         "hoverOpacity": "ホバー時の不透明度",
         "activeOpacity": "アクティブ時の不透明度",
         "borderOpacity": "ボーダーの不透明度",
+        "backgroundBlurLabel": "背景ぼかし",
+        "backgroundBlurHint": "すべての背景モードに適用（プリセット / 画像 / 動画）",
         "resetToDefault": "デフォルトにリセット",
         "uploadVideo": "動画をアップロード",
         "presetColors": {
@@ -1114,37 +1136,6 @@
     "filterToggleDesc": "ショートカットでフィルターを有効/無効",
     "saved": "ホットキーを保存しました"
   },
-  "screenRecord": {
-    "title": "画面録画",
-    "mode": "録画モード",
-    "mode.fullscreen": "全画面",
-    "mode.window": "ウィンドウ",
-    "targetDisplay": "対象ディスプレイ",
-    "targetWindow": "対象ウィンドウ",
-    "noWindow": "ウィンドウ未選択",
-    "resolution": "解像度",
-    "resolution.original": "オリジナル",
-    "fps": "フレームレート",
-    "format": "出力形式",
-    "quality": "画質",
-    "savePath": "保存場所",
-    "browse": "参照...",
-    "startRecording": "録画開始",
-    "pauseRecording": "一時停止",
-    "resumeRecording": "再開",
-    "stopRecording": "停止",
-    "recording": "録画中...",
-    "paused": "一時停止中",
-    "duration": "録画時間",
-    "fileSize": "ファイルサイズ",
-    "currentFps": "現在のFPS",
-    "saveSuccess": "録画が完了しました：",
-    "saveFailed": "録画の保存に失敗しました",
-    "noDisplays": "ディスプレイが見つかりません",
-    "selectWindow": "ウィンドウを選択してください",
-    "captureCursor": "カーソルをキャプチャ",
-    "primaryMonitor": "プライマリモニター"
-  },
   "diskHealth": {
     "title": "ディスク健全性",
     "refresh": "更新",
@@ -1162,6 +1153,61 @@
     "partitions": "パーティション",
     "loadError": "読み込み失敗",
     "retry": "再試行"
+  },
+  "screenRecord": {
+    "title": "画面録画",
+    "description": "ハードウェアアクセラレーション画面録画、高フレームレートキャプチャ対応",
+    "loading": "読み込み中...",
+    "previewWaiting": "録画開始を待っています...",
+    "recording": "録画中",
+    "idle": "待機中",
+    "openPreview": "プレビューウィンドウを開く",
+    "closePreview": "プレビューを閉じる",
+    "settings": {
+      "title": "録画設定",
+      "source": "キャプチャソース",
+      "display": "ディスプレイ",
+      "window": "ウィンドウ",
+      "windowSrc": "アプリウィンドウ",
+      "fps": "フレームレート",
+      "resolution": "解像度",
+      "original": "オリジナル",
+      "bitrate": "ビットレート",
+      "codec": "エンコーダー",
+      "container": "フォーマット",
+      "captureCursor": "カーソルをキャプチャ",
+      "savePath": "保存パス",
+      "selectPath": "保存場所を選択"
+    },
+    "controls": {
+      "start": "録画開始",
+      "stop": "録画停止",
+      "recording": "録画中",
+      "paused": "一時停止"
+    },
+    "stats": {
+      "title": "録画統計",
+      "lastRecording": "前回の録画",
+      "elapsed": "録画時間",
+      "targetFps": "目標FPS",
+      "captureFps": "キャプチャFPS",
+      "outputFps": "出力FPS",
+      "droppedFrames": "ドロップフレーム",
+      "totalFrames": "総フレーム数",
+      "fileSize": "ファイルサイズ",
+      "currentBitrate": "現在のビットレート"
+    },
+    "warnings": {
+      "refreshRateLow": "ディスプレイのリフレッシュレート ({{hz}}Hz) が目標FPS ({{fps}}fps) より低いです。フレーム補間で目標FPSに到達します。",
+      "noDisplayFound": "キャプチャ可能なディスプレイが見つかりません",
+      "savePathRequired": "保存パスを先に選択してください",
+      "encodingError": "エンコードエラー: {{message}}"
+    },
+    "messages": {
+      "recordingStarted": "録画を開始しました",
+      "recordingStopped": "録画を停止しました。ファイル保存先: {{path}}",
+      "recordingError": "録画エラー: {{message}}"
+    }
   }
 }
 

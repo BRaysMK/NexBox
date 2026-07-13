@@ -33,7 +33,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const bgColor = useColorModeValue("#fafafa", "#0a0a0a");
-  const { backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, activePresetIndex, presetBackgrounds } = useBackground();
+  const { backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, activePresetIndex, presetBackgrounds, backgroundBlur } = useBackground();
   const { config } = useThemeColor();
   const navPosition = useNavPosition();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -151,6 +151,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             bottom={0}
             zIndex={-1}
             opacity={layer.fading ? 0 : 1}
+            overflow="hidden"
             transition={layer.fading ? "opacity 0.5s ease-in-out" : undefined}
             animation={!layer.fading ? "bgFadeIn 0.5s ease-in-out" : undefined}
           >
@@ -162,9 +163,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                 height: "100%",
                 objectFit: "cover",
                 display: "block",
-                // GPU 合成层：避免背景图层重绘时影响悬浮框等覆盖层性能
-                willChange: "transform" as any,
-                transform: "translateZ(0)",
+                filter: backgroundBlur > 0 ? `blur(${backgroundBlur}px)` : undefined,
+                willChange: backgroundBlur > 0 ? "filter" : undefined,
               }}
             />
           </Box>
@@ -196,6 +196,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               width: "100%",
               height: "100%",
               objectFit: "cover",
+              filter: backgroundBlur > 0 ? `blur(${backgroundBlur}px)` : undefined,
             }}
           />
         </Box>

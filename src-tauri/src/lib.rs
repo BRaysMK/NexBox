@@ -10,7 +10,8 @@ mod game_launcher;
 mod game_ping;
 mod gpu_rename;
 mod hardware;
-mod heart_rate;
+mod hardware_report;
+
 mod hotkey;
 mod island;
 mod music;
@@ -19,7 +20,7 @@ mod netease_lyrics;
 mod nvapi;
 mod optimization;
 mod overlay_panel;
-mod screen_record;
+
 
 mod sensor;
 mod shader_cache;
@@ -67,6 +68,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // 初始化音乐 API 和音频代理
             let app_handle_for_music = app.handle().clone();
@@ -114,6 +116,7 @@ pub fn run() {
             sensor::start_sensor_process(app);
             utils::sys_info::check_and_send_statistics(app);
             overlay_panel::start_hardware_poller();
+            hardware_report::start_recording();
 
             // 初始化 ACE 自动检测（读取持久化配置并启动后台任务）
             let app_handle = app.handle().clone();
@@ -232,6 +235,8 @@ pub fn run() {
         music_api::music_lyric,
         music_api::music_personalized,
         music_api::music_recommend_songs,
+        music_api::music_artist_search,
+        music_api::music_artist_songs,
         music_api::music_open_login_window,
         music_api::audio_proxy::cmd_get_proxy_port,
         downloader::download_file,
@@ -463,6 +468,10 @@ pub fn run() {
         display_filter::get_custom_filter_settings,
         display_filter::save_custom_filter_settings,
         display_filter::export_custom_filter,
+        display_filter::get_user_filter_presets,
+        display_filter::save_user_filter_preset,
+        display_filter::apply_user_filter_preset,
+        display_filter::delete_user_filter_preset,
         display_filter::select_icc_file,
         display_filter::import_icc_profile,
         display_filter::get_icc_presets,
@@ -487,16 +496,13 @@ pub fn run() {
         overlay_panel::reset_overlay_position,
         overlay_panel::run_pawnio_setup,
 
+        hardware_report::export_hardware_report,
+        hardware_report::get_hardware_recording_status,
+        hardware_report::clear_hardware_data,
+
         sensor::get_lhm_cpu_load,
         sensor::get_lhm_cpu_status,
         sensor::get_lhm_gpu_status,
-        heart_rate::scan_ble_devices,
-        heart_rate::connect_ble_device,
-        heart_rate::disconnect_ble_device,
-        heart_rate::get_heart_rate_data,
-        heart_rate::get_ble_connection_status,
-        heart_rate::start_advert_hr_listen,
-        heart_rate::stop_advert_hr_listen,
 
         game_ping::get_current_ping,
         hotkey::get_overlay_hotkey,
@@ -527,6 +533,7 @@ pub fn run() {
         game_launcher::search_delta_force_launcher,
         game_launcher::get_default_delta_force_game,
         game_launcher::select_exe_file,
+        game_launcher::get_file_icon,
         gpu_rename::get_gpu_info,
         gpu_rename::get_gpu_options,
         gpu_rename::apply_gpu_rename,
@@ -570,21 +577,11 @@ pub fn run() {
             island::force_window_topmost,
             island::is_widget_visible,
             // === MCTier 命令 ===
-            // === 屏幕录制命令 ===
-            screen_record::enumerate_screen_record_displays,
-            screen_record::enumerate_screen_record_windows,
-            screen_record::start_screen_recording,
-            screen_record::pause_screen_recording,
-            screen_record::resume_screen_recording,
-            screen_record::stop_screen_recording,
-            screen_record::get_screen_recording_status,
-        screen_record::get_recordings_folder,
-        screen_record::pick_recording_save_path,
-        utils::cursor::get_cursor_position,
-        utils::cursor::set_desktop_lyrics_click_through,
-        utils::lyrics_btn::show_lyrics_unlock_btn,
-        utils::lyrics_btn::hide_lyrics_unlock_btn,
-        utils::lyrics_btn::unlock_lyrics,
+            utils::cursor::get_cursor_position,
+            utils::cursor::set_desktop_lyrics_click_through,
+            utils::lyrics_btn::show_lyrics_unlock_btn,
+            utils::lyrics_btn::hide_lyrics_unlock_btn,
+                        utils::lyrics_btn::unlock_lyrics,
 
     ])
         .build(tauri::generate_context!())
@@ -598,11 +595,10 @@ pub fn run() {
                 display_filter::cleanup();
                 overlay_panel::cleanup();
                 crosshair::cleanup();
-                screen_record::cleanup();
-                heart_rate::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);
                 nvapi::cleanup();
+                hardware_report::stop_recording();
             }
             _ => {}
         }

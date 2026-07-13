@@ -28,6 +28,10 @@ pub struct Artist {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mid: Option<String>,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pic_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub music_size: Option<i64>,
 }
 
 /// 歌单

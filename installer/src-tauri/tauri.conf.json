@@ -13,12 +13,12 @@
     "windows": [
       {
         "title": "新境盒 安装程序",
-        "width": 700,
-        "height": 520,
-        "minWidth": 700,
-        "minHeight": 520,
-        "maxWidth": 700,
-        "maxHeight": 520,
+        "width": 800,
+        "height": 620,
+        "minWidth": 800,
+        "minHeight": 620,
+        "maxWidth": 800,
+        "maxHeight": 620,
         "resizable": false,
         "center": true,
         "decorations": false

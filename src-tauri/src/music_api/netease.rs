@@ -166,6 +166,13 @@ fn map_artists(raw: &[Value]) -> Vec<Artist> {
                         .map(|n| n.to_string()),
                     mid: a.get("mid").and_then(|v| v.as_str()).map(|s| s.to_string()),
                     name: name.to_string(),
+                    pic_url: a
+                        .get("picUrl")
+                        .or_else(|| a.get("img1v1Url"))
+                        .or_else(|| a.get("cover"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
+                    music_size: a.get("musicSize").and_then(|v| v.as_i64()),
                 })
             }
         })
@@ -826,4 +833,130 @@ pub async fn recommend_songs(cookie: &str) -> Result<Vec<Song>, String> {
         .unwrap_or_default();
 
     Ok(songs.iter().map(map_song_record).collect())
+}
+
+/// 搜索歌手 (使用 cloudsearch type=100)
+pub async fn artist_search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Artist>, String> {
+    let client = build_client();
+    let url = "https://music.163.com/api/cloudsearch/get/web";
+    let body = format!(
+        "s={}&type=100&limit={}&offset=0",
+        urlencoding::encode(keywords),
+        limit
+    );
+
+    let resp = client
+        .post(url)
+        .header(USER_AGENT, NETEASE_USER_AGENT)
+        .header(REFERER, "https://music.163.com/")
+        .header(COOKIE, cookie)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("Artist search request failed: {e}"))?;
+
+    let text = resp.text().await.map_err(|e| format!("Failed to read artist search response: {e}"))?;
+    let result: Value = serde_json::from_str(&text).map_err(|e| format!("Failed to parse artist search JSON: {e}"))?;
+
+    log::info!("[NetEase] artist_search response code={}", result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1));
+
+    let artists_raw = result
+        .get("result")
+        .and_then(|r| r.get("artists"))
+        .and_then(|a| a.as_array())
+        .ok_or("No artists in search result")?;
+
+    let artists = map_artists(artists_raw);
+
+    Ok(artists)
+}
+
+/// 获取歌手热门歌曲（参考 Mineradio：先用 EAPI artist/songs，失败回退 artist/top/song）
+pub async fn artist_songs(
+    artist_id: &str,
+    limit: u32,
+    offset: u32,
+    cookie: &str,
+) -> Result<Vec<Song>, String> {
+    let client = build_client();
+
+    // 主策略：EAPI POST /api/artist/songs
+    let mut payload = serde_json::Map::new();
+    payload.insert("id".into(), json!(artist_id));
+    payload.insert("limit".into(), json!(limit));
+    payload.insert("offset".into(), json!(offset));
+    payload.insert("order".into(), json!("hot"));
+
+    let result = post_eapi(&client, "/api/artist/songs", payload, cookie).await?;
+    log::info!("[NetEase] artist_songs EAPI response code={}", result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1));
+
+    let songs_raw = result
+        .get("songs")
+        .or_else(|| result.get("data").and_then(|d| d.get("songs")))
+        .or_else(|| result.get("hotSongs"))
+        .and_then(|s| s.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    // 回退策略：如果 artist/songs 返回空，尝试 artist/top/song
+    let songs_raw = if songs_raw.is_empty() {
+        log::info!("[NetEase] artist_songs empty, trying artist/top/song fallback");
+        let mut fallback_payload = serde_json::Map::new();
+        fallback_payload.insert("id".into(), json!(artist_id));
+
+        match post_eapi(&client, "/api/artist/top/song", fallback_payload, cookie).await {
+            Ok(fb) => {
+                log::info!("[NetEase] artist/top/song response code={}", fb.get("code").and_then(|v| v.as_i64()).unwrap_or(-1));
+                fb.get("songs")
+                    .or_else(|| fb.get("data").and_then(|d| d.get("songs")))
+                    .and_then(|s| s.as_array())
+                    .cloned()
+                    .unwrap_or_default()
+            }
+            Err(e) => {
+                log::warn!("[NetEase] artist/top/song fallback failed: {e}");
+                vec![]
+            }
+        }
+    } else {
+        songs_raw
+    };
+
+    if songs_raw.is_empty() {
+        return Err("No songs in artist result".into());
+    }
+
+    let mut mapped: Vec<Song> = songs_raw.iter().map(map_song_record).collect();
+
+    // 歌手歌曲 API 返回的歌曲可能缺少封面，用 song_detail 补齐
+    let missing: Vec<String> = mapped
+        .iter()
+        .filter(|s| s.cover.is_empty())
+        .map(|s| s.id.clone())
+        .collect();
+
+    if !missing.is_empty() {
+        if let Ok(details) = song_detail(&client, &missing, cookie).await {
+            let id_to_pic: std::collections::HashMap<String, String> = details
+                .iter()
+                .map(|s| (s.id.clone(), s.cover.clone()))
+                .collect();
+            mapped = mapped
+                .iter()
+                .map(|s| {
+                    if s.cover.is_empty() {
+                        Song {
+                            cover: id_to_pic.get(&s.id).cloned().unwrap_or_default(),
+                            ..s.clone()
+                        }
+                    } else {
+                        s.clone()
+                    }
+                })
+                .collect();
+        }
+    }
+
+    Ok(mapped)
 }

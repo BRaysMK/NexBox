@@ -19,6 +19,8 @@ export interface Artist {
   id?: string;
   mid?: string;
   name: string;
+  pic_url?: string;
+  music_size?: number;
 }
 
 export interface Playlist {

@@ -49,8 +49,8 @@
         "dlssPreset": "三角洲DLSS設定",
         "epicFree": "喜加一",
         "dynamicIsland": "動態島",
-        "screenRecord": "螢幕錄製",
-    "diskHealth": "磁碟健康"
+    "diskHealth": "磁碟健康",
+"screenRecord": "螢幕錄製"
     },
   "optimization": {
     "pageTitle": "優化",
@@ -530,7 +530,16 @@
     "previewFiltered": "濾鏡",
     "previewDisabledNote": "濾鏡未啟用 · 僅預覽效果",
     "paramsUpdated": "參數已更新",
-    "paramsUpdatedHint": "請手動開啟濾鏡開關以生效"
+    "paramsUpdatedHint": "請手動開啟濾鏡開關以生效",
+    "myPresets": "我的濾鏡預設",
+    "noPresets": "還沒有自訂預設\n調整參數後點擊「另存為預設」儲存",
+    "saveAsPreset": "另存為預設",
+    "presetNamePlaceholder": "輸入預設名稱...",
+    "savePresetSuccess": "預設已儲存",
+    "deletePreset": "刪除預設",
+    "deletePresetConfirm": "確定刪除此預設？",
+    "deletePresetSuccess": "預設已刪除",
+    "save": "儲存"
   },
 "floatingNav": {
     "title": "懸浮導航框",
@@ -585,6 +594,14 @@
       "crossDot": "十字+點",
       "circleCross": "圓形+十字"
     }
+  },
+  "hardwareReport": {
+    "export": "匯出報告",
+    "selectPath": "選擇匯出位置",
+    "exporting": "正在產生報告...",
+    "exportSuccess": "報告匯出成功",
+    "exportFailed": "匯出失敗",
+    "recorderNotStarted": "記錄器未啟動，請稍後重試"
   },
   "overlayPanel": {
     "title": "懸浮框",
@@ -788,8 +805,8 @@
     "shaderCacheDesc": "清理 NVIDIA/AMD 著色器快取釋放磁碟空間",
     "dlssPresetDesc": "切換DLSS模型預設以優化遊戲畫質",
         "dynamicIslandDesc": "螢幕頂部懸浮島，顯示網速/硬體/音樂/通知",
-        "screenRecordDesc": "錄製螢幕或視窗，支援解析度與幀率調節",
-    "diskHealthDesc": "檢測硬碟健康狀態與SMART資訊"
+    "diskHealthDesc": "檢測硬碟健康狀態與SMART資訊",
+    "screenRecordDesc": "高效能螢幕錄製（硬體編碼）"
     },
   "gpuRename": {
     "title": "顯卡改寫",
@@ -899,6 +916,8 @@
       "randomQuoteDesc": "在首頁顯示隨機一言卡片",
       "gameLauncherLabel": "快捷啟動",
       "gameLauncherDesc": "在首頁顯示快捷啟動卡片",
+      "feedbackLabel": "回饋橫幅",
+      "feedbackDesc": "在首頁底部顯示回饋橫幅",
       "splash": "動畫",
       "splashLogoLabel": "啟動動畫 Logo",
       "splashLogoDesc": "自訂啟動動畫中顯示的 Logo 圖片",
@@ -952,6 +971,7 @@
       "liquidGlass": "液態玻璃",
       "liquidGlassLabel": "液態玻璃",
       "liquidGlassDesc": "啟用後，部分介面將使用「液態玻璃」效果，這可能會影響效能",
+      "liquidGlassBlurLabel": "模糊程度",
       "customBackground": "自訂背景",
       "customBackgroundLabel": "啟用自訂背景",
       "imageUrlPlaceholder": "輸入圖片URL或點擊上傳",
@@ -971,6 +991,8 @@
         "hoverOpacity": "懸停透明度",
         "activeOpacity": "啟用透明度",
         "borderOpacity": "邊框透明度",
+        "backgroundBlurLabel": "背景模糊",
+        "backgroundBlurHint": "對所有背景模式生效（預設 / 圖片 / 影片）",
         "resetToDefault": "重置為預設",
         "uploadVideo": "上傳影片",
         "presetColors": {
@@ -1096,37 +1118,6 @@
     "filterToggleDesc": "使用快速鍵開啟或關閉濾鏡",
     "saved": "快速鍵已保存"
   },
-  "screenRecord": {
-    "title": "螢幕錄製",
-    "mode": "錄製模式",
-    "mode.fullscreen": "全螢幕錄製",
-    "mode.window": "視窗錄製",
-    "targetDisplay": "目標顯示器",
-    "targetWindow": "目標視窗",
-    "noWindow": "未選擇視窗",
-    "resolution": "解析度",
-    "resolution.original": "原始解析度",
-    "fps": "幀率",
-    "format": "輸出格式",
-    "quality": "畫質",
-    "savePath": "儲存位置",
-    "browse": "瀏覽...",
-    "startRecording": "開始錄製",
-    "pauseRecording": "暫停錄製",
-    "resumeRecording": "繼續錄製",
-    "stopRecording": "停止錄製",
-    "recording": "錄製中...",
-    "paused": "已暫停",
-    "duration": "錄製時長",
-    "fileSize": "檔案大小",
-    "currentFps": "即時幀率",
-    "saveSuccess": "錄製完成，檔案已儲存至：",
-    "saveFailed": "錄製儲存失敗",
-    "noDisplays": "未檢測到顯示器",
-    "selectWindow": "請選擇一個視窗",
-    "captureCursor": "擷取滑鼠游標",
-    "primaryMonitor": "主顯示器"
-  },
   "diskHealth": {
     "title": "磁碟健康檢測",
     "refresh": "重新整理",
@@ -1144,6 +1135,61 @@
     "partitions": "個分割區",
     "loadError": "載入失敗",
     "retry": "重試"
+  },
+  "screenRecord": {
+    "title": "螢幕錄製",
+    "description": "硬體加速螢幕錄製，支援高幀率擷取",
+    "loading": "載入中...",
+    "previewWaiting": "等待錄製開始...",
+    "recording": "錄製中",
+    "idle": "待機",
+    "openPreview": "開啟預覽視窗",
+    "closePreview": "關閉預覽",
+    "settings": {
+      "title": "錄製設定",
+      "source": "擷取來源",
+      "display": "顯示器",
+      "window": "視窗",
+      "windowSrc": "應用視窗",
+      "fps": "幀率",
+      "resolution": "解析度",
+      "original": "原始",
+      "bitrate": "位元率",
+      "codec": "編碼器",
+      "container": "格式",
+      "captureCursor": "擷取游標",
+      "savePath": "儲存路徑",
+      "selectPath": "選擇儲存位置"
+    },
+    "controls": {
+      "start": "開始錄製",
+      "stop": "停止錄製",
+      "recording": "錄製中",
+      "paused": "已暫停"
+    },
+    "stats": {
+      "title": "錄製統計",
+      "lastRecording": "上次錄製",
+      "elapsed": "已錄製時長",
+      "targetFps": "目標幀率",
+      "captureFps": "擷取幀率",
+      "outputFps": "輸出幀率",
+      "droppedFrames": "丟幀數",
+      "totalFrames": "總幀數",
+      "fileSize": "檔案大小",
+      "currentBitrate": "目前位元率"
+    },
+    "warnings": {
+      "refreshRateLow": "顯示器更新率 ({{hz}}Hz) 低於目標幀率 ({{fps}}fps)，將透過補幀達到目標幀率",
+      "noDisplayFound": "未找到可擷取的顯示器",
+      "savePathRequired": "請先選擇儲存路徑",
+      "encodingError": "編碼錯誤: {{message}}"
+    },
+    "messages": {
+      "recordingStarted": "錄製已開始",
+      "recordingStopped": "錄製已停止，檔案已儲存到: {{path}}",
+      "recordingError": "錄製出錯: {{message}}"
+    }
   }
 }
 

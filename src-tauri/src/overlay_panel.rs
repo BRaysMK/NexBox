@@ -108,8 +108,6 @@ pub struct OverlayHardwareData {
     memory_usage: Option<f64>,
     delta_password: Option<String>,
     game_ping: Option<u32>,
-    heart_rate: Option<u16>,
-    heart_rate_device: Option<String>,
     gpu_fan_speed: Option<u32>,
     gpu_power: Option<u32>,
     gpu_clock: Option<u32>,
@@ -137,8 +135,6 @@ impl Default for OverlayHardwareData {
             memory_usage: None,
             delta_password: None,
             game_ping: None,
-            heart_rate: None,
-            heart_rate_device: None,
             gpu_fan_speed: None,
             gpu_power: None,
             gpu_clock: None,
@@ -255,9 +251,6 @@ fn collect_hardware_data() -> OverlayHardwareData {
         .display_items
         .iter()
         .any(|item| item.id == "netease_lyric" && item.enabled);
-
-    let heart_rate = crate::heart_rate::get_cached_heart_rate();
-    let heart_rate_device = crate::heart_rate::get_heart_rate_device_name();
 
     let current_time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
     let last_time = LAST_LHML_UPDATE.load(std::sync::atomic::Ordering::Relaxed);
@@ -535,8 +528,6 @@ fn collect_hardware_data() -> OverlayHardwareData {
         memory_usage,
         delta_password,
         game_ping,
-        heart_rate,
-        heart_rate_device,
         gpu_fan_speed,
         gpu_power,
         gpu_clock,
@@ -564,10 +555,6 @@ fn collect_hardware_data() -> OverlayHardwareData {
             memory_usage: new_data.memory_usage.or(prev.memory_usage),
             delta_password: new_data.delta_password.or_else(|| prev.delta_password.clone()),
             game_ping: new_data.game_ping.or(prev.game_ping),
-            heart_rate: new_data.heart_rate.or(prev.heart_rate),
-            heart_rate_device: new_data
-                .heart_rate_device
-                .or_else(|| prev.heart_rate_device.clone()),
             gpu_fan_speed: new_data.gpu_fan_speed.or(prev.gpu_fan_speed),
             gpu_power: new_data.gpu_power.or(prev.gpu_power),
             gpu_clock: new_data.gpu_clock.or(prev.gpu_clock),
@@ -985,17 +972,6 @@ mod win32 {
                         None => ("--".to_string(), None),
                     };
                     items.push(DisplayItem { label: "FPS".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: color });
-                }
-                "heart_rate" => {
-                    let val = data.heart_rate.map(|v| format!("{}", v)).unwrap_or_else(|| "--".to_string());
-                    let color = match data.heart_rate {
-                        Some(v) if v < 60 => Some(0x0000FFFFu32),
-                        Some(v) if v < 100 => Some(0x0000FF00u32),
-                        Some(v) if v < 140 => Some(0x0000FFFFu32),
-                        Some(_) => Some(0x000000FFu32),
-                        None => None,
-                    };
-                    items.push(DisplayItem { label: "❤".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: color });
                 }
                 "gpu_fan_speed" => {
                     let val = data.gpu_fan_speed.map(|v| format!("{}RPM", v)).unwrap_or_else(|| "--RPM".to_string());
@@ -2033,7 +2009,30 @@ pub fn start_hardware_poller() {
     thread::spawn(|| {
         while BACKGROUND_POLLER_ACTIVE.load(Ordering::SeqCst) {
             let data = collect_hardware_data();
-            *CURRENT_HARDWARE_DATA.lock().unwrap() = Some(data);
+            *CURRENT_HARDWARE_DATA.lock().unwrap() = Some(data.clone());
+
+            // 推送到硬件报告记录器（timestamp / elapsed_sec 由 push_snapshot 内部填充）
+            crate::hardware_report::push_snapshot(crate::hardware_report::HardwareSnapshot {
+                timestamp: String::new(),
+                elapsed_sec: 0,
+                cpu_usage: data.cpu_usage.map(|v| v as f64),
+                cpu_temp: data.cpu_temp,
+                cpu_clock: data.cpu_clock.map(|v| v as f64),
+                cpu_voltage: data.cpu_voltage,
+                cpu_power: data.cpu_power,
+                gpu_usage: data.gpu_usage.map(|v| v as f64),
+                gpu_temp: data.gpu_temp,
+                gpu_clock: data.gpu_clock.map(|v| v as f64),
+                gpu_voltage: data.gpu_voltage,
+                gpu_power: data.gpu_power.map(|v| v as f64),
+                gpu_fan_speed: data.gpu_fan_speed.map(|v| v as f64),
+                gpu_vram_used: data.gpu_vram_used.map(|v| v as f64),
+                gpu_vram_total: data.gpu_vram_total.map(|v| v as f64),
+                gpu_memory_clock: data.gpu_memory_clock.map(|v| v as f64),
+                memory_usage: data.memory_usage,
+                ssd_temp: data.ssd_temp,
+            });
+
             thread::sleep(Duration::from_millis(1000));
         }
     });
@@ -2046,7 +2045,6 @@ pub fn cleanup() {
     }
     crate::game_ping::cleanup();
     crate::game_fps::cleanup();
-    crate::heart_rate::cleanup();
     #[cfg(target_os = "windows")]
     unsafe {
         win32::shutdown_gdiplus();

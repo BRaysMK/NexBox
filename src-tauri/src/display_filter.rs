@@ -353,53 +353,89 @@ static CUSTOM_SETTINGS: Mutex<Option<HashMap<usize, CustomFilterSettings>>> = Mu
 
 fn get_settings_file_path() -> PathBuf {
     let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    config_dir.join("NexBox").join("filter-settings.json")
+}
+
+fn get_legacy_settings_file_path() -> PathBuf {
+    let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
     config_dir.join("NexBox").join("settings.json")
 }
 
 fn load_custom_settings_from_file() -> HashMap<usize, CustomFilterSettings> {
     let path = get_settings_file_path();
     if path.exists() {
-        match fs::read_to_string(&path) {
-            Ok(content) => {
-                match serde_json::from_str::<serde_json::Value>(&content) {
-                    Ok(json) => {
-                        if let Some(settings_value) = json.get("custom-filter-settings") {
-                            // Try to deserialize as a map first (new format: {"0": {...}, "1": {...}})
-                            if let Ok(map) = serde_json::from_value::<HashMap<String, CustomFilterSettings>>(
-                                settings_value.clone(),
-                            ) {
-                                let result: HashMap<usize, CustomFilterSettings> = map
-                                    .into_iter()
-                                    .filter_map(|(k, v)| k.parse::<usize>().ok().map(|idx| (idx, v)))
-                                    .collect();
-                                if !result.is_empty() {
-                                    return result;
-                                }
-                            }
-                            // Fallback: old format (single CustomFilterSettings object)
-                            match serde_json::from_value::<CustomFilterSettings>(settings_value.clone()) {
-                                Ok(settings) => {
-                                    let mut map = HashMap::new();
-                                    map.insert(0, settings);
-                                    return map;
-                                }
-                                Err(e) => {
-                                    log::error!("解析自定义滤镜设置失败: {}", e);
-                                }
-                            }
+        return load_from_json_file(&path);
+    }
+
+    // Fallback: try legacy path (settings.json) for migration from older versions
+    let legacy_path = get_legacy_settings_file_path();
+    if legacy_path.exists() {
+        if let Ok(content) = fs::read_to_string(&legacy_path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(settings_value) = json.get("custom-filter-settings") {
+                    let result = parse_custom_settings_value(settings_value.clone());
+                    if !result.is_empty() {
+                        // Migrate to new file
+                        if let Some(parent) = path.parent() {
+                            let _ = fs::create_dir_all(parent);
                         }
-                    }
-                    Err(e) => {
-                        log::error!("解析设置文件JSON失败: {}", e);
+                        let string_map: HashMap<String, &CustomFilterSettings> = result
+                            .iter()
+                            .map(|(k, v)| (k.to_string(), v))
+                            .collect();
+                        if let Ok(json_str) = serde_json::to_string_pretty(&serde_json::json!({"custom-filter-settings": string_map})) {
+                            let _ = fs::write(&path, json_str);
+                        }
+                        return result;
                     }
                 }
             }
-            Err(e) => {
-                log::error!("读取设置文件失败: {}", e);
-            }
         }
     }
+
     HashMap::new()
+}
+
+fn load_from_json_file(path: &PathBuf) -> HashMap<usize, CustomFilterSettings> {
+    match fs::read_to_string(path) {
+        Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
+            Ok(json) => {
+                if let Some(settings_value) = json.get("custom-filter-settings") {
+                    let result = parse_custom_settings_value(settings_value.clone());
+                    if !result.is_empty() {
+                        return result;
+                    }
+                }
+            }
+            Err(e) => log::error!("解析滤镜设置文件JSON失败: {}", e),
+        },
+        Err(e) => log::error!("读取滤镜设置文件失败: {}", e),
+    }
+    HashMap::new()
+}
+
+fn parse_custom_settings_value(value: serde_json::Value) -> HashMap<usize, CustomFilterSettings> {
+    if let Ok(map) = serde_json::from_value::<HashMap<String, CustomFilterSettings>>(value.clone()) {
+        let result: HashMap<usize, CustomFilterSettings> = map
+            .into_iter()
+            .filter_map(|(k, v)| k.parse::<usize>().ok().map(|idx| (idx, v)))
+            .collect();
+        if !result.is_empty() {
+            return result;
+        }
+    }
+    // Fallback: old format (single CustomFilterSettings object)
+    match serde_json::from_value::<CustomFilterSettings>(value) {
+        Ok(settings) => {
+            let mut map = HashMap::new();
+            map.insert(0, settings);
+            map
+        }
+        Err(e) => {
+            log::error!("解析自定义滤镜设置失败: {}", e);
+            HashMap::new()
+        }
+    }
 }
 
 fn save_custom_settings_to_file(settings: &HashMap<usize, CustomFilterSettings>) -> Result<(), String> {
@@ -1660,6 +1696,210 @@ pub async fn export_custom_filter(display_index: Option<usize>) -> Result<Option
     {
         Err("此功能仅支持 Windows 系统".to_string())
     }
+}
+
+// ─── User Filter Presets (named, shareable) ───
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct UserFilterPreset {
+    pub id: String,
+    pub name: String,
+    pub temperature: i32,
+    pub brightness: i32,
+    pub contrast: i32,
+    pub saturation: i32,
+    #[serde(default = "default_one_f64")]
+    pub r_gamma: f64,
+    #[serde(default = "default_one_f64")]
+    pub g_gamma: f64,
+    #[serde(default = "default_one_f64")]
+    pub b_gamma: f64,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct UserFilterPresetInfo {
+    pub id: String,
+    pub name: String,
+    pub temperature: i32,
+    pub brightness: i32,
+    pub contrast: i32,
+    pub saturation: i32,
+    pub r_gamma: f64,
+    pub g_gamma: f64,
+    pub b_gamma: f64,
+}
+
+static USER_FILTER_PRESETS: Mutex<Option<Vec<UserFilterPreset>>> = Mutex::new(None);
+
+fn get_user_filter_presets_file_path() -> PathBuf {
+    let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    config_dir.join("NexBox").join("user-filter-presets.json")
+}
+
+fn load_user_filter_presets_from_file() -> Vec<UserFilterPreset> {
+    let path = get_user_filter_presets_file_path();
+    if path.exists() {
+        match fs::read_to_string(&path) {
+            Ok(content) => match serde_json::from_str::<Vec<UserFilterPreset>>(&content) {
+                Ok(presets) => return presets,
+                Err(e) => log::error!("解析用户滤镜预设文件失败: {}", e),
+            },
+            Err(e) => log::error!("读取用户滤镜预设文件失败: {}", e),
+        }
+    }
+    Vec::new()
+}
+
+fn save_user_filter_presets_to_file(presets: &[UserFilterPreset]) -> Result<(), String> {
+    let path = get_user_filter_presets_file_path();
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent).map_err(|e| format!("无法创建目录: {}", e))?;
+        }
+    }
+    let json_str =
+        serde_json::to_string_pretty(presets).map_err(|e| format!("序列化失败: {}", e))?;
+    fs::write(&path, json_str).map_err(|e| format!("无法保存: {}", e))?;
+    Ok(())
+}
+
+fn get_or_load_user_filter_presets() -> Vec<UserFilterPreset> {
+    let mut lock = USER_FILTER_PRESETS.lock().unwrap();
+    if lock.is_none() {
+        let presets = load_user_filter_presets_from_file();
+        *lock = Some(presets.clone());
+        presets
+    } else {
+        lock.as_ref().unwrap().clone()
+    }
+}
+
+#[tauri::command]
+pub async fn get_user_filter_presets() -> Result<Vec<UserFilterPresetInfo>, String> {
+    let presets = get_or_load_user_filter_presets();
+    Ok(presets
+        .iter()
+        .map(|p| UserFilterPresetInfo {
+            id: p.id.clone(),
+            name: p.name.clone(),
+            temperature: p.temperature,
+            brightness: p.brightness,
+            contrast: p.contrast,
+            saturation: p.saturation,
+            r_gamma: p.r_gamma,
+            g_gamma: p.g_gamma,
+            b_gamma: p.b_gamma,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn save_user_filter_preset(
+    id: Option<String>,
+    name: String,
+    temperature: i32,
+    brightness: i32,
+    contrast: i32,
+    saturation: i32,
+    r_gamma: Option<f64>,
+    g_gamma: Option<f64>,
+    b_gamma: Option<f64>,
+) -> Result<UserFilterPresetInfo, String> {
+    let new_preset = UserFilterPreset {
+        id: id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+        name,
+        temperature: temperature.clamp(1000, 10000),
+        brightness: brightness.clamp(50, 150),
+        contrast: contrast.clamp(50, 150),
+        saturation: saturation.clamp(50, 150),
+        r_gamma: r_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
+        g_gamma: g_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
+        b_gamma: b_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
+    };
+
+    let mut lock = USER_FILTER_PRESETS.lock().unwrap();
+    let mut presets = if lock.is_some() {
+        lock.take().unwrap()
+    } else {
+        load_user_filter_presets_from_file()
+    };
+
+    if id.is_some() {
+        // Update existing
+        if let Some(existing) = presets.iter_mut().find(|p| p.id == new_preset.id) {
+            *existing = new_preset.clone();
+        } else {
+            presets.push(new_preset.clone());
+        }
+    } else {
+        presets.push(new_preset.clone());
+    }
+
+    save_user_filter_presets_to_file(&presets)?;
+    *lock = Some(presets);
+
+    Ok(UserFilterPresetInfo {
+        id: new_preset.id,
+        name: new_preset.name,
+        temperature: new_preset.temperature,
+        brightness: new_preset.brightness,
+        contrast: new_preset.contrast,
+        saturation: new_preset.saturation,
+        r_gamma: new_preset.r_gamma,
+        g_gamma: new_preset.g_gamma,
+        b_gamma: new_preset.b_gamma,
+    })
+}
+
+#[tauri::command]
+pub async fn apply_user_filter_preset(
+    display_index: Option<usize>,
+    id: String,
+    is_active: bool,
+) -> Result<FilterResult, String> {
+    let presets = get_or_load_user_filter_presets();
+    let preset = presets
+        .iter()
+        .find(|p| p.id == id)
+        .ok_or("未找到自定义滤镜预设".to_string())?;
+
+    // Forward to set_filter_settings with gamma values
+    set_filter_settings(
+        display_index,
+        preset.temperature,
+        preset.brightness,
+        preset.contrast,
+        preset.saturation,
+        0, // mode = Normal (custom)
+        is_active,
+        Some(preset.r_gamma),
+        Some(preset.g_gamma),
+        Some(preset.b_gamma),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_user_filter_preset(id: String) -> Result<(), String> {
+    let mut lock = USER_FILTER_PRESETS.lock().unwrap();
+    let mut presets = if lock.is_some() {
+        lock.take().unwrap()
+    } else {
+        load_user_filter_presets_from_file()
+    };
+
+    let len_before = presets.len();
+    presets.retain(|p| p.id != id);
+
+    if presets.len() == len_before {
+        *lock = Some(presets);
+        return Err("未找到要删除的自定义滤镜预设".to_string());
+    }
+
+    save_user_filter_presets_to_file(&presets)?;
+    *lock = Some(presets);
+
+    Ok(())
 }
 
 // ─── ICC Profile Support ───

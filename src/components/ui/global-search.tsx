@@ -51,7 +51,7 @@ export function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const toast = useToast();
-  const { liquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const { tools } = useAppStartup();
 
@@ -68,6 +68,19 @@ export function GlobalSearch() {
 
   const activeBg = getActiveColor();
   const activeIconColor = getContrastTextColor();
+
+  const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (liquidGlassEnabled) {
+      const timer = setTimeout(() => setShowBlur(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBlur(false);
+    }
+  }, [liquidGlassEnabled]);
+
+  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
 
   const inputBg = useColorModeValue(
     liquidGlassEnabled ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.9)",
@@ -247,7 +260,13 @@ export function GlobalSearch() {
             borderColor: activeBg,
             boxShadow: `0 0 0 1px ${activeBg}`,
           }}
-          backdropFilter="blur(1px)"
+          backdropFilter={`blur(${effectiveBlur}px)`}
+          sx={{
+            transform: "translateZ(0)",
+            WebkitTransform: "translateZ(0)",
+            willChange: "backdrop-filter, transform",
+            transition: "backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
           pr="60px"
         />
         {!isOpen && (
@@ -277,10 +296,12 @@ export function GlobalSearch() {
           border="1px solid"
           borderColor={inputBorderColor}
           boxShadow="2xl"
-          backdropFilter="blur(1px)"
-          zIndex={1000}
-          py={2}
+          backdropFilter={`blur(${effectiveBlur}px)`}
           sx={{
+            transform: "translateZ(0)",
+            WebkitTransform: "translateZ(0)",
+            willChange: "backdrop-filter, transform",
+            transition: "backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
             "&::-webkit-scrollbar": {
               width: "4px",
             },
@@ -292,6 +313,8 @@ export function GlobalSearch() {
               borderRadius: "2px",
             },
           }}
+          zIndex={1000}
+          py={2}
         >
           {totalResults === 0 ? (
             <Text px={4} py={3} color={noResultColor} fontSize="sm" textAlign="center">

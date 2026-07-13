@@ -3,6 +3,7 @@
 import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { useGlowEffect, getBorderGlowStyle } from "@/hooks/use-glow-effect";
+import { useState, useEffect } from "react";
 
 interface LiquidGlassToolCardProps extends BoxProps {
   children: React.ReactNode;
@@ -22,7 +23,7 @@ export function LiquidGlassToolCard({
   size = "sm",
   ...props 
 }: LiquidGlassToolCardProps) {
-  const { liquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
   
   const defaultBg = useColorModeValue("gray.50", "#111111");
@@ -33,6 +34,19 @@ export function LiquidGlassToolCard({
   const glassHoverBg = useColorModeValue("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");
   const glassBorder = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
   const glowColor = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.5)");
+
+  const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (liquidGlassEnabled) {
+      const timer = setTimeout(() => setShowBlur(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBlur(false);
+    }
+  }, [liquidGlassEnabled]);
+
+  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
 
   const padding = size === "sm" ? 3 : size === "md" ? 4 : 5;
   const borderRadius = size === "sm" ? "lg" : "xl";
@@ -50,6 +64,13 @@ export function LiquidGlassToolCard({
         borderColor={defaultBorder}
         _hover={{ bg: defaultHoverBg }}
         transition="all 0.2s"
+        sx={{
+          transform: "translateZ(0)",
+          WebkitTransform: "translateZ(0)",
+          WebkitBackfaceVisibility: "hidden",
+          backfaceVisibility: "hidden",
+          willChange: "transform",
+        }}
         {...props}
       >
         {children}
@@ -67,8 +88,8 @@ export function LiquidGlassToolCard({
       p={padding}
       border={isDashed ? "1px dashed" : "1px solid"}
       borderColor={glassBorder}
-      backdropFilter="blur(1px)"
-      transition="all 0.2s"
+      backdropFilter={`blur(${effectiveBlur}px)`}
+      transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
       position="relative"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
@@ -78,6 +99,7 @@ export function LiquidGlassToolCard({
         WebkitTransform: "translateZ(0)",
         WebkitBackfaceVisibility: "hidden",
         backfaceVisibility: "hidden",
+        willChange: "backdrop-filter, transform",
       }}
       {...props}
     >

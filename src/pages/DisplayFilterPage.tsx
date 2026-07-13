@@ -24,6 +24,13 @@ import {
   AlertDialogHeader,
   AlertDialogContent,
   AlertDialogOverlay,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
@@ -35,7 +42,7 @@ import { hexToRgba } from "@/lib/color-utils";
 import { 
   Sun, BookOpen, Monitor, Sparkles, RotateCcw, 
   Film, Heart, Palette, Gamepad2, Save, Settings2, ArrowLeft,
-  Upload, Trash2, FileImage, Download
+  Upload, Trash2, FileImage, Download, Bookmark
 } from "lucide-react";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -72,6 +79,18 @@ interface IccPresetInfo {
   id: string;
   name: string;
   description: string;
+}
+
+interface UserFilterPresetInfo {
+  id: string;
+  name: string;
+  temperature: number;
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  r_gamma: number;
+  g_gamma: number;
+  b_gamma: number;
 }
 
 interface DisplayInfo {
@@ -147,6 +166,10 @@ export default function DisplayFilterPage() {
   const [iccPresets, setIccPresets] = useState<IccPresetInfo[]>([]);
   const [activeIccId, setActiveIccId] = useState<string | null>(null);
   const [deleteIccId, setDeleteIccId] = useState<string | null>(null);
+  const [deleteUserPresetId, setDeleteUserPresetId] = useState<string | null>(null);
+  const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
+  const [presetNameInput, setPresetNameInput] = useState("");
+  const [userPresets, setUserPresets] = useState<UserFilterPresetInfo[]>([]);
   // ICC 滤镜预览参数
   const [iccPreviewFilter, setIccPreviewFilter] = useState<string | null>(null);
   const [iccTintColor, setIccTintColor] = useState<string | null>(null);
@@ -172,7 +195,7 @@ export default function DisplayFilterPage() {
   });
   
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const toast = useToast();
 
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
@@ -190,6 +213,19 @@ export default function DisplayFilterPage() {
   const miniGlassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const miniGlassBorder = useColorModeValue("rgba(255,255,255,0.5)", "rgba(255,255,255,0.2)");
   const miniGlassGlow = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.45)");
+
+  const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (liquidGlassEnabled) {
+      const timer = setTimeout(() => setShowBlur(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBlur(false);
+    }
+  }, [liquidGlassEnabled]);
+
+  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
 
   const loadSettings = useCallback(async () => {
     try {
@@ -247,6 +283,15 @@ export default function DisplayFilterPage() {
     }
   }, []);
 
+  const loadUserFilterPresets = useCallback(async () => {
+    try {
+      const result: UserFilterPresetInfo[] = await invoke("get_user_filter_presets");
+      setUserPresets(result);
+    } catch (error) {
+      console.error("Failed to load user filter presets:", error);
+    }
+  }, []);
+
   const loadDisplays = useCallback(async () => {
     try {
       const result: DisplayInfo[] = await invoke("get_displays");
@@ -275,7 +320,8 @@ export default function DisplayFilterPage() {
     loadPresets();
     loadCustomSettings();
     loadIccPresets();
-  }, [loadDisplays, loadSettings, loadPresets, loadCustomSettings, loadIccPresets]);
+    loadUserFilterPresets();
+  }, [loadDisplays, loadSettings, loadPresets, loadCustomSettings, loadIccPresets, loadUserFilterPresets]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -589,6 +635,129 @@ export default function DisplayFilterPage() {
     } finally {
       setIsLoading(false);
       setTimeout(() => setManualPresetChange(false), 100);
+    }
+  };
+
+  const saveCurrentAsPreset = async () => {
+    const name = presetNameInput.trim();
+    if (!name) return;
+
+    const temp = Math.max(1000, Math.min(10000, editValuesRef.current.temperature));
+    const brightness = Math.max(50, Math.min(150, editValuesRef.current.brightness));
+    const contrast = Math.max(50, Math.min(150, editValuesRef.current.contrast));
+    const saturation = Math.max(50, Math.min(150, editValuesRef.current.saturation));
+    const r_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.r_gamma));
+    const g_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.g_gamma));
+    const b_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.b_gamma));
+
+    try {
+      await invoke("save_user_filter_preset", {
+        id: null,
+        name,
+        temperature: temp,
+        brightness,
+        contrast,
+        saturation,
+        rGamma: r_gamma,
+        gGamma: g_gamma,
+        bGamma: b_gamma,
+      });
+      setShowSavePresetDialog(false);
+      setPresetNameInput("");
+      loadUserFilterPresets();
+      toast({
+        title: t("displayFilter.savePresetSuccess"),
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: t("displayFilter.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const applyUserFilterPreset = async (preset: UserFilterPresetInfo) => {
+    setIsLoading(true);
+    setManualPresetChange(true);
+    setActivePresetId("custom");
+    setActiveIccId(null);
+    setIccPreviewFilter(null);
+    setIccTintColor(null);
+    setIccTintOpacity(0);
+
+    try {
+      const result: any = await invoke("apply_user_filter_preset", {
+        displayIndex: activeDisplayIndex,
+        id: preset.id,
+        isActive: settings.is_active,
+      });
+      if (result.success) {
+        setSettings({
+          temperature: preset.temperature,
+          brightness: preset.brightness,
+          contrast: preset.contrast,
+          saturation: preset.saturation,
+          r_gamma: preset.r_gamma,
+          g_gamma: preset.g_gamma,
+          b_gamma: preset.b_gamma,
+          mode: 0,
+          is_active: settings.is_active,
+        });
+        editValuesRef.current = {
+          temperature: preset.temperature,
+          brightness: preset.brightness,
+          contrast: preset.contrast,
+          saturation: preset.saturation,
+          r_gamma: preset.r_gamma,
+          g_gamma: preset.g_gamma,
+          b_gamma: preset.b_gamma,
+        };
+        setInputVersion(v => v + 1);
+        setHasChanges(false);
+      }
+    } catch (error) {
+      toast({
+        title: t("displayFilter.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setManualPresetChange(false), 100);
+    }
+  };
+
+  const handleDeleteUserPreset = async () => {
+    if (!deleteUserPresetId) return;
+    setIsLoading(true);
+    try {
+      await invoke("delete_user_filter_preset", { id: deleteUserPresetId });
+      setDeleteUserPresetId(null);
+      loadUserFilterPresets();
+      toast({
+        title: t("displayFilter.deletePresetSuccess"),
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: t("displayFilter.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -995,13 +1164,15 @@ export default function DisplayFilterPage() {
           borderRadius="lg"
           overflow="hidden"
           bg={liquidGlassEnabled ? miniGlassBg : infoBg}
-          backdropFilter={liquidGlassEnabled ? "blur(6px)" : "none"}
-          sx={liquidGlassEnabled ? {
+          backdropFilter={`blur(${effectiveBlur}px)`}
+          sx={{
             transform: "translateZ(0)",
             WebkitTransform: "translateZ(0)",
             WebkitBackfaceVisibility: "hidden",
             backfaceVisibility: "hidden",
-          } : undefined}
+            willChange: "backdrop-filter, transform",
+          }}
+          transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
           border={liquidGlassEnabled ? "1px solid" : "none"}
           borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
         >
@@ -1102,13 +1273,15 @@ export default function DisplayFilterPage() {
           borderRadius="lg"
           overflow="hidden"
           bg={liquidGlassEnabled ? miniGlassBg : infoBg}
-          backdropFilter={liquidGlassEnabled ? "blur(6px)" : "none"}
-          sx={liquidGlassEnabled ? {
+          backdropFilter={`blur(${effectiveBlur}px)`}
+          sx={{
             transform: "translateZ(0)",
             WebkitTransform: "translateZ(0)",
             WebkitBackfaceVisibility: "hidden",
             backfaceVisibility: "hidden",
-          } : undefined}
+            willChange: "backdrop-filter, transform",
+          }}
+          transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
           border={liquidGlassEnabled ? "1px solid" : "none"}
           borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
         >
@@ -1197,7 +1370,7 @@ export default function DisplayFilterPage() {
         px={3}
         borderRadius="lg"
         bg={liquidGlassEnabled ? miniGlassBg : infoBg}
-        backdropFilter={liquidGlassEnabled ? "blur(6px)" : "none"}
+        backdropFilter={`blur(${effectiveBlur}px)`}
         sx={liquidGlassEnabled ? {
           transform: "translateZ(0)",
           WebkitTransform: "translateZ(0)",
@@ -1263,7 +1436,7 @@ export default function DisplayFilterPage() {
         px={3}
         borderRadius="lg"
         bg={liquidGlassEnabled ? miniGlassBg : infoBg}
-        backdropFilter={liquidGlassEnabled ? "blur(6px)" : "none"}
+        backdropFilter={`blur(${effectiveBlur}px)`}
         sx={liquidGlassEnabled ? {
           transform: "translateZ(0)",
           WebkitTransform: "translateZ(0)",
@@ -1401,14 +1574,15 @@ export default function DisplayFilterPage() {
                   borderColor={liquidGlassEnabled
                     ? (isActive ? accentColor : miniGlassBorder)
                     : (isActive ? accentColor : "transparent")}
-                  backdropFilter={liquidGlassEnabled ? "blur(8px)" : "none"}
-                  sx={liquidGlassEnabled ? {
+                  backdropFilter={`blur(${effectiveBlur}px)`}
+                  sx={{
                     transform: "translateZ(0)",
                     WebkitTransform: "translateZ(0)",
                     WebkitBackfaceVisibility: "hidden",
                     backfaceVisibility: "hidden",
-                  } : undefined}
-                  transition="all 0.2s"
+                    willChange: "backdrop-filter, transform",
+                  }}
+                  transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
                   _hover={{
                     borderColor: accentColor,
                     transform: "translateY(-2px)",
@@ -1472,14 +1646,15 @@ export default function DisplayFilterPage() {
               borderColor={liquidGlassEnabled
                 ? (activePresetId === "custom" ? presetColors["custom"] : miniGlassBorder)
                 : (activePresetId === "custom" ? presetColors["custom"] : "transparent")}
-              backdropFilter={liquidGlassEnabled ? "blur(8px)" : "none"}
-              sx={liquidGlassEnabled ? {
+              backdropFilter={`blur(${effectiveBlur}px)`}
+              sx={{
                 transform: "translateZ(0)",
                 WebkitTransform: "translateZ(0)",
                 WebkitBackfaceVisibility: "hidden",
                 backfaceVisibility: "hidden",
-              } : undefined}
-              transition="all 0.2s"
+                willChange: "backdrop-filter, transform",
+              }}
+              transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
               _hover={{
                 borderColor: presetColors["custom"],
                 transform: "translateY(-2px)",
@@ -1528,6 +1703,98 @@ export default function DisplayFilterPage() {
             </Box>
           </Tooltip>
         </SimpleGrid>
+      </VStack>
+
+      {/* User Filter Presets Section */}
+      <VStack align="start" spacing={4} w="full">
+        <HStack justify="space-between" w="full">
+          <HStack>
+            <Bookmark size={20} color={textColor} />
+            <Text color={textColor} fontSize="md" fontWeight="600">
+              {t("displayFilter.myPresets")}
+            </Text>
+            {userPresets.length > 0 && (
+              <Text color={subTextColor} fontSize="sm">
+                ({userPresets.length})
+              </Text>
+            )}
+          </HStack>
+        </HStack>
+        {userPresets.length === 0 ? (
+          <Text color={subTextColor} fontSize="sm" py={2}>
+            {t("displayFilter.noPresets")}
+          </Text>
+        ) : (
+          <SimpleGrid
+            columns={{
+              base: 2,
+              sm: 3,
+              md: 4,
+              lg: 5,
+            }}
+            spacing={3}
+            w="full"
+          >
+            {userPresets.map((preset) => {
+              const accentColor = "#8B5CF6";
+              return (
+                <Box
+                  key={preset.id}
+                  bg={liquidGlassEnabled ? miniGlassBg : sliderBg}
+                  borderRadius="xl"
+                  p={4}
+                  cursor="pointer"
+                  onClick={() => applyUserFilterPreset(preset)}
+                  border={liquidGlassEnabled ? "1px solid" : "2px solid"}
+                  borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
+                  backdropFilter={`blur(${effectiveBlur}px)`}
+                  sx={{
+                    transform: "translateZ(0)",
+                    WebkitTransform: "translateZ(0)",
+                    WebkitBackfaceVisibility: "hidden",
+                    backfaceVisibility: "hidden",
+                    willChange: "backdrop-filter, transform",
+                  }}
+                  transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+                  _hover={{
+                    borderColor: accentColor,
+                    transform: "translateY(-2px)",
+                  }}
+                  position="relative"
+                  overflow="hidden"
+                >
+                  {liquidGlassEnabled && (
+                    <Box
+                      style={getBorderGlowStyle(miniGlassGlow)}
+                    />
+                  )}
+                  <IconButton
+                    aria-label={t("displayFilter.delete")}
+                    icon={<Trash2 size={14} />}
+                    size="xs"
+                    variant="ghost"
+                    position="absolute"
+                    top={1}
+                    right={1}
+                    color={subTextColor}
+                    opacity={0.5}
+                    _hover={{ opacity: 1, color: "red.400" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteUserPresetId(preset.id);
+                    }}
+                  />
+                  <VStack spacing={2}>
+                    <Bookmark size={24} color={accentColor} />
+                    <Text color={textColor} fontSize="sm" fontWeight="600">
+                      {preset.name}
+                    </Text>
+                  </VStack>
+                </Box>
+              );
+            })}
+          </SimpleGrid>
+        )}
       </VStack>
 
       {/* ICC Color Profiles Section */}
@@ -1584,14 +1851,15 @@ export default function DisplayFilterPage() {
                   borderColor={liquidGlassEnabled
                     ? (isActive ? accentColor : miniGlassBorder)
                     : (isActive ? accentColor : "transparent")}
-                  backdropFilter={liquidGlassEnabled ? "blur(8px)" : "none"}
-                  sx={liquidGlassEnabled ? {
+                  backdropFilter={`blur(${effectiveBlur}px)`}
+                  sx={{
                     transform: "translateZ(0)",
                     WebkitTransform: "translateZ(0)",
                     WebkitBackfaceVisibility: "hidden",
                     backfaceVisibility: "hidden",
-                  } : undefined}
-                  transition="all 0.2s"
+                    willChange: "backdrop-filter, transform",
+                  }}
+                  transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
                   _hover={{
                     borderColor: accentColor,
                     transform: "translateY(-2px)",
@@ -1852,6 +2120,23 @@ export default function DisplayFilterPage() {
                 </Button>
                 <Button
                   size="xs"
+                  leftIcon={<Bookmark size={12} />}
+                  variant="outline"
+                  borderColor={primaryColor}
+                  color={primaryColor}
+                  onClick={() => {
+                    setPresetNameInput("");
+                    setShowSavePresetDialog(true);
+                  }}
+                  isDisabled={isLoading}
+                  _hover={{ bg: `${primaryColor}15` }}
+                  fontSize="xs"
+                  w="full"
+                >
+                  {t("displayFilter.saveAsPreset")}
+                </Button>
+                <Button
+                  size="xs"
                   leftIcon={<RotateCcw size={12} />}
                   variant="ghost"
                   color={subTextColor}
@@ -2023,6 +2308,69 @@ export default function DisplayFilterPage() {
 
   return (
     <Box pt={8}>
+      {/* Save Preset Dialog */}
+      <Modal isOpen={showSavePresetDialog} onClose={() => setShowSavePresetDialog(false)}>
+        <ModalOverlay />
+        <ModalContent bg={cardBg}>
+          <ModalHeader color={textColor}>{t("displayFilter.saveAsPreset")}</ModalHeader>
+          <ModalCloseButton color={subTextColor} />
+          <ModalBody>
+            <Input
+              placeholder={t("displayFilter.presetNamePlaceholder")}
+              value={presetNameInput}
+              onChange={(e) => setPresetNameInput(e.target.value)}
+              bg={inputBg}
+              color={textColor}
+              borderColor={cardBorder}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveCurrentAsPreset();
+              }}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={() => setShowSavePresetDialog(false)}>
+              {t("displayFilter.cancel")}
+            </Button>
+            <Button
+              bg={primaryColor}
+              color={contrastText}
+              onClick={saveCurrentAsPreset}
+              isDisabled={!presetNameInput.trim()}
+              _hover={{ bg: getHoverColor() }}
+            >
+              {t("displayFilter.save")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Delete User Preset Confirmation Dialog */}
+      <AlertDialog
+        isOpen={deleteUserPresetId !== null}
+        leastDestructiveRef={cancelDeleteRef}
+        onClose={() => setDeleteUserPresetId(null)}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              {t("displayFilter.deletePreset")}
+            </AlertDialogHeader>
+            <AlertDialogBody>
+              {t("displayFilter.deletePresetConfirm")}
+            </AlertDialogBody>
+            <AlertDialogFooter>
+              <Button ref={cancelDeleteRef} onClick={() => setDeleteUserPresetId(null)}>
+                {t("displayFilter.cancel")}
+              </Button>
+              <Button colorScheme="red" onClick={handleDeleteUserPreset} ml={3} isLoading={isLoading}>
+                {t("displayFilter.delete")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+
       {/* Delete ICC Confirmation Dialog */}
       <AlertDialog
         isOpen={deleteIccId !== null}

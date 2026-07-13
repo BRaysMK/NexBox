@@ -19,6 +19,12 @@ import {
   Image as ChakraImage,
   Heading,
   Portal,
+  Fade,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
+  Switch,
 } from "@chakra-ui/react";
 import {
   Search,
@@ -35,10 +41,14 @@ import {
   ChevronDown,
   MonitorSpeaker,
   Settings,
+  User,
+  MicVocal,
+  Palette,
+  Droplets,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import type { Song, Playlist } from "@/types/music";
+import type { Song, Playlist, Artist } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -47,6 +57,7 @@ import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { VirtualizedSongList } from "@/components/VirtualizedSongList";
 import { DesktopLyricsSettingsModal } from "@/components/DesktopLyricsSettingsModal";
+import { useCoverColor } from "@/hooks/use-cover-color";
 
 const scrollbarSx = (color: string) => ({
   "&::-webkit-scrollbar": { width: "4px" },
@@ -371,6 +382,11 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const currentBitrate = useMusicStore((s) => s.currentBitrate);
   const lyricsFontSize = useMusicStore((s) => s.lyricsFontSize);
   const lyricsHighlightColor = useMusicStore((s) => s.lyricsHighlightColor);
+  const expandedStyle = useMusicStore((s) => s.expandedStyle);
+  const dynamicEnabled = useMusicStore((s) => s.dynamicEnabled);
+  const desktopLyricsVisible = useMusicStore((s) => s.desktopLyricsVisible);
+  const playQueue = useMusicStore((s) => s.playQueue);
+  const currentIndex = useMusicStore((s) => s.currentIndex);
 
   const [isClosing, setIsClosing] = useState(false);
 
@@ -379,13 +395,43 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const contrastText = getContrastTextColor();
   const hoverBg = getHoverColor(false);
 
+  // 封面主色提取
+  const coverUrl = currentSong ? coverProxyUrl(currentSong.cover, proxyPort) : "";
+  const coverColor = useCoverColor(coverUrl);
+
+  // 现代模式：根据封面颜色决定文字色和背景
+  const [cr, cg, cb] = coverColor.rgb;
+  const modernBgSolid = coverColor.hex;
+  const modernBgDark = `rgb(${Math.round(cr * 0.25)},${Math.round(cg * 0.25)},${Math.round(cb * 0.25)})`;
+  const modernBgGradient = dynamicEnabled
+    ? `linear-gradient(135deg, ${modernBgSolid} 0%, ${modernBgSolid} 40%, ${modernBgDark} 100%)`
+    : `linear-gradient(135deg, ${modernBgSolid} 0%, ${modernBgSolid} 40%, ${modernBgDark} 100%)`;
+  // 动态模式通过 CSS animation 实现渐变色流动
+  const modernBgDynamic = `linear-gradient(45deg, ${modernBgSolid}, ${modernBgDark}, ${modernBgSolid})`;
+  const modernBgFinal = dynamicEnabled ? modernBgDynamic : modernBgGradient;
+  const modernTextColor = coverColor.isLight ? "#1a1a2e" : "#f0f0f0";
+  const modernSubTextColor = coverColor.isLight ? "#4a4a5e" : "#b0b0b0";
+  const modernBorderColor = coverColor.isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.15)";
+  const modernHoverBg = coverColor.isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.12)";
+
+  const isModern = expandedStyle === "modern";
+
   const bgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
-  const expDropdownBg = useColorModeValue("white", "#1a1a1a");
-  const expBorderColor = useColorModeValue("gray.200", "#333333");
+
+  // 文字颜色覆写（现代模式）
+  const effectiveTextColor = isModern ? modernTextColor : textColor;
+  const effectiveSubTextColor = isModern ? modernSubTextColor : subTextColor;
+  const effectiveHoverBg = isModern ? modernHoverBg : hoverBg;
+
+  // 下拉菜单配色：白底黑字
+  const menuBg = "white";
+  const menuBorder = "rgba(0,0,0,0.1)";
+  const menuText = "#1a1a2e";
+  const menuMuted = "#666";
 
   const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : Repeat;
 
@@ -421,17 +467,11 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       right={0}
       bottom={0}
       zIndex={9999}
-      bg={bgColor}
-      backdropFilter="blur(20px)"
-      border="1px solid"
-      borderColor={glassBorderColor}
+      bg={isModern ? modernBgFinal : bgColor}
+      backdropFilter={isModern ? "none" : "blur(20px)"}
       borderRadius="xl"
       overflow="hidden"
       boxShadow="xl"
-      animation={isClosing
-        ? "expandedPlayerSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
-        : "expandedPlayerSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)"
-      }
       sx={{
         "@keyframes expandedPlayerSlideUp": {
           from: { transform: "translateY(100%)", opacity: 0 },
@@ -443,7 +483,22 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         },
         display: "flex",
         flexDirection: "column",
-        WebkitBackdropFilter: "blur(20px)",
+        WebkitBackdropFilter: isModern ? "none" : "blur(20px)",
+        animation: (() => {
+          const slide = isClosing
+            ? "expandedPlayerSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
+            : "expandedPlayerSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)";
+          const dynamic = (dynamicEnabled && isModern) ? ", dynamicBg 8s ease infinite" : "";
+          return `${slide}${dynamic}`;
+        })(),
+        ...(dynamicEnabled && isModern ? {
+          backgroundSize: "400% 400%",
+          "@keyframes dynamicBg": {
+            "0%": { backgroundPosition: "0% 50%" },
+            "50%": { backgroundPosition: "100% 50%" },
+            "100%": { backgroundPosition: "0% 50%" },
+          },
+        } : {}),
       }}
     >
       {/* 顶部栏：关闭按钮 */}
@@ -456,24 +511,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               size="sm"
               variant="ghost"
               onClick={handleCloseWithAnimation}
-              sx={{ color: textColor, _hover: { bg: hoverBg } }}
+              sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
             />
           </Tooltip>
-          <Text color={subTextColor} fontSize="sm">正在播放</Text>
-        </HStack>
-        <HStack spacing={2}>
-          {loginInfo?.logged_in && (
-            <Tooltip label={isLiked ? "取消红心" : "红心"}>
-              <IconButton
-                aria-label="Like"
-                icon={<Heart size={20} fill={isLiked ? "#e53e3e" : "none"} color={isLiked ? "#e53e3e" : subTextColor} />}
-                size="sm"
-                variant="ghost"
-                onClick={() => useMusicStore.getState().toggleLike(currentSong.id)}
-                _hover={{ bg: hoverBg }}
-              />
-            </Tooltip>
-          )}
+          <Text color={effectiveSubTextColor} fontSize="sm">正在播放</Text>
         </HStack>
       </HStack>
 
@@ -502,21 +543,21 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </Box>
 
           <VStack spacing={1} align="center" maxW="400px">
-            <Text color={textColor} fontSize="xl" fontWeight="bold" noOfLines={1} textAlign="center">
+            <Text color={effectiveTextColor} fontSize="xl" fontWeight="bold" noOfLines={1} textAlign="center">
               {currentSong.name}
             </Text>
-            <Text color={subTextColor} fontSize="md" noOfLines={1} textAlign="center">
+            <Text color={effectiveSubTextColor} fontSize="md" noOfLines={1} textAlign="center">
               {currentSong.artist}
             </Text>
             {currentSong.album && (
-              <Text color={subTextColor} fontSize="sm" noOfLines={1} textAlign="center">
+              <Text color={effectiveSubTextColor} fontSize="sm" noOfLines={1} textAlign="center">
                 {currentSong.album}
               </Text>
             )}
           </VStack>
         </VStack>
 
-        {/* 右侧：歌词 - 卡拉OK逐字高亮 */}
+        {/* 右侧：歌词 */}
         <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden" justify="flex-start">
           <KaraokeLyricsView
             lines={karaokeLines}
@@ -524,8 +565,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             fontSize={lyricsFontSize}
             activeColor={activeColor}
             highlightColor={lyricsHighlightColor}
-            textColor={textColor}
-            subTextColor={subTextColor}
+            textColor={effectiveTextColor}
+            subTextColor={effectiveSubTextColor}
             scrollbarSx={memoScrollbarSx}
             audioRef={audioRef}
           />
@@ -534,8 +575,53 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
       {/* 底部：播放控制 + 进度条（全宽居中） */}
       <VStack spacing={4} w="100%" flexShrink={0} pb={4} px={8}>
-        {/* 控制按钮：主按钮居中，音质在右侧 */}
+        {/* 控制按钮：主按钮居中，红心在左侧，音质在右侧 */}
         <Box position="relative" w="100%">
+          {/* 左下方红心 + 样式切换 */}
+          <Box position="absolute" left={0} top="50%" transform="translateY(-50%)" zIndex={1} display="flex" alignItems="center" gap={1}>
+            {loginInfo?.logged_in && (
+              <Tooltip label={isLiked ? "取消红心" : "红心"}>
+                <IconButton
+                  aria-label="Like"
+                  icon={<Heart size={20} fill={isLiked ? "#e53e3e" : "none"} />}
+                  size="md"
+                  variant="ghost"
+                  onClick={() => useMusicStore.getState().toggleLike(currentSong.id)}
+                  sx={{
+                    color: isLiked ? "#e53e3e" : effectiveTextColor,
+                    _hover: { bg: effectiveHoverBg },
+                  }}
+                />
+              </Tooltip>
+            )}
+            <Tooltip label={isModern ? "切换通透样式" : "切换现代样式"}>
+              <IconButton
+                aria-label="Toggle style"
+                icon={isModern ? <Droplets size={18} /> : <Palette size={18} />}
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  const next = expandedStyle === "glass" ? "modern" : "glass";
+                  useMusicStore.getState().setExpandedStyle(next);
+                }}
+                sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
+              />
+            </Tooltip>
+            {isModern && (
+              <HStack spacing={1}>
+                <Text fontSize="xs" color={effectiveSubTextColor} fontWeight="medium">动态</Text>
+                <Switch
+                  size="sm"
+                  isChecked={dynamicEnabled}
+                  onChange={(e) => useMusicStore.getState().setDynamicEnabled(e.target.checked)}
+                  sx={{
+                    "& .chakra-switch__track": { bg: "rgba(255,255,255,0.3)" },
+                    "& .chakra-switch__track[data-checked]": { bg: `${activeColor} !important` },
+                  }}
+                />
+              </HStack>
+            )}
+          </Box>
           <HStack spacing={4} justify="center">
           <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : "列表循环"}>
             <IconButton
@@ -543,7 +629,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               icon={<ModeIcon size={20} />}
               size="md"
               variant="ghost"
-              sx={{ color: playMode !== "list" ? activeColor : subTextColor, _hover: { bg: hoverBg } }}
+              sx={{ color: playMode !== "list" ? activeColor : effectiveSubTextColor, _hover: { bg: effectiveHoverBg } }}
               onClick={() => useMusicStore.getState().togglePlayMode()}
             />
           </Tooltip>
@@ -553,14 +639,14 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             size="md"
             variant="ghost"
             onClick={() => useMusicStore.getState().prevTrack()}
-            sx={{ color: textColor, _hover: { bg: hoverBg } }}
+            sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
           />
           <IconButton
             aria-label="Play/Pause"
             icon={isPlaying ? <PauseIcon size={24} /> : <PlayBtn size={24} />}
             size="md"
             variant="ghost"
-            sx={{ color: textColor, _hover: { bg: activeColor, color: contrastText } }}
+            sx={{ color: effectiveTextColor, _hover: { bg: activeColor, color: contrastText } }}
             onClick={() => useMusicStore.getState().togglePlay()}
           />
           <IconButton
@@ -569,7 +655,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             size="md"
             variant="ghost"
             onClick={() => useMusicStore.getState().nextTrack()}
-            sx={{ color: textColor, _hover: { bg: hoverBg } }}
+            sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
           />
           {/* 音量控制：悬停向右展开滑块 */}
           <Box
@@ -589,7 +675,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               size="md"
               variant="ghost"
               onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
-              sx={{ color: textColor, _hover: { bg: hoverBg } }}
+              sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
             />
             <Box
               className="volume-slider"
@@ -649,7 +735,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               </Tooltip>
               <Tooltip label={`歌词字号: ${lyricsFontSize}px`}>
                 <HStack spacing={1} align="center">
-                  <Text fontSize="xs" color={subTextColor} fontWeight="bold" flexShrink={0}>A</Text>
+                  <Text fontSize="xs" color={effectiveSubTextColor} fontWeight="bold" flexShrink={0}>A</Text>
                   <Box
                     as="input"
                     type="range"
@@ -671,54 +757,137 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                   />
                 </HStack>
               </Tooltip>
-              <Menu>
-              <Tooltip label="音质选择">
-                <MenuButton
-                  as={IconButton}
-                  aria-label="Quality"
-                  size="md"
-                  variant="ghost"
-                  sx={{
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                    color: activeColor,
-                    minW: "auto",
-                    px: 2,
-                    _hover: { bg: hoverBg },
-                  }}
-                >
-                  {currentQuality || QUALITY_OPTIONS.find((o) => o.value === playbackQuality)?.label || "高清臻音"}
-                </MenuButton>
+              <Popover placement="top-end" isLazy strategy="fixed">
+                <Tooltip label="音质选择">
+                  <PopoverTrigger>
+                    <IconButton
+                      aria-label="Quality"
+                      icon={<Box as="span" fontSize="11px" fontWeight="bold">{currentQuality || QUALITY_OPTIONS.find((o) => o.value === playbackQuality)?.label || "高清臻音"}</Box>}
+                      size="md"
+                      variant="ghost"
+                      sx={{ color: activeColor, minW: "auto", px: 2, _hover: { bg: effectiveHoverBg } }}
+                    />
+                  </PopoverTrigger>
+                </Tooltip>
+                <Portal>
+                  <Fade in>
+                    <PopoverContent w="180px" bg={menuBg} border="1px solid" borderColor={menuBorder} borderRadius="lg" boxShadow="lg">
+                      <PopoverBody p={1}>
+                        {QUALITY_OPTIONS.map((opt) => {
+                          const isSvip = loginInfo?.is_svip ?? false;
+                          const locked = opt.svip && !isSvip;
+                          return (
+                            <HStack
+                              key={opt.value}
+                              spacing={3}
+                              px={3}
+                              py={1.5}
+                              cursor={locked ? "not-allowed" : "pointer"}
+                              opacity={locked ? 0.4 : 1}
+                              bg={opt.value === playbackQuality ? `${activeColor}22` : "transparent"}
+                              _hover={locked ? {} : { bg: "rgba(0,0,0,0.05)" }}
+                              borderRadius="md"
+                              onClick={() => { if (!locked) useMusicStore.getState().setPlaybackQuality(opt.value as any); }}
+                            >
+                              <Text fontSize="sm" fontWeight={opt.value === playbackQuality ? "bold" : "normal"} color={menuText}>{opt.label}</Text>
+                              <Text fontSize="xs" color={menuMuted}>{opt.desc}</Text>
+                            </HStack>
+                          );
+                        })}
+                      </PopoverBody>
+                    </PopoverContent>
+                  </Fade>
+                </Portal>
+              </Popover>
+            <Tooltip label={desktopLyricsVisible ? "关闭桌面歌词" : "开启桌面歌词"}>
+              <IconButton
+                aria-label="Desktop lyrics"
+                icon={<MonitorSpeaker size={20} />}
+                size="md"
+                variant="ghost"
+                onClick={() => useMusicStore.getState().toggleDesktopLyrics()}
+                sx={{
+                  color: desktopLyricsVisible ? activeColor : effectiveTextColor,
+                  _hover: { bg: effectiveHoverBg },
+                  opacity: desktopLyricsVisible ? 1 : 0.7,
+                }}
+              />
+            </Tooltip>
+            <Popover placement="top-end" isLazy strategy="fixed">
+              <Tooltip label="播放队列">
+                <PopoverTrigger>
+                  <IconButton
+                    aria-label="Queue"
+                    icon={<ListMusic size={20} />}
+                    size="md"
+                    variant="ghost"
+                    sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
+                  />
+                </PopoverTrigger>
               </Tooltip>
               <Portal>
-                <MenuList minW="180px" bg={expDropdownBg} borderColor={expBorderColor}>
-                  {QUALITY_OPTIONS.map((opt) => {
-                    const isSvip = loginInfo?.is_svip ?? false;
-                    const locked = opt.svip && !isSvip;
-                    return (
-                      <MenuItem
-                        key={opt.value}
-                        onClick={() => {
-                          if (!locked) useMusicStore.getState().setPlaybackQuality(opt.value as any);
-                        }}
-                        bg={opt.value === playbackQuality ? `${activeColor}33` : undefined}
-                        opacity={locked ? 0.4 : 1}
-                        cursor={locked ? "not-allowed" : "pointer"}
-                      >
-                        <HStack spacing={3} w="100%" justify="space-between">
-                          <Text fontSize="sm" fontWeight={opt.value === playbackQuality ? "bold" : "normal"} color={textColor}>
-                            {opt.label}
-                          </Text>
-                          <Text fontSize="xs" color={subTextColor}>
-                            {opt.desc}
-                          </Text>
-                        </HStack>
-                      </MenuItem>
-                    );
-                  })}
-                </MenuList>
+                <Fade in>
+                  <PopoverContent
+                    maxH="400px"
+                    overflowY="auto"
+                    w="260px"
+                    bg={menuBg}
+                    border="1px solid"
+                    borderColor={menuBorder}
+                    borderRadius="lg"
+                    boxShadow="lg"
+                  >
+                    <PopoverBody p={1}>
+                      {playQueue.length === 0 ? (
+                        <Text color={menuMuted} fontSize="sm" px={3} py={2}>播放列表为空</Text>
+                      ) : (
+                        playQueue.map((s, i) => (
+                          <HStack
+                            key={`${s.id}-${i}`}
+                            spacing={2}
+                            px={3}
+                            py={1.5}
+                            cursor="pointer"
+                            bg={i === currentIndex ? `${activeColor}22` : "transparent"}
+                            _hover={{ bg: "rgba(0,0,0,0.05)" }}
+                            borderRadius="md"
+                            overflow="hidden"
+                            onClick={() => useMusicStore.getState().playSong(s, playQueue)}
+                          >
+                            <Text fontSize="xs" color={(i === currentIndex) ? activeColor : menuMuted} w="20px" flexShrink={0}>
+                              {i === currentIndex ? "▶" : i + 1}
+                            </Text>
+                            <VStack spacing={0} flex={1} minW={0} align="start">
+                              <Text
+                                fontSize="sm"
+                                fontWeight={(i === currentIndex) ? "bold" : "normal"}
+                                color={(i === currentIndex) ? activeColor : menuText}
+                                w="100%"
+                                overflow="hidden"
+                                textOverflow="ellipsis"
+                                whiteSpace="nowrap"
+                              >
+                                {s.name}
+                              </Text>
+                              <Text
+                                fontSize="xs"
+                                color={menuMuted}
+                                w="100%"
+                                overflow="hidden"
+                                textOverflow="ellipsis"
+                                whiteSpace="nowrap"
+                              >
+                                {s.artist}
+                              </Text>
+                            </VStack>
+                          </HStack>
+                        ))
+                      )}
+                    </PopoverBody>
+                  </PopoverContent>
+                </Fade>
               </Portal>
-            </Menu>
+            </Popover>
             </HStack>
           </Box>
         </Box>
@@ -726,7 +895,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         {/* 进度条 — 独立组件，自己管理 timeupdate，不触发 ExpandedPlayer 重渲染 */}
         <ProgressSection
           activeColor={activeColor}
-          subTextColor={subTextColor}
+          subTextColor={effectiveSubTextColor}
           sliderTrackBg={sliderTrackBg}
           audioRef={audioRef}
           currentSongId={currentSong.id}
@@ -905,6 +1074,13 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
     <LiquidGlassCard
       p={3}
       flexShrink={0}
+      cursor={onExpand ? "pointer" : "default"}
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest("button, input, [role='menubutton'], [role='slider']")) {
+          onExpand?.();
+        }
+      }}
       sx={{ marginTop: "auto", position: "relative" }}
     >
       <VStack spacing={2} align="stretch">
@@ -1099,9 +1275,29 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
                   onClick={() => useMusicStore.getState().playSong(s, playQueue)}
                   bg={i === currentIndex ? `${activeColor}33` : undefined}
                 >
-                  <Text noOfLines={1} fontSize="sm" color={i === currentIndex ? activeColor : textColor}>
-                    {i + 1}. {s.name} - {s.artist}
-                  </Text>
+                  <VStack spacing={0} flex={1} minW={0} align="start">
+                    <Text
+                      fontSize="sm"
+                      fontWeight={i === currentIndex ? "bold" : "normal"}
+                      color={i === currentIndex ? activeColor : textColor}
+                      w="100%"
+                      overflow="hidden"
+                      textOverflow="ellipsis"
+                      whiteSpace="nowrap"
+                    >
+                      {i === currentIndex ? "▶" : i + 1}. {s.name}
+                    </Text>
+                    <Text
+                      fontSize="xs"
+                      color={subTextColor}
+                      w="100%"
+                      overflow="hidden"
+                      textOverflow="ellipsis"
+                      whiteSpace="nowrap"
+                    >
+                      {s.artist}
+                    </Text>
+                  </VStack>
                 </MenuItem>
               ))}
             </MenuList>
@@ -1144,6 +1340,7 @@ interface SongRowProps {
   onPlay: (song: Song, queue: Song[]) => void;
   onTogglePlay: () => void;
   onToggleLike: (songId: string) => void;
+  onArtistClick?: (artist: Artist) => void;
 }
 
 const SongRow = memo(function SongRow({
@@ -1165,6 +1362,7 @@ const SongRow = memo(function SongRow({
   onPlay,
   onTogglePlay,
   onToggleLike,
+  onArtistClick,
 }: SongRowProps) {
   const formatTime = (time: number): string => {
     if (isNaN(time)) return "0:00";
@@ -1198,9 +1396,32 @@ const SongRow = memo(function SongRow({
         <Text color={textColor} fontSize="sm" noOfLines={1} fontWeight={isCurrent ? "bold" : "normal"}>
           {song.name}
         </Text>
-        <Text color={subTextColor} fontSize="xs" noOfLines={1}>
-          {song.artist} {song.album ? `- ${song.album}` : ""}
-        </Text>
+        <HStack spacing={1} minW={0}>
+          {song.artists.length > 0 && song.artists[0].id && onArtistClick ? (
+            <Text
+              color={subTextColor}
+              fontSize="xs"
+              noOfLines={1}
+              cursor="pointer"
+              _hover={{ color: activeColor, textDecoration: "underline" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onArtistClick(song.artists[0]);
+              }}
+            >
+              {song.artist}
+            </Text>
+          ) : (
+            <Text color={subTextColor} fontSize="xs" noOfLines={1}>
+              {song.artist}
+            </Text>
+          )}
+          {song.album && (
+            <Text color={subTextColor} fontSize="xs" noOfLines={1}>
+              {" "}- {song.album}
+            </Text>
+          )}
+        </HStack>
       </VStack>
       <Text color={subTextColor} fontSize="xs" flexShrink={0}>
         {formatTime(song.duration / 1000)}
@@ -1261,10 +1482,14 @@ const SongRow = memo(function SongRow({
 // 不订阅 currentTime/duration，播放时不会重渲染
 // ═══════════════════════════════════════════════
 interface SearchBoxProps {
-  onEnterSearchMode: (searchInput: string) => void;
+  onUnifiedSearch: (searchInput: string) => void;
+  onArtistClick?: (artist: Artist) => void;
 }
 
-const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps) {
+const SearchBox = memo(function SearchBox({
+  onUnifiedSearch,
+  onArtistClick,
+}: SearchBoxProps) {
   // ── 非受控 input：用 ref 跟踪值，不使用 value prop ──
   // 这样即使组件重渲染，input 也不会丢失焦点
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1275,6 +1500,7 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
   // 订阅 searching + likedSongIds，让爱心状态实时更新；不订阅 currentTime/duration
   const likedSongIds = useMusicStore((s) => s.likedSongIds);
   const searching = useMusicStore((s) => s.searching);
+  const searchingArtists = useMusicStore((s) => s.searchingArtists);
 
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [dropdownResults, setDropdownResults] = useState<Song[]>([]);
@@ -1335,27 +1561,33 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
     handleInputChange(e.currentTarget.value);
   }, [handleInputChange]);
 
-  // ── 回车：进入全屏搜索结果 ──
+  // ── 回车：统一搜索，同时搜歌曲和歌手 ──
   const handleSearchEnter = useCallback(() => {
     const value = searchInputRef.current;
     if (!value.trim()) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    storeActions.search(value).then(() => {
-      onEnterSearchMode(value);
+    Promise.all([
+      storeActions.search(value),
+      storeActions.searchArtists(value),
+    ]).then(() => {
+      onUnifiedSearch(value);
       setShowSearchDropdown(false);
     });
-  }, [storeActions, onEnterSearchMode]);
+  }, [storeActions, onUnifiedSearch]);
 
-  // ── 搜索按钮：进入全屏搜索结果 ──
+  // ── 搜索按钮：统一搜索 ──
   const handleSearchButtonClick = useCallback(() => {
     const value = searchInputRef.current;
     if (!value.trim()) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    storeActions.search(value).then(() => {
-      onEnterSearchMode(value);
+    Promise.all([
+      storeActions.search(value),
+      storeActions.searchArtists(value),
+    ]).then(() => {
+      onUnifiedSearch(value);
       setShowSearchDropdown(false);
     });
-  }, [storeActions, onEnterSearchMode]);
+  }, [storeActions, onUnifiedSearch]);
 
   // ── 回调函数（稳定引用）──
   const onPlay = useCallback((song: Song, queue: Song[]) => {
@@ -1392,6 +1624,7 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
         onPlay={onPlay}
         onTogglePlay={onTogglePlay}
         onToggleLike={onToggleLike}
+        onArtistClick={onArtistClick}
       />
     );
   };
@@ -1407,7 +1640,7 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
           {/* 这样即使组件因任何原因重渲染，input 焦点也不会丢失 */}
           <Input
             ref={inputRef}
-            placeholder="搜索歌曲、歌手... (回车查看全部)"
+            placeholder="搜索歌曲和歌手... (回车查看全部)"
             defaultValue=""
             onChange={handleSearchChange}
             onKeyDown={(e) => e.key === "Enter" && handleSearchEnter()}
@@ -1420,7 +1653,7 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
         <Button
           leftIcon={<Search size={16} />}
           onClick={handleSearchButtonClick}
-          isLoading={searching}
+          isLoading={searching || searchingArtists}
           size="md"
           borderRadius="xl"
           flexShrink={0}
@@ -1435,7 +1668,7 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
         </Button>
       </HStack>
 
-      {/* 搜索下拉预览 — 不使用液态玻璃 */}
+      {/* 搜索下拉预览 */}
       {showSearchDropdown && dropdownResults.length > 0 && (
         <Box
           p={2}
@@ -1459,8 +1692,14 @@ const SearchBox = memo(function SearchBox({ onEnterSearchMode }: SearchBoxProps)
               size="sm"
               variant="ghost"
               onClick={() => {
-                onEnterSearchMode(searchInputRef.current);
-                setShowSearchDropdown(false);
+                const val = searchInputRef.current;
+                Promise.all([
+                  storeActions.search(val),
+                  storeActions.searchArtists(val),
+                ]).then(() => {
+                  onUnifiedSearch(val);
+                  setShowSearchDropdown(false);
+                });
               }}
               sx={{ color: activeColor, _hover: { bg: hoverBg } }}
             >
@@ -1496,14 +1735,20 @@ export default function MusicPage() {
   const loadingLeftTracks = useMusicStore((s) => s.loadingLeftTracks);
   const loadingRightTracks = useMusicStore((s) => s.loadingRightTracks);
   const proxyPort = useMusicStore((s) => s.proxyPort);
+  const artistSearchResults = useMusicStore((s) => s.artistSearchResults);
+  const artistSongs = useMusicStore((s) => s.artistSongs);
+  const selectedArtist = useMusicStore((s) => s.selectedArtist);
+  const searchingArtists = useMusicStore((s) => s.searchingArtists);
+  const loadingArtistSongs = useMusicStore((s) => s.loadingArtistSongs);
 
   // actions 是稳定的，用 useRef 只获取一次，避免每次渲染重新创建导致 useCallback 失效
   const storeActionsRef = useRef(useMusicStore.getState());
   const storeActions = storeActionsRef.current;
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [searchMode, setSearchMode] = useState(false);
+  const [viewMode, setViewMode] = useState<"main" | "unifiedSearch" | "fullArtistList" | "artistDetail">("main");
   const [searchInput, setSearchInput] = useState("");
+  const previousViewRef = useRef<typeof viewMode>("main");
   const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
   const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks">("recommendations");
   const [expandedPlayer, setExpandedPlayer] = useState(false);
@@ -1576,8 +1821,18 @@ export default function MusicPage() {
   }, [loginInfo?.logged_in]);
 
   const handleBack = useCallback(() => {
-    setSearchMode(false);
-  }, []);
+    if (viewMode === "artistDetail") {
+      setViewMode(previousViewRef.current);
+    } else {
+      setViewMode("main");
+      storeActions.clearArtistState();
+    }
+  }, [viewMode, storeActions]);
+
+  const handleBackToMain = useCallback(() => {
+    setViewMode("main");
+    storeActions.clearArtistState();
+  }, [storeActions]);
 
   // 展开播放器时加载歌词
   const handleExpandPlayer = useCallback(() => {
@@ -1592,11 +1847,41 @@ export default function MusicPage() {
     setExpandedPlayer(false);
   }, []);
 
-  // SearchBox 进入搜索结果模式的回调（稳定引用）
-  const handleEnterSearchMode = useCallback((input: string) => {
+  // 统一搜索：进入综合搜索结果页
+  const handleUnifiedSearch = useCallback((input: string) => {
     setSearchInput(input);
-    setSearchMode(true);
+    setViewMode("unifiedSearch");
   }, []);
+
+  // 从统一搜索进入全部歌手列表
+  const handleShowAllArtists = useCallback(() => {
+    setViewMode("fullArtistList");
+  }, []);
+
+  // 从全部歌手列表返回统一搜索
+  const handleBackToUnifiedSearch = useCallback(() => {
+    setViewMode("unifiedSearch");
+  }, []);
+
+  // 点击歌手卡片进入歌手详情
+  const handleArtistClick = useCallback((artist: Artist) => {
+    previousViewRef.current = viewMode;
+    const patched = { ...artist };
+    // 从歌曲卡片进入时 Artist 可能没有头像，用 album cover 或搜索结果补齐
+    if (!patched.pic_url) {
+      const state = useMusicStore.getState();
+      // 尝试从搜索结果中找同名歌手获取头像
+      const match = state.artistSearchResults.find(
+        (a) => a.id === artist.id || a.name === artist.name
+      );
+      if (match?.pic_url) patched.pic_url = match.pic_url;
+      // 再尝试用当前歌曲的封面
+      else if (state.currentSong?.cover) patched.pic_url = state.currentSong.cover;
+    }
+    useMusicStore.setState({ selectedArtist: patched });
+    storeActions.loadArtistSongs(patched.id || "");
+    setViewMode("artistDetail");
+  }, [storeActions, viewMode]);
 
 // ── 我的歌单点击：在左侧面板切换到曲目视图 ──
 const handlePlaylistClick = useCallback((pl: Playlist) => {
@@ -1655,6 +1940,7 @@ setRightPanelView("tracks");
       onPlay={onPlay}
       onTogglePlay={onTogglePlay}
       onToggleLike={onToggleLike}
+      onArtistClick={handleArtistClick}
     />
   );
 
@@ -1692,9 +1978,9 @@ setRightPanelView("tracks");
   );
 
   // ═══════════════════════════════════════════════
-  // 搜索结果全屏视图
+  // 歌手详情视图
   // ═══════════════════════════════════════════════
-  if (searchMode) {
+  if (viewMode === "artistDetail") {
     return (
       <VStack
         spacing={4}
@@ -1715,34 +2001,298 @@ setRightPanelView("tracks");
               sx={{ color: activeColor, _hover: { bg: hoverBg } }}
             />
           </Tooltip>
-          <Text fontSize="lg" fontWeight="bold" color={textColor}>
-            搜索结果 "{searchInput}"
-          </Text>
-          <Text color={subTextColor} fontSize="sm">
-            ({searchResults.length})
-          </Text>
+          {selectedArtist && (
+            <HStack spacing={3}>
+              <ChakraImage
+                src={coverProxyUrl(selectedArtist.pic_url || "", proxyPort)}
+                alt=""
+                w="56px"
+                h="56px"
+                borderRadius="full"
+                objectFit="cover"
+                fallback={<Box w="56px" h="56px" borderRadius="full" bg="gray.700" />}
+              />
+              <VStack spacing={0} align="start">
+                <Text fontSize="xl" fontWeight="bold" color={textColor}>
+                  {selectedArtist.name}
+                </Text>
+                <Text color={subTextColor} fontSize="sm">
+                  {artistSongs.length} 首热门歌曲
+                </Text>
+              </VStack>
+            </HStack>
+          )}
+          {!selectedArtist && (
+            <Text fontSize="lg" fontWeight="bold" color={textColor}>
+              歌手歌曲
+            </Text>
+          )}
         </HStack>
 
         <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
-          {searching ? (
+          {loadingArtistSongs ? (
             <VStack py={12}>
               <Spinner size="lg" sx={{ color: activeColor }} />
-              <Text color={subTextColor} fontSize="sm">搜索中...</Text>
+              <Text color={subTextColor} fontSize="sm">加载中...</Text>
             </VStack>
-          ) : searchResults.length > 0 ? (
+          ) : artistSongs.length > 0 ? (
             <VirtualizedSongList
-              items={searchResults}
-              renderItem={(song, i) => renderSongRow(song, i, searchResults)}
-              emptyText="没有找到相关音乐"
-              resetKey={searchInput}
+              items={artistSongs}
+              renderItem={(song, i) => renderSongRow(song, i, artistSongs)}
+              emptyText="暂无歌曲"
+              resetKey={selectedArtist?.id}
               scrollbarSx={scrollbarSx(activeColor)}
             />
           ) : (
             <VStack py={12} spacing={2}>
               <MusicIcon size={32} color={subTextColor} />
-              <Text color={subTextColor} fontSize="sm">没有找到相关音乐</Text>
+              <Text color={subTextColor} fontSize="sm">暂无歌曲</Text>
             </VStack>
           )}
+        </LiquidGlassCard>
+
+        <PlayerBar onExpand={handleExpandPlayer} />
+
+        {/* 展开的播放器 */}
+        {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
+      </VStack>
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // 统一搜索结果视图：歌手 + 歌曲
+  // ═══════════════════════════════════════════════
+  if (viewMode === "unifiedSearch") {
+    const isLoading = searching || searchingArtists;
+    const previewArtists = artistSearchResults.slice(0, 2);
+    const hasAnyResults = artistSearchResults.length > 0 || searchResults.length > 0;
+
+    return (
+      <VStack
+        spacing={4}
+        align="stretch"
+        w="100%"
+        h="calc(100vh - 120px)"
+        overflow="hidden"
+        sx={{ maxWidth: "100%", overflowX: "hidden", position: "relative" }}
+      >
+        <HStack spacing={3} flexShrink={0}>
+          <Tooltip label="返回">
+            <IconButton
+              aria-label="Back"
+              icon={<ArrowLeft size={18} />}
+              size="sm"
+              variant="ghost"
+              onClick={handleBackToMain}
+              sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+            />
+          </Tooltip>
+          <Text fontSize="lg" fontWeight="bold" color={textColor}>
+            搜索 "{searchInput}"
+          </Text>
+        </HStack>
+
+        <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
+          {isLoading ? (
+            <VStack py={12}>
+              <Spinner size="lg" sx={{ color: activeColor }} />
+              <Text color={subTextColor} fontSize="sm">搜索中...</Text>
+            </VStack>
+          ) : !hasAnyResults ? (
+            <VStack py={12} spacing={2}>
+              <Search size={32} color={subTextColor} />
+              <Text color={subTextColor} fontSize="sm">没有找到相关内容</Text>
+            </VStack>
+          ) : (
+            <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
+              <VStack spacing={4} align="stretch">
+                {/* ── 歌手区域 ── */}
+                {artistSearchResults.length > 0 && (
+                  <Box>
+                    <HStack justify="space-between" mb={2}>
+                      <HStack spacing={2}>
+                        <User size={16} color={activeColor} />
+                        <Text fontSize="sm" fontWeight="bold" color={textColor}>
+                          歌手 ({artistSearchResults.length})
+                        </Text>
+                      </HStack>
+                      {artistSearchResults.length > 2 && (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={handleShowAllArtists}
+                          sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                        >
+                          查看全部 →
+                        </Button>
+                      )}
+                    </HStack>
+                    <HStack spacing={3}>
+                      {previewArtists.map((artist) => (
+                        <LiquidGlassCard
+                          key={artist.id || artist.name}
+                          as="button"
+                          flex={1}
+                          p={3}
+                          borderRadius="lg"
+                          cursor="pointer"
+                          onClick={() => handleArtistClick(artist)}
+                          _hover={{ transform: "scale(1.02)" }}
+                          transition="transform 0.15s"
+                        >
+                          <VStack spacing={2} align="center">
+                            <Box w="64px" h="64px" borderRadius="md" overflow="hidden" flexShrink={0}>
+                              <ChakraImage
+                                src={coverProxyUrl(artist.pic_url || "", proxyPort)}
+                                alt=""
+                                w="64px"
+                                h="64px"
+                                objectFit="cover"
+                                fallback={
+                                  <Box
+                                    w="64px"
+                                    h="64px"
+                                    bg="gray.700"
+                                    display="flex"
+                                    alignItems="center"
+                                    justifyContent="center"
+                                  >
+                                    <User size={28} color={subTextColor} />
+                                  </Box>
+                                }
+                              />
+                            </Box>
+                            <VStack spacing={0} w="100%">
+                              <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1} textAlign="center">
+                                {artist.name}
+                              </Text>
+                              <Text color={subTextColor} fontSize="xs">
+                                {artist.music_size != null ? `${artist.music_size} 首` : ""}
+                              </Text>
+                            </VStack>
+                          </VStack>
+                        </LiquidGlassCard>
+                      ))}
+                      {/* 填充占位保证对齐 */}
+                      {previewArtists.length < 2 && (
+                        <Box flex={1} />
+                      )}
+                    </HStack>
+                  </Box>
+                )}
+
+                {/* ── 分隔线 ── */}
+                {artistSearchResults.length > 0 && searchResults.length > 0 && (
+                  <Box borderTop="1px solid" borderColor={borderColor} />
+                )}
+
+                {/* ── 歌曲区域 ── */}
+                {searchResults.length > 0 && (
+                  <Box>
+                    <HStack spacing={2} mb={2}>
+                      <MusicIcon size={16} color={activeColor} />
+                      <Text fontSize="sm" fontWeight="bold" color={textColor}>
+                        歌曲 ({searchResults.length})
+                      </Text>
+                    </HStack>
+                    <VStack spacing={1} align="stretch">
+                      {searchResults.map((song, i) => renderSongRow(song, i, searchResults))}
+                    </VStack>
+                  </Box>
+                )}
+              </VStack>
+            </Box>
+          )}
+        </LiquidGlassCard>
+
+        <PlayerBar onExpand={handleExpandPlayer} />
+
+        {/* 展开的播放器 */}
+        {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
+      </VStack>
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // 全部歌手列表视图
+  // ═══════════════════════════════════════════════
+  if (viewMode === "fullArtistList") {
+    return (
+      <VStack
+        spacing={4}
+        align="stretch"
+        w="100%"
+        h="calc(100vh - 120px)"
+        overflow="hidden"
+        sx={{ maxWidth: "100%", overflowX: "hidden", position: "relative" }}
+      >
+        <HStack spacing={3} flexShrink={0}>
+          <Tooltip label="返回">
+            <IconButton
+              aria-label="Back"
+              icon={<ArrowLeft size={18} />}
+              size="sm"
+              variant="ghost"
+              onClick={handleBackToUnifiedSearch}
+              sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+            />
+          </Tooltip>
+          <Text fontSize="lg" fontWeight="bold" color={textColor}>
+            全部歌手 - "{searchInput}"
+          </Text>
+          <Text color={subTextColor} fontSize="sm">
+            ({artistSearchResults.length})
+          </Text>
+        </HStack>
+
+        <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
+          <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
+            <VStack spacing={2} align="stretch">
+              {artistSearchResults.map((artist) => (
+                <HStack
+                  key={artist.id || artist.name}
+                  spacing={3}
+                  p={3}
+                  borderRadius="lg"
+                  cursor="pointer"
+                  _hover={{ bg: itemHoverBg }}
+                  onClick={() => handleArtistClick(artist)}
+                  transition="background 0.15s"
+                >
+                  <Box w="48px" h="48px" borderRadius="md" overflow="hidden" flexShrink={0}>
+                    <ChakraImage
+                      src={coverProxyUrl(artist.pic_url || "", proxyPort)}
+                      alt=""
+                      w="48px"
+                      h="48px"
+                      objectFit="cover"
+                      fallback={
+                        <Box
+                          w="48px"
+                          h="48px"
+                          bg="gray.700"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <User size={20} color={subTextColor} />
+                        </Box>
+                      }
+                    />
+                  </Box>
+                  <VStack spacing={0} align="start" flex={1} minW={0}>
+                    <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
+                      {artist.name}
+                    </Text>
+                    <Text color={subTextColor} fontSize="xs">
+                      {artist.music_size != null ? `${artist.music_size} 首歌曲` : "点击查看热门歌曲"}
+                    </Text>
+                  </VStack>
+                  <MicVocal size={16} color={subTextColor} />
+                </HStack>
+              ))}
+            </VStack>
+          </Box>
         </LiquidGlassCard>
 
         <PlayerBar onExpand={handleExpandPlayer} />
@@ -1844,7 +2394,10 @@ setRightPanelView("tracks");
         {/* ══ 右侧：搜索 + 推荐 ══ */}
         <VStack spacing={4} align="stretch" flex={1} minW={0} overflow="hidden">
           {/* 搜索框 — 独立 memo 组件，播放时不会因重渲染而失焦 */}
-          <SearchBox onEnterSearchMode={handleEnterSearchMode} />
+          <SearchBox
+            onUnifiedSearch={handleUnifiedSearch}
+            onArtistClick={handleArtistClick}
+          />
 
           {/* 推荐歌单 / 推荐歌单曲目 */}
           <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">

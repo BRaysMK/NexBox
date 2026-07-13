@@ -6,7 +6,8 @@ import {
   HStack,
   useColorModeValue,
   Grid,
-  Spinner,
+  Button,
+  useToast,
 } from "@chakra-ui/react";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useBackground } from "@/contexts/background-context";
@@ -20,10 +21,13 @@ import {
   HardDrive,
   Volume2,
   Wifi,
+  Download,
+  Trash2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
 
 interface DisplayInfo {
   name: string;
@@ -310,11 +314,13 @@ export default function HardwarePage() {
   const { hardwareInfo } = useAppStartup();
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
+  const { exportReport, isExporting } = useHardwareReportExport();
   
   const cardBg = useColorModeValue("white", "#111111");
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
+  const btnBorderColor = useColorModeValue("gray.300", "#333333");
 
   const [cpuLoad, setCpuLoad] = useState<number | null>(null);
   const [cpuTemp, setCpuTemp] = useState<number | null>(null);
@@ -335,25 +341,53 @@ export default function HardwarePage() {
     isMounted.current = true;
 
     const fetchSensorData = async () => {
-      if (!isMounted.current || !hardwareInfo) return;
+      if (!isMounted.current) return;
 
       try {
-        const cpuStatus = await invoke<[number | null, number | null]>("get_lhm_cpu_status");
+        // 从悬窗缓存读取实时数据（后台线程每1秒更新，无需等待 PowerShell）
+        const overlay = await invoke<{
+          cpu_usage: number | null;
+          cpu_temp: number | null;
+          gpu_temp: number | null;
+          gpu_usage: number | null;
+          memory_usage: number | null;
+        }>("get_overlay_hardware_data");
         if (!isMounted.current) return;
-        const [cpuLoadResult, cpuTempResult] = cpuStatus;
-        if (cpuLoadResult !== null) {
-          setCpuLoad(cpuLoadResult);
-          setCpuSparkline((prev) => [...prev.slice(1), cpuLoadResult]);
+
+        const cpuLoadVal = overlay.cpu_usage ?? null;
+        const cpuTempVal = overlay.cpu_temp ?? null;
+        const gpuTempVal = overlay.gpu_temp ?? null;
+        const gpuUsageVal = overlay.gpu_usage ?? null;
+        const memPercent = overlay.memory_usage ?? null;
+
+        if (cpuLoadVal !== null) {
+          setCpuLoad(cpuLoadVal);
+          setCpuSparkline((prev) => [...prev.slice(1), cpuLoadVal]);
         }
-        if (cpuTempResult !== null) {
-          setCpuTemp(Math.round(cpuTempResult));
+        if (cpuTempVal !== null) {
+          setCpuTemp(Math.round(cpuTempVal));
+        }
+        if (gpuTempVal !== null) {
+          setGpuTemps([gpuTempVal]);
+        }
+        if (gpuUsageVal !== null) {
+          setGpuUsages([gpuUsageVal]);
+          setGpuSparkline((prev) => [...prev.slice(1), gpuUsageVal]);
+        }
+        if (memPercent !== null) {
+          setMemSparkline((prev) => [...prev.slice(1), Math.round(memPercent)]);
         }
 
+        // 内存和磁盘的详情（非百分比信息）仍需单独查询
         const memResult = await invoke<MemoryStatus>("get_memory_status");
         if (!isMounted.current) return;
         if (memResult) {
           setMemoryStatus(memResult);
-          setMemSparkline((prev) => [...prev.slice(1), Math.round(memResult.usage_percent)]);
+          if (memPercent === null) {
+            setMemSparkline((prev) => [...prev.slice(1), Math.round(memResult.usage_percent)]);
+          }
+        } else if (memPercent !== null) {
+          setMemoryStatus({ usage_percent: memPercent, used: 0, total: 0 } as MemoryStatus);
         }
 
         const diskResult = await invoke<DiskInfo>("get_disk_status");
@@ -361,19 +395,6 @@ export default function HardwarePage() {
         if (diskResult) {
           setDiskStatus(diskResult);
           setStorageSparkline((prev) => [...prev.slice(1), Math.round(diskResult.usage_percent)]);
-        }
-
-        const gpuStatusList = await invoke<[number | null, number | null][]>("get_lhm_gpu_status");
-        if (!isMounted.current) return;
-
-        const gpuTempsResult = gpuStatusList.map(([temp]) => temp ?? 0);
-        const gpuUsagesResult = gpuStatusList.map(([, usage]) => usage ?? 0);
-
-        setGpuTemps(gpuTempsResult);
-        setGpuUsages(gpuUsagesResult);
-
-        if (gpuUsagesResult.length > 0 && gpuUsagesResult[0] !== null) {
-          setGpuSparkline((prev) => [...prev.slice(1), gpuUsagesResult[0]]);
         }
       } catch (error) {
         console.error("Failed to fetch sensor data:", error);
@@ -390,15 +411,7 @@ export default function HardwarePage() {
         intervalRef.current = null;
       }
     };
-  }, [hardwareInfo]);
-
-  if (!hardwareInfo) {
-    return (
-      <Box pt={8} display="flex" justifyContent="center" alignItems="center" minH="50vh">
-        <Spinner size="xl" />
-      </Box>
-    );
-  }
+  }, []); // 不依赖 hardwareInfo，立即开始轮询
 
   const gpuTemp = gpuTemps[0] ?? null;
   const gpuUsage = gpuUsages[0] ?? null;
@@ -409,7 +422,7 @@ export default function HardwarePage() {
   const diskUsed = diskStatus ? diskStatus.used_gb.toFixed(1) : "--";
   const diskTotal = diskStatus ? diskStatus.total_gb.toFixed(1) : "--";
 
-  const cpuDisplayInfo: DisplayInfo[] = [
+  const cpuDisplayInfo: DisplayInfo[] = hardwareInfo ? [
     { name: t("hardware.model"), value: hardwareInfo.cpu.name },
     {
       name: t("hardware.coresThreads"),
@@ -423,49 +436,94 @@ export default function HardwarePage() {
       name: t("hardware.l3Cache"),
       value: `${(hardwareInfo.cpu.l3_cache_size / 1024).toFixed(0)} MB`,
     },
-  ];
+  ] : [];
 
-  const gpuDisplayInfos: DisplayInfo[][] = hardwareInfo.gpu.map((gpu) => [
+  const gpuDisplayInfos: DisplayInfo[][] = hardwareInfo ? hardwareInfo.gpu.map((gpu) => [
     { name: t("hardware.model"), value: gpu.name },
     { name: t("hardware.vendor"), value: gpu.vendor },
     { name: t("hardware.memory"), value: `${gpu.memory_gb.toFixed(1)} GB` },
     { name: t("hardware.driverVersion"), value: gpu.driver_version },
-  ]);
+  ]) : [];
 
-  const totalCapacity = hardwareInfo.memory.reduce((sum, mem) => sum + mem.capacity_gb, 0);
-  const memoryDisplayInfo: DisplayInfo[] = [
+  const totalCapacity = hardwareInfo ? hardwareInfo.memory.reduce((sum, mem) => sum + mem.capacity_gb, 0) : 0;
+  const memoryDisplayInfo: DisplayInfo[] = hardwareInfo ? [
     { name: t("hardware.totalCapacity"), value: `${totalCapacity.toFixed(0)} GB` },
     { name: t("hardware.speed"), value: hardwareInfo.memory.length > 0 ? `${hardwareInfo.memory[0].speed_mhz} MHz` : "--" },
     { name: t("hardware.count"), value: `${hardwareInfo.memory.length}` },
-  ];
+  ] : [];
 
-  const storageDisplayInfo: DisplayInfo[] = hardwareInfo.disk.map((disk, i) => ({
+  const storageDisplayInfo: DisplayInfo[] = hardwareInfo ? hardwareInfo.disk.map((disk, i) => ({
     name: `${t("hardware.storage")} ${i + 1}`,
     value: disk,
-  }));
+  })) : [];
 
-  const motherboardDisplayInfo: DisplayInfo[] = [
+  const motherboardDisplayInfo: DisplayInfo[] = hardwareInfo ? [
     { name: t("hardware.model"), value: hardwareInfo.motherboard },
-  ];
+  ] : [];
 
-  const soundCardDisplayInfos: DisplayInfo[][] = (hardwareInfo.sound_card || []).map((card) => [
+  const soundCardDisplayInfos: DisplayInfo[][] = hardwareInfo ? (hardwareInfo.sound_card || []).map((card) => [
     { name: t("hardware.model"), value: card.name },
     { name: t("hardware.manufacturer"), value: card.manufacturer },
-  ]);
+  ]) : [];
 
-  const networkCardDisplayInfos: DisplayInfo[][] = (hardwareInfo.network_card || []).map((card) => [
+  const networkCardDisplayInfos: DisplayInfo[][] = hardwareInfo ? (hardwareInfo.network_card || []).map((card) => [
     { name: t("hardware.model"), value: card.name },
     { name: t("hardware.manufacturer"), value: card.manufacturer },
     { name: t("hardware.adapterType"), value: card.adapter_type },
     { name: t("hardware.macAddress"), value: card.mac_address },
     { name: t("hardware.linkSpeed"), value: card.speed_mbps > 0 ? `${card.speed_mbps} Mbps` : "--" },
-  ]);
+  ]) : [];
 
   return (
     <Box pt={8}>
-      <Heading size="lg" color={headingColor} mb={6}>
-        {t("hardware.title")}
-      </Heading>
+      <HStack justify="space-between" mb={6}>
+        <Heading size="lg" color={headingColor}>
+          {t("hardware.title")}
+        </Heading>
+        <HStack gap={2}>
+          <Button
+            leftIcon={<Trash2 size={16} />}
+            size="sm"
+            variant="outline"
+            colorScheme="red"
+            color="#e74c3c"
+            borderColor="rgba(231,76,60,0.3)"
+            _hover={{ bg: "rgba(231,76,60,0.1)" }}
+            onClick={async () => {
+              try {
+                await invoke("clear_hardware_data");
+                toast({
+                  title: "硬件数据已清除",
+                  status: "success",
+                  duration: 3000,
+                  isClosable: true,
+                });
+              } catch (e) {
+                toast({
+                  title: "清除失败",
+                  description: String(e),
+                  status: "error",
+                  duration: 3000,
+                  isClosable: true,
+                });
+              }
+            }}
+          >
+            清除数据
+          </Button>
+          <Button
+            leftIcon={<Download size={16} />}
+            size="sm"
+            variant="outline"
+            color={headingColor}
+            borderColor={btnBorderColor}
+            onClick={exportReport}
+            isLoading={isExporting}
+          >
+            {t("hardwareReport.export") || "导出报告"}
+          </Button>
+        </HStack>
+      </HStack>
 
       <VStack spacing={6} align="stretch">
         <Grid

@@ -111,7 +111,7 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
 export function Sidebar() {
   const location = useLocation();
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const [showLabel, setShowLabel] = useState(() => {
     return localStorage.getItem("nexbox_sidebar_show_label") === "true";
@@ -144,6 +144,19 @@ export function Sidebar() {
 
   const isTop = navPosition === "top";
   
+  const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (liquidGlassEnabled) {
+      const timer = setTimeout(() => setShowBlur(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBlur(false);
+    }
+  }, [liquidGlassEnabled]);
+
+  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+
   const defaultBgColor = useColorModeValue("rgba(255,255,255,0.9)", "rgba(17,17,17,0.95)");
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const defaultBorderColor = useColorModeValue("rgba(200,200,200,0.3)", "rgba(51,51,51,0.5)");
@@ -228,8 +241,12 @@ export function Sidebar() {
       bg={liquidGlassEnabled ? glassBgColor : defaultBgColor}
       border="1px solid"
       borderColor={glassBorderColor}
-      backdropFilter={liquidGlassEnabled ? "blur(1px)" : "blur(0px)"}
+      backdropFilter={`blur(${effectiveBlur}px)`}
       transition="max-width 0.25s cubic-bezier(0.95, 0, 1, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+      sx={{
+        ...containerStyles.sx,
+        willChange: "backdrop-filter, transform",
+      }}
     >
       <ChakraBox
         style={getBorderGlowStyle(glowColor)}

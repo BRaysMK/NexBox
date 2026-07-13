@@ -12,7 +12,6 @@ import AceOptimizePage from "./pages/AceOptimizePage";
 import DisplayFilterPage from "./pages/DisplayFilterPage";
 import SettingsPage from "./pages/SettingsPage";
 import CrosshairPage from "./pages/CrosshairPage";
-import ScreenRecordPage from "./pages/ScreenRecordPage";
 import DiskHealthPage from "./pages/DiskHealthPage";
 import OverlayPanelPage from "./pages/OverlayPanelPage";
 import DeltaForcePage from "./pages/DeltaForcePage";
@@ -68,7 +67,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "5.0.0";
+const CURRENT_VERSION = "5.2.0";
 
 function App() {
   const { t } = useTranslation();
@@ -275,7 +274,6 @@ function App() {
               <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
               <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
               <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
-              <Route path="/screen-record" element={<AnimatedPage><ScreenRecordPage /></AnimatedPage>} />
               <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
               <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
               <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />

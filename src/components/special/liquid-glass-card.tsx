@@ -3,7 +3,7 @@
 import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 interface LiquidGlassCardProps extends BoxProps {
   children: React.ReactNode;
@@ -17,7 +17,7 @@ export function LiquidGlassCard({
   isDashed = false,
   ...props
 }: LiquidGlassCardProps) {
-  const { liquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
@@ -25,12 +25,25 @@ export function LiquidGlassCard({
   const defaultBg = useColorModeValue("white", "#111111");
   const defaultBorder = useColorModeValue("gray.200", "#333333");
 
+  const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (liquidGlassEnabled) {
+      const timer = setTimeout(() => setShowBlur(true), 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBlur(false);
+    }
+  }, [liquidGlassEnabled]);
+
+  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+
   const cardStyles = useMemo(() => ({
     bg: liquidGlassEnabled ? glassBgColor : defaultBg,
     borderRadius: "xl",
     border: isDashed ? "1px dashed" : "1px solid",
     borderColor: liquidGlassEnabled ? glassBorderColor : defaultBorder,
-    backdropFilter: liquidGlassEnabled ? "blur(1px)" : "blur(0px)",
+    backdropFilter: `blur(${effectiveBlur}px)`,
     boxShadow: "sm",
     transition: "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
     sx: {
@@ -38,8 +51,9 @@ export function LiquidGlassCard({
       WebkitTransform: "translateZ(0)",
       WebkitBackfaceVisibility: "hidden",
       backfaceVisibility: "hidden",
+      willChange: "backdrop-filter, transform",
     },
-  }), [liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder, isDashed]);
+  }), [effectiveBlur, liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder, isDashed]);
 
   return (
     <Box

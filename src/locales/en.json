@@ -50,8 +50,8 @@
     "dlssPreset": "Delta Force DLSS Settings",
     "epicFree": "Epic Free Games",
     "dynamicIsland": "Dynamic Island",
-    "screenRecord": "Screen Record",
-    "diskHealth": "Disk Health"
+    "diskHealth": "Disk Health",
+"screenRecord": "Screen Record"
   },
   "optimization": {
     "pageTitle": "Optimize",
@@ -632,7 +632,16 @@
     "previewFiltered": "Filter",
     "previewDisabledNote": "Filter inactive · Preview only",
     "paramsUpdated": "Parameters updated",
-    "paramsUpdatedHint": "Enable filter switch to apply"
+    "paramsUpdatedHint": "Enable filter switch to apply",
+    "myPresets": "My Presets",
+    "noPresets": "No custom presets yet.\nAdjust parameters and click \"Save as Preset\" to save.",
+    "saveAsPreset": "Save as Preset",
+    "presetNamePlaceholder": "Enter preset name...",
+    "savePresetSuccess": "Preset saved",
+    "deletePreset": "Delete Preset",
+    "deletePresetConfirm": "Delete this preset?",
+    "deletePresetSuccess": "Preset deleted",
+    "save": "Save"
   },
   "floatingNav": {
     "title": "Floating Navigation Box",
@@ -687,6 +696,14 @@
       "crossDot": "Cross+Dot",
       "circleCross": "Circle+Cross"
     }
+  },
+  "hardwareReport": {
+    "export": "Export Report",
+    "selectPath": "Select Export Location",
+    "exporting": "Generating report...",
+    "exportSuccess": "Report exported successfully",
+    "exportFailed": "Export failed",
+    "recorderNotStarted": "Recorder not started, please try again later"
   },
   "overlayPanel": {
     "title": "Overlay Panel",
@@ -909,8 +926,8 @@
     "shaderCacheDesc": "Clean up NVIDIA/AMD shader cache to free disk space",
     "dlssPresetDesc": "Switch DLSS model presets to optimize game graphics",
     "dynamicIslandDesc": "Floating island on screen, showing network speed/hardware/music/notifications",
-    "screenRecordDesc": "Record screen or window with adjustable resolution & frame rate",
-    "diskHealthDesc": "Check disk health status and SMART information"
+    "diskHealthDesc": "Check disk health status and SMART information",
+    "screenRecordDesc": "High-performance screen recording (hardware encoding)"
   },
   "gpuRename": {
     "title": "GPU Rename",
@@ -971,6 +988,8 @@
       "homeHardwareModelDesc": "Show a brief summary of CPU/GPU/RAM/Motherboard/Storage on the homepage",
       "searchBarLabel": "Search Bar",
       "searchBarDesc": "Show the global search bar in the title bar",
+      "feedbackLabel": "Feedback Banner",
+      "feedbackDesc": "Show feedback banner at the bottom of home page",
       "splash": "Animation",
       "splashLogoLabel": "Splash Logo",
       "splashLogoDesc": "Customize the logo image shown during startup",
@@ -1024,6 +1043,7 @@
       "liquidGlass": "Liquid Glass",
       "liquidGlassLabel": "Liquid Glass",
       "liquidGlassDesc": "When enabled, some interfaces will use the \"Liquid Glass\" effect, which may affect performance",
+      "liquidGlassBlurLabel": "Blur Intensity",
       "customBackground": "Custom Background",
       "customBackgroundLabel": "Enable Custom Background",
       "imageUrlPlaceholder": "Enter image URL or click to upload",
@@ -1045,6 +1065,8 @@
       "hoverOpacity": "Hover Opacity",
       "activeOpacity": "Active Opacity",
       "borderOpacity": "Border Opacity",
+      "backgroundBlurLabel": "Background Blur",
+      "backgroundBlurHint": "Applies to all background modes (preset / image / video)",
       "resetToDefault": "Reset to Default",
       "presetColors": {
         "cyan": "Cyan",
@@ -1423,37 +1445,6 @@
     "islandToggleDesc": "Use shortcut to show or hide the Dynamic Island",
     "saved": "Hotkey saved"
   },
-  "screenRecord": {
-    "title": "Screen Recording",
-    "mode": "Recording Mode",
-    "mode.fullscreen": "Full Screen",
-    "mode.window": "Window",
-    "targetDisplay": "Target Display",
-    "targetWindow": "Target Window",
-    "noWindow": "No window selected",
-    "resolution": "Resolution",
-    "resolution.original": "Original",
-    "fps": "Frame Rate",
-    "format": "Output Format",
-    "quality": "Quality",
-    "savePath": "Save Location",
-    "browse": "Browse...",
-    "startRecording": "Start Recording",
-    "pauseRecording": "Pause Recording",
-    "resumeRecording": "Resume Recording",
-    "stopRecording": "Stop Recording",
-    "recording": "Recording...",
-    "paused": "Paused",
-    "duration": "Duration",
-    "fileSize": "File Size",
-    "currentFps": "Current FPS",
-    "saveSuccess": "Recording saved to:",
-    "saveFailed": "Recording save failed",
-    "noDisplays": "No displays found",
-    "selectWindow": "Please select a window",
-    "captureCursor": "Capture Cursor",
-    "primaryMonitor": "Primary Monitor"
-  },
   "diskHealth": {
     "title": "Disk Health",
     "refresh": "Refresh",
@@ -1471,6 +1462,61 @@
     "partitions": "partitions",
     "loadError": "Failed to load disk data",
     "retry": "Retry"
+  },
+  "screenRecord": {
+    "title": "Screen Recording",
+    "description": "Hardware-accelerated screen recording with high frame rate capture",
+    "loading": "Loading...",
+    "previewWaiting": "Waiting for recording to start...",
+    "recording": "Recording",
+    "idle": "Idle",
+    "openPreview": "Open Preview Window",
+    "closePreview": "Close Preview",
+    "settings": {
+      "title": "Recording Settings",
+      "source": "Capture Source",
+      "display": "Display",
+      "window": "Window",
+      "windowSrc": "App Window",
+      "fps": "Frame Rate",
+      "resolution": "Resolution",
+      "original": "Original",
+      "bitrate": "Bitrate",
+      "codec": "Encoder",
+      "container": "Format",
+      "captureCursor": "Capture Cursor",
+      "savePath": "Save Path",
+      "selectPath": "Select Save Location"
+    },
+    "controls": {
+      "start": "Start Recording",
+      "stop": "Stop Recording",
+      "recording": "Recording",
+      "paused": "Paused"
+    },
+    "stats": {
+      "title": "Recording Stats",
+      "lastRecording": "Last Recording",
+      "elapsed": "Elapsed Time",
+      "targetFps": "Target FPS",
+      "captureFps": "Capture FPS",
+      "outputFps": "Output FPS",
+      "droppedFrames": "Dropped Frames",
+      "totalFrames": "Total Frames",
+      "fileSize": "File Size",
+      "currentBitrate": "Current Bitrate"
+    },
+    "warnings": {
+      "refreshRateLow": "Display refresh rate ({{hz}}Hz) is lower than target FPS ({{fps}}fps). Frame duplication will be used.",
+      "noDisplayFound": "No captureable display found",
+      "savePathRequired": "Please select a save path first",
+      "encodingError": "Encoding error: {{message}}"
+    },
+    "messages": {
+      "recordingStarted": "Recording started",
+      "recordingStopped": "Recording stopped, file saved to: {{path}}",
+      "recordingError": "Recording error: {{message}}"
+    }
   }
 }
 

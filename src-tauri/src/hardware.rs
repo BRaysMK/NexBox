@@ -178,8 +178,13 @@ fn detect_gpu_vendor(name: &str) -> GpuVendor {
 }
 
 fn run_powershell<T: for<'de> Deserialize<'de>>(command: &str) -> Result<Vec<T>, HardwareError> {
+    // 强制所有 PowerShell 输出使用 UTF-8 编码，防止中文乱码
+    let full_cmd = format!(
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; {}",
+        command
+    );
     let mut cmd = Command::new("powershell");
-    cmd.args(&["-Command", command]);
+    cmd.args(&["-Command", &full_cmd]);
     
     #[cfg(windows)]
     {
@@ -575,7 +580,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_sound = errors.clone();
     let sound_handle = thread::spawn(move || {
-        let sound_cmd = r#"Get-WmiObject Win32_SoundDevice | Where-Object { $_.Status -eq 'OK' -and $_.PNPDeviceID -notlike 'USB\*' -and $_.PNPDeviceID -notlike 'HID\*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VB-Audio*' -and $_.Name -notlike '*Voicemeeter*' -and $_.Name -notlike '*CABLE*' -and $_.Name -notlike '*Sonic Studio*' -and $_.Name -notlike '*NVIDIA Virtual Audio*' -and $_.Name -notlike '*Steam Streaming*' -and $_.Name -notlike '*Oculus Virtual*' -and $_.Name -notlike '*Wave Link*' -and $_.Name -notlike '*Elgato Sound Capture*' } | Select-Object Name, Manufacturer | ConvertTo-Json -Compress"#;
+        let sound_cmd = r#"Get-WmiObject Win32_SoundDevice | Where-Object { $_.Status -eq 'OK' -and $_.PNPDeviceID -notlike 'USB\*' -and $_.PNPDeviceID -notlike 'HID\*' -and $_.PNPDeviceID -notlike 'SWD\*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VB-Audio*' -and $_.Name -notlike '*Voicemeeter*' -and $_.Name -notlike '*CABLE*' -and $_.Name -notlike '*Sonic*Studio*' -and $_.Name -notlike '*NVIDIA*Virtual*' -and $_.Name -notlike '*Steam*Streaming*' -and $_.Name -notlike '*Oculus*' -and $_.Name -notlike '*Wave*Link*' -and $_.Name -notlike '*Elgato*Sound*Capture*' -and $_.Name -notlike '*Nahimic*' -and $_.Name -notlike '*DTS*' -and $_.Name -notlike '*Dolby*' -and $_.Name -notlike '*Bluetooth*' -and $_.Name -notlike '*Hands-Free*' -and $_.Name -notlike '*S/PDIF*' } | Select-Object Name, Manufacturer | ConvertTo-Json -Compress"#;
         match run_powershell::<PsSoundDevice>(sound_cmd) {
             Ok(results) => {
                 log::info!("获取到{}个声卡信息", results.len());
@@ -597,7 +602,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_network = errors.clone();
     let network_handle = thread::spawn(move || {
-        let network_cmd = r#"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-WmiObject Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -and $_.NetEnabled -eq $true -and $_.Name -notlike '*Hyper-V*' -and $_.Name -notlike '*vEthernet*' -and $_.Name -notlike '*VirtualBox*' -and $_.Name -notlike '*VMware*' -and $_.Name -notlike '*Bluetooth*' -and $_.AdapterType -notlike '*Loopback*' } | Select-Object Name, Manufacturer, AdapterType, MACAddress, Speed | ConvertTo-Json -Compress"#;
+        let network_cmd = r#"Get-WmiObject Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -and $_.NetEnabled -eq $true -and $_.PNPDeviceID -notlike 'SWD\*' -and $_.Name -notlike '*Hyper-V*' -and $_.Name -notlike '*vEthernet*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VirtualBox*' -and $_.Name -notlike '*VMware*' -and $_.Name -notlike '*Bluetooth*' -and $_.Name -notlike '*Tailscale*' -and $_.Name -notlike '*ZeroTier*' -and $_.Name -notlike '*WSL*' -and $_.Name -notlike '*Docker*' -and $_.Name -notlike '*Npcap*' -and $_.Name -notlike '*WireGuard*' -and $_.Name -notlike '*OpenVPN*' -and $_.Name -notlike '*TAP-Windows*' -and $_.Name -notlike '*WAN Miniport*' -and $_.Name -notlike '*VPN*' -and $_.Name -notlike '*Proton*' -and $_.Name -notlike '*Nord*' -and $_.Name -notlike '*Cloudflare*WARP*' -and $_.AdapterType -notlike '*Loopback*' } | Select-Object Name, Manufacturer, AdapterType, MACAddress, Speed | ConvertTo-Json -Compress"#;
         match run_powershell::<PsNetworkAdapter>(network_cmd) {
             Ok(results) => {
                 log::info!("获取到{}个网卡信息", results.len());

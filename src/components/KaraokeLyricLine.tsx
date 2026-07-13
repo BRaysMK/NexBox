@@ -96,13 +96,7 @@ function KaraokeLyricLineInner({
   // ── 非当前行：简单显示 ──
   if (!isActive) {
     return (
-      <Box
-        py={1}
-        sx={{
-          opacity: 0.3,
-          transition: "opacity 0.4s ease",
-        }}
-      >
+      <Box py={1}>
         <Text
           fontSize={`${fontSize}px`}
           color={textColor}
@@ -117,7 +111,6 @@ function KaraokeLyricLineInner({
           <Text
             fontSize={`${fontSize - 4}px`}
             color={subTextColor}
-            opacity={0.7}
             mt={1}
             textAlign="center"
             noOfLines={1}

@@ -24,6 +24,8 @@ interface BackgroundContextType {
   activeBgIndex: number;
   dynamicBgVideo: string | null;
   liquidGlassEnabled: boolean;
+  liquidGlassBlur: number;
+  backgroundBlur: number;
   activePresetIndex: number;
   presetBackgrounds: PresetBackground[];
   carouselEnabled: boolean;
@@ -34,6 +36,8 @@ interface BackgroundContextType {
   setActiveBgIndex: (index: number) => void;
   setDynamicBgVideo: (video: string | null) => void;
   setLiquidGlassEnabled: (enabled: boolean) => void;
+  setLiquidGlassBlur: (blur: number) => void;
+  setBackgroundBlur: (blur: number) => void;
   setActivePresetIndex: (index: number) => void;
   setCarouselEnabled: (enabled: boolean) => void;
 }
@@ -44,6 +48,8 @@ const BackgroundContext = createContext<BackgroundContextType>({
   activeBgIndex: 0,
   dynamicBgVideo: null,
   liquidGlassEnabled: false,
+  liquidGlassBlur: 1,
+  backgroundBlur: 0,
   activePresetIndex: 0,
   presetBackgrounds: PRESET_BACKGROUNDS,
   carouselEnabled: false,
@@ -54,6 +60,8 @@ const BackgroundContext = createContext<BackgroundContextType>({
   setActiveBgIndex: () => {},
   setDynamicBgVideo: () => {},
   setLiquidGlassEnabled: () => {},
+  setLiquidGlassBlur: () => {},
+  setBackgroundBlur: () => {},
   setActivePresetIndex: () => {},
   setCarouselEnabled: () => {},
 });
@@ -72,6 +80,8 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [activeBgIndex, setActiveBgIndex] = useState(0);
   const [dynamicBgVideo, setDynamicBgVideo] = useState<string | null>(null);
   const [liquidGlassEnabled, setLiquidGlassEnabled] = useState(false);
+  const [liquidGlassBlur, setLiquidGlassBlur] = useState(1);
+  const [backgroundBlur, setBackgroundBlur] = useState(0);
   const [activePresetIndex, setActivePresetIndex] = useState(0);
   const [carouselEnabled, setCarouselEnabled] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -81,13 +91,15 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     async function loadSettings() {
       try {
         // 批量读取所有设置，减少 store IO 调用次数
-        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedActivePreset, savedCarousel, hasLaunched] =
+        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedBgBlur, savedActivePreset, savedCarousel, hasLaunched] =
           await Promise.all([
             store.get<string>("background-mode"),
             store.get<string[]>("custom-bg-images"),
             store.get<number>("active-bg-index"),
             store.get<string>("dynamic-bg-video"),
             store.get<boolean>("liquid-glass-enabled"),
+            store.get<number>("liquid-glass-blur"),
+            store.get<number>("background-blur"),
             store.get<number>("active-preset-index"),
             store.get<boolean>("carousel-enabled"),
             store.get<boolean>("has-launched"),
@@ -127,6 +139,12 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         if (savedLiquidGlass !== null && savedLiquidGlass !== undefined) {
           setLiquidGlassEnabled(savedLiquidGlass);
         }
+        if (savedLiquidGlassBlur !== null && savedLiquidGlassBlur !== undefined) {
+          setLiquidGlassBlur(savedLiquidGlassBlur);
+        }
+        if (savedBgBlur !== null && savedBgBlur !== undefined) {
+          setBackgroundBlur(savedBgBlur);
+        }
 
         setIsLoaded(true);
       } catch (error) {
@@ -161,6 +179,8 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         }
 
         await store.set("liquid-glass-enabled", liquidGlassEnabled);
+        await store.set("liquid-glass-blur", liquidGlassBlur);
+        await store.set("background-blur", backgroundBlur);
         await store.set("carousel-enabled", carouselEnabled);
 
         await store.save();
@@ -170,7 +190,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     }
 
     saveSettings();
-  }, [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, activePresetIndex, carouselEnabled, isLoaded]);
+  }, [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, backgroundBlur, activePresetIndex, carouselEnabled, isLoaded]);
 
   // 预设壁纸轮播定时器
   const carouselTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -218,6 +238,8 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     activeBgIndex,
     dynamicBgVideo,
     liquidGlassEnabled,
+    liquidGlassBlur,
+    backgroundBlur,
     activePresetIndex,
     presetBackgrounds: PRESET_BACKGROUNDS,
     carouselEnabled,
@@ -228,9 +250,11 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     setActiveBgIndex,
     setDynamicBgVideo,
     setLiquidGlassEnabled,
+    setLiquidGlassBlur,
+    setBackgroundBlur,
     setActivePresetIndex,
     setCarouselEnabled,
-  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, activePresetIndex, carouselEnabled, addCustomBgImage, removeCustomBgImage]);
+  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, backgroundBlur, activePresetIndex, carouselEnabled, addCustomBgImage, removeCustomBgImage]);
 
   return (
     <BackgroundContext.Provider value={value}>
