@@ -179,7 +179,6 @@ function KaraokeLyricLineInner({
             width: "0%",
             overflow: "hidden",
             color: highlightColor,
-            willChange: "width",
             maskImage: maskGradient,
             WebkitMaskImage: maskGradient,
           }}

@@ -80,7 +80,7 @@ fn convert_header_value(val: &reqwest::header::HeaderValue) -> HeaderValue {
     HeaderValue::from_bytes(val.as_bytes()).unwrap_or(HeaderValue::from_static(""))
 }
 
-/// 音频代理 - 支持 Range 请求
+/// 音频代理 - 支持 Range 请求，纯流式透传（零额外开销）
 async fn audio_proxy(Query(query): Query<ProxyQuery>, headers: HeaderMap) -> Response {
     let audio_url = &query.url;
     if !audio_url.starts_with("http") {
@@ -125,7 +125,7 @@ async fn audio_proxy(Query(query): Query<ProxyQuery>, headers: HeaderMap) -> Res
         out_headers.insert("Content-Range", convert_header_value(cr));
     }
 
-    // 流式传输：边下边播，不再等全量下载完才响应
+    // 流式传输：边下边播，纯透传，零额外内存开销
     let stream = resp.bytes_stream().map(|result| {
         result.map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     });

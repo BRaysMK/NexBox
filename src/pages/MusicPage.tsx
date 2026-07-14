@@ -49,7 +49,7 @@ import {
   TrendingUp,
   Film,
 } from "lucide-react";
-import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
+import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import type { Song, Playlist, Artist } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
@@ -348,13 +348,6 @@ const ProgressSection = memo(function ProgressSection({
     }
   }, []);
 
-  const formatTime = (time: number): string => {
-    if (isNaN(time)) return "0:00";
-    const m = Math.floor(time / 60);
-    const s = Math.floor(time % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
   return (
     <HStack spacing={3} w="100%" maxW="600px">
       <Text color={subTextColor} fontSize="xs" w="45px" textAlign="center">
@@ -484,13 +477,21 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
     return buildKaraokeLines(currentLyrics);
   }, [currentLyrics]);
 
+  // 关闭动画定时器清理，防止组件卸载后定时器仍触发
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
   if (!currentSong) return null;
 
   const isLiked = likedSongIds.has(currentSong.id);
 
   const handleCloseWithAnimation = useCallback(() => {
     setIsClosing(true);
-    setTimeout(() => onClose(), 300);
+    closeTimerRef.current = setTimeout(() => onClose(), 300);
   }, [onClose]);
 
   return (
@@ -1164,11 +1165,13 @@ const PlayerProgress = memo(function PlayerProgress({
   subTextColor,
   sliderTrackBg,
   currentSong,
+  hidden,
 }: {
   activeColor: string;
   subTextColor: string;
   sliderTrackBg: string;
   currentSong: Song | null;
+  hidden?: boolean;
 }) {
   const audioRef = useMusicStore((s) => s.audioRef);
   const storeDuration = useMusicStore((s) => s.duration);
@@ -1182,7 +1185,7 @@ const PlayerProgress = memo(function PlayerProgress({
   }, [storeDuration]);
 
   useEffect(() => {
-    if (!audioRef) return;
+    if (!audioRef || hidden) return;
     if (audioRef.duration && isFinite(audioRef.duration)) {
       setLocalDuration(audioRef.duration);
     }
@@ -1202,7 +1205,7 @@ const PlayerProgress = memo(function PlayerProgress({
       audioRef.removeEventListener("timeupdate", onTimeUpdate);
       audioRef.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
-  }, [audioRef]);
+  }, [audioRef, hidden]);
 
   useEffect(() => {
     setLocalCurrentTime(0);
@@ -1264,7 +1267,7 @@ const PlayerProgress = memo(function PlayerProgress({
 // 关键：用 local state 监听 timeupdate，播放期间不更新 store
 // 这样搜索框等组件完全不受播放影响
 // ═══════════════════════════════════════════════
-const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void }) {
+const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () => void; hidden?: boolean }) {
   const currentSong = useMusicStore((s) => s.currentSong);
   const isPlaying = useMusicStore((s) => s.isPlaying);
   const volume = useMusicStore((s) => s.volume);
@@ -1567,6 +1570,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
           subTextColor={subTextColor}
           sliderTrackBg={sliderTrackBg}
           currentSong={currentSong}
+          hidden={hidden}
         />
       </VStack>
     </LiquidGlassCard>
@@ -1621,13 +1625,6 @@ const SongRow = memo(function SongRow({
   onToggleLike,
   onArtistClick,
 }: SongRowProps) {
-  const formatTime = (time: number): string => {
-    if (isNaN(time)) return "0:00";
-    const m = Math.floor(time / 60);
-    const s = Math.floor(time % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
   return (
     <HStack
       key={`${song.provider}-${song.id}-${index}`}
@@ -1795,6 +1792,16 @@ const SearchBox = memo(function SearchBox({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // 卸载时清理 debounce 定时器，防止回调操作已卸载组件
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
+  }, []);
+
   // ── 搜索：边输入边出预览（debounce 300ms）──
   // 非受控：直接从 input ref 读取值，不触发 setState
   const handleInputChange = useCallback((value: string) => {
@@ -1860,7 +1867,7 @@ const SearchBox = memo(function SearchBox({
   }, []);
 
   // ── 渲染歌曲行 ──
-  const renderSongRow = (song: Song, index: number, queue: Song[]) => {
+  const renderSongRow = useCallback((song: Song, index: number, queue: Song[]) => {
     const state = useMusicStore.getState();
     return (
       <SongRow
@@ -1886,7 +1893,7 @@ const SearchBox = memo(function SearchBox({
         onArtistClick={onArtistClick}
       />
     );
-  };
+  }, [likedSongIds, activeColor, hoverBg, itemHoverBg, itemActiveBg, textColor, subTextColor, liquidGlassEnabled, onPlay, onTogglePlay, onToggleLike, onArtistClick]);
 
   return (
     <Box ref={searchBoxRef} position="relative" flexShrink={0}>
@@ -2059,6 +2066,9 @@ export default function MusicPage() {
   const itemHoverBg = useColorModeValue("gray.50", "rgba(255,255,255,0.05)");
   const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
 
+  // memoize scrollbarSx，避免每次渲染创建新对象导致子组件不必要重渲染
+  const memoScrollbarSx = useMemo(() => scrollbarSx(activeColor), [activeColor]);
+
   useEffect(() => {
     const storeState = useMusicStore.getState();
     const audio = storeState.audioRef ?? new Audio();
@@ -2099,6 +2109,8 @@ export default function MusicPage() {
 
     return () => {
       // 离开页面不暂停 — Audio 留在 store 中继续播放
+      // 停止桌面歌词时间同步定时器，避免 100ms 间隔的空转
+      stopTimeSync();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2234,7 +2246,7 @@ setRightPanelView("tracks");
   }, []);
 
   // ── 渲染歌曲行 ──
-  const renderSongRow = (song: Song, index: number, queue: Song[]) => (
+  const renderSongRow = useCallback((song: Song, index: number, queue: Song[]) => (
     <SongRow
       key={`${song.provider}-${song.id}-${index}`}
       song={song}
@@ -2257,6 +2269,20 @@ setRightPanelView("tracks");
       onToggleLike={onToggleLike}
       onArtistClick={handleArtistClick}
     />
+  ), [currentSong, isPlaying, likedSongIds, loginInfo, proxyPort, activeColor, hoverBg, itemHoverBg, itemActiveBg, textColor, subTextColor, liquidGlassEnabled, onPlay, onTogglePlay, onToggleLike, handleArtistClick]);
+
+  // VirtualList renderItem 回调（useCallback 稳定引用，避免 VirtualList memo 失效）
+  const renderArtistSongItem = useCallback(
+    (song: Song, i: number) => renderSongRow(song, i, artistSongs),
+    [renderSongRow, artistSongs]
+  );
+  const renderLeftTrackItem = useCallback(
+    (song: Song, i: number) => renderSongRow(song, i, leftPlaylistTracks),
+    [renderSongRow, leftPlaylistTracks]
+  );
+  const renderRightTrackItem = useCallback(
+    (song: Song, i: number) => renderSongRow(song, i, rightPlaylistTracks),
+    [renderSongRow, rightPlaylistTracks]
   );
 
   // ── 渲染歌单行（可自定义 onClick）──
@@ -2377,11 +2403,11 @@ setRightPanelView("tracks");
             <VirtualList
               items={artistSongs}
               itemHeight={60}
-              renderItem={(song, i) => renderSongRow(song, i, artistSongs)}
+              renderItem={renderArtistSongItem}
               getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
               emptyText="暂无歌曲"
               resetKey={selectedArtist?.id}
-              scrollbarSx={scrollbarSx(activeColor)}
+              scrollbarSx={memoScrollbarSx}
             />
           ) : (
             <VStack py={12} spacing={2}>
@@ -2391,7 +2417,7 @@ setRightPanelView("tracks");
           )}
         </LiquidGlassCard>
 
-        <PlayerBar onExpand={handleExpandPlayer} />
+        <PlayerBar onExpand={handleExpandPlayer} hidden={expandedPlayer} />
 
         {/* 展开的播放器 */}
         {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
@@ -2468,7 +2494,7 @@ setRightPanelView("tracks");
                 <Text color={subTextColor} fontSize="sm">加载曲目中...</Text>
               </VStack>
             ) : searchExpandedTracks.length > 0 ? (
-              <Box flex={1} overflowY="scroll" sx={scrollbarSx(activeColor)}>
+              <Box flex={1} overflowY="scroll" sx={memoScrollbarSx}>
                 <VStack spacing={1} align="stretch">
                   {searchExpandedTracks.map((song, i) => renderSongRow(song, i, searchExpandedTracks))}
                 </VStack>
@@ -2481,7 +2507,7 @@ setRightPanelView("tracks");
             )}
           </LiquidGlassCard>
 
-          <PlayerBar onExpand={handleExpandPlayer} />
+          <PlayerBar onExpand={handleExpandPlayer} hidden={expandedPlayer} />
           {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
         </VStack>
       );
@@ -2575,7 +2601,7 @@ setRightPanelView("tracks");
               <Text color={subTextColor} fontSize="sm">没有找到相关内容</Text>
             </VStack>
           ) : (
-            <Box flex={1} overflowY="auto" overflowX="hidden" sx={scrollbarSx(activeColor)}>
+            <Box flex={1} overflowY="auto" overflowX="hidden" sx={memoScrollbarSx}>
               <AnimatePresence mode="wait">
                 <motion.div key={searchTab} variants={tabContentVariants} initial="hidden" animate="visible" exit="exit">
               {/* ── 单曲标签 ── */}
@@ -2750,7 +2776,7 @@ setRightPanelView("tracks");
           )}
         </LiquidGlassCard>
 
-        <PlayerBar onExpand={handleExpandPlayer} />
+        <PlayerBar onExpand={handleExpandPlayer} hidden={expandedPlayer} />
 
         {/* 展开的播放器 */}
         {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
@@ -2796,7 +2822,7 @@ setRightPanelView("tracks");
         />
 
         <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
-          <Box flex={1} overflowY="scroll" sx={scrollbarSx(activeColor)}>
+          <Box flex={1} overflowY="scroll" sx={memoScrollbarSx}>
             <VStack spacing={2} align="stretch">
               {artistSearchResults.map((artist) => (
                 <HStack
@@ -2845,7 +2871,7 @@ setRightPanelView("tracks");
           </Box>
         </LiquidGlassCard>
 
-        <PlayerBar onExpand={handleExpandPlayer} />
+        <PlayerBar onExpand={handleExpandPlayer} hidden={expandedPlayer} />
 
         {/* 展开的播放器 */}
         {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
@@ -2905,13 +2931,13 @@ setRightPanelView("tracks");
                 <VirtualList
                   items={leftPlaylistTracks}
                   itemHeight={60}
-                  renderItem={(song, i) => renderSongRow(song, i, leftPlaylistTracks)}
+                  renderItem={renderLeftTrackItem}
                   getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
                   loading={loadingLeftTracks}
                   loadingText="加载曲目中..."
                   emptyText="暂无曲目"
                   resetKey={leftPlaylistMeta?.id}
-                  scrollbarSx={scrollbarSx(activeColor)}
+                  scrollbarSx={memoScrollbarSx}
                   onEndReached={() => storeActions.loadMoreLeftPlaylistTracks()}
                   hasMore={(leftPlaylistMeta?.track_count ?? 0) > leftPlaylistTracks.length}
                 />
@@ -2922,7 +2948,7 @@ setRightPanelView("tracks");
                 <Text fontSize="sm" fontWeight="bold" color={textColor} mb={3} flexShrink={0}>
                   我的歌单
                 </Text>
-                <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
+                <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
                   {loadingPlaylists ? (
                     <VStack py={6}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
                   ) : userPlaylists.length > 0 ? (
@@ -2981,13 +3007,13 @@ setRightPanelView("tracks");
                 <VirtualList
                   items={rightPlaylistTracks}
                   itemHeight={60}
-                  renderItem={(song, i) => renderSongRow(song, i, rightPlaylistTracks)}
+                  renderItem={renderRightTrackItem}
                   getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
                   loading={loadingRightTracks}
                   loadingText="加载曲目中..."
                   emptyText="暂无曲目"
                   resetKey={rightPlaylistMeta?.id}
-                  scrollbarSx={scrollbarSx(activeColor)}
+                  scrollbarSx={memoScrollbarSx}
                   onEndReached={() => storeActions.loadMoreRightPlaylistTracks()}
                   hasMore={(rightPlaylistMeta?.track_count ?? 0) > rightPlaylistTracks.length}
                 />
@@ -3019,7 +3045,7 @@ setRightPanelView("tracks");
                     <TrendingUp size={13} color={activeColor} />
                     <Text fontSize="2xs" fontWeight="bold" color={subTextColor}>官方榜单</Text>
                   </HStack>
-                  <HStack spacing={1.5} minW={0} overflowX="auto" sx={scrollbarSx(activeColor)}>
+                  <HStack spacing={1.5} minW={0} overflowX="auto" sx={memoScrollbarSx}>
                     {officialCharts.length > 0 ? officialCharts.map((chart) => (
                       <VStack
                         key={chart.id}
@@ -3066,7 +3092,7 @@ setRightPanelView("tracks");
                   </HStack>
                 </VStack>
 
-                <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
+                <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
                   {!loginInfo?.logged_in ? (
                     <VStack py={8} spacing={3}>
                       <MusicIcon size={32} color={subTextColor} />
@@ -3092,7 +3118,7 @@ setRightPanelView("tracks");
       </HStack>
 
       {/* 底部播放器 */}
-      <PlayerBar onExpand={handleExpandPlayer} />
+      <PlayerBar onExpand={handleExpandPlayer} hidden={expandedPlayer} />
 
       {/* 展开的播放器 */}
       {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}

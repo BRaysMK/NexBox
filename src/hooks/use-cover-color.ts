@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 
 interface CoverColor {
   hex: string;       // 主色 hex 值
@@ -64,30 +64,61 @@ function extractDominantColor(img: HTMLImageElement): CoverColor {
   return { hex, isLight, rgb: [r, g, b] };
 }
 
+const DEFAULT_COLOR: CoverColor = { hex: "#1a1a2e", isLight: false, rgb: [26, 26, 46] };
+
+// 缓存：同一 URL 不重复提取，避免 Strict Mode 双调用和重复展开时重复计算
+const coverColorCache = new Map<string, CoverColor>();
+
 /**
  * 从专辑封面提取主色
+ *
+ * 清理策略：
+ * - cancelled 标志防止卸载后 setState
+ * - 断开 onload/onerror 闭包引用，允许 GC
+ * - 不设置 img.src = ""（会取消图片加载）
+ * - 不使用 lastUrlRef 跳过（与 Strict Mode 双调用冲突，导致图片永不加载）
+ * - 用模块级缓存替代 lastUrlRef 去重
  */
 export function useCoverColor(coverUrl: string): CoverColor {
-  const [color, setColor] = useState<CoverColor>({ hex: "#1a1a2e", isLight: false, rgb: [26, 26, 46] });
-  const lastUrlRef = useRef("");
+  const [color, setColor] = useState<CoverColor>(() => {
+    // 初始化时尝试从缓存读取，避免首次渲染闪烁
+    return coverColorCache.get(coverUrl) ?? DEFAULT_COLOR;
+  });
 
   useEffect(() => {
-    if (!coverUrl || coverUrl === lastUrlRef.current) return;
-    lastUrlRef.current = coverUrl;
+    if (!coverUrl) return;
 
+    // 缓存命中：直接使用，无需创建 Image
+    const cached = coverColorCache.get(coverUrl);
+    if (cached) {
+      setColor(cached);
+      return;
+    }
+
+    let cancelled = false;
     const img = new Image();
     img.crossOrigin = "anonymous";
 
     img.onload = () => {
+      if (cancelled) return;
       const c = extractDominantColor(img);
+      if (cancelled) return;
+      coverColorCache.set(coverUrl, c);
       setColor(c);
     };
 
     img.onerror = () => {
-      setColor({ hex: "#1a1a2e", isLight: false, rgb: [26, 26, 46] });
+      if (cancelled) return;
+      setColor(DEFAULT_COLOR);
     };
 
     img.src = coverUrl;
+
+    return () => {
+      cancelled = true;
+      img.onload = null;
+      img.onerror = null;
+    };
   }, [coverUrl]);
 
   return color;

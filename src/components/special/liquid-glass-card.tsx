@@ -51,9 +51,12 @@ export function LiquidGlassCard({
       WebkitTransform: "translateZ(0)",
       WebkitBackfaceVisibility: "hidden",
       backfaceVisibility: "hidden",
-      willChange: "backdrop-filter, transform",
+      // willChange 仅在启用液态玻璃时设置，避免大量静态卡片累积 GPU 图层
+      ...(liquidGlassEnabled ? { willChange: "backdrop-filter" } : {}),
     },
   }), [effectiveBlur, liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder, isDashed]);
+
+  const borderGlowStyle = useMemo(() => getBorderGlowStyle(glowColor), [glowColor]);
 
   return (
     <Box
@@ -63,7 +66,7 @@ export function LiquidGlassCard({
       {...props}
     >
       <Box
-        style={getBorderGlowStyle(glowColor)}
+        style={borderGlowStyle}
         opacity={liquidGlassEnabled ? 1 : 0}
         transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
       />

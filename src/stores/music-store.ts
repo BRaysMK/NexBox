@@ -22,6 +22,7 @@ interface MusicState {
   currentTime: number;
   duration: number;
   volume: number;
+  prevVolume: number;
   playMode: PlayMode;
   playQueue: Song[];
   currentIndex: number;
@@ -162,6 +163,9 @@ const getStore = async (): Promise<Store> => {
 let timeSyncTimer: ReturnType<typeof setInterval> | null = null;
 // 防止 React Strict Mode 双重调用 init 导致重复注册 listener
 let listenersRegistered = false;
+// 存储 Tauri 事件监听器的取消函数，防止内存泄漏
+const unlistenFns: (() => void)[] = [];
+
 function startTimeSync() {
   if (timeSyncTimer) return;
   timeSyncTimer = setInterval(() => {
@@ -174,11 +178,18 @@ function startTimeSync() {
     }
   }, 100);
 }
-function stopTimeSync() {
+export function stopTimeSync() {
   if (timeSyncTimer) {
     clearInterval(timeSyncTimer);
     timeSyncTimer = null;
   }
+}
+
+/** 清理所有 Tauri 事件监听器，防止内存泄漏 */
+export function cleanupMusicListeners() {
+  unlistenFns.forEach((fn) => fn());
+  unlistenFns.length = 0;
+  listenersRegistered = false;
 }
 
 async function getProxyAudioUrl(rawUrl: string, proxyPort: number): Promise<string> {
@@ -197,6 +208,8 @@ export function coverProxyUrl(url: string, proxyPort: number): string {
 
 /// 后台批量加载歌单剩余曲目到播放队列（不加入歌单列表）
 /// 优化：先在本地累积所有批次，最后做一次去重 setState，避免重复歌曲和频繁 re-render
+/// 限制：播放队列最大 2000 首，超出部分不再追加，防止内存无限增长
+const MAX_PLAY_QUEUE = 2000;
 let batchLoadGuard: string | null = null;
 async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalCount: number) {
   if (initialSongs.length >= totalCount) return;
@@ -224,6 +237,8 @@ async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalC
         }
       }
       offset += 200;
+      // 队列已达上限，停止加载
+      if (initialSongs.length + collected.length >= MAX_PLAY_QUEUE) break;
     }
   } catch {
     // 网络错误中断，已收集的部分仍然写入
@@ -241,8 +256,11 @@ async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalC
   if (isSameList) {
     const queueIds = new Set(state.playQueue.map((s) => s.id));
     const unique = collected.filter((s) => !queueIds.has(s.id));
-    if (unique.length > 0) {
-      useMusicStore.setState({ playQueue: [...state.playQueue, ...unique] });
+    // 截断到最大队列长度
+    const remaining = MAX_PLAY_QUEUE - state.playQueue.length;
+    const toAdd = unique.slice(0, Math.max(0, remaining));
+    if (toAdd.length > 0) {
+      useMusicStore.setState({ playQueue: [...state.playQueue, ...toAdd] });
     }
   }
 }
@@ -253,6 +271,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   currentTime: 0,
   duration: 0,
   volume: 0.7,
+  prevVolume: 0.7,
   playMode: "list",
   playQueue: [],
   currentIndex: -1,
@@ -366,69 +385,77 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     listenersRegistered = true;
 
     // 桌面歌词控制事件监听
-    listen<{ action: string }>("desktop-lyrics:control", (event) => {
-      const { action } = event.payload;
-      switch (action) {
-        case "play-pause":
-          get().togglePlay();
-          break;
-        case "prev":
-          get().prevTrack();
-          break;
-        case "next":
-          get().nextTrack();
-          break;
-        case "toggle-shuffle":
-          get().togglePlayMode();
-          break;
-        case "lock":
-          get().setDesktopLyricsLocked(true);
-          break;
-        case "unlock":
-          get().setDesktopLyricsLocked(false);
-          break;
-      }
-    });
+    unlistenFns.push(
+      await listen<{ action: string }>("desktop-lyrics:control", (event) => {
+        const { action } = event.payload;
+        switch (action) {
+          case "play-pause":
+            get().togglePlay();
+            break;
+          case "prev":
+            get().prevTrack();
+            break;
+          case "next":
+            get().nextTrack();
+            break;
+          case "toggle-shuffle":
+            get().togglePlayMode();
+            break;
+          case "lock":
+            get().setDesktopLyricsLocked(true);
+            break;
+          case "unlock":
+            get().setDesktopLyricsLocked(false);
+            break;
+        }
+      })
+    );
 
     // 桌面歌词窗口就绪后请求数据
     // 解决窗口首次打开时 emit 早于 listen 注册的时序问题
-    listen("desktop-lyrics:request-data", () => {
-      // 小延时确保请求方 listener 完全就绪
-      setTimeout(() => {
-        get().emitDesktopLyricsData();
-        get().emitDesktopLyricsSettings();
-        emit("desktop-lyrics:state", {
-          isPlaying: get().isPlaying,
-          playMode: get().playMode,
-          volume: get().volume,
-        });
-      }, 50);
-    });
+    unlistenFns.push(
+      await listen("desktop-lyrics:request-data", () => {
+        // 小延时确保请求方 listener 完全就绪
+        setTimeout(() => {
+          get().emitDesktopLyricsData();
+          get().emitDesktopLyricsSettings();
+          emit("desktop-lyrics:state", {
+            isPlaying: get().isPlaying,
+            playMode: get().playMode,
+            volume: get().volume,
+          });
+        }, 50);
+      })
+    );
 
     // 监听登录成功事件 (来自网页登录窗口的 cookie 捕获)
     // 后端会附带 LoginInfo 数据
-    listen<LoginInfo>("netease-login-success", async (event) => {
-      console.log("[Music] Login success event received", event.payload);
-      const info = event.payload;
-      if (info && info.logged_in) {
-        // 直接使用后端返回的登录信息
-        set({ loginInfo: info });
-        get().loadUserPlaylists();
-        get().loadLikedList();
-      } else {
-        // 后端没带数据，手动刷新
-        await get().loginStatus();
-        if (get().loginInfo?.logged_in) {
+    unlistenFns.push(
+      await listen<LoginInfo>("netease-login-success", async (event) => {
+        console.log("[Music] Login success event received", event.payload);
+        const info = event.payload;
+        if (info && info.logged_in) {
+          // 直接使用后端返回的登录信息
+          set({ loginInfo: info });
           get().loadUserPlaylists();
           get().loadLikedList();
+        } else {
+          // 后端没带数据，手动刷新
+          await get().loginStatus();
+          if (get().loginInfo?.logged_in) {
+            get().loadUserPlaylists();
+            get().loadLikedList();
+          }
         }
-      }
-    });
+      })
+    );
 
     // 监听登录失败事件
-    listen<string>("netease-login-failed", (event) => {
-      console.error("[Music] Login failed:", event.payload);
-    });
+    unlistenFns.push(
+      await listen<string>("netease-login-failed", (event) => {
+        console.error("[Music] Login failed:", event.payload);
+      })
+    );
 
     // 检查登录状态
     await get().loginStatus();
@@ -649,9 +676,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   setVolume: (v) => {
-    const { audioRef } = get();
+    const { audioRef, prevVolume } = get();
     if (audioRef) audioRef.volume = v;
-    set({ volume: v });
+    set({ volume: v, prevVolume: v > 0 ? v : prevVolume });
     getStore().then((s) => s.set("volume", v).then(() => s.save()));
   },
 
