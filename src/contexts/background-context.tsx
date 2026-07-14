@@ -108,9 +108,16 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         if (!hasLaunched) {
           setIsFirstLaunch(true);
           // 首次启动默认启用预设背景和自动轮播
-          setBackgroundMode("preset");
-          setActivePresetIndex(0);
-          setCarouselEnabled(true);
+          const defaultMode: BackgroundMode = "preset";
+          const defaultPresetIndex = 0;
+          const defaultCarousel = true;
+          setBackgroundMode(defaultMode);
+          setActivePresetIndex(defaultPresetIndex);
+          setCarouselEnabled(defaultCarousel);
+          // 首次启动时直接保存所有默认设置，避免保存 effect 未及时触发导致设置丢失
+          await store.set("background-mode", defaultMode);
+          await store.set("active-preset-index", defaultPresetIndex);
+          await store.set("carousel-enabled", defaultCarousel);
           await store.set("has-launched", true);
           await store.save();
         } else {

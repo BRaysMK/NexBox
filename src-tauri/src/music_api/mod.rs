@@ -107,6 +107,24 @@ pub async fn music_playlist_tracks(id: String) -> Result<(Playlist, Vec<Song>), 
 }
 
 #[tauri::command]
+pub async fn music_playlist_tracks_range(id: String, start: usize, count: usize) -> Result<Vec<Song>, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::playlist_tracks_range(&id, start, count, &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_playlist_info_with_track_ids(id: String) -> Result<(Playlist, Vec<String>), String> {
+    let app_cookie = get_app_cookie().await;
+    netease::playlist_info_with_track_ids(&id, &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_playlist_detail(id: String) -> Result<Playlist, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::playlist_detail(&id, &app_cookie).await
+}
+
+#[tauri::command]
 pub async fn music_likelist(app: AppHandle) -> Result<Vec<String>, String> {
     let app_cookie = load_app_cookie(&app).await;
     let info = netease::login_status(&app_cookie).await?;
@@ -117,6 +135,12 @@ pub async fn music_likelist(app: AppHandle) -> Result<Vec<String>, String> {
 pub async fn music_like(id: String, like: bool) -> Result<(), String> {
     let app_cookie = get_app_cookie().await;
     netease::like(&id, like, &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_playlist_subscribe(id: String, subscribe: bool) -> Result<(), String> {
+    let app_cookie = get_app_cookie().await;
+    netease::playlist_subscribe(&id, subscribe, &app_cookie).await
 }
 
 #[tauri::command]
@@ -141,6 +165,12 @@ pub async fn music_recommend_songs() -> Result<Vec<Song>, String> {
 pub async fn music_artist_search(keywords: String, limit: Option<u32>) -> Result<Vec<Artist>, String> {
     let app_cookie = get_app_cookie().await;
     netease::artist_search(&keywords, limit.unwrap_or(30), &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_playlist_search(keywords: String, limit: Option<u32>) -> Result<Vec<Playlist>, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::playlist_search(&keywords, limit.unwrap_or(30), &app_cookie).await
 }
 
 #[tauri::command]

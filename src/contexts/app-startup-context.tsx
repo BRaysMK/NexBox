@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { type HardwareInfo, getHardwareInfo } from "@/lib/hardware";
 
@@ -448,11 +447,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
 
     runStartup();
 
-    const unlisten = listen("tauri://close-requested", () => {});
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
+    return () => {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

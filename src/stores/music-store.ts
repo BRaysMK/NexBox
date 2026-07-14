@@ -38,6 +38,11 @@ interface MusicState {
   // 右侧「推荐歌单」面板的曲目
   rightPlaylistTracks: Song[];
   rightPlaylistMeta: Playlist | null;
+  // 歌单分页
+  leftPlaylistTotalTrackIds: string[];
+  rightPlaylistTotalTrackIds: string[];
+  leftPlaylistLoadingMore: boolean;
+  rightPlaylistLoadingMore: boolean;
   likedSongIds: Set<string>;
   currentLyrics: Lyrics | null;
   recommendations: Playlist[];
@@ -49,6 +54,13 @@ interface MusicState {
   selectedArtist: Artist | null;
   searchingArtists: boolean;
   loadingArtistSongs: boolean;
+
+  // 歌单搜索
+  playlistSearchResults: Playlist[];
+  searchingPlaylists: boolean;
+
+  // 官方榜单
+  officialCharts: Playlist[];
 
   // 音质
   playbackQuality: PlaybackQuality;
@@ -79,6 +91,7 @@ interface MusicState {
   loadingLyrics: boolean;
   expandedStyle: "glass" | "modern";
   dynamicEnabled: boolean;
+  coverFilmEffect: boolean;
 
   // 音频元素引用
   audioRef: HTMLAudioElement | null;
@@ -91,6 +104,7 @@ interface MusicState {
   searchArtists: (keywords: string) => Promise<void>;
   loadArtistSongs: (artistId: string, offset?: number) => Promise<void>;
   clearArtistState: () => void;
+  searchPlaylists: (keywords: string) => Promise<void>;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -103,6 +117,7 @@ interface MusicState {
   setLyricsHighlightColor: (color: string) => Promise<void>;
   setExpandedStyle: (style: "glass" | "modern") => Promise<void>;
   setDynamicEnabled: (enabled: boolean) => Promise<void>;
+  setCoverFilmEffect: (enabled: boolean) => Promise<void>;
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
 
@@ -124,11 +139,15 @@ interface MusicState {
 
   loadUserPlaylists: () => Promise<void>;
   loadLeftPlaylistTracks: (id: string) => Promise<void>;
+  loadMoreLeftPlaylistTracks: () => Promise<void>;
   loadRightPlaylistTracks: (id: string) => Promise<void>;
+  loadMoreRightPlaylistTracks: () => Promise<void>;
   loadLikedList: () => Promise<void>;
   toggleLike: (songId: string) => Promise<void>;
   loadLyrics: (songId: string) => Promise<void>;
   loadRecommendations: () => Promise<void>;
+  loadOfficialCharts: () => Promise<void>;
+  togglePlaylistSubscribe: (playlistId: string, currentSubscribed: boolean) => Promise<void>;
 }
 
 let storeInstance: Store | null = null;
@@ -176,6 +195,58 @@ export function coverProxyUrl(url: string, proxyPort: number): string {
   return `http://127.0.0.1:${proxyPort}/cover?url=${encodeURIComponent(url)}`;
 }
 
+/// 后台批量加载歌单剩余曲目到播放队列（不加入歌单列表）
+/// 优化：先在本地累积所有批次，最后做一次去重 setState，避免重复歌曲和频繁 re-render
+let batchLoadGuard: string | null = null;
+async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalCount: number) {
+  if (initialSongs.length >= totalCount) return;
+  // 防止并发执行同一歌单的后台加载
+  if (batchLoadGuard === playlistId) return;
+  batchLoadGuard = playlistId;
+
+  // 本地累积，仅在结束时做一次 setState
+  const collected: Song[] = [];
+  const seenIds = new Set(initialSongs.map((s) => s.id));
+  let offset = initialSongs.length;
+
+  try {
+    while (offset < totalCount) {
+      const batch = await invoke<Song[]>("music_playlist_tracks_range", { id: playlistId, start: offset, count: 200 });
+      if (batch.length === 0) break;
+      // 检查用户是否已切换到其他歌单
+      const state = useMusicStore.getState();
+      if (state.leftPlaylistMeta?.id !== playlistId && state.rightPlaylistMeta?.id !== playlistId) break;
+      // 去重：跳过已收集的歌曲
+      for (const song of batch) {
+        if (!seenIds.has(song.id)) {
+          seenIds.add(song.id);
+          collected.push(song);
+        }
+      }
+      offset += 200;
+    }
+  } catch {
+    // 网络错误中断，已收集的部分仍然写入
+  } finally {
+    batchLoadGuard = null;
+  }
+
+  if (collected.length === 0) return;
+
+  // 单次 setState，并对当前 playQueue 去重
+  const state = useMusicStore.getState();
+  const isSameList = state.playQueue.length > 0
+    && state.currentSong
+    && state.playQueue.some((s) => s.id === state.currentSong!.id);
+  if (isSameList) {
+    const queueIds = new Set(state.playQueue.map((s) => s.id));
+    const unique = collected.filter((s) => !queueIds.has(s.id));
+    if (unique.length > 0) {
+      useMusicStore.setState({ playQueue: [...state.playQueue, ...unique] });
+    }
+  }
+}
+
 export const useMusicStore = create<MusicState>((set, get) => ({
   currentSong: null,
   isPlaying: false,
@@ -194,6 +265,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   leftPlaylistMeta: null,
   rightPlaylistTracks: [],
   rightPlaylistMeta: null,
+  leftPlaylistTotalTrackIds: [],
+  rightPlaylistTotalTrackIds: [],
+  leftPlaylistLoadingMore: false,
+  rightPlaylistLoadingMore: false,
   likedSongIds: new Set(),
   currentLyrics: null,
   recommendations: [],
@@ -205,6 +280,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   searchingArtists: false,
   loadingArtistSongs: false,
 
+  playlistSearchResults: [],
+  searchingPlaylists: false,
+
+  officialCharts: [],
+
   playbackQuality: "hires",
   currentQuality: "",
   currentBitrate: 0,
@@ -212,6 +292,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   lyricsHighlightColor: "#fff0b8",
   expandedStyle: "modern",
   dynamicEnabled: false,
+  coverFilmEffect: false,
   proxyPort: 0,
 
   desktopLyricsVisible: false,
@@ -259,6 +340,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (expStyle === "modern") set({ expandedStyle: "modern" });
       const dynamic = await store.get<boolean>("dynamicEnabled");
       if (dynamic) set({ dynamicEnabled: true });
+      const filmEffect = await store.get<boolean>("coverFilmEffect");
+      if (filmEffect) set({ coverFilmEffect: true });
       if (dlFontSize != null) set({ desktopLyricsFontSize: dlFontSize });
       if (dlHighlightColor) set({ desktopLyricsHighlightColor: dlHighlightColor });
       if (dlBaseColor) set({ desktopLyricsBaseColor: dlBaseColor });
@@ -267,6 +350,16 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     } catch {
       // ignore
     }
+
+    // 加载缓存的官方榜单（优先显示缓存，后台刷新）
+    try {
+      const s = await getStore();
+      const cached = await s.get<Playlist[]>("officialCharts");
+      if (cached && cached.length > 0) {
+        set({ officialCharts: cached });
+      }
+    } catch {}
+    get().loadOfficialCharts();
 
     // 防止 React Strict Mode 双重调用导致重复注册
     if (listenersRegistered) return;
@@ -342,7 +435,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // 如果已登录, 加载歌单和喜欢列表
     if (get().loginInfo?.logged_in) {
       get().loadUserPlaylists();
-      get().loadLikedList();
+      await get().loadLikedList();
     }
   },
 
@@ -391,6 +484,26 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   clearArtistState: () => {
     set({ artistSearchResults: [], artistSongs: [], selectedArtist: null });
+  },
+
+  searchPlaylists: async (keywords) => {
+    if (!keywords.trim()) return;
+    set({ searchingPlaylists: true, playlistSearchResults: [] });
+    try {
+      const results = await invoke<Playlist[]>("music_playlist_search", { keywords, limit: 30 });
+      // 同步已收藏状态
+      const subscribedIds = new Set(get().userPlaylists.filter((pl) => pl.subscribed).map((pl) => pl.id));
+      set({
+        playlistSearchResults: results.map((pl) =>
+          ({ ...pl, subscribed: subscribedIds.has(pl.id) })
+        ),
+      });
+    } catch (e) {
+      console.error("Playlist search failed:", e);
+      set({ playlistSearchResults: [] });
+    } finally {
+      set({ searchingPlaylists: false });
+    }
   },
 
   playSong: async (song, queue) => {
@@ -602,6 +715,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     getStore().then((s) => s.set("dynamicEnabled", enabled).then(() => s.save()));
   },
 
+  setCoverFilmEffect: async (enabled) => {
+    set({ coverFilmEffect: enabled });
+    getStore().then((s) => s.set("coverFilmEffect", enabled).then(() => s.save()));
+  },
+
   // ══ 桌面歌词 Actions ══
   toggleDesktopLyrics: async () => {
     const visible = !get().desktopLyricsVisible;
@@ -696,6 +814,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     emit("desktop-lyrics:data", {
       song: s.currentSong,
       karaokeLines,
+      currentTime: s.audioRef?.currentTime ?? 0,
+      isPlaying: s.isPlaying,
     });
   },
 
@@ -756,10 +876,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   loadLeftPlaylistTracks: async (id) => {
-    set({ loadingLeftTracks: true });
+    set({ loadingLeftTracks: true, leftPlaylistTracks: [], leftPlaylistMeta: null });
     try {
-      const result = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id });
-      set({ leftPlaylistMeta: result[0], leftPlaylistTracks: result[1] });
+      const [meta, songs] = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id });
+      set({ leftPlaylistMeta: meta, leftPlaylistTracks: songs });
+      // 后台加载全部剩余 → 只追加到播放列表，不塞进歌单
+      batchLoadToQueue(id, songs, meta.track_count);
     } catch {
       set({ leftPlaylistTracks: [] });
     } finally {
@@ -767,15 +889,86 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
-  loadRightPlaylistTracks: async (id) => {
-    set({ loadingRightTracks: true });
+
+  loadMoreLeftPlaylistTracks: async () => {
+    const state = get();
+    const id = state.leftPlaylistMeta?.id;
+    const total = state.leftPlaylistMeta?.track_count ?? 0;
+    if (!id || state.leftPlaylistLoadingMore) return;
+    const start = state.leftPlaylistTracks.length;
+    if (start >= total) return;
+    set({ leftPlaylistLoadingMore: true });
     try {
-      const result = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id });
-      set({ rightPlaylistMeta: result[0], rightPlaylistTracks: result[1] });
+      const songs = await invoke<Song[]>("music_playlist_tracks_range", { id, start, count: 50 });
+      set((s) => {
+        // 如果当前播放队列是从左侧歌单播放的，同步追加（去重）
+        const shouldSync = s.playQueue.length > 0
+          && s.playQueue[s.currentIndex]?.id === s.currentSong?.id
+          && s.leftPlaylistTracks.length > 0
+          && s.leftPlaylistTracks[0]?.id === s.playQueue[0]?.id;
+        if (shouldSync) {
+          const queueIds = new Set(s.playQueue.map((q) => q.id));
+          const unique = songs.filter((song) => !queueIds.has(song.id));
+          return {
+            leftPlaylistTracks: [...s.leftPlaylistTracks, ...songs],
+            playQueue: unique.length > 0 ? [...s.playQueue, ...unique] : s.playQueue,
+          };
+        }
+        return {
+          leftPlaylistTracks: [...s.leftPlaylistTracks, ...songs],
+        };
+      });
+    } catch (e) {
+      console.error("loadMore left failed:", e);
+    } finally {
+      set({ leftPlaylistLoadingMore: false });
+    }
+  },
+
+  loadRightPlaylistTracks: async (id) => {
+    set({ loadingRightTracks: true, rightPlaylistTracks: [], rightPlaylistMeta: null });
+    try {
+      const [meta, songs] = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id });
+      set({ rightPlaylistMeta: meta, rightPlaylistTracks: songs });
+      batchLoadToQueue(id, songs, meta.track_count);
     } catch {
       set({ rightPlaylistTracks: [] });
     } finally {
       set({ loadingRightTracks: false });
+    }
+  },
+
+  loadMoreRightPlaylistTracks: async () => {
+    const state = get();
+    const id = state.rightPlaylistMeta?.id;
+    const total = state.rightPlaylistMeta?.track_count ?? 0;
+    if (!id || state.rightPlaylistLoadingMore) return;
+    const start = state.rightPlaylistTracks.length;
+    if (start >= total) return;
+    set({ rightPlaylistLoadingMore: true });
+    try {
+      const songs = await invoke<Song[]>("music_playlist_tracks_range", { id, start, count: 50 });
+      set((s) => {
+        const shouldSync = s.playQueue.length > 0
+          && s.playQueue[s.currentIndex]?.id === s.currentSong?.id
+          && s.rightPlaylistTracks.length > 0
+          && s.rightPlaylistTracks[0]?.id === s.playQueue[0]?.id;
+        if (shouldSync) {
+          const queueIds = new Set(s.playQueue.map((q) => q.id));
+          const unique = songs.filter((song) => !queueIds.has(song.id));
+          return {
+            rightPlaylistTracks: [...s.rightPlaylistTracks, ...songs],
+            playQueue: unique.length > 0 ? [...s.playQueue, ...unique] : s.playQueue,
+          };
+        }
+        return {
+          rightPlaylistTracks: [...s.rightPlaylistTracks, ...songs],
+        };
+      });
+    } catch (e) {
+      console.error("loadMore right failed:", e);
+    } finally {
+      set({ rightPlaylistLoadingMore: false });
     }
   },
 
@@ -791,17 +984,26 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   toggleLike: async (songId) => {
     const liked = get().likedSongIds.has(songId);
+    // 乐观更新：先改 UI，API 在后台执行
+    const newSet = new Set(get().likedSongIds);
+    if (liked) {
+      newSet.delete(songId);
+    } else {
+      newSet.add(songId);
+    }
+    set({ likedSongIds: newSet });
     try {
       await invoke("music_like", { id: songId, like: !liked });
-      const newSet = new Set(get().likedSongIds);
-      if (liked) {
-        newSet.delete(songId);
-      } else {
-        newSet.add(songId);
-      }
-      set({ likedSongIds: newSet });
     } catch (e) {
+      // 回滚
       console.error("Toggle like failed:", e);
+      const rollback = new Set(get().likedSongIds);
+      if (liked) {
+        rollback.add(songId);
+      } else {
+        rollback.delete(songId);
+      }
+      set({ likedSongIds: rollback });
     }
   },
 
@@ -833,6 +1035,62 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       set({ recommendations: playlists, recommendSongs: songs });
     } catch {
       // ignore
+    }
+  },
+
+  loadOfficialCharts: async () => {
+    const chartIds = ["3778678", "19723756", "3779629", "6723173524", "5453912201", "6886768100"];
+    const chartNames = ["热歌榜", "飙升榜", "新歌榜", "网络热歌榜", "VIP热歌榜", "中文DJ榜"];
+    try {
+      const results = await Promise.all(
+        chartIds.map((id) =>
+          invoke<Playlist>("music_playlist_detail", { id })
+            .catch(() => ({
+              provider: "netease" as const,
+              id,
+              name: chartNames[chartIds.indexOf(id)] || "",
+              cover: "",
+              track_count: 0,
+              creator: "网易云音乐",
+              subscribed: false,
+            }))
+        )
+      );
+      set({ officialCharts: results });
+      // 持久化缓存
+      try {
+        const s = await getStore();
+        await s.set("officialCharts", results);
+        await s.save();
+      } catch {}
+    } catch {}
+  },
+
+  togglePlaylistSubscribe: async (playlistId, currentSubscribed) => {
+    const newSubscribed = !currentSubscribed;
+    try {
+      await invoke("music_playlist_subscribe", { id: playlistId, subscribe: newSubscribed });
+      // 刷新我的歌单列表
+      await get().loadUserPlaylists();
+      // 获取已收藏的歌单 ID 集合，同步到所有列表
+      const subscribedIds = new Set(get().userPlaylists.filter((pl) => pl.subscribed).map((pl) => pl.id));
+      set((state) => ({
+        playlistSearchResults: state.playlistSearchResults.map((pl) =>
+          ({ ...pl, subscribed: subscribedIds.has(pl.id) })
+        ),
+        recommendations: state.recommendations.map((pl) =>
+          ({ ...pl, subscribed: subscribedIds.has(pl.id) })
+        ),
+        officialCharts: state.officialCharts.map((pl) =>
+          ({ ...pl, subscribed: subscribedIds.has(pl.id) })
+        ),
+        leftPlaylistMeta: state.leftPlaylistMeta?.id === playlistId
+          ? { ...state.leftPlaylistMeta, subscribed: newSubscribed } : state.leftPlaylistMeta,
+        rightPlaylistMeta: state.rightPlaylistMeta?.id === playlistId
+          ? { ...state.rightPlaylistMeta, subscribed: newSubscribed } : state.rightPlaylistMeta,
+      }));
+    } catch (e) {
+      console.error("Playlist subscribe failed:", e);
     }
   },
 }));

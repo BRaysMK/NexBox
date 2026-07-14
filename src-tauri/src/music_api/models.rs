@@ -43,6 +43,8 @@ pub struct Playlist {
     pub cover: String,
     pub track_count: u32,
     pub creator: String,
+    #[serde(default)]
+    pub subscribed: bool,
 }
 
 /// 播放地址结果

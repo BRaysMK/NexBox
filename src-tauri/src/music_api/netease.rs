@@ -616,18 +616,38 @@ pub async fn user_playlist(uid: &str, cookie: &str) -> Result<Vec<Playlist>, Str
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string(),
+            subscribed: pl.get("subscribed").and_then(|v| v.as_bool()).unwrap_or(false),
         })
         .collect())
 }
 
-/// 获取歌单内曲目
-/// 用 /api/v6/playlist/detail 获取歌单信息 + trackIds（全部曲目ID），
-/// 如果 tracks 字段已包含全部曲目则直接返回，
-/// 否则用 trackIds + song_detail 批量获取完整曲目信息。
-pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<Song>), String> {
+/// 获取歌单元信息（仅元数据，不加载曲目）
+pub async fn playlist_detail(id: &str, cookie: &str) -> Result<Playlist, String> {
     let client = build_client();
+    let n_str = "0".to_string();
+    let s_str = "0".to_string();
+    let detail = post_api(&client, "/api/v6/playlist/detail", &[
+        ("id", id),
+        ("n", &n_str),
+        ("s", &s_str),
+        ("csrf_token", ""),
+    ], cookie).await?;
 
-    // ── 第一步：获取歌单信息 ──
+    let pl = detail.get("playlist").ok_or("No playlist in result")?;
+    Ok(Playlist {
+        provider: "netease".into(),
+        id: pl.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_default(),
+        name: pl.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        cover: pl.get("coverImgUrl").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        track_count: pl.get("trackCount").and_then(|v| v.as_u64()).map(|n| n as u32).unwrap_or(0),
+        creator: pl.get("creator").and_then(|c| c.get("nickname")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        ..Default::default()
+    })
+}
+
+/// 获取歌单元数据 + 全部 trackIds（不加载曲目详情，用于前端分页）
+pub async fn playlist_info_with_track_ids(id: &str, cookie: &str) -> Result<(Playlist, Vec<String>), String> {
+    let client = build_client();
     let n_str = "1000".to_string();
     let s_str = "0".to_string();
     let detail = post_api(&client, "/api/v6/playlist/detail", &[
@@ -645,19 +665,9 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
         cover: pl.get("coverImgUrl").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         track_count: pl.get("trackCount").and_then(|v| v.as_u64()).map(|n| n as u32).unwrap_or(0),
         creator: pl.get("creator").and_then(|c| c.get("nickname")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        ..Default::default()
     };
 
-    // detail 中的 tracks（可能不完整，推荐歌单可能只返回 20 首）
-    let detail_tracks: Vec<Song> = pl
-        .get("tracks")
-        .and_then(|t| t.as_array())
-        .cloned()
-        .unwrap_or_default()
-        .iter()
-        .map(map_song_record)
-        .collect();
-
-    // 提取 trackIds（包含歌单所有曲目 ID）
     let track_ids: Vec<String> = pl
         .get("trackIds")
         .and_then(|t| t.as_array())
@@ -667,58 +677,99 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
         .filter_map(|v| v.get("id").and_then(|id| id.as_i64()).map(|n| n.to_string()))
         .collect();
 
-    // 如果 detail tracks 已经包含全部曲目，直接返回
-    let total = if !track_ids.is_empty() {
-        track_ids.len()
-    } else {
-        playlist.track_count as usize
-    };
-
-    if detail_tracks.len() >= total || track_ids.is_empty() {
-        return Ok((playlist, detail_tracks));
-    }
-
-    // ── 第二步：用 trackIds 批量获取完整曲目信息 ──
-    // song_detail 每次最多约 1000 首
-    let mut all_tracks: Vec<Song> = Vec::with_capacity(total);
-    let batch_size = 1000;
-
-    for chunk in track_ids.chunks(batch_size) {
-        match song_detail(&client, chunk, cookie).await {
-            Ok(songs) => all_tracks.extend(songs),
-            Err(_) => {
-                // 如果批量获取失败，回退到 detail tracks
-                if all_tracks.len() < detail_tracks.len() {
-                    return Ok((playlist, detail_tracks));
-                }
-                break;
-            }
-        }
-    }
-
-    if all_tracks.len() >= detail_tracks.len() {
-        Ok((playlist, all_tracks))
-    } else {
-        Ok((playlist, detail_tracks))
-    }
+    Ok((playlist, track_ids))
 }
 
-/// 获取喜欢列表
+/// 获取歌单前 50 首曲目
+pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<Song>), String> {
+    let (pl, track_ids) = playlist_info_with_track_ids(id, cookie).await?;
+    if track_ids.is_empty() {
+        return Ok((pl, vec![]));
+    }
+    let end = 50.min(track_ids.len());
+    let client = build_client();
+    let songs = song_detail(&client, &track_ids[..end], cookie).await.unwrap_or_default();
+    Ok((pl, songs))
+}
+
+/// 加载歌单后继续加更多曲目（指定 range）
+pub async fn playlist_tracks_range(id: &str, start: usize, count: usize, cookie: &str) -> Result<Vec<Song>, String> {
+    let (_, track_ids) = playlist_info_with_track_ids(id, cookie).await?;
+    if track_ids.is_empty() || start >= track_ids.len() {
+        return Ok(vec![]);
+    }
+    let client = build_client();
+    let end = (start + count).min(track_ids.len());
+    let range_ids: Vec<String> = track_ids[start..end].to_vec();
+    let songs = song_detail(&client, &range_ids, cookie).await.unwrap_or_default();
+    Ok(songs)
+}
+
+/// 获取喜欢列表 — 优先从"我喜欢的音乐"歌单取 trackIds
 pub async fn likelist(uid: &str, cookie: &str) -> Result<Vec<String>, String> {
     let client = build_client();
-    let result = post_api(&client, "/api/likelist/get", &[
+
+    // 1. 获取用户歌单，找到"我喜欢的音乐"（特殊歌单，id 格式为 uid）
+    let limit_str = "200".to_string();
+    let offset_str = "0".to_string();
+    let pl_result = get_api(&client, "/api/user/playlist", &[
         ("uid", uid),
+        ("limit", &limit_str),
+        ("offset", &offset_str),
         ("csrf_token", ""),
     ], cookie).await?;
 
-    let ids = result.get("ids").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-    Ok(ids
+    let playlists = pl_result
+        .get("playlist")
+        .and_then(|p| p.as_array())
+        .ok_or("No playlists in result")?;
+
+    // 找到"我喜欢的音乐"歌单（网易云特殊歌单，specialType=5 或名称匹配）
+    let liked_pl = playlists.iter().find(|pl| {
+        let special = pl.get("specialType").and_then(|v| v.as_i64()).unwrap_or(0);
+        special == 5
+    }).or_else(|| {
+        playlists.iter().find(|pl| {
+            let name = pl.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            name == "我喜欢的音乐" || name.contains("喜欢")
+        })
+    }).or_else(|| {
+        // 兜底：用 uid 作为歌单 id
+        playlists.iter().find(|pl| {
+            pl.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string() == uid).unwrap_or(false)
+        })
+    });
+
+    let liked_id = if let Some(pl) = liked_pl {
+        pl.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_default()
+    } else {
+        uid.to_string()
+    };
+
+    log::info!("[NetEase] liked playlist id: {liked_id}");
+
+    // 2. 获取歌单详情取 trackIds（仅元数据，不加载曲目详情）
+    let detail = post_api(&client, "/api/v6/playlist/detail", &[
+        ("id", &liked_id),
+        ("n", "0"),
+        ("s", "0"),
+        ("csrf_token", ""),
+    ], cookie).await?;
+
+    let pl = detail.get("playlist").ok_or("No playlist in detail")?;
+    let ids: Vec<String> = pl
+        .get("trackIds")
+        .and_then(|t| t.as_array())
+        .cloned()
+        .unwrap_or_default()
         .iter()
         .filter_map(|v| {
-            v.as_i64().map(|n| n.to_string())
-                .or_else(|| v.as_str().map(|s| s.to_string()))
+            v.get("id").and_then(|id| id.as_i64()).map(|n| n.to_string())
         })
-        .collect())
+        .collect();
+
+    log::info!("[NetEase] likelist loaded {} songs from playlist", ids.len());
+    Ok(ids)
 }
 
 /// 红心/取消红心
@@ -735,6 +786,26 @@ pub async fn like(id: &str, like: bool, cookie: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("Like failed with code: {code}"))
+    }
+}
+
+/// 收藏/取消收藏歌单
+pub async fn playlist_subscribe(id: &str, subscribe: bool, cookie: &str) -> Result<(), String> {
+    let client = build_client();
+    let csrf = super::cookie::parse_cookie_string(cookie)
+        .get("__csrf")
+        .cloned()
+        .unwrap_or_default();
+    let api = if subscribe { "/api/playlist/subscribe" } else { "/api/playlist/unsubscribe" };
+    let result = post_api(&client, api, &[
+        ("id", id),
+        ("csrf_token", &csrf),
+    ], cookie).await?;
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(0);
+    if code == 200 {
+        Ok(())
+    } else {
+        Err(format!("Playlist subscribe failed with code: {code}"))
     }
 }
 
@@ -814,6 +885,7 @@ pub async fn personalized(cookie: &str) -> Result<Vec<Playlist>, String> {
             creator: pl.get("creator").and_then(|c| c.get("nickname")).and_then(|v| v.as_str())
                 .or_else(|| pl.get("copywriter").and_then(|v| v.as_str()))
                 .unwrap_or("").to_string(),
+            ..Default::default()
         })
         .collect())
 }
@@ -833,6 +905,62 @@ pub async fn recommend_songs(cookie: &str) -> Result<Vec<Song>, String> {
         .unwrap_or_default();
 
     Ok(songs.iter().map(map_song_record).collect())
+}
+
+/// 搜索歌单 (使用 cloudsearch type=1000)
+pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Playlist>, String> {
+    let client = build_client();
+    let url = "https://music.163.com/api/cloudsearch/get/web";
+    let body = format!(
+        "s={}&type=1000&limit={}&offset=0",
+        urlencoding::encode(keywords),
+        limit
+    );
+
+    let resp = client
+        .post(url)
+        .header(USER_AGENT, NETEASE_USER_AGENT)
+        .header(REFERER, "https://music.163.com/")
+        .header(COOKIE, cookie)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("Playlist search request failed: {e}"))?;
+
+    let text = resp.text().await.map_err(|e| format!("Failed to read playlist search response: {e}"))?;
+    let result: Value = serde_json::from_str(&text).map_err(|e| format!("Failed to parse playlist search JSON: {e}"))?;
+
+    log::info!("[NetEase] playlist_search response code={}", result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1));
+
+    let playlists_raw = result
+        .get("result")
+        .and_then(|r| r.get("playlists"))
+        .and_then(|a| a.as_array())
+        .ok_or("No playlists in search result")?;
+
+    let playlists: Vec<Playlist> = playlists_raw
+        .iter()
+        .map(|pl| Playlist {
+            provider: "netease".into(),
+            id: pl.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_default(),
+            name: pl.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            cover: pl.get("coverImgUrl").or_else(|| pl.get("picUrl")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            track_count: pl.get("trackCount")
+                .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|n| n as u64)).or_else(|| v.as_f64().map(|n| n as u64)))
+                .map(|n| n as u32)
+                .unwrap_or(0),
+            creator: pl
+                .get("creator")
+                .and_then(|c| c.get("nickname"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            ..Default::default()
+        })
+        .collect();
+
+    Ok(playlists)
 }
 
 /// 搜索歌手 (使用 cloudsearch type=100)

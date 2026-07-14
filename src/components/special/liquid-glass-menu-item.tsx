@@ -73,7 +73,7 @@ export function LiquidGlassMenuItem({
         WebkitTransform: "translateZ(0)",
         WebkitBackfaceVisibility: "hidden",
         backfaceVisibility: "hidden",
-        willChange: "backdrop-filter, transform",
+        willChange: "auto",
         transition,
       }}
       _focusVisible={{

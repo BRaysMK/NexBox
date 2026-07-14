@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   Box,
   VStack,
@@ -45,6 +46,8 @@ import {
   MicVocal,
   Palette,
   Droplets,
+  TrendingUp,
+  Film,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -55,9 +58,39 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
-import { VirtualizedSongList } from "@/components/VirtualizedSongList";
+import { VirtualList } from "@/components/VirtualList";
 import { DesktopLyricsSettingsModal } from "@/components/DesktopLyricsSettingsModal";
 import { useCoverColor } from "@/hooks/use-cover-color";
+import { motion, AnimatePresence } from "framer-motion";
+
+// ═══════════════════════════════════════════════
+// 动画变体定义
+// ═══════════════════════════════════════════════
+const listContainerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.04, delayChildren: 0.05 },
+  },
+};
+
+const listItemVariants = {
+  hidden: { opacity: 0, y: 8 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  exit: { opacity: 0, transition: { duration: 0.15 } },
+};
+
+const dropdownVariants = {
+  hidden: { opacity: 0, y: -8, scale: 0.98 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.2, ease: "easeOut" } },
+  exit: { opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12, ease: "easeIn" } },
+};
+
+const tabContentVariants = {
+  hidden: { opacity: 0, x: 12 },
+  visible: { opacity: 1, x: 0, transition: { duration: 0.2, ease: "easeOut" } },
+  exit: { opacity: 0, x: -8, transition: { duration: 0.12, ease: "easeIn" } },
+};
 
 const scrollbarSx = (color: string) => ({
   "&::-webkit-scrollbar": { width: "4px" },
@@ -384,6 +417,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const lyricsHighlightColor = useMusicStore((s) => s.lyricsHighlightColor);
   const expandedStyle = useMusicStore((s) => s.expandedStyle);
   const dynamicEnabled = useMusicStore((s) => s.dynamicEnabled);
+  const coverFilmEffect = useMusicStore((s) => s.coverFilmEffect);
   const desktopLyricsVisible = useMusicStore((s) => s.desktopLyricsVisible);
   const playQueue = useMusicStore((s) => s.playQueue);
   const currentIndex = useMusicStore((s) => s.currentIndex);
@@ -522,25 +556,212 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       <HStack flex={1} spacing={8} px={8} pb={2} align="stretch" overflow="hidden" minH={0}>
         {/* 左侧：封面 + 歌曲信息 */}
         <VStack spacing={6} align="center" justify="center" flex={1} minW={0}>
-          <Box
-            position="relative"
-            borderRadius="2xl"
-            overflow="hidden"
-            boxShadow="2xl"
-            sx={{
-              transition: "transform 0.3s ease",
-              _hover: { transform: "scale(1.02)" },
-            }}
-          >
-            <ChakraImage
-              src={coverProxyUrl(currentSong.cover, proxyPort)}
-              alt=""
-              w={{ base: "200px", md: "280px", lg: "320px" }}
-              h={{ base: "200px", md: "280px", lg: "320px" }}
-              objectFit="cover"
-              fallback={<Box w="280px" h="280px" bg="gray.700" borderRadius="2xl" />}
-            />
-          </Box>
+          {/* 碟片模式 */}
+          {coverFilmEffect ? (
+            <Box
+              position="relative"
+              w={{ base: "240px", md: "320px", lg: "360px" }}
+              h={{ base: "240px", md: "320px", lg: "360px" }}
+            >
+              {/* 唱臂（磁头）— SVG 弯臂 + 圆点支座 + 数据线接头 */}
+              <Box
+                position="absolute"
+                top={{ base: "-15px", md: "-18px", lg: "-20px" }}
+                right={{ base: "-8px", md: "-10px", lg: "-12px" }}
+                w={{ base: "48px", md: "56px", lg: "62px" }}
+                h={{ base: "180px", md: "220px", lg: "250px" }}
+                zIndex={5}
+                sx={{
+                  transformOrigin: "top right",
+                  transform: isPlaying
+                    ? "rotate(30deg)"
+                    : "rotate(-10deg)",
+                  transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              >
+                <svg
+                  viewBox="0 0 48 220"
+                  style={{
+                    overflow: "visible",
+                    width: "100%",
+                    height: "100%",
+                  }}
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  {/* 圆点支座（旋转轴） */}
+                  <circle cx="42" cy="8" r="7" fill="url(#pivotGrad)" stroke="rgba(255,255,255,0.2)" strokeWidth="0.5" />
+                  <circle cx="40" cy="6" r="2" fill="rgba(255,255,255,0.3)" />
+                  {/* 唱臂杆 — 垂直段 + 30° 弯折 */}
+                  <path
+                    d="M 42 14 L 42 135 Q 42 145, 30 155 L 18 175"
+                    fill="none"
+                    stroke="url(#armGrad)"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* 唱臂内层高光 */}
+                  <path
+                    d="M 42 14 L 42 135 Q 42 145, 30 155 L 18 175"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.12)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* 数据线接头磁头 — 金属外壳 + 插槽 + 触点 */}
+                  {/* 金属外壳主体 */}
+                  <rect
+                    x="9" y="170" width="18" height="22" rx="4"
+                    fill="url(#headShellGrad)"
+                    stroke="rgba(0,0,0,0.3)"
+                    strokeWidth="0.5"
+                  />
+                  {/* 外壳顶部高光 */}
+                  <rect x="10.5" y="171.5" width="15" height="4" rx="2" fill="url(#headTopShine)" />
+                  {/* 左右金属侧面高光 */}
+                  <rect x="9.5" y="172" width="1.5" height="18" rx="0.75" fill="rgba(255,255,255,0.25)" />
+                  <rect x="25" y="172" width="1.5" height="18" rx="0.75" fill="rgba(0,0,0,0.15)" />
+                  {/* 底部插槽开口（黑色凹槽） */}
+                  <rect x="12" y="184" width="12" height="6" rx="1.5" fill="#000" />
+                  {/* 插槽内的金属触点条 */}
+                  <rect x="13" y="185.5" width="10" height="1" rx="0.5" fill="#555" />
+                  <rect x="13" y="187.5" width="10" height="1" rx="0.5" fill="#444" />
+                  {/* 底部连接处缩窄颈 */}
+                  <rect x="14" y="192" width="8" height="4" rx="1" fill="url(#neckGrad)" />
+                  {/* 唱针针尖 */}
+                  <path d="M 18 196 L 18 202 L 16.5 204" fill="none" stroke="#999" strokeWidth="0.8" strokeLinecap="round" />
+
+                  {/* 渐变定义 */}
+                  <defs>
+                    <radialGradient id="pivotGrad" cx="35%" cy="30%">
+                      <stop offset="0%" stopColor="#aaa" />
+                      <stop offset="60%" stopColor="#555" />
+                      <stop offset="100%" stopColor="#222" />
+                    </radialGradient>
+                    <linearGradient id="armGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#666" />
+                      <stop offset="50%" stopColor="#3a3a3a" />
+                      <stop offset="100%" stopColor="#222" />
+                    </linearGradient>
+                    <linearGradient id="headShellGrad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#e8e8e8" />
+                      <stop offset="35%" stopColor="#aaa" />
+                      <stop offset="65%" stopColor="#888" />
+                      <stop offset="100%" stopColor="#555" />
+                    </linearGradient>
+                    <linearGradient id="headTopShine" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="rgba(255,255,255,0.1)" />
+                      <stop offset="40%" stopColor="rgba(255,255,255,0.45)" />
+                      <stop offset="60%" stopColor="rgba(255,255,255,0.45)" />
+                      <stop offset="100%" stopColor="rgba(255,255,255,0.05)" />
+                    </linearGradient>
+                    <linearGradient id="neckGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#666" />
+                      <stop offset="100%" stopColor="#333" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </Box>
+
+              {/* 黑胶碟片底盘 */}
+              <Box
+                position="absolute"
+                top={0}
+                left={0}
+                w="100%"
+                h="100%"
+                borderRadius="50%"
+                sx={{
+                  background:
+                    "radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%)",
+                  boxShadow:
+                    "0 4px 16px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
+                }}
+              />
+              {/* 碟片同心圆纹理 — 预渲染为伪元素避免重绘 */}
+              <Box
+                position="absolute"
+                top={0}
+                left={0}
+                w="100%"
+                h="100%"
+                borderRadius="50%"
+                pointerEvents="none"
+                sx={{
+                  background:
+                    "repeating-radial-gradient(circle at center, transparent 0px, transparent 3px, rgba(255,255,255,0.02) 3px, rgba(255,255,255,0.02) 4px)",
+                  willChange: "auto",
+                }}
+              />
+              {/* 旋转的封面区域 — 用包裹层居中，内层只做旋转 */}
+              <Box
+                position="absolute"
+                top="50%"
+                left="50%"
+                sx={{
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <Box
+                  w={{ base: "150px", md: "200px", lg: "220px" }}
+                  h={{ base: "150px", md: "200px", lg: "220px" }}
+                  borderRadius="50%"
+                  overflow="hidden"
+                  sx={{
+                    animation: "vinylSpin 12s linear infinite",
+                    animationPlayState: isPlaying ? "running" : "paused",
+                    boxShadow: "0 0 0 2px rgba(255,255,255,0.08)",
+                    willChange: "transform",
+                    backfaceVisibility: "hidden",
+                  }}
+                >
+                  <ChakraImage
+                    src={coverProxyUrl(currentSong.cover, proxyPort)}
+                    alt=""
+                    w="100%"
+                    h="100%"
+                    objectFit="cover"
+                    fallback={<Box w="100%" h="100%" bg="gray.700" />}
+                  />
+                  {/* 封面上的高光反射 */}
+                  <Box
+                    position="absolute"
+                    top={0}
+                    left={0}
+                    w="100%"
+                    h="100%"
+                    pointerEvents="none"
+                    sx={{
+                      background:
+                        "linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.2) 100%)",
+                    }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+          ) : (
+            /* 普通模式 */
+            <Box
+              position="relative"
+              borderRadius="2xl"
+              overflow="hidden"
+              boxShadow="2xl"
+              sx={{
+                transition: "transform 0.3s ease",
+                _hover: { transform: "scale(1.02)" },
+              }}
+            >
+              <ChakraImage
+                src={coverProxyUrl(currentSong.cover, proxyPort)}
+                alt=""
+                w={{ base: "200px", md: "280px", lg: "320px" }}
+                h={{ base: "200px", md: "280px", lg: "320px" }}
+                objectFit="cover"
+                fallback={<Box w="280px" h="280px" bg="gray.700" borderRadius="2xl" />}
+              />
+            </Box>
+          )}
 
           <VStack spacing={1} align="center" maxW="400px">
             <Text color={effectiveTextColor} fontSize="xl" fontWeight="bold" noOfLines={1} textAlign="center">
@@ -594,6 +815,19 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 />
               </Tooltip>
             )}
+            <Tooltip label={coverFilmEffect ? "关闭碟片模式" : "开启碟片模式"}>
+              <IconButton
+                aria-label="Toggle film effect"
+                icon={<Film size={18} />}
+                size="sm"
+                variant="ghost"
+                onClick={() => useMusicStore.getState().setCoverFilmEffect(!coverFilmEffect)}
+                sx={{
+                  color: coverFilmEffect ? activeColor : effectiveTextColor,
+                  _hover: { bg: effectiveHoverBg },
+                }}
+              />
+            </Tooltip>
             <Tooltip label={isModern ? "切换通透样式" : "切换现代样式"}>
               <IconButton
                 aria-label="Toggle style"
@@ -828,8 +1062,6 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               <Portal>
                 <Fade in>
                   <PopoverContent
-                    maxH="400px"
-                    overflowY="auto"
                     w="260px"
                     bg={menuBg}
                     border="1px solid"
@@ -841,47 +1073,53 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                       {playQueue.length === 0 ? (
                         <Text color={menuMuted} fontSize="sm" px={3} py={2}>播放列表为空</Text>
                       ) : (
-                        playQueue.map((s, i) => (
-                          <HStack
-                            key={`${s.id}-${i}`}
-                            spacing={2}
-                            px={3}
-                            py={1.5}
-                            cursor="pointer"
-                            bg={i === currentIndex ? `${activeColor}22` : "transparent"}
-                            _hover={{ bg: "rgba(0,0,0,0.05)" }}
-                            borderRadius="md"
-                            overflow="hidden"
-                            onClick={() => useMusicStore.getState().playSong(s, playQueue)}
-                          >
-                            <Text fontSize="xs" color={(i === currentIndex) ? activeColor : menuMuted} w="20px" flexShrink={0}>
-                              {i === currentIndex ? "▶" : i + 1}
-                            </Text>
-                            <VStack spacing={0} flex={1} minW={0} align="start">
-                              <Text
-                                fontSize="sm"
-                                fontWeight={(i === currentIndex) ? "bold" : "normal"}
-                                color={(i === currentIndex) ? activeColor : menuText}
-                                w="100%"
-                                overflow="hidden"
-                                textOverflow="ellipsis"
-                                whiteSpace="nowrap"
-                              >
-                                {s.name}
+                        <VirtualList
+                          items={playQueue}
+                          itemHeight={48}
+                          height={Math.min(384, playQueue.length * 48)}
+                          scrollToIndex={currentIndex}
+                          getKey={(s, i) => `${s.id}-${i}`}
+                          renderItem={(s, i) => (
+                            <HStack
+                              spacing={2}
+                              px={3}
+                              h="100%"
+                              cursor="pointer"
+                              bg={i === currentIndex ? `${activeColor}22` : "transparent"}
+                              _hover={{ bg: "rgba(0,0,0,0.05)" }}
+                              borderRadius="md"
+                              overflow="hidden"
+                              onClick={() => useMusicStore.getState().playSong(s, playQueue)}
+                            >
+                              <Text fontSize="xs" color={(i === currentIndex) ? activeColor : menuMuted} w="20px" flexShrink={0}>
+                                {i === currentIndex ? "▶" : i + 1}
                               </Text>
-                              <Text
-                                fontSize="xs"
-                                color={menuMuted}
-                                w="100%"
-                                overflow="hidden"
-                                textOverflow="ellipsis"
-                                whiteSpace="nowrap"
-                              >
-                                {s.artist}
-                              </Text>
-                            </VStack>
-                          </HStack>
-                        ))
+                              <VStack spacing={0} flex={1} minW={0} align="start">
+                                <Text
+                                  fontSize="sm"
+                                  fontWeight={(i === currentIndex) ? "bold" : "normal"}
+                                  color={(i === currentIndex) ? activeColor : menuText}
+                                  w="100%"
+                                  overflow="hidden"
+                                  textOverflow="ellipsis"
+                                  whiteSpace="nowrap"
+                                >
+                                  {s.name}
+                                </Text>
+                                <Text
+                                  fontSize="xs"
+                                  color={menuMuted}
+                                  w="100%"
+                                  overflow="hidden"
+                                  textOverflow="ellipsis"
+                                  whiteSpace="nowrap"
+                                >
+                                  {s.artist}
+                                </Text>
+                              </VStack>
+                            </HStack>
+                          )}
+                        />
                       )}
                     </PopoverBody>
                   </PopoverContent>
@@ -1264,43 +1502,62 @@ const PlayerBar = memo(function PlayerBar({ onExpand }: { onExpand?: () => void 
             </Tooltip>
           </HStack>
 
-          <Menu>
-            <Tooltip label="播放队列">
-              <MenuButton as={IconButton} aria-label="Queue" icon={<ListMusic size={18} />} size="sm" variant="ghost" />
-            </Tooltip>
-            <MenuList maxH="300px" overflowY="auto" minW="240px" bg={dropdownBg} borderColor={borderColor}>
-              {playQueue.map((s, i) => (
-                <MenuItem
-                  key={`${s.id}-${i}`}
-                  onClick={() => useMusicStore.getState().playSong(s, playQueue)}
-                  bg={i === currentIndex ? `${activeColor}33` : undefined}
-                >
-                  <VStack spacing={0} flex={1} minW={0} align="start">
-                    <Text
-                      fontSize="sm"
-                      fontWeight={i === currentIndex ? "bold" : "normal"}
-                      color={i === currentIndex ? activeColor : textColor}
-                      w="100%"
-                      overflow="hidden"
-                      textOverflow="ellipsis"
-                      whiteSpace="nowrap"
-                    >
-                      {i === currentIndex ? "▶" : i + 1}. {s.name}
-                    </Text>
-                    <Text
-                      fontSize="xs"
-                      color={subTextColor}
-                      w="100%"
-                      overflow="hidden"
-                      textOverflow="ellipsis"
-                      whiteSpace="nowrap"
-                    >
-                      {s.artist}
-                    </Text>
-                  </VStack>
-                </MenuItem>
-              ))}
-            </MenuList>
+          <Menu isLazy>
+            {({ onClose }) => (
+              <>
+                <Tooltip label="播放队列">
+                  <MenuButton as={IconButton} aria-label="Queue" icon={<ListMusic size={18} />} size="sm" variant="ghost" />
+                </Tooltip>
+                <MenuList minW="240px" py={1} bg={dropdownBg} borderColor={borderColor}>
+                  {playQueue.length === 0 ? (
+                    <Text px={3} py={2} fontSize="sm" color={subTextColor}>播放列表为空</Text>
+                  ) : (
+                    <VirtualList
+                      items={playQueue}
+                      itemHeight={48}
+                      height={Math.min(288, playQueue.length * 48)}
+                      scrollToIndex={currentIndex}
+                      getKey={(s, i) => `${s.id}-${i}`}
+                      renderItem={(s, i) => (
+                        <VStack
+                          spacing={0}
+                          h="100%"
+                          justify="center"
+                          align="start"
+                          px={3}
+                          cursor="pointer"
+                          bg={i === currentIndex ? `${activeColor}33` : undefined}
+                          _hover={{ bg: hoverBg }}
+                          onClick={() => { useMusicStore.getState().playSong(s, playQueue); onClose(); }}
+                        >
+                          <Text
+                            fontSize="sm"
+                            fontWeight={i === currentIndex ? "bold" : "normal"}
+                            color={i === currentIndex ? activeColor : textColor}
+                            w="100%"
+                            overflow="hidden"
+                            textOverflow="ellipsis"
+                            whiteSpace="nowrap"
+                          >
+                            {i === currentIndex ? "▶" : i + 1}. {s.name}
+                          </Text>
+                          <Text
+                            fontSize="xs"
+                            color={subTextColor}
+                            w="100%"
+                            overflow="hidden"
+                            textOverflow="ellipsis"
+                            whiteSpace="nowrap"
+                          >
+                            {s.artist}
+                          </Text>
+                        </VStack>
+                      )}
+                    />
+                  )}
+                </MenuList>
+              </>
+            )}
           </Menu>
         </HStack>
 
@@ -1561,7 +1818,7 @@ const SearchBox = memo(function SearchBox({
     handleInputChange(e.currentTarget.value);
   }, [handleInputChange]);
 
-  // ── 回车：统一搜索，同时搜歌曲和歌手 ──
+  // ── 回车：统一搜索，同时搜歌曲、歌单和歌手 ──
   const handleSearchEnter = useCallback(() => {
     const value = searchInputRef.current;
     if (!value.trim()) return;
@@ -1569,6 +1826,7 @@ const SearchBox = memo(function SearchBox({
     Promise.all([
       storeActions.search(value),
       storeActions.searchArtists(value),
+      storeActions.searchPlaylists(value),
     ]).then(() => {
       onUnifiedSearch(value);
       setShowSearchDropdown(false);
@@ -1583,6 +1841,7 @@ const SearchBox = memo(function SearchBox({
     Promise.all([
       storeActions.search(value),
       storeActions.searchArtists(value),
+      storeActions.searchPlaylists(value),
     ]).then(() => {
       onUnifiedSearch(value);
       setShowSearchDropdown(false);
@@ -1631,6 +1890,11 @@ const SearchBox = memo(function SearchBox({
 
   return (
     <Box ref={searchBoxRef} position="relative" flexShrink={0}>
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+      >
       <HStack spacing={2}>
         <InputGroup size="md">
           <InputLeftElement pointerEvents="none">
@@ -1647,7 +1911,8 @@ const SearchBox = memo(function SearchBox({
             bg={liquidGlassEnabled ? glassInputBg : bgColor}
             borderColor={liquidGlassEnabled ? themeBorder : borderColor}
             borderRadius="xl"
-            _focus={{ borderColor: activeColor, boxShadow: `0 0 0 1px ${activeColor}` }}
+            transition="border-color 0.2s, box-shadow 0.2s"
+            _focus={{ borderColor: activeColor, boxShadow: `0 0 0 2px ${activeColor}33, 0 0 0 1px ${activeColor}` }}
           />
         </InputGroup>
         <Button
@@ -1667,47 +1932,66 @@ const SearchBox = memo(function SearchBox({
           搜索
         </Button>
       </HStack>
+      </motion.div>
 
       {/* 搜索下拉预览 */}
-      {showSearchDropdown && dropdownResults.length > 0 && (
-        <Box
-          p={2}
-          position="absolute"
-          top="50px"
-          left={0}
-          right={0}
-          zIndex={30}
-          maxH="320px"
-          overflowY="auto"
-          bg={dropdownBg}
-          border="1px solid"
-          borderColor={dropdownBorder}
-          borderRadius="lg"
-          boxShadow="lg"
-          sx={scrollbarSx(activeColor)}
-        >
-          <VStack spacing={1} align="stretch">
-            {dropdownResults.slice(0, 6).map((song, i) => renderSongRow(song, i, dropdownResults))}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                const val = searchInputRef.current;
-                Promise.all([
-                  storeActions.search(val),
-                  storeActions.searchArtists(val),
-                ]).then(() => {
-                  onUnifiedSearch(val);
-                  setShowSearchDropdown(false);
-                });
-              }}
-              sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+      <AnimatePresence>
+        {showSearchDropdown && dropdownResults.length > 0 && (
+          <motion.div
+            key="search-dropdown"
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            variants={dropdownVariants}
+            style={{
+              padding: "8px",
+              position: "absolute",
+              top: "50px",
+              left: 0,
+              right: 0,
+              zIndex: 30,
+              maxHeight: "320px",
+              overflowY: "auto",
+              background: dropdownBg,
+              borderRadius: "0.5rem",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+            }}
+          >
+            <motion.div
+              variants={listContainerVariants}
+              initial="hidden"
+              animate="visible"
+              style={{ display: "flex", flexDirection: "column", gap: "4px" }}
             >
-              查看全部 ({dropdownResults.length})
-            </Button>
-          </VStack>
-        </Box>
-      )}
+              {dropdownResults.slice(0, 6).map((song, i) => (
+                <motion.div key={`${song.provider}-${song.id}-${i}`} variants={listItemVariants}>
+                  {renderSongRow(song, i, dropdownResults)}
+                </motion.div>
+              ))}
+              <motion.div variants={listItemVariants}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    const val = searchInputRef.current;
+                    Promise.all([
+                      storeActions.search(val),
+                      storeActions.searchArtists(val),
+                      storeActions.searchPlaylists(val),
+                    ]).then(() => {
+                      onUnifiedSearch(val);
+                      setShowSearchDropdown(false);
+                    });
+                  }}
+                  sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                >
+                  查看全部 ({dropdownResults.length})
+                </Button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Box>
   );
 });
@@ -1740,6 +2024,8 @@ export default function MusicPage() {
   const selectedArtist = useMusicStore((s) => s.selectedArtist);
   const searchingArtists = useMusicStore((s) => s.searchingArtists);
   const loadingArtistSongs = useMusicStore((s) => s.loadingArtistSongs);
+  const playlistSearchResults = useMusicStore((s) => s.playlistSearchResults);
+  const searchingPlaylists = useMusicStore((s) => s.searchingPlaylists);
 
   // actions 是稳定的，用 useRef 只获取一次，避免每次渲染重新创建导致 useCallback 失效
   const storeActionsRef = useRef(useMusicStore.getState());
@@ -1748,10 +2034,18 @@ export default function MusicPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [viewMode, setViewMode] = useState<"main" | "unifiedSearch" | "fullArtistList" | "artistDetail">("main");
   const [searchInput, setSearchInput] = useState("");
+  const [searchTab, setSearchTab] = useState<"songs" | "playlists" | "artists">("songs");
   const previousViewRef = useRef<typeof viewMode>("main");
   const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
   const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks">("recommendations");
   const [expandedPlayer, setExpandedPlayer] = useState(false);
+
+  // 搜索结果中展开的歌单
+  const [searchExpandedPlaylist, setSearchExpandedPlaylist] = useState<Playlist | null>(null);
+  const [searchExpandedTracks, setSearchExpandedTracks] = useState<Song[]>([]);
+  const [searchLoadingExpanded, setSearchLoadingExpanded] = useState(false);
+
+  const officialCharts = useMusicStore((s) => s.officialCharts);
 
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
@@ -1797,9 +2091,6 @@ export default function MusicPage() {
     const initAndResume = async () => {
       await storeActions.init();
       const state = useMusicStore.getState();
-      if (state.loginInfo?.logged_in) {
-        state.loadLikedList();
-      }
       if (state.currentSong && !isExisting) {
         state.playSong(state.currentSong);
       }
@@ -1850,6 +2141,8 @@ export default function MusicPage() {
   // 统一搜索：进入综合搜索结果页
   const handleUnifiedSearch = useCallback((input: string) => {
     setSearchInput(input);
+    setSearchExpandedPlaylist(null);
+    setSearchExpandedTracks([]);
     setViewMode("unifiedSearch");
   }, []);
 
@@ -1886,26 +2179,48 @@ export default function MusicPage() {
 // ── 我的歌单点击：在左侧面板切换到曲目视图 ──
 const handlePlaylistClick = useCallback((pl: Playlist) => {
 storeActions.loadLeftPlaylistTracks(pl.id);
-storeActions.loadLikedList();
 setLeftPanelView("tracks");
-setRightPanelView("recommendations"); // 右侧回到推荐
+setRightPanelView("recommendations");
 }, [storeActions]);
 
   const handleBackToPlaylists = useCallback(() => {
     setLeftPanelView("playlists");
-    storeActions.loadLikedList();
-  }, [storeActions]);
+  }, []);
 
 // ── 推荐歌单点击：在右侧面板切换到曲目视图 ──
 const handleRecPlaylistClick = useCallback((pl: Playlist) => {
 storeActions.loadRightPlaylistTracks(pl.id);
-storeActions.loadLikedList();
 setRightPanelView("tracks");
 }, [storeActions]);
 
   const handleBackToRecommendations = useCallback(() => {
     setRightPanelView("recommendations");
   }, []);
+
+  // ── 收藏/取消收藏歌单 ──
+  const handleTogglePlaylistSubscribe = useCallback((pl: Playlist) => {
+    useMusicStore.getState().togglePlaylistSubscribe(pl.id, pl.subscribed);
+  }, []);
+
+  // ── 搜索结果中点击歌单：在搜索页内加载曲目 ──
+  const handleSearchPlaylistClick = useCallback(async (pl: Playlist) => {
+    setSearchExpandedPlaylist(pl);
+    setSearchExpandedTracks([]);
+    setSearchLoadingExpanded(true);
+    try {
+      const result = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id: pl.id });
+      setSearchExpandedTracks(result[1]);
+    } catch {
+      setSearchExpandedTracks([]);
+    } finally {
+      setSearchLoadingExpanded(false);
+    }
+  }, []);
+
+  // 判断是否为用户自建歌单（在我的歌单里且 subscribed=false）
+  const isOwnPlaylist = useCallback((pl: Playlist) => {
+    return userPlaylists.some((p) => p.id === pl.id && !p.subscribed);
+  }, [userPlaylists]);
 
   // ── 回调函数 ──
   const onPlay = useCallback((song: Song, queue: Song[]) => {
@@ -1974,6 +2289,24 @@ setRightPanelView("tracks");
           {pl.track_count} 首 {pl.creator ? `· ${pl.creator}` : ""}
         </Text>
       </VStack>
+      {loginInfo?.logged_in && !isOwnPlaylist(pl) && (
+        <IconButton
+          aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
+          icon={<Heart size={16} fill={pl.subscribed ? "#e53e3e" : "none"} />}
+          size="sm"
+          variant="ghost"
+          title={pl.subscribed ? "取消收藏" : "收藏歌单"}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleTogglePlaylistSubscribe(pl);
+          }}
+          sx={{
+            color: pl.subscribed ? "#e53e3e" : subTextColor,
+            _hover: { bg: hoverBg },
+            flexShrink: 0,
+          }}
+        />
+      )}
     </HStack>
   );
 
@@ -2029,6 +2362,11 @@ setRightPanelView("tracks");
           )}
         </HStack>
 
+        <SearchBox
+          onUnifiedSearch={handleUnifiedSearch}
+          onArtistClick={handleArtistClick}
+        />
+
         <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
           {loadingArtistSongs ? (
             <VStack py={12}>
@@ -2036,9 +2374,11 @@ setRightPanelView("tracks");
               <Text color={subTextColor} fontSize="sm">加载中...</Text>
             </VStack>
           ) : artistSongs.length > 0 ? (
-            <VirtualizedSongList
+            <VirtualList
               items={artistSongs}
+              itemHeight={60}
               renderItem={(song, i) => renderSongRow(song, i, artistSongs)}
+              getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
               emptyText="暂无歌曲"
               resetKey={selectedArtist?.id}
               scrollbarSx={scrollbarSx(activeColor)}
@@ -2060,12 +2400,92 @@ setRightPanelView("tracks");
   }
 
   // ═══════════════════════════════════════════════
-  // 统一搜索结果视图：歌手 + 歌曲
+  // 统一搜索结果视图：三标签切换 (单曲 / 歌单 / 歌手)
   // ═══════════════════════════════════════════════
   if (viewMode === "unifiedSearch") {
-    const isLoading = searching || searchingArtists;
-    const previewArtists = artistSearchResults.slice(0, 2);
-    const hasAnyResults = artistSearchResults.length > 0 || searchResults.length > 0;
+    const isLoading = searching || searchingArtists || searchingPlaylists;
+    const hasAnyResults = searchResults.length > 0 || playlistSearchResults.length > 0 || artistSearchResults.length > 0;
+
+    const tabBarBg = useColorModeValue("gray.100", "rgba(255,255,255,0.04)");
+    const tabActiveBg = useColorModeValue("white", "rgba(255,255,255,0.1)");
+
+    const tabs: { key: "songs" | "playlists" | "artists"; label: string; icon: React.ReactNode; count: number }[] = [
+      { key: "songs", label: "单曲", icon: <MusicIcon size={14} />, count: searchResults.length },
+      { key: "playlists", label: "歌单", icon: <ListMusic size={14} />, count: playlistSearchResults.length },
+      { key: "artists", label: "歌手", icon: <User size={14} />, count: artistSearchResults.length },
+    ];
+
+    // 展开的歌单曲目视图
+    if (searchExpandedPlaylist) {
+      return (
+        <VStack
+          spacing={4}
+          align="stretch"
+          w="100%"
+          h="calc(100vh - 120px)"
+          overflow="hidden"
+          sx={{ maxWidth: "100%", overflowX: "hidden", position: "relative" }}
+        >
+          <HStack spacing={3} flexShrink={0}>
+            <Tooltip label="返回搜索结果">
+              <IconButton
+                aria-label="Back to search"
+                icon={<ArrowLeft size={18} />}
+                size="sm"
+                variant="ghost"
+                onClick={() => { setSearchExpandedPlaylist(null); setSearchExpandedTracks([]); }}
+                sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+              />
+            </Tooltip>
+            <ChakraImage
+              src={coverProxyUrl(searchExpandedPlaylist.cover, proxyPort)}
+              alt=""
+              w="40px"
+              h="40px"
+              borderRadius="md"
+              objectFit="cover"
+              fallback={<Box w="40px" h="40px" borderRadius="md" bg="gray.700" />}
+            />
+            <VStack spacing={0} align="start">
+              <Text fontSize="md" fontWeight="bold" color={textColor} noOfLines={1}>
+                {searchExpandedPlaylist.name}
+              </Text>
+              <Text color={subTextColor} fontSize="xs">
+                {searchExpandedPlaylist.track_count} 首 {searchExpandedPlaylist.creator ? `· ${searchExpandedPlaylist.creator}` : ""}
+              </Text>
+            </VStack>
+          </HStack>
+
+          <SearchBox
+            onUnifiedSearch={handleUnifiedSearch}
+            onArtistClick={handleArtistClick}
+          />
+
+          <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
+            {searchLoadingExpanded ? (
+              <VStack py={12}>
+                <Spinner size="lg" sx={{ color: activeColor }} />
+                <Text color={subTextColor} fontSize="sm">加载曲目中...</Text>
+              </VStack>
+            ) : searchExpandedTracks.length > 0 ? (
+              <Box flex={1} overflowY="scroll" sx={scrollbarSx(activeColor)}>
+                <VStack spacing={1} align="stretch">
+                  {searchExpandedTracks.map((song, i) => renderSongRow(song, i, searchExpandedTracks))}
+                </VStack>
+              </Box>
+            ) : (
+              <VStack py={12} spacing={2}>
+                <MusicIcon size={32} color={subTextColor} />
+                <Text color={subTextColor} fontSize="sm">暂无曲目</Text>
+              </VStack>
+            )}
+          </LiquidGlassCard>
+
+          <PlayerBar onExpand={handleExpandPlayer} />
+          {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
+        </VStack>
+      );
+    }
 
     return (
       <VStack
@@ -2092,6 +2512,57 @@ setRightPanelView("tracks");
           </Text>
         </HStack>
 
+        <SearchBox
+          onUnifiedSearch={handleUnifiedSearch}
+          onArtistClick={handleArtistClick}
+        />
+
+        {/* 三标签导航栏 */}
+        <HStack
+          spacing={1}
+          flexShrink={0}
+          bg={liquidGlassEnabled ? "rgba(255,255,255,0.08)" : tabBarBg}
+          p={1}
+          borderRadius="xl"
+          sx={
+            liquidGlassEnabled
+              ? {
+                  backdropFilter: "blur(12px)",
+                  WebkitBackdropFilter: "blur(12px)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                }
+              : {}
+          }
+        >
+          {tabs.map((tab) => (
+            <Button
+              key={tab.key}
+              size="sm"
+              variant="ghost"
+              onClick={() => setSearchTab(tab.key)}
+              borderRadius="lg"
+              flex={1}
+              sx={{
+                bg: searchTab === tab.key
+                  ? (liquidGlassEnabled ? "rgba(255,255,255,0.2)" : tabActiveBg)
+                  : "transparent",
+                color: searchTab === tab.key ? activeColor : subTextColor,
+                fontWeight: searchTab === tab.key ? "bold" : "normal",
+                boxShadow: searchTab === tab.key ? "sm" : "none",
+                _hover: { bg: searchTab === tab.key ? undefined : hoverBg },
+              }}
+            >
+              <HStack spacing={1.5}>
+                {tab.icon}
+                <Text fontSize="sm">{tab.label}</Text>
+                {tab.count > 0 && (
+                  <Text fontSize="xs" color={searchTab === tab.key ? activeColor : subTextColor}> ({tab.count})</Text>
+                )}
+              </HStack>
+            </Button>
+          ))}
+        </HStack>
+
         <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
           {isLoading ? (
             <VStack py={12}>
@@ -2104,103 +2575,177 @@ setRightPanelView("tracks");
               <Text color={subTextColor} fontSize="sm">没有找到相关内容</Text>
             </VStack>
           ) : (
-            <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
-              <VStack spacing={4} align="stretch">
-                {/* ── 歌手区域 ── */}
-                {artistSearchResults.length > 0 && (
-                  <Box>
-                    <HStack justify="space-between" mb={2}>
-                      <HStack spacing={2}>
-                        <User size={16} color={activeColor} />
-                        <Text fontSize="sm" fontWeight="bold" color={textColor}>
-                          歌手 ({artistSearchResults.length})
-                        </Text>
-                      </HStack>
-                      {artistSearchResults.length > 2 && (
+            <Box flex={1} overflowY="auto" overflowX="hidden" sx={scrollbarSx(activeColor)}>
+              <AnimatePresence mode="wait">
+                <motion.div key={searchTab} variants={tabContentVariants} initial="hidden" animate="visible" exit="exit">
+              {/* ── 单曲标签 ── */}
+              {searchTab === "songs" && (
+                searchResults.length > 0 ? (
+                  <motion.div variants={listContainerVariants} initial="hidden" animate="visible" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    {searchResults.map((song, i) => (
+                      <motion.div key={`${song.provider}-${song.id}-${i}`} variants={listItemVariants}>
+                        {renderSongRow(song, i, searchResults)}
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                ) : (
+                  <VStack py={12} spacing={2}>
+                    <MusicIcon size={32} color={subTextColor} />
+                    <Text color={subTextColor} fontSize="sm">未找到相关单曲</Text>
+                  </VStack>
+                )
+              )}
+
+              {/* ── 歌单标签 ── */}
+              {searchTab === "playlists" && (
+                playlistSearchResults.length > 0 ? (
+                  <motion.div variants={listContainerVariants} initial="hidden" animate="visible" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {playlistSearchResults.map((pl) => (
+                      <motion.div key={`search-pl-${pl.id}`} variants={listItemVariants}>
+                        <HStack
+                          spacing={3}
+                          p={2}
+                          borderRadius="lg"
+                          cursor="pointer"
+                          _hover={{ bg: liquidGlassEnabled ? hoverBg : itemHoverBg }}
+                          onClick={() => handleSearchPlaylistClick(pl)}
+                          transition="background 0.15s"
+                        >
+                          <ChakraImage
+                            src={coverProxyUrl(pl.cover, proxyPort)}
+                            alt=""
+                            w="48px"
+                            h="48px"
+                            borderRadius="md"
+                            objectFit="cover"
+                            fallback={<Box w="48px" h="48px" borderRadius="md" bg="gray.700" />}
+                          />
+                          <VStack spacing={0} align="start" flex={1} minW={0}>
+                            <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
+                              {pl.name}
+                            </Text>
+                            <Text color={subTextColor} fontSize="xs">
+                              {pl.track_count} 首 {pl.creator ? `· ${pl.creator}` : ""}
+                            </Text>
+                          </VStack>
+                          {loginInfo?.logged_in && (
+                            <IconButton
+                              aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
+                              icon={<Heart size={14} fill={pl.subscribed ? "#e53e3e" : "none"} />}
+                              size="xs"
+                              variant="ghost"
+                              title={pl.subscribed ? "取消收藏" : "收藏歌单"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTogglePlaylistSubscribe(pl);
+                              }}
+                              sx={{
+                                color: pl.subscribed ? "#e53e3e" : subTextColor,
+                                _hover: { bg: hoverBg },
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
+                          <Tooltip label="查看曲目">
+                            <IconButton
+                              aria-label="Play"
+                              icon={<PlayBtn size={14} />}
+                              size="xs"
+                              variant="ghost"
+                              sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSearchPlaylistClick(pl);
+                              }}
+                            />
+                          </Tooltip>
+                        </HStack>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                ) : (
+                  <VStack py={12} spacing={2}>
+                    <ListMusic size={32} color={subTextColor} />
+                    <Text color={subTextColor} fontSize="sm">未找到相关歌单</Text>
+                  </VStack>
+                )
+              )}
+
+              {/* ── 歌手标签 ── */}
+              {searchTab === "artists" && (
+                artistSearchResults.length > 0 ? (
+                  <motion.div variants={listContainerVariants} initial="hidden" animate="visible" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <HStack spacing={3} flexWrap="wrap">
+                      {artistSearchResults.map((artist) => (
+                        <motion.div key={artist.id || artist.name} variants={listItemVariants} style={{ flex: "1 1 calc(50% - 6px)", minWidth: "140px", maxWidth: "calc(50% - 6px)" }}>
+                          <Box
+                            as="button"
+                            p={3}
+                            w="100%"
+                            borderRadius="lg"
+                            cursor="pointer"
+                            onClick={() => handleArtistClick(artist)}
+                            _hover={{ transform: "scale(1.02)" }}
+                            transition="transform 0.15s"
+                            bg={liquidGlassEnabled ? "rgba(255,255,255,0.08)" : itemHoverBg}
+                            border="1px solid"
+                            borderColor="transparent"
+                            sx={
+                              liquidGlassEnabled
+                                ? { backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }
+                                : {}
+                            }
+                          >
+                            <VStack spacing={2} align="center">
+                              <Box w="60px" h="60px" borderRadius="full" overflow="hidden" flexShrink={0}>
+                                <ChakraImage
+                                  src={coverProxyUrl(artist.pic_url || "", proxyPort)}
+                                  alt=""
+                                  w="60px"
+                                  h="60px"
+                                  objectFit="cover"
+                                  fallback={
+                                    <Box w="60px" h="60px" bg="gray.700" display="flex" alignItems="center" justifyContent="center">
+                                      <User size={28} color={subTextColor} />
+                                    </Box>
+                                  }
+                                />
+                              </Box>
+                              <VStack spacing={0} w="100%">
+                                <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1} textAlign="center">
+                                  {artist.name}
+                                </Text>
+                                <Text color={subTextColor} fontSize="xs">
+                                  {artist.music_size != null ? `${artist.music_size} 首` : ""}
+                                </Text>
+                              </VStack>
+                            </VStack>
+                          </Box>
+                        </motion.div>
+                      ))}
+                    </HStack>
+                    {artistSearchResults.length > 4 && (
+                      <HStack justify="center" pt={2}>
                         <Button
                           size="xs"
                           variant="ghost"
                           onClick={handleShowAllArtists}
                           sx={{ color: activeColor, _hover: { bg: hoverBg } }}
                         >
-                          查看全部 →
+                          查看全部 ({artistSearchResults.length}) →
                         </Button>
-                      )}
-                    </HStack>
-                    <HStack spacing={3}>
-                      {previewArtists.map((artist) => (
-                        <LiquidGlassCard
-                          key={artist.id || artist.name}
-                          as="button"
-                          flex={1}
-                          p={3}
-                          borderRadius="lg"
-                          cursor="pointer"
-                          onClick={() => handleArtistClick(artist)}
-                          _hover={{ transform: "scale(1.02)" }}
-                          transition="transform 0.15s"
-                        >
-                          <VStack spacing={2} align="center">
-                            <Box w="64px" h="64px" borderRadius="md" overflow="hidden" flexShrink={0}>
-                              <ChakraImage
-                                src={coverProxyUrl(artist.pic_url || "", proxyPort)}
-                                alt=""
-                                w="64px"
-                                h="64px"
-                                objectFit="cover"
-                                fallback={
-                                  <Box
-                                    w="64px"
-                                    h="64px"
-                                    bg="gray.700"
-                                    display="flex"
-                                    alignItems="center"
-                                    justifyContent="center"
-                                  >
-                                    <User size={28} color={subTextColor} />
-                                  </Box>
-                                }
-                              />
-                            </Box>
-                            <VStack spacing={0} w="100%">
-                              <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1} textAlign="center">
-                                {artist.name}
-                              </Text>
-                              <Text color={subTextColor} fontSize="xs">
-                                {artist.music_size != null ? `${artist.music_size} 首` : ""}
-                              </Text>
-                            </VStack>
-                          </VStack>
-                        </LiquidGlassCard>
-                      ))}
-                      {/* 填充占位保证对齐 */}
-                      {previewArtists.length < 2 && (
-                        <Box flex={1} />
-                      )}
-                    </HStack>
-                  </Box>
-                )}
-
-                {/* ── 分隔线 ── */}
-                {artistSearchResults.length > 0 && searchResults.length > 0 && (
-                  <Box borderTop="1px solid" borderColor={borderColor} />
-                )}
-
-                {/* ── 歌曲区域 ── */}
-                {searchResults.length > 0 && (
-                  <Box>
-                    <HStack spacing={2} mb={2}>
-                      <MusicIcon size={16} color={activeColor} />
-                      <Text fontSize="sm" fontWeight="bold" color={textColor}>
-                        歌曲 ({searchResults.length})
-                      </Text>
-                    </HStack>
-                    <VStack spacing={1} align="stretch">
-                      {searchResults.map((song, i) => renderSongRow(song, i, searchResults))}
-                    </VStack>
-                  </Box>
-                )}
-              </VStack>
+                      </HStack>
+                    )}
+                  </motion.div>
+                ) : (
+                  <VStack py={12} spacing={2}>
+                    <User size={32} color={subTextColor} />
+                    <Text color={subTextColor} fontSize="sm">未找到相关歌手</Text>
+                  </VStack>
+                )
+              )}
+                </motion.div>
+              </AnimatePresence>
             </Box>
           )}
         </LiquidGlassCard>
@@ -2245,8 +2790,13 @@ setRightPanelView("tracks");
           </Text>
         </HStack>
 
+        <SearchBox
+          onUnifiedSearch={handleUnifiedSearch}
+          onArtistClick={handleArtistClick}
+        />
+
         <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
-          <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
+          <Box flex={1} overflowY="scroll" sx={scrollbarSx(activeColor)}>
             <VStack spacing={2} align="stretch">
               {artistSearchResults.map((artist) => (
                 <HStack
@@ -2352,14 +2902,18 @@ setRightPanelView("tracks");
                     ({leftPlaylistTracks.length} 首)
                   </Text>
                 </HStack>
-                <VirtualizedSongList
+                <VirtualList
                   items={leftPlaylistTracks}
+                  itemHeight={60}
                   renderItem={(song, i) => renderSongRow(song, i, leftPlaylistTracks)}
+                  getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
                   loading={loadingLeftTracks}
                   loadingText="加载曲目中..."
                   emptyText="暂无曲目"
                   resetKey={leftPlaylistMeta?.id}
                   scrollbarSx={scrollbarSx(activeColor)}
+                  onEndReached={() => storeActions.loadMoreLeftPlaylistTracks()}
+                  hasMore={(leftPlaylistMeta?.track_count ?? 0) > leftPlaylistTracks.length}
                 />
               </>
             ) : (
@@ -2372,9 +2926,11 @@ setRightPanelView("tracks");
                   {loadingPlaylists ? (
                     <VStack py={6}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
                   ) : userPlaylists.length > 0 ? (
-                    <VStack spacing={1} align="stretch">
-                      {userPlaylists.map((pl) => renderPlaylistRow(pl))}
-                    </VStack>
+                    <motion.div variants={listContainerVariants} initial="hidden" animate="visible" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                      {userPlaylists.map((pl) => (
+                        <motion.div key={pl.id} variants={listItemVariants}>{renderPlaylistRow(pl)}</motion.div>
+                      ))}
+                    </motion.div>
                   ) : (
                     <Text color={subTextColor} fontSize="xs" py={4} textAlign="center">暂无歌单</Text>
                   )}
@@ -2422,14 +2978,18 @@ setRightPanelView("tracks");
                     ({rightPlaylistTracks.length} 首)
                   </Text>
                 </HStack>
-                <VirtualizedSongList
+                <VirtualList
                   items={rightPlaylistTracks}
+                  itemHeight={60}
                   renderItem={(song, i) => renderSongRow(song, i, rightPlaylistTracks)}
+                  getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
                   loading={loadingRightTracks}
                   loadingText="加载曲目中..."
                   emptyText="暂无曲目"
                   resetKey={rightPlaylistMeta?.id}
                   scrollbarSx={scrollbarSx(activeColor)}
+                  onEndReached={() => storeActions.loadMoreRightPlaylistTracks()}
+                  hasMore={(rightPlaylistMeta?.track_count ?? 0) > rightPlaylistTracks.length}
                 />
               </>
             ) : (
@@ -2453,6 +3013,59 @@ setRightPanelView("tracks");
                   )}
                 </HStack>
 
+                {/* 官方榜单 */}
+                <VStack spacing={1.5} align="stretch" mb={2} flexShrink={0}>
+                  <HStack spacing={1.5}>
+                    <TrendingUp size={13} color={activeColor} />
+                    <Text fontSize="2xs" fontWeight="bold" color={subTextColor}>官方榜单</Text>
+                  </HStack>
+                  <HStack spacing={1.5} minW={0} overflowX="auto" sx={scrollbarSx(activeColor)}>
+                    {officialCharts.length > 0 ? officialCharts.map((chart) => (
+                      <VStack
+                        key={chart.id}
+                        spacing={0.5}
+                        cursor="pointer"
+                        minW="60px"
+                        maxW="70px"
+                        flexShrink={0}
+                        onClick={() => handleRecPlaylistClick(chart)}
+                        _hover={{ transform: "scale(1.04)" }}
+                        transition="transform 0.15s"
+                      >
+                        <Box
+                          w="100%"
+                          borderRadius="lg"
+                          overflow="hidden"
+                          sx={{ aspectRatio: "1 / 1" }}
+                        >
+                          <ChakraImage
+                            src={coverProxyUrl(chart.cover, proxyPort)}
+                            alt=""
+                            w="100%"
+                            h="100%"
+                            objectFit="cover"
+                            fallback={
+                              <Box w="100%" h="100%" bg="gray.700" display="flex" alignItems="center" justifyContent="center">
+                                <TrendingUp size={14} color={subTextColor} />
+                              </Box>
+                            }
+                          />
+                        </Box>
+                        <Text color={textColor} fontSize="xs" fontWeight="medium" noOfLines={1} textAlign="center">
+                          {chart.name}
+                        </Text>
+                      </VStack>
+                    )) : (
+                      // 骨架占位
+                      <>
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                          <Box key={i} minW="60px" maxW="70px" flexShrink={0} borderRadius="lg" bg={itemHoverBg} sx={{ aspectRatio: "1 / 1" }} />
+                        ))}
+                      </>
+                    )}
+                  </HStack>
+                </VStack>
+
                 <Box flex={1} overflowY="auto" sx={scrollbarSx(activeColor)}>
                   {!loginInfo?.logged_in ? (
                     <VStack py={8} spacing={3}>
@@ -2465,9 +3078,11 @@ setRightPanelView("tracks");
                       <Text color={subTextColor} fontSize="sm" textAlign="center">点击刷新加载推荐</Text>
                     </VStack>
                   ) : (
-                    <VStack spacing={2} align="stretch">
-                      {recommendations.map((pl) => renderPlaylistRow(pl, "rec-", handleRecPlaylistClick))}
-                    </VStack>
+                    <motion.div variants={listContainerVariants} initial="hidden" animate="visible" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {recommendations.map((pl) => (
+                        <motion.div key={`rec-${pl.id}`} variants={listItemVariants}>{renderPlaylistRow(pl, "rec-", handleRecPlaylistClick)}</motion.div>
+                      ))}
+                    </motion.div>
                   )}
                 </Box>
               </>

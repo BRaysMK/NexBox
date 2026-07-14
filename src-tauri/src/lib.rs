@@ -179,6 +179,17 @@ pub fn run() {
                 });
             }
 
+            // Main window: intercept taskbar Close / Alt+F4 → hide instead of destroy
+            if let Some(main_window) = app.get_webview_window("main") {
+                let main_clone = main_window.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = main_clone.hide();
+                    }
+                });
+            }
+
             // Tray menu: hide when losing focus (click outside), reset always-on-top
             if let Some(tray_menu) = app.get_webview_window("tray-menu") {
                 let menu_clone = tray_menu.clone();
@@ -230,13 +241,18 @@ pub fn run() {
         music_api::music_logout,
         music_api::music_user_playlist,
         music_api::music_playlist_tracks,
+        music_api::music_playlist_tracks_range,
+        music_api::music_playlist_info_with_track_ids,
+        music_api::music_playlist_detail,
         music_api::music_likelist,
         music_api::music_like,
+        music_api::music_playlist_subscribe,
         music_api::music_lyric,
         music_api::music_personalized,
         music_api::music_recommend_songs,
         music_api::music_artist_search,
         music_api::music_artist_songs,
+        music_api::music_playlist_search,
         music_api::music_open_login_window,
         music_api::audio_proxy::cmd_get_proxy_port,
         downloader::download_file,

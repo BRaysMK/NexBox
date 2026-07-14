@@ -69,7 +69,7 @@ export function LiquidGlassToolCard({
           WebkitTransform: "translateZ(0)",
           WebkitBackfaceVisibility: "hidden",
           backfaceVisibility: "hidden",
-          willChange: "transform",
+          willChange: "auto",
         }}
         {...props}
       >
@@ -99,7 +99,7 @@ export function LiquidGlassToolCard({
         WebkitTransform: "translateZ(0)",
         WebkitBackfaceVisibility: "hidden",
         backfaceVisibility: "hidden",
-        willChange: "backdrop-filter, transform",
+        willChange: "auto",
       }}
       {...props}
     >

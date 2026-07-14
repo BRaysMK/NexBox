@@ -53,3 +53,13 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #7FD1C1;
 }
+
+/* 碟片旋转动画 */
+@keyframes vinylSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -30,6 +30,7 @@ export interface Playlist {
   cover: string;
   track_count: number;
   creator: string;
+  subscribed: boolean;
 }
 
 export interface SongUrlResult {

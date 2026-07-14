@@ -264,7 +264,7 @@ export function GlobalSearch() {
           sx={{
             transform: "translateZ(0)",
             WebkitTransform: "translateZ(0)",
-            willChange: "backdrop-filter, transform",
+            willChange: "auto",
             transition: "backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
           pr="60px"
@@ -300,7 +300,7 @@ export function GlobalSearch() {
           sx={{
             transform: "translateZ(0)",
             WebkitTransform: "translateZ(0)",
-            willChange: "backdrop-filter, transform",
+            willChange: "auto",
             transition: "backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
             "&::-webkit-scrollbar": {
               width: "4px",

@@ -33,6 +33,10 @@ interface VirtualizedSongListProps<T> {
   spacing?: string | number;
   /** 自定义滚动容器样式 */
   scrollbarSx?: Record<string, unknown>;
+  /** 当接近列表末尾时触发的回调（用于从后端加载更多） */
+  onLoadMore?: () => void;
+  /** 外部判断是否还有更多数据（后端未加载完） */
+  hasMoreServer?: boolean;
 }
 
 const DEFAULT_BATCH = 50;
@@ -50,6 +54,8 @@ function VirtualizedSongListInner<T>({
   sx,
   spacing = 1,
   scrollbarSx,
+  onLoadMore,
+  hasMoreServer = false,
 }: VirtualizedSongListProps<T>) {
   const [visibleCount, setVisibleCount] = useState(batchSize);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -66,10 +72,14 @@ function VirtualizedSongListInner<T>({
   // IntersectionObserver 检测哨兵元素进入视口
   const loadMore = useCallback(() => {
     setVisibleCount((prev) => {
-      if (prev >= items.length) return prev;
+      if (prev >= items.length) {
+        // 本地数据已全部展示，触发后端加载更多
+        onLoadMore?.();
+        return prev;
+      }
       return Math.min(prev + batchSize, items.length);
     });
-  }, [items.length, batchSize]);
+  }, [items.length, batchSize, onLoadMore]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -135,18 +145,18 @@ function VirtualizedSongListInner<T>({
         {visibleItems.map((item, i) => renderItem(item, i))}
       </VStack>
 
-      {/* 底部哨兵：进入视口时触发加载下一批 */}
-      {hasMore && (
+      {/* 底部哨兵：进入视口时触发加载下一批 / 后端更多 */}
+      {(hasMore || hasMoreServer) && (
         <Box ref={sentinelRef} py={3} textAlign="center">
           <Spinner size="xs" />
           <Text fontSize="xs" color="gray.500" mt={1}>
-            加载更多... ({visibleCount}/{items.length})
+            {hasMore ? `加载更多... (${visibleCount}/${items.length})` : "加载更多..."}
           </Text>
         </Box>
       )}
 
       {/* 全部加载完成时显示总数 */}
-      {!hasMore && items.length > batchSize && (
+      {!hasMore && !hasMoreServer && items.length > batchSize && (
         <Text fontSize="xs" color="gray.500" py={2} textAlign="center" opacity={0.6}>
           共 {items.length} 首
         </Text>

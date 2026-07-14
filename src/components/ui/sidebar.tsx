@@ -245,7 +245,7 @@ export function Sidebar() {
       transition="max-width 0.25s cubic-bezier(0.95, 0, 1, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
       sx={{
         ...containerStyles.sx,
-        willChange: "backdrop-filter, transform",
+        willChange: "auto",
       }}
     >
       <ChakraBox

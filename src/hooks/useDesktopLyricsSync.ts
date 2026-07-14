@@ -87,11 +87,16 @@ export function useDesktopLyricsSync() {
         await listen<{
           song: Song | null;
           karaokeLines: KaraokeLine[];
+          currentTime: number;
+          isPlaying: boolean;
         }>("desktop-lyrics:data", (e) => {
           setSong(e.payload.song);
           setKaraokeLines(e.payload.karaokeLines);
-          audioTimeRef.current = 0;
-          setEstimatedTime(0);
+          // 使用主窗口传来的当前播放时间，避免重置为 0 导致闪烁
+          audioTimeRef.current = e.payload.currentTime;
+          setEstimatedTime(e.payload.currentTime);
+          isPlayingRef.current = e.payload.isPlaying;
+          lastSyncRef.current = performance.now();
           hasDataRef.current = true;
         })
       );
