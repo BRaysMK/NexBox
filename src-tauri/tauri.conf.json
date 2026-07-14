@@ -102,7 +102,9 @@
       "../nvidiaProfileInspector.exe.config",
       "../Reference.xml",
       "../power-plans/*",
-      "../monitor/bin/Release/net48/*"
+      "../monitor/bin/Release/net48/*",
+      "../aq_registry/*",
+      "../aq_registry_restore/*"
     ],
     "icon": [
       "icons/32x32.png",

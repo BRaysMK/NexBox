@@ -1435,6 +1435,18 @@ fn save_injected_resolution(width: u32, height: u32) -> Result<(), String> {
     Ok(())
 }
 
+/// Check if a monitor name is a generic/placeholder (any language variant)
+fn is_generic_monitor_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.contains("generic")
+        || lower.contains("即插即用")
+        || lower.contains("通用")
+        || lower.contains("pnp")
+        || lower.contains("standard monitor")
+        || lower.contains("digital display")
+        || lower.contains("analog display")
+}
+
 /// Enumerate NVIDIA displays with real NVAPI displayId from GetDisplayConfig.
 #[tauri::command]
 pub fn list_nvidia_displays() -> Result<Vec<NvidiaDisplay>, String> {
@@ -1503,9 +1515,7 @@ pub fn list_nvidia_displays() -> Result<Vec<NvidiaDisplay>, String> {
                         if len > 0 {
                             let model = String::from_utf16_lossy(&dd.DeviceString[..len]);
                             let t = model.trim();
-                            if !t.is_empty()
-                                && !t.eq_ignore_ascii_case("Generic PnP Monitor")
-                            {
+                            if !t.is_empty() && !is_generic_monitor_name(t) {
                                 t.to_string()
                             } else {
                                 device_name.trim_start_matches("\\\\.\\").to_string()

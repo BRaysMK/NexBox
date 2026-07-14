@@ -3,11 +3,8 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { store } from "@/lib/store";
 import { type HardwareInfo, getHardwareInfo } from "@/lib/hardware";
-
-const SETTINGS_FILE = "settings.json";
-const store = new LazyStore(SETTINGS_FILE);
 
 const DEFAULT_OVERLAY_HOTKEY = "Shift+F10";
 const DEFAULT_CROSSHAIR_HOTKEY = "Shift+F9";

@@ -137,6 +137,18 @@ pub fn init() {
     // no-op on non-Windows
 }
 
+/// Check if a monitor name is a generic/placeholder (any language variant)
+fn is_generic_monitor_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.contains("generic")
+        || lower.contains("即插即用")
+        || lower.contains("通用")
+        || lower.contains("pnp")
+        || lower.contains("standard monitor")
+        || lower.contains("digital display")
+        || lower.contains("analog display")
+}
+
 #[cfg(target_os = "windows")]
 fn get_monitor_model_name(device_name: &str) -> String {
     use windows_sys::Win32::Graphics::Gdi::{EnumDisplayDevicesW, DISPLAY_DEVICEW};
@@ -153,10 +165,10 @@ fn get_monitor_model_name(device_name: &str) -> String {
             if len > 0 {
                 let model = String::from_utf16_lossy(&disp_device.DeviceString[..len]);
                 let trimmed = model.trim();
-                if !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("Generic PnP Monitor") {
+                if !trimmed.is_empty() && !is_generic_monitor_name(trimmed) {
                     return trimmed.to_string();
                 }
-                return model.trim().to_string();
+                return String::new();
             }
         }
     }

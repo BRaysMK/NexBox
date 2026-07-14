@@ -26,7 +26,7 @@ import {
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { store } from "@/lib/store";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, ArrowLeft, RotateCcw, Monitor, ChevronDown, Check, Image } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -61,7 +61,6 @@ interface DisplayInfo {
 }
 
 const CROSSHAIR_STORE_KEY = "crosshair-settings";
-const store = new LazyStore("settings.json");
 
 const DEFAULT_SETTINGS: CrosshairSettings = {
   enabled: false,

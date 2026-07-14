@@ -18,11 +18,25 @@ pub enum HardwareError {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CpuInfo {
     pub name: String,
+    pub manufacturer: String,
     pub cores: u32,
     pub threads: u32,
     pub max_clock_speed: u32,
+    pub l2_cache_size: u32,
     pub l3_cache_size: u32,
     pub load_percentage: Option<u16>,
+    pub architecture: String,
+    pub socket: String,
+    pub l2_cache_speed: Option<u32>,
+    pub l3_cache_speed: Option<u32>,
+    pub current_clock_speed: Option<u32>,
+    pub ext_clock: Option<u32>,
+    pub processor_id: String,
+    pub family: u32,
+    pub stepping: String,
+    pub revision: String,
+    pub enabled_cores: Option<u32>,
+    pub voltage_caps: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -41,6 +55,20 @@ pub struct GpuInfo {
     pub driver_version: String,
     pub temperature: Option<f64>,
     pub usage: Option<u32>,
+    pub video_processor: String,
+    pub adapter_compatibility: String,
+    pub driver_date: String,
+    pub installed_drivers: String,
+    pub video_mode: String,
+    pub resolution_width: Option<u32>,
+    pub resolution_height: Option<u32>,
+    pub refresh_rate: Option<u32>,
+    pub device_id: String,
+    pub pnp_device_id: String,
+    pub status: String,
+    pub inf_filename: String,
+    pub video_architecture: Option<String>,
+    pub video_memory_type: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -50,12 +78,23 @@ pub struct MemoryInfo {
     pub capacity_gb: f64,
     pub speed_mhz: u32,
     pub bank_label: String,
+    pub form_factor: String,
+    pub memory_type: String,
+    pub configured_clock_speed: Option<u32>,
+    pub configured_voltage: Option<u32>,
+    pub data_width: Option<u32>,
+    pub total_width: Option<u32>,
+    pub serial_number: String,
+    pub type_detail: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SoundCardInfo {
     pub name: String,
     pub manufacturer: String,
+    pub status: String,
+    pub device_id: String,
+    pub pnp_device_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -65,6 +104,52 @@ pub struct NetworkCardInfo {
     pub adapter_type: String,
     pub mac_address: String,
     pub speed_mbps: u64,
+    pub connection_name: String,
+    pub service_name: String,
+    pub index: u32,
+    pub max_speed: Option<u64>,
+    pub guid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MotherboardInfo {
+    pub product: String,
+    pub manufacturer: String,
+    pub serial_number: String,
+    pub version: String,
+    pub bios_vendor: String,
+    pub bios_version: String,
+    pub bios_release_date: String,
+    pub system_manufacturer: String,
+    pub system_model: String,
+    pub system_type: String,
+    pub chassis_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiskDetailInfo {
+    pub model: String,
+    pub size_gb: f64,
+    pub interface_type: String,
+    pub serial_number: String,
+    pub firmware_revision: String,
+    pub media_type: String,
+    pub bytes_per_sector: Option<u32>,
+    pub partitions: u32,
+    pub status: String,
+    pub is_ssd: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MonitorInfo {
+    pub name: String,
+    pub manufacturer: String,
+    pub screen_width: Option<u32>,
+    pub screen_height: Option<u32>,
+    pub refresh_rate: Option<u32>,
+    pub pnp_device_id: String,
+    pub status: String,
+    pub availability: Option<u16>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -72,10 +157,11 @@ pub struct HardwareInfo {
     pub cpu: CpuInfo,
     pub gpu: Vec<GpuInfo>,
     pub memory: Vec<MemoryInfo>,
-    pub motherboard: String,
-    pub disk: Vec<String>,
+    pub motherboard: MotherboardInfo,
+    pub disk: Vec<DiskDetailInfo>,
     pub sound_card: Vec<SoundCardInfo>,
     pub network_card: Vec<NetworkCardInfo>,
+    pub monitor: Vec<MonitorInfo>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,8 +171,22 @@ struct PsProcessor {
     NumberOfCores: u32,
     NumberOfLogicalProcessors: u32,
     MaxClockSpeed: u32,
+    L2CacheSize: Option<u32>,
+    L2CacheSpeed: Option<u32>,
     L3CacheSize: Option<u32>,
+    L3CacheSpeed: Option<u32>,
     LoadPercentage: Option<u16>,
+    Manufacturer: Option<String>,
+    Architecture: Option<u16>,
+    SocketDesignation: Option<String>,
+    CurrentClockSpeed: Option<u32>,
+    ExtClock: Option<u32>,
+    ProcessorId: Option<String>,
+    Family: Option<u32>,
+    Stepping: Option<String>,
+    Revision: Option<u16>,
+    NumberOfEnabledCore: Option<u32>,
+    VoltageCaps: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,13 +195,51 @@ struct PsVideoController {
     Name: String,
     DriverVersion: Option<String>,
     AdapterRAM: Option<u64>,
+    VideoProcessor: Option<String>,
+    AdapterCompatibility: Option<String>,
+    DriverDate: Option<String>,
+    InstalledDisplayDrivers: Option<String>,
+    VideoModeDescription: Option<String>,
+    CurrentHorizontalResolution: Option<u32>,
+    CurrentVerticalResolution: Option<u32>,
+    CurrentRefreshRate: Option<u32>,
+    DeviceID: Option<String>,
+    PNPDeviceID: Option<String>,
+    Status: Option<String>,
+    InfFilename: Option<String>,
+    VideoArchitecture: Option<u16>,
+    VideoMemoryType: Option<u16>,
 }
 
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case, dead_code)]
 struct PsBaseBoard {
-    Manufacturer: String,
-    Product: String,
+    Manufacturer: Option<String>,
+    Product: Option<String>,
+    SerialNumber: Option<String>,
+    Version: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsComputerSystem {
+    Manufacturer: Option<String>,
+    Model: Option<String>,
+    SystemType: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsBios {
+    SMBIOSBIOSVersion: Option<String>,
+    Manufacturer: Option<String>,
+    ReleaseDate: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsSystemEnclosure {
+    ChassisTypes: Option<Vec<u16>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,6 +250,14 @@ struct PsPhysicalMemory {
     Capacity: u64,
     Speed: Option<u32>,
     BankLabel: Option<String>,
+    FormFactor: Option<u16>,
+    MemoryType: Option<u16>,
+    ConfiguredClockSpeed: Option<u32>,
+    ConfiguredVoltage: Option<u32>,
+    DataWidth: Option<u32>,
+    TotalWidth: Option<u32>,
+    SerialNumber: Option<String>,
+    TypeDetail: Option<u16>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -119,6 +265,13 @@ struct PsPhysicalMemory {
 struct PsDiskDrive {
     Model: String,
     Size: u64,
+    InterfaceType: Option<String>,
+    SerialNumber: Option<String>,
+    FirmwareRevision: Option<String>,
+    MediaType: Option<String>,
+    BytesPerSector: Option<u32>,
+    Partitions: Option<u32>,
+    Status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,6 +279,9 @@ struct PsDiskDrive {
 struct PsSoundDevice {
     Name: String,
     Manufacturer: Option<String>,
+    Status: Option<String>,
+    DeviceID: Option<String>,
+    PNPDeviceID: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,6 +292,25 @@ struct PsNetworkAdapter {
     AdapterType: Option<String>,
     MACAddress: Option<String>,
     Speed: Option<u64>,
+    NetConnectionID: Option<String>,
+    ServiceName: Option<String>,
+    Index: Option<u32>,
+    MaxSpeed: Option<u64>,
+    #[serde(rename = "GUID")]
+    GUID: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsDesktopMonitor {
+    Name: Option<String>,
+    MonitorManufacturerName: Option<String>,
+    ScreenWidth: Option<u32>,
+    ScreenHeight: Option<u32>,
+    DisplayFrequency: Option<u32>,
+    PNPDeviceID: Option<String>,
+    Status: Option<String>,
+    Availability: Option<u16>,
 }
 
 // 静态硬件信息缓存（不会变化的部分）
@@ -143,11 +318,12 @@ struct PsNetworkAdapter {
 struct StaticHardwareInfo {
     cpu: CpuInfo,
     gpu_static: Vec<GpuStaticInfo>,
-    motherboard: String,
+    motherboard: MotherboardInfo,
     memory: Vec<MemoryInfo>,
-    disk: Vec<String>,
+    disk: Vec<DiskDetailInfo>,
     sound_card: Vec<SoundCardInfo>,
     network_card: Vec<NetworkCardInfo>,
+    monitor: Vec<MonitorInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,6 +332,20 @@ struct GpuStaticInfo {
     vendor: GpuVendor,
     memory_gb: f64,
     driver_version: String,
+    video_processor: String,
+    adapter_compatibility: String,
+    driver_date: String,
+    installed_drivers: String,
+    video_mode: String,
+    resolution_width: Option<u32>,
+    resolution_height: Option<u32>,
+    refresh_rate: Option<u32>,
+    device_id: String,
+    pnp_device_id: String,
+    status: String,
+    inf_filename: String,
+    video_architecture: Option<String>,
+    video_memory_type: Option<String>,
 }
 
 static STATIC_HARDWARE_CACHE: Mutex<Option<StaticHardwareInfo>> = Mutex::new(None);
@@ -265,6 +455,20 @@ fn get_nvidia_gpus_with_nvml() -> Result<Vec<GpuInfo>, HardwareError> {
             driver_version,
             temperature,
             usage,
+            video_processor: String::new(),
+            adapter_compatibility: "NVIDIA".to_string(),
+            driver_date: String::new(),
+            installed_drivers: String::new(),
+            video_mode: String::new(),
+            resolution_width: None,
+            resolution_height: None,
+            refresh_rate: None,
+            device_id: String::new(),
+            pnp_device_id: String::new(),
+            status: String::new(),
+            inf_filename: String::new(),
+            video_architecture: None,
+            video_memory_type: None,
         });
     }
 
@@ -315,6 +519,20 @@ fn get_nvidia_gpus_with_smi() -> Vec<GpuInfo> {
                         driver_version,
                         temperature,
                         usage,
+                        video_processor: String::new(),
+                        adapter_compatibility: "NVIDIA".to_string(),
+                        driver_date: String::new(),
+                        installed_drivers: String::new(),
+                        video_mode: String::new(),
+                        resolution_width: None,
+                        resolution_height: None,
+                        refresh_rate: None,
+                        device_id: String::new(),
+                        pnp_device_id: String::new(),
+                        status: String::new(),
+                        inf_filename: String::new(),
+                        video_architecture: None,
+                        video_memory_type: None,
                     });
                 }
             }
@@ -324,10 +542,63 @@ fn get_nvidia_gpus_with_smi() -> Vec<GpuInfo> {
     gpus
 }
 
+fn video_architecture_name(code: Option<u16>) -> Option<String> {
+    match code {
+        Some(1) => Some("VGA".into()),
+        Some(2) => Some("XGA".into()),
+        Some(3) => Some("Other".into()),
+        Some(4) => Some("S-Video".into()),
+        Some(5) => Some("Composite".into()),
+        Some(6) => Some("Component".into()),
+        Some(7) => Some("DVI".into()),
+        Some(8) => Some("HDMI".into()),
+        Some(9) => Some("LVDS".into()),
+        Some(10) => Some("D-Jpn".into()),
+        Some(11) => Some("SDI".into()),
+        Some(12) => Some("DisplayPort (External)".into()),
+        Some(13) => Some("DisplayPort (Embedded)".into()),
+        Some(14) => Some("UDI (External)".into()),
+        Some(15) => Some("UDI (Embedded)".into()),
+        Some(16) => Some("SDTV-Dongle".into()),
+        Some(17) => Some("Miracast".into()),
+        Some(18) => Some("Internal".into()),
+        _ => None,
+    }
+}
+
+fn video_memory_type_name(code: Option<u16>) -> Option<String> {
+    match code {
+        Some(1) => Some("Other".into()),
+        Some(2) => Some("Unknown".into()),
+        Some(3) => Some("VRAM".into()),
+        Some(4) => Some("DRAM".into()),
+        Some(5) => Some("SRAM".into()),
+        Some(6) => Some("WRAM".into()),
+        Some(7) => Some("EDO RAM".into()),
+        Some(8) => Some("Burst Synchronous DRAM".into()),
+        Some(9) => Some("Pipelined Burst SRAM".into()),
+        Some(10) => Some("CDRAM".into()),
+        Some(11) => Some("3DRAM".into()),
+        Some(12) => Some("SDRAM".into()),
+        Some(13) => Some("SGRAM".into()),
+        Some(14) => Some("GDDR3".into()),
+        Some(15) => Some("GDDR4".into()),
+        Some(16) => Some("GDDR5".into()),
+        Some(17) => Some("HBM".into()),
+        Some(18) => Some("HBM2".into()),
+        Some(19) => Some("GDDR5X".into()),
+        Some(20) => Some("GDDR6".into()),
+        Some(21) => Some("GDDR6X".into()),
+        Some(22) => Some("GDDR7".into()),
+        Some(23) => Some("HBM3".into()),
+        _ => None,
+    }
+}
+
 fn get_gpus_from_wmi() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
 
-    let gpu_cmd = "Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM | ConvertTo-Json -Compress";
+    let gpu_cmd = "Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM, VideoProcessor, AdapterCompatibility, DriverDate, InstalledDisplayDrivers, VideoModeDescription, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate, DeviceID, PNPDeviceID, Status, InfFilename, VideoArchitecture, VideoMemoryType | ConvertTo-Json -Compress";
     if let Ok(gpu_results) = run_powershell::<PsVideoController>(gpu_cmd) {
         for g in gpu_results {
             let name_lower = g.Name.to_lowercase();
@@ -362,6 +633,20 @@ fn get_gpus_from_wmi() -> Vec<GpuInfo> {
                 driver_version: g.DriverVersion.unwrap_or_else(|| "未知".to_string()),
                 temperature: None,
                 usage: None,
+                video_processor: g.VideoProcessor.unwrap_or_else(|| "未知".to_string()),
+                adapter_compatibility: g.AdapterCompatibility.unwrap_or_else(|| "未知".to_string()),
+                driver_date: g.DriverDate.unwrap_or_else(|| "未知".to_string()),
+                installed_drivers: g.InstalledDisplayDrivers.unwrap_or_else(|| "未知".to_string()),
+                video_mode: g.VideoModeDescription.unwrap_or_else(|| "未知".to_string()),
+                resolution_width: g.CurrentHorizontalResolution,
+                resolution_height: g.CurrentVerticalResolution,
+                refresh_rate: g.CurrentRefreshRate,
+                device_id: g.DeviceID.unwrap_or_else(|| "未知".to_string()),
+                pnp_device_id: g.PNPDeviceID.unwrap_or_else(|| "未知".to_string()),
+                status: g.Status.unwrap_or_else(|| "未知".to_string()),
+                inf_filename: g.InfFilename.unwrap_or_else(|| "未知".to_string()),
+                video_architecture: video_architecture_name(g.VideoArchitecture),
+                video_memory_type: video_memory_type_name(g.VideoMemoryType),
             });
         }
     }
@@ -370,21 +655,64 @@ fn get_gpus_from_wmi() -> Vec<GpuInfo> {
 }
 
 fn get_gpu_info() -> Vec<GpuInfo> {
-    // 首先尝试用NVML获取NVIDIA显卡（最好的方式）
-    if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
+    // 同时获取WMI扩展信息（所有GPU的详细参数）
+    let wmi_gpus = get_gpus_from_wmi();
+
+    // 尝试用NVML获取NVIDIA显卡（最好的方式）
+    if let Ok(mut nvml_gpus) = get_nvidia_gpus_with_nvml() {
         if !nvml_gpus.is_empty() {
+            // 合并WMI扩展字段到NVML结果
+            for gpu in nvml_gpus.iter_mut() {
+                if let Some(wmi_match) = wmi_gpus.iter().find(|w| w.vendor == GpuVendor::NVIDIA) {
+                    gpu.video_processor = wmi_match.video_processor.clone();
+                    gpu.adapter_compatibility = wmi_match.adapter_compatibility.clone();
+                    gpu.driver_date = wmi_match.driver_date.clone();
+                    gpu.installed_drivers = wmi_match.installed_drivers.clone();
+                    gpu.video_mode = wmi_match.video_mode.clone();
+                    gpu.resolution_width = wmi_match.resolution_width;
+                    gpu.resolution_height = wmi_match.resolution_height;
+                    gpu.refresh_rate = wmi_match.refresh_rate;
+                    gpu.device_id = wmi_match.device_id.clone();
+                    gpu.pnp_device_id = wmi_match.pnp_device_id.clone();
+                    gpu.status = wmi_match.status.clone();
+                    gpu.inf_filename = wmi_match.inf_filename.clone();
+                    gpu.video_architecture = wmi_match.video_architecture.clone();
+                    gpu.video_memory_type = wmi_match.video_memory_type.clone();
+                    break;
+                }
+            }
             return nvml_gpus;
         }
     }
 
     // 然后尝试用nvidia-smi
-    let smi_gpus = get_nvidia_gpus_with_smi();
+    let mut smi_gpus = get_nvidia_gpus_with_smi();
     if !smi_gpus.is_empty() {
+        // 合并WMI扩展字段
+        for gpu in smi_gpus.iter_mut() {
+            if let Some(wmi_match) = wmi_gpus.iter().find(|w| w.vendor == GpuVendor::NVIDIA) {
+                gpu.video_processor = wmi_match.video_processor.clone();
+                gpu.adapter_compatibility = wmi_match.adapter_compatibility.clone();
+                gpu.driver_date = wmi_match.driver_date.clone();
+                gpu.installed_drivers = wmi_match.installed_drivers.clone();
+                gpu.video_mode = wmi_match.video_mode.clone();
+                gpu.resolution_width = wmi_match.resolution_width;
+                gpu.resolution_height = wmi_match.resolution_height;
+                gpu.refresh_rate = wmi_match.refresh_rate;
+                gpu.device_id = wmi_match.device_id.clone();
+                gpu.pnp_device_id = wmi_match.pnp_device_id.clone();
+                gpu.status = wmi_match.status.clone();
+                gpu.inf_filename = wmi_match.inf_filename.clone();
+                gpu.video_architecture = wmi_match.video_architecture.clone();
+                gpu.video_memory_type = wmi_match.video_memory_type.clone();
+                break;
+            }
+        }
         return smi_gpus;
     }
 
-    // 最后用WMI
-    get_gpus_from_wmi()
+    // 最后用WMI（已包含扩展字段）
+    wmi_gpus
 }
 
 // 只获取GPU的动态数据（温度、占用）
@@ -449,6 +777,136 @@ fn get_cpu_dynamic_info() -> Option<u16> {
     Some(usage)
 }
 
+fn architecture_name(code: Option<u16>) -> String {
+    match code {
+        Some(0) => "x86".into(),
+        Some(1) => "MIPS".into(),
+        Some(2) => "Alpha".into(),
+        Some(3) => "PowerPC".into(),
+        Some(5) => "ARM".into(),
+        Some(6) => "ia64".into(),
+        Some(7) => "Alpha64".into(),
+        Some(9) => "x64".into(),
+        Some(12) => "ARM64".into(),
+        _ => "未知".into(),
+    }
+}
+
+fn memory_form_factor_name(code: Option<u16>) -> String {
+    match code {
+        Some(0) => "未知".into(),
+        Some(1) => "Other".into(),
+        Some(2) => "SIP".into(),
+        Some(3) => "DIP".into(),
+        Some(4) => "ZIP".into(),
+        Some(5) => "SOJ".into(),
+        Some(6) => "Proprietary".into(),
+        Some(7) => "SIMM".into(),
+        Some(8) => "DIMM".into(),
+        Some(9) => "TSOP".into(),
+        Some(10) => "PGA".into(),
+        Some(11) => "RIMM".into(),
+        Some(12) => "SODIMM".into(),
+        Some(13) => "SRIMM".into(),
+        Some(14) => "SMD".into(),
+        Some(15) => "SSMP".into(),
+        Some(16) => "QFP".into(),
+        Some(17) => "TQFP".into(),
+        Some(18) => "SOIC".into(),
+        Some(19) => "LCC".into(),
+        Some(20) => "PLCC".into(),
+        Some(21) => "BGA".into(),
+        Some(22) => "FPBGA".into(),
+        Some(23) => "LGA".into(),
+        Some(24) => "FB-DIMM".into(),
+        _ => "未知".into(),
+    }
+}
+
+fn memory_type_name(code: Option<u16>) -> String {
+    match code {
+        Some(0) => "未知".into(),
+        Some(1) => "Other".into(),
+        Some(2) => "DRAM".into(),
+        Some(3) => "Synchronous DRAM".into(),
+        Some(4) => "Cache DRAM".into(),
+        Some(5) => "EDO".into(),
+        Some(6) => "EDRAM".into(),
+        Some(7) => "VRAM".into(),
+        Some(8) => "SRAM".into(),
+        Some(9) => "RAM".into(),
+        Some(10) => "ROM".into(),
+        Some(11) => "Flash".into(),
+        Some(12) => "EEPROM".into(),
+        Some(13) => "FEPROM".into(),
+        Some(14) => "EPROM".into(),
+        Some(15) => "CDRAM".into(),
+        Some(16) => "3DRAM".into(),
+        Some(17) => "SDRAM".into(),
+        Some(18) => "SGRAM".into(),
+        Some(19) => "RDRAM".into(),
+        Some(20) => "DDR".into(),
+        Some(21) => "DDR2".into(),
+        Some(22) => "DDR2 FB-DIMM".into(),
+        Some(24) => "DDR3".into(),
+        Some(25) => "FBD2".into(),
+        Some(26) => "DDR4".into(),
+        Some(27) => "LPDDR".into(),
+        Some(28) => "LPDDR2".into(),
+        Some(29) => "LPDDR3".into(),
+        Some(30) => "LPDDR4".into(),
+        Some(31) => "Logical non-volatile".into(),
+        Some(32) => "HBM".into(),
+        Some(33) => "HBM2".into(),
+        Some(34) => "DDR5".into(),
+        Some(35) => "LPDDR5".into(),
+        Some(36) => "HBM3".into(),
+        _ => "未知".into(),
+    }
+}
+
+fn chassis_type_name(codes: &Option<Vec<u16>>) -> String {
+    match codes.as_ref().and_then(|v| v.first()).copied() {
+        Some(1) => "Other".into(),
+        Some(2) => "Unknown".into(),
+        Some(3) => "Desktop".into(),
+        Some(4) => "Low Profile Desktop".into(),
+        Some(5) => "Pizza Box".into(),
+        Some(6) => "Mini Tower".into(),
+        Some(7) => "Tower".into(),
+        Some(8) => "Portable".into(),
+        Some(9) => "Laptop".into(),
+        Some(10) => "Notebook".into(),
+        Some(11) => "Hand Held".into(),
+        Some(12) => "Docking Station".into(),
+        Some(13) => "All in One".into(),
+        Some(14) => "Sub Notebook".into(),
+        Some(15) => "Space-Saving".into(),
+        Some(16) => "Lunch Box".into(),
+        Some(17) => "Main System Chassis".into(),
+        Some(18) => "Expansion Chassis".into(),
+        Some(19) => "Sub Chassis".into(),
+        Some(20) => "Bus Expansion Chassis".into(),
+        Some(21) => "Peripheral Chassis".into(),
+        Some(22) => "Storage Chassis".into(),
+        Some(23) => "Rack Mount Chassis".into(),
+        Some(24) => "Sealed-Case PC".into(),
+        Some(25) => "Multi-System Chassis".into(),
+        Some(26) => "Compact PCI".into(),
+        Some(27) => "Advanced TCA".into(),
+        Some(28) => "Blade".into(),
+        Some(29) => "Blade Enclosure".into(),
+        Some(30) => "Tablet".into(),
+        Some(31) => "Convertible".into(),
+        Some(32) => "Detachable".into(),
+        Some(33) => "IoT Gateway".into(),
+        Some(34) => "Embedded PC".into(),
+        Some(35) => "Mini PC".into(),
+        Some(36) => "Stick PC".into(),
+        _ => "未知".into(),
+    }
+}
+
 fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
     // Fast path: 先检查缓存，不加初始化锁
     {
@@ -477,7 +935,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_cpu = errors.clone();
     let cpu_handle = thread::spawn(move || {
-        let cpu_cmd = "Get-WmiObject Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L3CacheSize, LoadPercentage | ConvertTo-Json -Compress";
+        let cpu_cmd = "Get-WmiObject Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L2CacheSize, L2CacheSpeed, L3CacheSize, L3CacheSpeed, LoadPercentage, Manufacturer, Architecture, SocketDesignation, CurrentClockSpeed, ExtClock, ProcessorId, Family, Stepping, Revision, NumberOfEnabledCore, VoltageCaps | ConvertTo-Json -Compress";
         match run_powershell::<PsProcessor>(cpu_cmd) {
             Ok(cpu_results) => {
                 log::info!("获取到{}个CPU信息", cpu_results.len());
@@ -485,11 +943,25 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                     log::info!("CPU型号: {}", p.Name);
                     CpuInfo {
                         name: p.Name,
+                        manufacturer: p.Manufacturer.unwrap_or_else(|| "未知".to_string()),
                         cores: p.NumberOfCores,
                         threads: p.NumberOfLogicalProcessors,
                         max_clock_speed: p.MaxClockSpeed,
+                        l2_cache_size: p.L2CacheSize.unwrap_or(0),
                         l3_cache_size: p.L3CacheSize.unwrap_or(0),
                         load_percentage: p.LoadPercentage,
+                        architecture: architecture_name(p.Architecture),
+                        socket: p.SocketDesignation.unwrap_or_else(|| "未知".to_string()),
+                        l2_cache_speed: p.L2CacheSpeed,
+                        l3_cache_speed: p.L3CacheSpeed,
+                        current_clock_speed: p.CurrentClockSpeed,
+                        ext_clock: p.ExtClock,
+                        processor_id: p.ProcessorId.unwrap_or_else(|| "未知".to_string()),
+                        family: p.Family.unwrap_or(0),
+                        stepping: p.Stepping.unwrap_or_else(|| "未知".to_string()),
+                        revision: p.Revision.map(|r| r.to_string()).unwrap_or_else(|| "未知".to_string()),
+                        enabled_cores: p.NumberOfEnabledCore,
+                        voltage_caps: p.VoltageCaps.map(|v| format!("{} mV", v)),
                     }
                 })
             }
@@ -509,32 +981,65 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
             vendor: g.vendor,
             memory_gb: g.memory_gb,
             driver_version: g.driver_version,
+            video_processor: g.video_processor,
+            adapter_compatibility: g.adapter_compatibility,
+            driver_date: g.driver_date,
+            installed_drivers: g.installed_drivers,
+            video_mode: g.video_mode,
+            resolution_width: g.resolution_width,
+            resolution_height: g.resolution_height,
+            refresh_rate: g.refresh_rate,
+            device_id: g.device_id,
+            pnp_device_id: g.pnp_device_id,
+            status: g.status,
+            inf_filename: g.inf_filename,
+            video_architecture: g.video_architecture,
+            video_memory_type: g.video_memory_type,
         }).collect::<Vec<GpuStaticInfo>>()
     });
 
     let errors_mobo = errors.clone();
     let mobo_handle = thread::spawn(move || {
-        let mobo_cmd = "Get-WmiObject Win32_BaseBoard | Select-Object Manufacturer, Product | ConvertTo-Json -Compress";
-        match run_powershell::<PsBaseBoard>(mobo_cmd) {
-            Ok(results) => {
-                log::info!("获取到{}个主板信息", results.len());
-                results.into_iter().next().map(|m| {
-                    log::info!("主板: {}", m.Product);
-                    m.Product
-                })
-            }
-            Err(e) => {
-                if let Ok(mut errs) = errors_mobo.lock() {
-                    errs.push(format!("主板: {}", e));
-                }
-                None
-            }
+        // 同时查询主板、系统信息、BIOS、机箱
+        let mobo_cmd = "Get-WmiObject Win32_BaseBoard | Select-Object Manufacturer, Product, SerialNumber, Version | ConvertTo-Json -Compress";
+        let sys_cmd = "Get-WmiObject Win32_ComputerSystem | Select-Object Manufacturer, Model, SystemType | ConvertTo-Json -Compress";
+        let bios_cmd = "Get-WmiObject Win32_BIOS | Select-Object SMBIOSBIOSVersion, Manufacturer, Name, ReleaseDate, SerialNumber | ConvertTo-Json -Compress";
+        let chassis_cmd = "Get-WmiObject Win32_SystemEnclosure | Select-Object ChassisTypes, Manufacturer, Version, SerialNumber | ConvertTo-Json -Compress";
+
+        let mobo_result = run_powershell::<PsBaseBoard>(mobo_cmd).ok().and_then(|r| r.into_iter().next());
+        let sys_result = run_powershell::<PsComputerSystem>(sys_cmd).ok().and_then(|r| r.into_iter().next());
+        let bios_result = run_powershell::<PsBios>(bios_cmd).ok().and_then(|r| r.into_iter().next());
+        let chassis_result = run_powershell::<PsSystemEnclosure>(chassis_cmd).ok().and_then(|r| r.into_iter().next());
+
+        if let Some(ref m) = mobo_result {
+            log::info!("主板: {} {}", m.Manufacturer.as_deref().unwrap_or(""), m.Product.as_deref().unwrap_or(""));
         }
+        if let Some(ref b) = bios_result {
+            log::info!("BIOS: {}", b.SMBIOSBIOSVersion.as_deref().unwrap_or(""));
+        }
+
+        if let Ok(mut errs) = errors_mobo.lock() {
+            if mobo_result.is_none() { errs.push("主板: WMI查询失败".to_string()); }
+        }
+
+        mobo_result.map(|m| MotherboardInfo {
+            product: m.Product.unwrap_or_else(|| "未知".to_string()),
+            manufacturer: m.Manufacturer.unwrap_or_else(|| "未知".to_string()),
+            serial_number: m.SerialNumber.unwrap_or_else(|| "未知".to_string()),
+            version: m.Version.unwrap_or_else(|| "未知".to_string()),
+            bios_vendor: bios_result.as_ref().and_then(|b| b.Manufacturer.clone()).unwrap_or_else(|| "未知".to_string()),
+            bios_version: bios_result.as_ref().and_then(|b| b.SMBIOSBIOSVersion.clone()).unwrap_or_else(|| "未知".to_string()),
+            bios_release_date: bios_result.as_ref().and_then(|b| b.ReleaseDate.clone()).unwrap_or_else(|| "未知".to_string()),
+            system_manufacturer: sys_result.as_ref().and_then(|s| s.Manufacturer.clone()).unwrap_or_else(|| "未知".to_string()),
+            system_model: sys_result.as_ref().and_then(|s| s.Model.clone()).unwrap_or_else(|| "未知".to_string()),
+            system_type: sys_result.as_ref().and_then(|s| s.SystemType.clone()).unwrap_or_else(|| "未知".to_string()),
+            chassis_type: chassis_type_name(&chassis_result.as_ref().and_then(|c| c.ChassisTypes.clone())),
+        })
     });
 
     let errors_mem = errors.clone();
     let mem_handle = thread::spawn(move || {
-        let mem_cmd = "Get-WmiObject Win32_PhysicalMemory | Select-Object Manufacturer, PartNumber, Capacity, Speed, BankLabel | ConvertTo-Json -Compress";
+        let mem_cmd = "Get-WmiObject Win32_PhysicalMemory | Select-Object Manufacturer, PartNumber, Capacity, Speed, BankLabel, FormFactor, MemoryType, ConfiguredClockSpeed, ConfiguredVoltage, DataWidth, TotalWidth, SerialNumber, TypeDetail | ConvertTo-Json -Compress";
         match run_powershell::<PsPhysicalMemory>(mem_cmd) {
             Ok(results) => {
                 log::info!("获取到{}个内存条信息", results.len());
@@ -546,6 +1051,14 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                         capacity_gb,
                         speed_mhz: mem.Speed.unwrap_or(0),
                         bank_label: mem.BankLabel.unwrap_or_else(|| "未知".to_string()),
+                        form_factor: memory_form_factor_name(mem.FormFactor),
+                        memory_type: memory_type_name(mem.MemoryType),
+                        configured_clock_speed: mem.ConfiguredClockSpeed,
+                        configured_voltage: mem.ConfiguredVoltage,
+                        data_width: mem.DataWidth,
+                        total_width: mem.TotalWidth,
+                        serial_number: mem.SerialNumber.unwrap_or_else(|| "未知".to_string()),
+                        type_detail: mem.TypeDetail.map(|d| d.to_string()).unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<MemoryInfo>>()
             }
@@ -560,14 +1073,27 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_disk = errors.clone();
     let disk_handle = thread::spawn(move || {
-        let disk_cmd = "Get-WmiObject Win32_DiskDrive | Select-Object Model, Size | ConvertTo-Json -Compress";
+        let disk_cmd = "Get-WmiObject Win32_DiskDrive | Select-Object Model, Size, InterfaceType, SerialNumber, FirmwareRevision, MediaType, BytesPerSector, Partitions, Status, PNPDeviceID | ConvertTo-Json -Compress";
         match run_powershell::<PsDiskDrive>(disk_cmd) {
             Ok(results) => {
                 log::info!("获取到{}个硬盘信息", results.len());
                 results.into_iter().map(|d| {
-                    let size_gb = d.Size / (1024 * 1024 * 1024);
-                    format!("{} ({}GB)", d.Model, size_gb)
-                }).collect::<Vec<String>>()
+                    let size_gb = d.Size as f64 / (1024.0 * 1024.0 * 1024.0);
+                    let media_type = d.MediaType.as_deref().unwrap_or("").to_string();
+                    let is_ssd = media_type.to_lowercase().contains("ssd") || media_type.to_lowercase().contains("solid state");
+                    DiskDetailInfo {
+                        model: d.Model,
+                        size_gb,
+                        interface_type: d.InterfaceType.unwrap_or_else(|| "未知".to_string()),
+                        serial_number: d.SerialNumber.unwrap_or_else(|| "未知".to_string()),
+                        firmware_revision: d.FirmwareRevision.unwrap_or_else(|| "未知".to_string()),
+                        media_type: if media_type.is_empty() { "未知".to_string() } else { media_type },
+                        bytes_per_sector: d.BytesPerSector,
+                        partitions: d.Partitions.unwrap_or(0),
+                        status: d.Status.unwrap_or_else(|| "未知".to_string()),
+                        is_ssd,
+                    }
+                }).collect::<Vec<DiskDetailInfo>>()
             }
             Err(e) => {
                 if let Ok(mut errs) = errors_disk.lock() {
@@ -580,7 +1106,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_sound = errors.clone();
     let sound_handle = thread::spawn(move || {
-        let sound_cmd = r#"Get-WmiObject Win32_SoundDevice | Where-Object { $_.Status -eq 'OK' -and $_.PNPDeviceID -notlike 'USB\*' -and $_.PNPDeviceID -notlike 'HID\*' -and $_.PNPDeviceID -notlike 'SWD\*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VB-Audio*' -and $_.Name -notlike '*Voicemeeter*' -and $_.Name -notlike '*CABLE*' -and $_.Name -notlike '*Sonic*Studio*' -and $_.Name -notlike '*NVIDIA*Virtual*' -and $_.Name -notlike '*Steam*Streaming*' -and $_.Name -notlike '*Oculus*' -and $_.Name -notlike '*Wave*Link*' -and $_.Name -notlike '*Elgato*Sound*Capture*' -and $_.Name -notlike '*Nahimic*' -and $_.Name -notlike '*DTS*' -and $_.Name -notlike '*Dolby*' -and $_.Name -notlike '*Bluetooth*' -and $_.Name -notlike '*Hands-Free*' -and $_.Name -notlike '*S/PDIF*' } | Select-Object Name, Manufacturer | ConvertTo-Json -Compress"#;
+        let sound_cmd = r#"Get-WmiObject Win32_SoundDevice | Where-Object { $_.Status -eq 'OK' -and $_.PNPDeviceID -notlike 'USB\*' -and $_.PNPDeviceID -notlike 'HID\*' -and $_.PNPDeviceID -notlike 'SWD\*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VB-Audio*' -and $_.Name -notlike '*Voicemeeter*' -and $_.Name -notlike '*CABLE*' -and $_.Name -notlike '*Sonic*Studio*' -and $_.Name -notlike '*NVIDIA*Virtual*' -and $_.Name -notlike '*Steam*Streaming*' -and $_.Name -notlike '*Oculus*' -and $_.Name -notlike '*Wave*Link*' -and $_.Name -notlike '*Elgato*Sound*Capture*' -and $_.Name -notlike '*Nahimic*' -and $_.Name -notlike '*DTS*' -and $_.Name -notlike '*Dolby*' -and $_.Name -notlike '*Bluetooth*' -and $_.Name -notlike '*Hands-Free*' -and $_.Name -notlike '*S/PDIF*' } | Select-Object Name, Manufacturer, Status, DeviceID, PNPDeviceID | ConvertTo-Json -Compress"#;
         match run_powershell::<PsSoundDevice>(sound_cmd) {
             Ok(results) => {
                 log::info!("获取到{}个声卡信息", results.len());
@@ -588,6 +1114,9 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                     SoundCardInfo {
                         name: s.Name,
                         manufacturer: s.Manufacturer.unwrap_or_else(|| "未知".to_string()),
+                        status: s.Status.unwrap_or_else(|| "未知".to_string()),
+                        device_id: s.DeviceID.unwrap_or_else(|| "未知".to_string()),
+                        pnp_device_id: s.PNPDeviceID.unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<SoundCardInfo>>()
             }
@@ -602,19 +1131,25 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_network = errors.clone();
     let network_handle = thread::spawn(move || {
-        let network_cmd = r#"Get-WmiObject Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -and $_.NetEnabled -eq $true -and $_.PNPDeviceID -notlike 'SWD\*' -and $_.Name -notlike '*Hyper-V*' -and $_.Name -notlike '*vEthernet*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VirtualBox*' -and $_.Name -notlike '*VMware*' -and $_.Name -notlike '*Bluetooth*' -and $_.Name -notlike '*Tailscale*' -and $_.Name -notlike '*ZeroTier*' -and $_.Name -notlike '*WSL*' -and $_.Name -notlike '*Docker*' -and $_.Name -notlike '*Npcap*' -and $_.Name -notlike '*WireGuard*' -and $_.Name -notlike '*OpenVPN*' -and $_.Name -notlike '*TAP-Windows*' -and $_.Name -notlike '*WAN Miniport*' -and $_.Name -notlike '*VPN*' -and $_.Name -notlike '*Proton*' -and $_.Name -notlike '*Nord*' -and $_.Name -notlike '*Cloudflare*WARP*' -and $_.AdapterType -notlike '*Loopback*' } | Select-Object Name, Manufacturer, AdapterType, MACAddress, Speed | ConvertTo-Json -Compress"#;
+        let network_cmd = r#"Get-WmiObject Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -and $_.NetEnabled -eq $true -and $_.PNPDeviceID -notlike 'SWD\*' -and $_.Name -notlike '*Hyper-V*' -and $_.Name -notlike '*vEthernet*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VirtualBox*' -and $_.Name -notlike '*VMware*' -and $_.Name -notlike '*Bluetooth*' -and $_.Name -notlike '*Tailscale*' -and $_.Name -notlike '*ZeroTier*' -and $_.Name -notlike '*WSL*' -and $_.Name -notlike '*Docker*' -and $_.Name -notlike '*Npcap*' -and $_.Name -notlike '*WireGuard*' -and $_.Name -notlike '*OpenVPN*' -and $_.Name -notlike '*TAP-Windows*' -and $_.Name -notlike '*WAN Miniport*' -and $_.Name -notlike '*VPN*' -and $_.Name -notlike '*Proton*' -and $_.Name -notlike '*Nord*' -and $_.Name -notlike '*Cloudflare*WARP*' -and $_.AdapterType -notlike '*Loopback*' } | Select-Object Name, Manufacturer, AdapterType, MACAddress, Speed, NetConnectionID, ServiceName, Index, MaxSpeed, GUID | ConvertTo-Json -Compress"#;
         match run_powershell::<PsNetworkAdapter>(network_cmd) {
             Ok(results) => {
                 log::info!("获取到{}个网卡信息", results.len());
                 results.into_iter().map(|n| {
                     // Speed is in bits per second, convert to Mbps
                     let speed_mbps = n.Speed.map(|s| s / 1_000_000).unwrap_or(0);
+                    let max_speed = n.MaxSpeed.map(|s| s / 1_000_000);
                     NetworkCardInfo {
                         name: n.Name,
                         manufacturer: n.Manufacturer.unwrap_or_else(|| "未知".to_string()),
                         adapter_type: n.AdapterType.unwrap_or_else(|| "未知".to_string()),
                         mac_address: n.MACAddress.unwrap_or_else(|| "未知".to_string()),
                         speed_mbps,
+                        connection_name: n.NetConnectionID.unwrap_or_else(|| "未知".to_string()),
+                        service_name: n.ServiceName.unwrap_or_else(|| "未知".to_string()),
+                        index: n.Index.unwrap_or(0),
+                        max_speed,
+                        guid: n.GUID.unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<NetworkCardInfo>>()
             }
@@ -627,21 +1162,85 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         }
     });
 
+    let errors_monitor = errors.clone();
+    let monitor_handle = thread::spawn(move || {
+        let monitor_cmd = "Get-WmiObject Win32_DesktopMonitor | Where-Object { $_.Name -ne $null -and $_.PNPDeviceID -ne $null } | Select-Object Name, MonitorManufacturerName, ScreenWidth, ScreenHeight, DisplayFrequency, PNPDeviceID, Status, Availability | ConvertTo-Json -Compress";
+        match run_powershell::<PsDesktopMonitor>(monitor_cmd) {
+            Ok(results) => {
+                log::info!("获取到{}个显示器信息", results.len());
+                results.into_iter().map(|m| {
+                    MonitorInfo {
+                        name: m.Name.unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: m.MonitorManufacturerName.unwrap_or_else(|| "未知".to_string()),
+                        screen_width: m.ScreenWidth,
+                        screen_height: m.ScreenHeight,
+                        refresh_rate: m.DisplayFrequency,
+                        pnp_device_id: m.PNPDeviceID.unwrap_or_else(|| "未知".to_string()),
+                        status: m.Status.unwrap_or_else(|| "未知".to_string()),
+                        availability: m.Availability,
+                    }
+                }).collect::<Vec<MonitorInfo>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_monitor.lock() {
+                    errs.push(format!("显示器: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
     let cpu = cpu_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| CpuInfo {
         name: "未知CPU".to_string(),
+        manufacturer: "未知".to_string(),
         cores: 0,
         threads: 0,
         max_clock_speed: 0,
+        l2_cache_size: 0,
         l3_cache_size: 0,
         load_percentage: None,
+        architecture: "未知".to_string(),
+        socket: "未知".to_string(),
+        l2_cache_speed: None,
+        l3_cache_speed: None,
+        current_clock_speed: None,
+        ext_clock: None,
+        processor_id: "未知".to_string(),
+        family: 0,
+        stepping: "未知".to_string(),
+        revision: "未知".to_string(),
+        enabled_cores: None,
+        voltage_caps: None,
     });
 
     let gpu_static = gpu_handle.join().unwrap_or_else(|_| Vec::new());
-    let motherboard = mobo_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| "未知主板".to_string());
+    let motherboard = mobo_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| MotherboardInfo {
+        product: "未知".to_string(),
+        manufacturer: "未知".to_string(),
+        serial_number: "未知".to_string(),
+        version: "未知".to_string(),
+        bios_vendor: "未知".to_string(),
+        bios_version: "未知".to_string(),
+        bios_release_date: "未知".to_string(),
+        system_manufacturer: "未知".to_string(),
+        system_model: "未知".to_string(),
+        system_type: "未知".to_string(),
+        chassis_type: "未知".to_string(),
+    });
     let memory = mem_handle.join().unwrap_or_else(|_| Vec::new());
     let disk = disk_handle.join().unwrap_or_else(|_| Vec::new());
     let sound_card = sound_handle.join().unwrap_or_else(|_| Vec::new());
     let network_card = network_handle.join().unwrap_or_else(|_| Vec::new());
+    let mut monitor = monitor_handle.join().unwrap_or_else(|_| Vec::new());
+    // Fallback: fill monitor resolution/refresh from GPU output if WMI didn't provide it
+    if !gpu_static.is_empty() && !monitor.is_empty() {
+        let gpu = &gpu_static[0];
+        for m in monitor.iter_mut() {
+            if m.screen_width.is_none() { m.screen_width = gpu.resolution_width; }
+            if m.screen_height.is_none() { m.screen_height = gpu.resolution_height; }
+            if m.refresh_rate.is_none() { m.refresh_rate = gpu.refresh_rate; }
+        }
+    }
 
     if let Ok(errs) = errors.lock() {
         for e in errs.iter() {
@@ -657,6 +1256,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         disk,
         sound_card,
         network_card,
+        monitor,
     };
 
     {
@@ -695,6 +1295,20 @@ pub fn get_hardware_info() -> Result<HardwareInfo, HardwareError> {
                 driver_version: gs.driver_version.clone(),
                 temperature: temp,
                 usage,
+                video_processor: gs.video_processor.clone(),
+                adapter_compatibility: gs.adapter_compatibility.clone(),
+                driver_date: gs.driver_date.clone(),
+                installed_drivers: gs.installed_drivers.clone(),
+                video_mode: gs.video_mode.clone(),
+                resolution_width: gs.resolution_width,
+                resolution_height: gs.resolution_height,
+                refresh_rate: gs.refresh_rate,
+                device_id: gs.device_id.clone(),
+                pnp_device_id: gs.pnp_device_id.clone(),
+                status: gs.status.clone(),
+                inf_filename: gs.inf_filename.clone(),
+                video_architecture: gs.video_architecture.clone(),
+                video_memory_type: gs.video_memory_type.clone(),
             }
         })
         .collect();
@@ -707,6 +1321,7 @@ pub fn get_hardware_info() -> Result<HardwareInfo, HardwareError> {
         disk: static_info.disk,
         sound_card: static_info.sound_card,
         network_card: static_info.network_card,
+        monitor: static_info.monitor,
     })
 }
 

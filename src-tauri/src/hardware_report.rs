@@ -929,8 +929,8 @@ function populateHardwareOverview() {
         memItems.push(['插槽 ' + (i + 1), m.manufacturer + ' ' + m.capacity_gb.toFixed(0) + 'GB ' + m.speed_mhz + 'MHz']);
     });
     html += hwCard('内存', '#f39c12', memItems, memSvg);
-    html += hwCard('主板', '#ffc312', [['型号', hw.motherboard]], mbSvg);
-    hw.disk.forEach(function(d, i) { html += hwCard('存储 ' + (i + 1), '#fd79a8', [['型号', d]], diskSvg); });
+    html += hwCard('主板', '#ffc312', [['型号', hw.motherboard.product], ['制造商', hw.motherboard.manufacturer], ['BIOS', hw.motherboard.bios_version]], mbSvg);
+    hw.disk.forEach(function(d, i) { html += hwCard('存储 ' + (i + 1), '#fd79a8', [['型号', d.model], ['容量', d.size_gb.toFixed(1) + ' GB'], ['接口', d.interface_type]], diskSvg); });
     hw.network_card.forEach(function(n, i) {
         html += hwCard('网卡 ' + (i + 1), '#ff7675', [
             ['型号', n.name], ['厂商', n.manufacturer],

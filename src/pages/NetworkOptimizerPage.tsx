@@ -19,7 +19,7 @@ import { ArrowLeft, Globe, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { store } from "@/lib/store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -32,7 +32,6 @@ import {
 
 const STORE_KEY = "network_optimizer_states";
 const DNS_STORE_KEY = "network_optimizer_dns";
-const store = new LazyStore("settings.json");
 
 export default function NetworkOptimizerPage() {
   const { t } = useTranslation();

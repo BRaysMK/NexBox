@@ -124,11 +124,12 @@ export default function HardwareModelCard() {
   }
 
   if (hardware.motherboard) {
-    lines.push({ label: t("hardware.motherboard") || "主板", value: hardware.motherboard });
+    lines.push({ label: t("hardware.motherboard") || "主板", value: hardware.motherboard.product });
   }
 
   if (hardware.disk && hardware.disk.length > 0) {
-    const diskDisplay = hardware.disk.length <= 2 ? hardware.disk.join("; ") : `${hardware.disk.slice(0,2).join("; ")} +${hardware.disk.length - 2}`;
+    const diskList = hardware.disk.map(d => `${d.model} (${(d.size_gb ?? 0).toFixed(0)}GB)`);
+    const diskDisplay = diskList.length <= 2 ? diskList.join("; ") : `${diskList.slice(0,2).join("; ")} +${diskList.length - 2}`;
     lines.push({ label: t("hardware.storage") || "硬盘", value: diskDisplay });
   }
 

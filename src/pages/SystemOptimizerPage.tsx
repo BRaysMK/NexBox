@@ -20,7 +20,7 @@ import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { store } from "@/lib/store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -33,7 +33,6 @@ import {
 } from "@/config/system-optimizer";
 
 const STORE_KEY = "system_optimizer_states";
-const store = new LazyStore("settings.json");
 
 export default function SystemOptimizerPage() {
   const { t } = useTranslation();
@@ -42,9 +41,8 @@ export default function SystemOptimizerPage() {
   const toast = useToast();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
 
-  const [scannedStates, setScannedStates] = useState<Record<string, boolean>>({});
   const [savedStates, setSavedStates] = useState<Record<string, boolean>>({});
-  const [isInitialScanning, setIsInitialScanning] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isBatchOptimizing, setIsBatchOptimizing] = useState(false);
   const [togglingItems, setTogglingItems] = useState<Set<string>>(new Set());
 
@@ -57,29 +55,26 @@ export default function SystemOptimizerPage() {
   const contrastText = getContrastTextColor();
   const hoverBg = getHoverColor(false);
 
-  // 加载保存的状态并自动扫描
+  // 加载保存的状态
   useEffect(() => {
     let cancelled = false;
     async function init() {
       const startTime = Date.now();
-      const [savedResult, scannedResult] = await Promise.allSettled([
+      const savedResult = await Promise.allSettled([
         store.get<Record<string, boolean>>(STORE_KEY),
-        invoke<Record<string, boolean>>("check_all_tweak_states"),
       ]);
-      // 如果组件已卸载（StrictMode 首次 mount 的清理），放弃本次结果
       if (cancelled) return;
-      const saved = savedResult.status === "fulfilled" && savedResult.value ? savedResult.value : {};
-      const scanned = scannedResult.status === "fulfilled" ? scannedResult.value : {};
-      // 确保 loading 至少显示 600ms
-      const remaining = Math.max(0, 600 - (Date.now() - startTime));
+      const saved = savedResult[0].status === "fulfilled" && savedResult[0].value
+        ? savedResult[0].value
+        : {};
+      // 确保 loading 至少显示 400ms
+      const remaining = Math.max(0, 400 - (Date.now() - startTime));
       if (remaining > 0) {
         await new Promise((r) => setTimeout(r, remaining));
       }
       if (cancelled) return;
-      // 一次性原子设置所有状态
       setSavedStates(saved);
-      setScannedStates(scanned);
-      setIsInitialScanning(false);
+      setIsLoading(false);
     }
     init();
     return () => {
@@ -98,26 +93,21 @@ export default function SystemOptimizerPage() {
   // 获取某个优化项的最终显示状态
   const getItemState = useCallback(
     (item: OptimizerItem): boolean => {
-      // 已保存状态优先（用户主动操作的结果，覆盖扫描结果）
       if (savedStates[item.id] !== undefined) return savedStates[item.id];
-      // 否则使用扫描结果
-      const scanned = scannedStates[item.stateKey];
-      if (scanned !== undefined) return scanned;
       return false;
     },
-    [scannedStates, savedStates],
+    [savedStates],
   );
 
-  // 执行单个优化项（后端完成后前端再更新）
+  // 执行单个优化项
   const toggleItem = useCallback(
     async (item: OptimizerItem, enable: boolean) => {
-      const cmd = enable ? item.enableCmd : item.disableCmd;
+      const cmd = enable ? "apply_registry_tweak" : "restore_registry_tweak";
       setTogglingItems((prev) => new Set(prev).add(item.id));
       try {
-        await invoke(cmd);
+        await invoke(cmd, { name: item.regName });
         const newSaved = { ...savedStates, [item.id]: enable };
         setSavedStates(newSaved);
-        setScannedStates((prev) => ({ ...prev, [item.stateKey]: enable }));
         persistStates(newSaved);
         toast({
           title: enable
@@ -147,19 +137,17 @@ export default function SystemOptimizerPage() {
     [savedStates, persistStates, toast, t],
   );
 
-  // 全部优化（后端完成后前端再更新）
+  // 全部优化
   const handleBatchEnable = useCallback(async () => {
     setIsBatchOptimizing(true);
     try {
-      await invoke("batch_enable_tweaks");
+      const names = optimizerItems.map((item) => item.regName);
+      await invoke("batch_apply_registry_tweaks", { names });
       const newSaved: Record<string, boolean> = {};
-      const newScanned: Record<string, boolean> = {};
       for (const item of optimizerItems) {
         newSaved[item.id] = true;
-        newScanned[item.stateKey] = true;
       }
       setSavedStates(newSaved);
-      setScannedStates(newScanned);
       persistStates(newSaved);
       toast({
         title: t("systemOptimizer.batchOptimized"),
@@ -180,18 +168,18 @@ export default function SystemOptimizerPage() {
     }
   }, [persistStates, toast, t]);
 
-  // 全部取消优化（后端完成后前端再更新）
+  // 全部恢复
   const handleBatchDisable = useCallback(async () => {
     setIsBatchOptimizing(true);
     try {
-      await invoke("batch_disable_tweaks");
-      const newScanned: Record<string, boolean> = {};
+      const names = optimizerItems.map((item) => item.regName);
+      await invoke("batch_restore_registry_tweaks", { names });
+      const newSaved: Record<string, boolean> = {};
       for (const item of optimizerItems) {
-        newScanned[item.stateKey] = false;
+        newSaved[item.id] = false;
       }
-      setSavedStates({});
-      setScannedStates(newScanned);
-      persistStates({});
+      setSavedStates(newSaved);
+      persistStates(newSaved);
       toast({
         title: t("systemOptimizer.batchReverted"),
         status: "success",
@@ -339,8 +327,8 @@ export default function SystemOptimizerPage() {
     );
   }
 
-  // 扫描中：只显示 loading（不渲染任何内容）
-  if (isInitialScanning) {
+  // 加载中
+  if (isLoading) {
     return (
       <Box pt={8}>
         {liquidGlassEnabled ? (
@@ -348,7 +336,7 @@ export default function SystemOptimizerPage() {
             <Flex w="full" minH="360px" align="center" justify="center" direction="column" gap={4}>
               <Spinner size="xl" color={activeColor} thickness="3px" />
               <Text color={subTextColor} fontSize="sm">
-                {t("systemOptimizer.scanning")}
+                {t("systemOptimizer.loading")}
               </Text>
             </Flex>
           </LiquidGlassCard>
@@ -357,7 +345,7 @@ export default function SystemOptimizerPage() {
             <Flex w="full" minH="360px" align="center" justify="center" direction="column" gap={4}>
               <Spinner size="xl" color={activeColor} thickness="3px" />
               <Text color={subTextColor} fontSize="sm">
-                {t("systemOptimizer.scanning")}
+                {t("systemOptimizer.loading")}
               </Text>
             </Flex>
           </Box>
@@ -422,6 +410,13 @@ export default function SystemOptimizerPage() {
       {categoryOrder.map((cat) => (
         <CategorySection key={cat} category={cat} />
       ))}
+
+      {/* 致谢标注 */}
+      <Box w="full" textAlign="center" mt={2}>
+        <Text fontSize="xs" color={subTextColor}>
+          {t("systemOptimizer.credits")}
+        </Text>
+      </Box>
     </VStack>
   );
 

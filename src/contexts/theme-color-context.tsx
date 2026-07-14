@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from "react";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { store } from "@/lib/store";
 import { hexToRgba, getContrastColor, isValidHexColor, normalizeHexColor } from "@/lib/color-utils";
 
 export interface ThemeColorConfig {
@@ -47,9 +47,6 @@ const ThemeColorContext = createContext<ThemeColorContextType>({
 export function useThemeColor() {
   return useContext(ThemeColorContext);
 }
-
-const SETTINGS_FILE = "settings.json";
-const store = new LazyStore(SETTINGS_FILE);
 
 export function ThemeColorProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<ThemeColorConfig>(DEFAULT_THEME_COLOR_CONFIG);

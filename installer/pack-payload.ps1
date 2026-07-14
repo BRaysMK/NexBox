@@ -48,7 +48,23 @@ if (Test-Path $monitorDir) {
     Write-Host "  [OK] monitor/*"
 }
 
-# 5. Flat root files
+# 5. AQ registry tweak files (apply)
+$aqRegistry = "$MainProject\aq_registry"
+if (Test-Path $aqRegistry) {
+    New-Item -ItemType Directory -Path "$TempDir\aq_registry" -Force | Out-Null
+    Copy-Item "$aqRegistry\*" "$TempDir\aq_registry\" -Recurse -Force
+    Write-Host "  [OK] aq_registry/*"
+}
+
+# 6. AQ registry tweak files (restore)
+$aqRegistryRestore = "$MainProject\aq_registry_restore"
+if (Test-Path $aqRegistryRestore) {
+    New-Item -ItemType Directory -Path "$TempDir\aq_registry_restore" -Force | Out-Null
+    Copy-Item "$aqRegistryRestore\*" "$TempDir\aq_registry_restore\" -Recurse -Force
+    Write-Host "  [OK] aq_registry_restore/*"
+}
+
+# 7. Flat root files
 $rootFiles = @(
     "nvidiaProfileInspector.exe",
     "nvidiaProfileInspector.exe.config",
@@ -65,7 +81,7 @@ foreach ($file in $rootFiles) {
     }
 }
 
-# 6. NVAPI lib
+# 8. NVAPI lib
 $nvapiDir = "$TempDir\R560-developer\amd64"
 New-Item -ItemType Directory -Path $nvapiDir -Force | Out-Null
 $nvapiLib = "$MainProject\R560-developer\amd64\nvapi64.lib"
@@ -76,7 +92,7 @@ if (Test-Path $nvapiLib) {
     Write-Warning "  [WARN] nvapi64.lib not found (skipping)"
 }
 
-# 7. Uninstaller
+# 9. Uninstaller
 $uninstExe = "$UninstallerProject\src-tauri\target\release\uninstnexbox.exe"
 if (Test-Path $uninstExe) {
     Copy-Item $uninstExe $TempDir\
@@ -85,7 +101,7 @@ if (Test-Path $uninstExe) {
     Write-Warning "  [WARN] Uninstnexbox.exe not found (build uninstaller first)"
 }
 
-# 8. Create ZIP
+# 10. Create ZIP
 Write-Host "`nCompressing payload..." -ForegroundColor Cyan
 if (Test-Path $PayloadZip) {
     Remove-Item $PayloadZip -Force

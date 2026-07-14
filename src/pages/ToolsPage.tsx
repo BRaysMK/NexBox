@@ -42,10 +42,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { Image } from "@chakra-ui/react";
-import { LazyStore } from "@tauri-apps/plugin-store";
-
-const SETTINGS_FILE = "settings.json";
-const store = new LazyStore(SETTINGS_FILE);
+import { store } from "@/lib/store";
 const CUSTOM_TOOLS_KEY = "custom-added-tools";
 
 const toolIcons = import.meta.glob<{ default: string }>(
@@ -447,6 +444,7 @@ function ToolSection({
           md: "repeat(3, 1fr)",
         }}
         gap={4}
+        alignItems="start"
       >
         {filteredTools.map((tool) => (
           <ToolCardComponent key={tool.id} tool={tool} categoryLabels={categoryLabels} />
@@ -562,6 +560,7 @@ function OfficialToolSection({
           md: "repeat(3, 1fr)",
         }}
         gap={4}
+        alignItems="start"
       >
         <LiquidGlassToolCard size={"md"} onClick={handleOpenMCTier}>
           <VStack align={"start"} spacing={3}>
@@ -976,6 +975,7 @@ function ThirdPartyToolSection({
           md: "repeat(3, 1fr)",
         }}
         gap={4}
+        alignItems="start"
       >
         {sortedTools.map((tool) => (
           <ThirdPartyToolCard 

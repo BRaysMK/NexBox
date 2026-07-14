@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback, useMemo } from "react";
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { store } from "@/lib/store";
 
 type BackgroundMode = "none" | "preset" | "image" | "dynamic";
 
@@ -70,8 +70,7 @@ export function useBackground() {
   return useContext(BackgroundContext);
 }
 
-const SETTINGS_FILE = "settings.json";
-const store = new LazyStore(SETTINGS_FILE);
+
 const MAX_BG_IMAGES = 3;
 
 export function BackgroundProvider({ children }: { children: ReactNode }) {

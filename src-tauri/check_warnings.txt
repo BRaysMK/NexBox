@@ -1,0 +1,928 @@
+warning: function `enable_performance_tweaks` is never used
+    --> src\optimization.rs:2371:14
+     |
+2371 | pub async fn enable_performance_tweaks() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `disable_performance_tweaks` is never used
+    --> src\optimization.rs:2468:14
+     |
+2468 | pub async fn disable_performance_tweaks() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `remove_menu_delay` is never used
+    --> src\optimization.rs:2596:14
+     |
+2596 | pub async fn remove_menu_delay() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `restore_menu_delay` is never used
+    --> src\optimization.rs:2605:14
+     |
+2605 | pub async fn restore_menu_delay() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_network_throttling` is never used
+    --> src\optimization.rs:2614:14
+     |
+2614 | pub async fn disable_network_throttling() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_network_throttling` is never used
+    --> src\optimization.rs:2625:14
+     |
+2625 | pub async fn enable_network_throttling() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_error_reporting` is never used
+    --> src\optimization.rs:2635:14
+     |
+2635 | pub async fn disable_error_reporting() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_error_reporting` is never used
+    --> src\optimization.rs:2650:14
+     |
+2650 | pub async fn enable_error_reporting() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_compatibility_assistant` is never used
+    --> src\optimization.rs:2663:14
+     |
+2663 | pub async fn disable_compatibility_assistant() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_compatibility_assistant` is never used
+    --> src\optimization.rs:2673:14
+     |
+2673 | pub async fn enable_compatibility_assistant() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_print_service` is never used
+    --> src\optimization.rs:2683:14
+     |
+2683 | pub async fn disable_print_service() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_print_service` is never used
+    --> src\optimization.rs:2693:14
+     |
+2693 | pub async fn enable_print_service() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_fax_service` is never used
+    --> src\optimization.rs:2703:14
+     |
+2703 | pub async fn disable_fax_service() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_fax_service` is never used
+    --> src\optimization.rs:2713:14
+     |
+2713 | pub async fn enable_fax_service() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_sticky_keys` is never used
+    --> src\optimization.rs:2722:14
+     |
+2722 | pub async fn disable_sticky_keys() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_sticky_keys` is never used
+    --> src\optimization.rs:2737:14
+     |
+2737 | pub async fn enable_sticky_keys() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_smart_screen` is never used
+    --> src\optimization.rs:2751:14
+     |
+2751 | pub async fn disable_smart_screen() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_smart_screen` is never used
+    --> src\optimization.rs:2766:14
+     |
+2766 | pub async fn enable_smart_screen() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_system_restore` is never used
+    --> src\optimization.rs:2783:14
+     |
+2783 | pub async fn disable_system_restore() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_system_restore` is never used
+    --> src\optimization.rs:2795:14
+     |
+2795 | pub async fn enable_system_restore() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_superfetch` is never used
+    --> src\optimization.rs:2806:14
+     |
+2806 | pub async fn disable_superfetch() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_superfetch` is never used
+    --> src\optimization.rs:2819:14
+     |
+2819 | pub async fn enable_superfetch() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `disable_hibernate` is never used
+    --> src\optimization.rs:2832:14
+     |
+2832 | pub async fn disable_hibernate() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `enable_hibernate` is never used
+    --> src\optimization.rs:2842:14
+     |
+2842 | pub async fn enable_hibernate() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^
+
+warning: function `disable_ntfs_timestamp` is never used
+    --> src\optimization.rs:2852:14
+     |
+2852 | pub async fn disable_ntfs_timestamp() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_ntfs_timestamp` is never used
+    --> src\optimization.rs:2859:14
+     |
+2859 | pub async fn enable_ntfs_timestamp() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_telemetry_tasks` is never used
+    --> src\optimization.rs:2866:14
+     |
+2866 | pub async fn disable_telemetry_tasks() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_telemetry_tasks` is never used
+    --> src\optimization.rs:2910:14
+     |
+2910 | pub async fn enable_telemetry_tasks() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_media_player_sharing` is never used
+    --> src\optimization.rs:2951:14
+     |
+2951 | pub async fn disable_media_player_sharing() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_media_player_sharing` is never used
+    --> src\optimization.rs:2961:14
+     |
+2961 | pub async fn enable_media_player_sharing() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_home_group` is never used
+    --> src\optimization.rs:2971:14
+     |
+2971 | pub async fn disable_home_group() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_home_group` is never used
+    --> src\optimization.rs:2984:14
+     |
+2984 | pub async fn enable_home_group() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `disable_smb1` is never used
+    --> src\optimization.rs:2997:14
+     |
+2997 | pub async fn disable_smb1() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^
+
+warning: function `enable_smb1` is never used
+    --> src\optimization.rs:3006:14
+     |
+3006 | pub async fn enable_smb1() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^
+
+warning: function `disable_smb2` is never used
+    --> src\optimization.rs:3015:14
+     |
+3015 | pub async fn disable_smb2() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^
+
+warning: function `enable_smb2` is never used
+    --> src\optimization.rs:3024:14
+     |
+3024 | pub async fn enable_smb2() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^
+
+warning: function `disable_office_telemetry` is never used
+    --> src\optimization.rs:3033:14
+     |
+3033 | pub async fn disable_office_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_office_telemetry` is never used
+    --> src\optimization.rs:3072:14
+     |
+3072 | pub async fn enable_office_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_firefox_telemetry` is never used
+    --> src\optimization.rs:3105:14
+     |
+3105 | pub async fn disable_firefox_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_firefox_telemetry` is never used
+    --> src\optimization.rs:3117:14
+     |
+3117 | pub async fn enable_firefox_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_chrome_telemetry` is never used
+    --> src\optimization.rs:3129:14
+     |
+3129 | pub async fn disable_chrome_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_chrome_telemetry` is never used
+    --> src\optimization.rs:3145:14
+     |
+3145 | pub async fn enable_chrome_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_nvidia_telemetry` is never used
+    --> src\optimization.rs:3160:14
+     |
+3160 | pub async fn disable_nvidia_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_nvidia_telemetry` is never used
+    --> src\optimization.rs:3175:14
+     |
+3175 | pub async fn enable_nvidia_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_vs_telemetry` is never used
+    --> src\optimization.rs:3190:14
+     |
+3190 | pub async fn disable_vs_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_vs_telemetry` is never used
+    --> src\optimization.rs:3210:14
+     |
+3210 | pub async fn enable_vs_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_telemetry_services` is never used
+    --> src\optimization.rs:3230:14
+     |
+3230 | pub async fn disable_telemetry_services() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_telemetry_services` is never used
+    --> src\optimization.rs:3258:14
+     |
+3258 | pub async fn enable_telemetry_services() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_cortana` is never used
+    --> src\optimization.rs:3288:14
+     |
+3288 | pub async fn disable_cortana() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^
+
+warning: function `enable_cortana` is never used
+    --> src\optimization.rs:3307:14
+     |
+3307 | pub async fn enable_cortana() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^
+
+warning: function `disable_news_interests` is never used
+    --> src\optimization.rs:3328:14
+     |
+3328 | pub async fn disable_news_interests() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_news_interests` is never used
+    --> src\optimization.rs:3339:14
+     |
+3339 | pub async fn enable_news_interests() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_start_menu_ads` is never used
+    --> src\optimization.rs:3352:14
+     |
+3352 | pub async fn disable_start_menu_ads() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_start_menu_ads` is never used
+    --> src\optimization.rs:3382:14
+     |
+3382 | pub async fn enable_start_menu_ads() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_edge_telemetry` is never used
+    --> src\optimization.rs:3414:14
+     |
+3414 | pub async fn disable_edge_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_edge_telemetry` is never used
+    --> src\optimization.rs:3436:14
+     |
+3436 | pub async fn enable_edge_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_edge_discover_bar` is never used
+    --> src\optimization.rs:3460:14
+     |
+3460 | pub async fn disable_edge_discover_bar() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_edge_discover_bar` is never used
+    --> src\optimization.rs:3471:14
+     |
+3471 | pub async fn enable_edge_discover_bar() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `optimize_process_count` is never used
+    --> src\optimization.rs:3484:14
+     |
+3484 | pub async fn optimize_process_count() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `restore_process_count` is never used
+    --> src\optimization.rs:3494:14
+     |
+3494 | pub async fn restore_process_count() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_store_search_app` is never used
+    --> src\optimization.rs:3505:14
+     |
+3505 | pub async fn disable_store_search_app() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_store_search_app` is never used
+    --> src\optimization.rs:3515:14
+     |
+3515 | pub async fn enable_store_search_app() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_store_promotions` is never used
+    --> src\optimization.rs:3526:14
+     |
+3526 | pub async fn disable_store_promotions() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_store_promotions` is never used
+    --> src\optimization.rs:3544:14
+     |
+3544 | pub async fn enable_store_promotions() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_store_auto_update` is never used
+    --> src\optimization.rs:3564:14
+     |
+3564 | pub async fn disable_store_auto_update() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_store_auto_update` is never used
+    --> src\optimization.rs:3574:14
+     |
+3574 | pub async fn enable_store_auto_update() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_spotlight_lock` is never used
+    --> src\optimization.rs:3585:14
+     |
+3585 | pub async fn disable_spotlight_lock() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_spotlight_lock` is never used
+    --> src\optimization.rs:3598:14
+     |
+3598 | pub async fn enable_spotlight_lock() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_my_people` is never used
+    --> src\optimization.rs:3612:14
+     |
+3612 | pub async fn disable_my_people() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `enable_my_people` is never used
+    --> src\optimization.rs:3621:14
+     |
+3621 | pub async fn enable_my_people() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^
+
+warning: function `disable_tpm_check` is never used
+    --> src\optimization.rs:3632:14
+     |
+3632 | pub async fn disable_tpm_check() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `enable_tpm_check` is never used
+    --> src\optimization.rs:3649:14
+     |
+3649 | pub async fn enable_tpm_check() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^
+
+warning: function `disable_sensor_services` is never used
+    --> src\optimization.rs:3666:14
+     |
+3666 | pub async fn disable_sensor_services() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_sensor_services` is never used
+    --> src\optimization.rs:3678:14
+     |
+3678 | pub async fn enable_sensor_services() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `remove_cast_to_device` is never used
+    --> src\optimization.rs:3692:14
+     |
+3692 | pub async fn remove_cast_to_device() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `add_cast_to_device` is never used
+    --> src\optimization.rs:3702:14
+     |
+3702 | pub async fn add_cast_to_device() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_vbs` is never used
+    --> src\optimization.rs:3713:14
+     |
+3713 | pub async fn disable_vbs() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^
+
+warning: function `enable_vbs` is never used
+    --> src\optimization.rs:3722:14
+     |
+3722 | pub async fn enable_vbs() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^
+
+warning: function `disable_modern_standby` is never used
+    --> src\optimization.rs:3733:14
+     |
+3733 | pub async fn disable_modern_standby() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_modern_standby` is never used
+    --> src\optimization.rs:3742:14
+     |
+3742 | pub async fn enable_modern_standby() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_gaming_mode` is never used
+    --> src\optimization.rs:3753:14
+     |
+3753 | pub async fn enable_gaming_mode() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_gaming_mode` is never used
+    --> src\optimization.rs:3765:14
+     |
+3765 | pub async fn disable_gaming_mode() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_xbox_live` is never used
+    --> src\optimization.rs:3779:14
+     |
+3779 | pub async fn disable_xbox_live() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `enable_xbox_live` is never used
+    --> src\optimization.rs:3797:14
+     |
+3797 | pub async fn enable_xbox_live() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^
+
+warning: function `disable_game_bar` is never used
+    --> src\optimization.rs:3812:14
+     |
+3812 | pub async fn disable_game_bar() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^
+
+warning: function `enable_game_bar` is never used
+    --> src\optimization.rs:3828:14
+     |
+3828 | pub async fn enable_game_bar() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^
+
+warning: function `disable_windows_ink` is never used
+    --> src\optimization.rs:3845:14
+     |
+3845 | pub async fn disable_windows_ink() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_windows_ink` is never used
+    --> src\optimization.rs:3857:14
+     |
+3857 | pub async fn enable_windows_ink() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_spelling_typing` is never used
+    --> src\optimization.rs:3870:14
+     |
+3870 | pub async fn disable_spelling_typing() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_spelling_typing` is never used
+    --> src\optimization.rs:3884:14
+     |
+3884 | pub async fn enable_spelling_typing() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_app_launch_tracking` is never used
+    --> src\optimization.rs:3900:14
+     |
+3900 | pub async fn disable_app_launch_tracking() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_app_launch_tracking` is never used
+    --> src\optimization.rs:3910:14
+     |
+3910 | pub async fn enable_app_launch_tracking() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_advertising_id` is never used
+    --> src\optimization.rs:3922:14
+     |
+3922 | pub async fn disable_advertising_id() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_advertising_id` is never used
+    --> src\optimization.rs:3933:14
+     |
+3933 | pub async fn enable_advertising_id() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_file_system_access` is never used
+    --> src\optimization.rs:3945:14
+     |
+3945 | pub async fn disable_file_system_access() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_file_system_access` is never used
+    --> src\optimization.rs:3955:14
+     |
+3955 | pub async fn enable_file_system_access() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_documents_access` is never used
+    --> src\optimization.rs:3966:14
+     |
+3966 | pub async fn disable_documents_access() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_documents_access` is never used
+    --> src\optimization.rs:3976:14
+     |
+3976 | pub async fn enable_documents_access() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_calendar_access` is never used
+    --> src\optimization.rs:3987:14
+     |
+3987 | pub async fn disable_calendar_access() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_calendar_access` is never used
+    --> src\optimization.rs:3997:14
+     |
+3997 | pub async fn enable_calendar_access() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_contacts_access` is never used
+    --> src\optimization.rs:4008:14
+     |
+4008 | pub async fn disable_contacts_access() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_contacts_access` is never used
+    --> src\optimization.rs:4018:14
+     |
+4018 | pub async fn enable_contacts_access() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_language_tracking` is never used
+    --> src\optimization.rs:4029:14
+     |
+4029 | pub async fn disable_language_tracking() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_language_tracking` is never used
+    --> src\optimization.rs:4040:14
+     |
+4040 | pub async fn enable_language_tracking() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_welcome_experience` is never used
+    --> src\optimization.rs:4052:14
+     |
+4052 | pub async fn disable_welcome_experience() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_welcome_experience` is never used
+    --> src\optimization.rs:4063:14
+     |
+4063 | pub async fn enable_welcome_experience() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_feedback_frequency` is never used
+    --> src\optimization.rs:4075:14
+     |
+4075 | pub async fn disable_feedback_frequency() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_feedback_frequency` is never used
+    --> src\optimization.rs:4088:14
+     |
+4088 | pub async fn enable_feedback_frequency() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_diagnostic_data` is never used
+    --> src\optimization.rs:4101:14
+     |
+4101 | pub async fn disable_diagnostic_data() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_diagnostic_data` is never used
+    --> src\optimization.rs:4117:14
+     |
+4117 | pub async fn enable_diagnostic_data() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_writing_habits` is never used
+    --> src\optimization.rs:4132:14
+     |
+4132 | pub async fn disable_writing_habits() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_writing_habits` is never used
+    --> src\optimization.rs:4148:14
+     |
+4148 | pub async fn enable_writing_habits() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_ceip` is never used
+    --> src\optimization.rs:4164:14
+     |
+4164 | pub async fn disable_ceip() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^
+
+warning: function `enable_ceip` is never used
+    --> src\optimization.rs:4173:14
+     |
+4173 | pub async fn enable_ceip() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^
+
+warning: function `disable_trk_wks` is never used
+    --> src\optimization.rs:4184:14
+     |
+4184 | pub async fn disable_trk_wks() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^
+
+warning: function `enable_trk_wks` is never used
+    --> src\optimization.rs:4194:14
+     |
+4194 | pub async fn enable_trk_wks() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^
+
+warning: function `disable_auto_maintenance` is never used
+    --> src\optimization.rs:4205:14
+     |
+4205 | pub async fn disable_auto_maintenance() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_auto_maintenance` is never used
+    --> src\optimization.rs:4214:14
+     |
+4214 | pub async fn enable_auto_maintenance() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_large_sys_cache` is never used
+    --> src\optimization.rs:4225:14
+     |
+4225 | pub async fn enable_large_sys_cache() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_large_sys_cache` is never used
+    --> src\optimization.rs:4234:14
+     |
+4234 | pub async fn disable_large_sys_cache() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_spectre_patch` is never used
+    --> src\optimization.rs:4245:14
+     |
+4245 | pub async fn disable_spectre_patch() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_spectre_patch` is never used
+    --> src\optimization.rs:4255:14
+     |
+4255 | pub async fn enable_spectre_patch() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_auto_debug` is never used
+    --> src\optimization.rs:4267:14
+     |
+4267 | pub async fn disable_auto_debug() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_auto_debug` is never used
+    --> src\optimization.rs:4277:14
+     |
+4277 | pub async fn enable_auto_debug() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `disable_crash_dump` is never used
+    --> src\optimization.rs:4289:14
+     |
+4289 | pub async fn disable_crash_dump() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_crash_dump` is never used
+    --> src\optimization.rs:4298:14
+     |
+4298 | pub async fn enable_crash_dump() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `disable_audit_log` is never used
+    --> src\optimization.rs:4309:14
+     |
+4309 | pub async fn disable_audit_log() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `enable_audit_log` is never used
+    --> src\optimization.rs:4318:14
+     |
+4318 | pub async fn enable_audit_log() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^
+
+warning: function `disable_wfp_diag` is never used
+    --> src\optimization.rs:4329:14
+     |
+4329 | pub async fn disable_wfp_diag() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^
+
+warning: function `enable_wfp_diag` is never used
+    --> src\optimization.rs:4338:14
+     |
+4338 | pub async fn enable_wfp_diag() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^
+
+warning: function `disable_address_book_collect` is never used
+    --> src\optimization.rs:4349:14
+     |
+4349 | pub async fn disable_address_book_collect() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_address_book_collect` is never used
+    --> src\optimization.rs:4358:14
+     |
+4358 | pub async fn enable_address_book_collect() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_typing_collection` is never used
+    --> src\optimization.rs:4369:14
+     |
+4369 | pub async fn disable_typing_collection() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_typing_collection` is never used
+    --> src\optimization.rs:4379:14
+     |
+4379 | pub async fn enable_typing_collection() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_silent_app_install` is never used
+    --> src\optimization.rs:4391:14
+     |
+4391 | pub async fn disable_silent_app_install() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_silent_app_install` is never used
+    --> src\optimization.rs:4400:14
+     |
+4400 | pub async fn enable_silent_app_install() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_wifi_hotspots` is never used
+    --> src\optimization.rs:4411:14
+     |
+4411 | pub async fn disable_wifi_hotspots() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_wifi_hotspots` is never used
+    --> src\optimization.rs:4421:14
+     |
+4421 | pub async fn enable_wifi_hotspots() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_typing_insights` is never used
+    --> src\optimization.rs:4432:14
+     |
+4432 | pub async fn disable_typing_insights() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_typing_insights` is never used
+    --> src\optimization.rs:4441:14
+     |
+4441 | pub async fn enable_typing_insights() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_preinstalled_apps` is never used
+    --> src\optimization.rs:4452:14
+     |
+4452 | pub async fn disable_preinstalled_apps() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_preinstalled_apps` is never used
+    --> src\optimization.rs:4461:14
+     |
+4461 | pub async fn enable_preinstalled_apps() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_dotnet_telemetry` is never used
+    --> src\optimization.rs:4472:14
+     |
+4472 | pub async fn disable_dotnet_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_dotnet_telemetry` is never used
+    --> src\optimization.rs:4481:14
+     |
+4481 | pub async fn enable_dotnet_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_pwsh_telemetry` is never used
+    --> src\optimization.rs:4492:14
+     |
+4492 | pub async fn disable_pwsh_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_pwsh_telemetry` is never used
+    --> src\optimization.rs:4501:14
+     |
+4501 | pub async fn enable_pwsh_telemetry() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `check_all_tweak_states` is never used
+    --> src\optimization.rs:4906:14
+     |
+4906 | pub async fn check_all_tweak_states() -> Result<HashMap<String, bool>, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `disable_wifi_sense` is never used
+    --> src\optimization.rs:5021:14
+     |
+5021 | pub async fn disable_wifi_sense() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_wifi_sense` is never used
+    --> src\optimization.rs:5032:14
+     |
+5032 | pub async fn enable_wifi_sense() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^
+
+warning: function `disable_step_recorder` is never used
+    --> src\optimization.rs:5044:14
+     |
+5044 | pub async fn disable_step_recorder() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `enable_step_recorder` is never used
+    --> src\optimization.rs:5054:14
+     |
+5054 | pub async fn enable_step_recorder() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_batch_script` is never used
+    --> src\optimization.rs:5064:4
+     |
+5064 | fn run_batch_script(script: &str, success_msg: &str, admin_msg: &str) -> Result<PerfTweakResult, String> {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `batch_enable_tweaks` is never used
+    --> src\optimization.rs:5083:14
+     |
+5083 | pub async fn batch_enable_tweaks() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^
+
+warning: function `batch_disable_tweaks` is never used
+    --> src\optimization.rs:5481:14
+     |
+5481 | pub async fn batch_disable_tweaks() -> Result<PerfTweakResult, String> {
+     |              ^^^^^^^^^^^^^^^^^^^^
+
+warning: `nexbox` (lib) generated 154 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.76s

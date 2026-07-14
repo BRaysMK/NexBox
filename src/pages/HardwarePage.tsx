@@ -8,10 +8,13 @@ import {
   Grid,
   Button,
   useToast,
+  useDisclosure,
 } from "@chakra-ui/react";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useBackground } from "@/contexts/background-context";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import HardwareDetailModal, { type SpecItem } from "@/components/HardwareDetailModal";
+import type { CpuInfo, GpuInfo, MemoryInfo, MotherboardInfo, DiskDetailInfo, SoundCardInfo, NetworkCardInfo, MonitorInfo } from "@/lib/hardware";
 import {
   Cpu,
   Monitor,
@@ -234,6 +237,7 @@ function DetailCard({
   textColor,
   subTextColor,
   liquidGlassEnabled,
+  onClick,
 }: {
   title: string;
   icon: React.ElementType;
@@ -243,6 +247,7 @@ function DetailCard({
   textColor: string;
   subTextColor: string;
   liquidGlassEnabled: boolean;
+  onClick?: () => void;
 }) {
   const iconColor =
     type === "cpu"
@@ -290,6 +295,10 @@ function DetailCard({
         overflow="hidden"
         position="relative"
         borderColor="white"
+        cursor={onClick ? "pointer" : undefined}
+        onClick={onClick}
+        _hover={onClick ? { opacity: 0.9 } : undefined}
+        transition="opacity 0.15s"
       >
         {cardContent}
       </LiquidGlassCard>
@@ -304,6 +313,10 @@ function DetailCard({
       borderColor="white"
       overflow="hidden"
       position="relative"
+      cursor={onClick ? "pointer" : undefined}
+      onClick={onClick}
+      _hover={onClick ? { opacity: 0.9 } : undefined}
+      transition="opacity 0.15s"
     >
       {cardContent}
     </Box>
@@ -334,6 +347,20 @@ export default function HardwarePage() {
   const [gpuSparkline, setGpuSparkline] = useState<number[]>(Array(20).fill(0));
   const [memSparkline, setMemSparkline] = useState<number[]>(Array(20).fill(0));
   const [storageSparkline, setStorageSparkline] = useState<number[]>(Array(20).fill(0));
+
+  // Modal state for detail expansion
+  const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
+  const [detailCard, setDetailCard] = useState<{
+    title: string;
+    icon: React.ElementType;
+    type: string;
+    specs: SpecItem[];
+  } | null>(null);
+
+  const handleOpenDetail = (title: string, icon: React.ElementType, type: string, specs: SpecItem[]) => {
+    setDetailCard({ title, icon, type, specs });
+    onDetailOpen();
+  };
 
   const isMounted = useRef(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -423,6 +450,7 @@ export default function HardwarePage() {
   const diskUsed = diskStatus ? diskStatus.used_gb.toFixed(1) : "--";
   const diskTotal = diskStatus ? diskStatus.total_gb.toFixed(1) : "--";
 
+  // ─── Card display info (summary) ───
   const cpuDisplayInfo: DisplayInfo[] = hardwareInfo ? [
     { name: t("hardware.model"), value: hardwareInfo.cpu.name },
     {
@@ -455,11 +483,12 @@ export default function HardwarePage() {
 
   const storageDisplayInfo: DisplayInfo[] = hardwareInfo ? hardwareInfo.disk.map((disk, i) => ({
     name: `${t("hardware.storage")} ${i + 1}`,
-    value: disk,
+    value: `${disk.model} (${disk.size_gb.toFixed(0)}GB)`,
   })) : [];
 
   const motherboardDisplayInfo: DisplayInfo[] = hardwareInfo ? [
-    { name: t("hardware.model"), value: hardwareInfo.motherboard },
+    { name: t("hardware.model"), value: hardwareInfo.motherboard.product },
+    { name: t("hardware.manufacturer"), value: hardwareInfo.motherboard.manufacturer },
   ] : [];
 
   const soundCardDisplayInfos: DisplayInfo[][] = hardwareInfo ? (hardwareInfo.sound_card || []).map((card) => [
@@ -469,11 +498,154 @@ export default function HardwarePage() {
 
   const networkCardDisplayInfos: DisplayInfo[][] = hardwareInfo ? (hardwareInfo.network_card || []).map((card) => [
     { name: t("hardware.model"), value: card.name },
-    { name: t("hardware.manufacturer"), value: card.manufacturer },
+    { name: t("hardware.connectionName") || "连接", value: card.connection_name },
     { name: t("hardware.adapterType"), value: card.adapter_type },
-    { name: t("hardware.macAddress"), value: card.mac_address },
     { name: t("hardware.linkSpeed"), value: card.speed_mbps > 0 ? `${card.speed_mbps} Mbps` : "--" },
   ]) : [];
+
+  const monitorDisplayInfos: DisplayInfo[][] = hardwareInfo ? (hardwareInfo.monitor || []).map((m) => [
+    { name: t("hardware.model"), value: m.name },
+    { name: t("hardware.resolution") || "分辨率", value: m.screen_width && m.screen_height ? `${m.screen_width} x ${m.screen_height}` : "--" },
+    { name: t("hardware.refreshRate") || "刷新率", value: m.refresh_rate ? `${m.refresh_rate} Hz` : "--" },
+  ]) : [];
+
+  // ─── Detail specs builders (for modal) ───
+  const buildCpuSpecs = (cpu: CpuInfo): SpecItem[] => [
+    { label: t("hardware.model"), value: cpu.name },
+    { label: t("hardware.manufacturer"), value: cpu.manufacturer },
+    { label: t("hardware.architecture") || "架构", value: cpu.architecture },
+    { label: t("hardware.socket") || "插槽", value: cpu.socket },
+    { label: t("hardware.cores"), value: `${cpu.cores}` },
+    { label: t("hardware.threads"), value: `${cpu.threads}` },
+    { label: t("hardware.enabledCores") || "已启用核心", value: cpu.enabled_cores ? `${cpu.enabled_cores}` : "--" },
+    { label: t("hardware.baseClock"), value: `${(cpu.max_clock_speed / 1000).toFixed(1)} GHz` },
+    { label: t("hardware.currentClock") || "当前频率", value: cpu.current_clock_speed ? `${(cpu.current_clock_speed / 1000).toFixed(1)} GHz` : "--" },
+    { label: t("hardware.extClock") || "外频(Bus)", value: cpu.ext_clock ? `${cpu.ext_clock} MHz` : "--" },
+    { label: t("hardware.l2Cache"), value: cpu.l2_cache_size > 0 ? `${(cpu.l2_cache_size / 1024).toFixed(1)} MB` : "--" },
+    { label: t("hardware.l3Cache"), value: cpu.l3_cache_size > 0 ? `${(cpu.l3_cache_size / 1024).toFixed(1)} MB` : "--" },
+    { label: t("hardware.family") || "系列", value: cpu.family > 0 ? `${cpu.family}` : "--" },
+    { label: t("hardware.stepping") || "步进", value: cpu.stepping || "--" },
+    { label: t("hardware.revision") || "修订", value: cpu.revision || "--" },
+    { label: t("hardware.processorId") || "处理器ID", value: cpu.processor_id || "--" },
+    { label: t("hardware.voltageCaps") || "电压能力", value: cpu.voltage_caps || "--" },
+  ];
+
+  const buildGpuSpecs = (gpu: GpuInfo, idx: number): SpecItem[] => [
+    { label: t("hardware.model"), value: gpu.name },
+    { label: t("hardware.vendor"), value: gpu.vendor },
+    { label: t("hardware.videoProcessor") || "核心架构", value: gpu.video_processor || "--" },
+    { label: t("hardware.memory"), value: `${gpu.memory_gb.toFixed(1)} GB` },
+    { label: t("hardware.videoMemoryType") || "显存类型", value: gpu.video_memory_type || "--" },
+    { label: t("hardware.driverVersion"), value: gpu.driver_version },
+    { label: t("hardware.driverDate") || "驱动日期", value: gpu.driver_date || "--" },
+    { label: t("hardware.infFilename") || "INF文件", value: gpu.inf_filename || "--" },
+    { label: t("hardware.deviceId") || "设备ID", value: gpu.device_id || "--" },
+    { label: t("hardware.pnpDeviceId") || "PNP ID", value: gpu.pnp_device_id || "--" },
+    { label: t("hardware.resolution"), value: gpu.resolution_width && gpu.resolution_height ? `${gpu.resolution_width} x ${gpu.resolution_height}` : "--" },
+    { label: t("hardware.refreshRate") || "刷新率", value: gpu.refresh_rate ? `${gpu.refresh_rate} Hz` : "--" },
+    { label: t("hardware.status"), value: gpu.status || "--" },
+  ];
+
+  const buildMemorySpecs = (mems: MemoryInfo[]): SpecItem[] => {
+    const specs: SpecItem[] = [];
+    const totalGb = mems.reduce((s, m) => s + m.capacity_gb, 0);
+    specs.push(
+      { label: t("hardware.totalCapacity"), value: `${totalGb.toFixed(0)} GB` },
+      { label: t("hardware.count"), value: `${mems.length}` },
+    );
+    mems.forEach((mem, i) => {
+      const prefix = mems.length > 1 ? `[${i + 1}] ` : "";
+      specs.push(
+        { label: `${prefix}${t("hardware.bankLabel")}`, value: mem.bank_label },
+        { label: `${prefix}${t("hardware.partNumber")}`, value: mem.part_number },
+        { label: `${prefix}${t("hardware.manufacturer")}`, value: mem.manufacturer },
+        { label: `${prefix}${t("hardware.capacity")}`, value: `${mem.capacity_gb.toFixed(0)} GB` },
+        { label: `${prefix}${t("hardware.speed")}`, value: `${mem.speed_mhz} MHz` },
+        { label: `${prefix}${t("hardware.memoryType") || "类型"}`, value: mem.memory_type || "--" },
+        { label: `${prefix}${t("hardware.formFactor") || "外形"}`, value: mem.form_factor || "--" },
+        { label: `${prefix}${t("hardware.serialNumber") || "序列号"}`, value: mem.serial_number || "--" },
+      );
+    });
+    return specs;
+  };
+
+  const buildMotherboardSpecs = (mobo: MotherboardInfo): SpecItem[] => [
+    { label: t("hardware.model"), value: mobo.product },
+    { label: t("hardware.manufacturer"), value: mobo.manufacturer },
+    { label: t("hardware.serialNumber") || "序列号", value: mobo.serial_number || "--" },
+    { label: t("hardware.version"), value: mobo.version || "--" },
+    { label: t("hardware.biosVendor") || "BIOS 厂商", value: mobo.bios_vendor || "--" },
+    { label: t("hardware.biosVersion") || "BIOS 版本", value: mobo.bios_version || "--" },
+    { label: t("hardware.biosReleaseDate") || "BIOS 日期", value: mobo.bios_release_date || "--" },
+    { label: t("hardware.systemManufacturer") || "系统制造商", value: mobo.system_manufacturer || "--" },
+    { label: t("hardware.systemModel") || "系统型号", value: mobo.system_model || "--" },
+    { label: t("hardware.systemType") || "系统类型", value: mobo.system_type || "--" },
+    { label: t("hardware.chassisType") || "机箱类型", value: mobo.chassis_type || "--" },
+  ];
+
+  const buildStorageSpecs = (disks: DiskDetailInfo[]): SpecItem[] => {
+    const specs: SpecItem[] = [];
+    disks.forEach((disk, i) => {
+      const prefix = disks.length > 1 ? `[${i + 1}] ` : "";
+      specs.push(
+        { label: `${prefix}${t("hardware.model")}`, value: disk.model },
+        { label: `${prefix}${t("hardware.capacity")}`, value: `${disk.size_gb.toFixed(1)} GB` },
+        { label: `${prefix}${t("hardware.diskType") || "类型"}`, value: disk.is_ssd ? "SSD" : disk.media_type || "HDD" },
+        { label: `${prefix}${t("hardware.interfaceType") || "接口"}`, value: disk.interface_type || "--" },
+        { label: `${prefix}${t("hardware.serialNumber") || "序列号"}`, value: disk.serial_number || "--" },
+        { label: `${prefix}${t("hardware.firmware") || "固件版本"}`, value: disk.firmware_revision || "--" },
+        { label: `${prefix}${t("hardware.status")}`, value: disk.status || "--" },
+      );
+    });
+    return specs;
+  };
+
+  const buildSoundCardSpecs = (cards: SoundCardInfo[]): SpecItem[] => {
+    const specs: SpecItem[] = [];
+    cards.forEach((card, i) => {
+      const prefix = cards.length > 1 ? `[${i + 1}] ` : "";
+      specs.push(
+        { label: `${prefix}${t("hardware.name") || "名称"}`, value: card.name },
+        { label: `${prefix}${t("hardware.manufacturer")}`, value: card.manufacturer },
+        { label: `${prefix}${t("hardware.status")}`, value: card.status || "--" },
+      );
+    });
+    return specs;
+  };
+
+  const buildNetworkCardSpecs = (cards: NetworkCardInfo[]): SpecItem[] => {
+    const specs: SpecItem[] = [];
+    cards.forEach((card, i) => {
+      const prefix = cards.length > 1 ? `[${i + 1}] ` : "";
+      specs.push(
+        { label: `${prefix}${t("hardware.name") || "名称"}`, value: card.name },
+        { label: `${prefix}${t("hardware.connectionName") || "连接名称"}`, value: card.connection_name || "--" },
+        { label: `${prefix}${t("hardware.manufacturer")}`, value: card.manufacturer },
+        { label: `${prefix}${t("hardware.adapterType")}`, value: card.adapter_type },
+        { label: `${prefix}${t("hardware.macAddress")}`, value: card.mac_address },
+        { label: `${prefix}${t("hardware.linkSpeed")}`, value: card.speed_mbps > 0 ? `${card.speed_mbps} Mbps` : "--" },
+        { label: `${prefix}${t("hardware.maxSpeed") || "最大速度"}`, value: card.max_speed ? `${card.max_speed} Mbps` : "--" },
+        { label: `${prefix}${t("hardware.guid") || "GUID"}`, value: card.guid || "--" },
+      );
+    });
+    return specs;
+  };
+
+  const buildMonitorSpecs = (monitors: MonitorInfo[]): SpecItem[] => {
+    const specs: SpecItem[] = [];
+    monitors.forEach((mon, i) => {
+      const prefix = monitors.length > 1 ? `[${i + 1}] ` : "";
+      specs.push(
+        { label: `${prefix}${t("hardware.name") || "名称"}`, value: mon.name },
+        { label: `${prefix}${t("hardware.manufacturer")}`, value: mon.manufacturer || "--" },
+        { label: `${prefix}${t("hardware.resolution") || "分辨率"}`, value: mon.screen_width && mon.screen_height ? `${mon.screen_width} x ${mon.screen_height}` : "--" },
+        { label: `${prefix}${t("hardware.refreshRate") || "刷新率"}`, value: mon.refresh_rate ? `${mon.refresh_rate} Hz` : "--" },
+        { label: `${prefix}${t("hardware.pnpDeviceId") || "PNP ID"}`, value: mon.pnp_device_id || "--" },
+        { label: `${prefix}${t("hardware.status")}`, value: mon.status || "--" },
+      );
+    });
+    return specs;
+  };
 
   return (
     <Box pt={8}>
@@ -601,6 +773,7 @@ export default function HardwarePage() {
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
+            onClick={hardwareInfo ? () => handleOpenDetail(t("hardware.processor"), Cpu, "cpu", buildCpuSpecs(hardwareInfo.cpu)) : undefined}
           />
           {gpuDisplayInfos.map((gpuInfo, i) => (
             <DetailCard
@@ -613,6 +786,7 @@ export default function HardwarePage() {
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}
+              onClick={hardwareInfo && hardwareInfo.gpu[i] ? () => handleOpenDetail(t("hardware.gpu"), Monitor, "gpu", buildGpuSpecs(hardwareInfo.gpu[i], i)) : undefined}
             />
           ))}
           <DetailCard
@@ -624,6 +798,7 @@ export default function HardwarePage() {
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
+            onClick={hardwareInfo ? () => handleOpenDetail(t("hardware.ram"), Ram, "memory", buildMemorySpecs(hardwareInfo.memory)) : undefined}
           />
           <DetailCard
             title={t("hardware.motherboard")}
@@ -634,6 +809,7 @@ export default function HardwarePage() {
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
+            onClick={hardwareInfo ? () => handleOpenDetail(t("hardware.motherboard"), CircuitBoard, "motherboard", buildMotherboardSpecs(hardwareInfo.motherboard)) : undefined}
           />
           {storageDisplayInfo.length > 0 && (
             <DetailCard
@@ -645,6 +821,7 @@ export default function HardwarePage() {
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}
+              onClick={hardwareInfo ? () => handleOpenDetail(t("hardware.storage"), HardDrive, "storage", buildStorageSpecs(hardwareInfo.disk)) : undefined}
             />
           )}
           {soundCardDisplayInfos.map((info, i) => (
@@ -658,6 +835,7 @@ export default function HardwarePage() {
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}
+              onClick={hardwareInfo && hardwareInfo.sound_card ? () => handleOpenDetail(t("hardware.soundCard"), Volume2, "sound", buildSoundCardSpecs(hardwareInfo.sound_card)) : undefined}
             />
           ))}
           {networkCardDisplayInfos.map((info, i) => (
@@ -671,10 +849,35 @@ export default function HardwarePage() {
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}
+              onClick={hardwareInfo && hardwareInfo.network_card ? () => handleOpenDetail(t("hardware.networkCard"), Wifi, "network", buildNetworkCardSpecs(hardwareInfo.network_card)) : undefined}
+            />
+          ))}
+          {monitorDisplayInfos.map((info, i) => (
+            <DetailCard
+              key={`monitor-${i}`}
+              title={t("hardware.monitor") || "显示器"}
+              icon={Monitor}
+              info={info}
+              type="monitor"
+              cardBg={cardBg}
+              textColor={textColor}
+              subTextColor={subTextColor}
+              liquidGlassEnabled={liquidGlassEnabled}
+              onClick={hardwareInfo && hardwareInfo.monitor ? () => handleOpenDetail(t("hardware.monitor") || "显示器", Monitor, "monitor", buildMonitorSpecs(hardwareInfo.monitor)) : undefined}
             />
           ))}
         </Grid>
       </VStack>
+
+      {/* Detail Modal */}
+      <HardwareDetailModal
+        isOpen={isDetailOpen}
+        onClose={onDetailClose}
+        title={detailCard?.title || ""}
+        icon={detailCard?.icon || Cpu}
+        type={detailCard?.type || "cpu"}
+        specs={detailCard?.specs || []}
+      />
     </Box>
   );
 }
