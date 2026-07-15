@@ -621,6 +621,7 @@
     "appearance": "外觀設定",
     "styles": "懸浮框樣式",
     "styles.default": "預設",
+    "styles.dynamicIsland": "動態島",
     "opacity": "透明度",
     "startFailed": "啟動失敗",
     "stopFailed": "停止失敗",

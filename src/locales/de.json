@@ -639,6 +639,7 @@
     "appearance": "Darstellungseinstellungen",
     "styles": "Overlay-Stil",
     "styles.default": "Standard",
+    "styles.dynamicIsland": "Dynamic Island",
     "opacity": "Deckkraft",
     "startFailed": "Starten fehlgeschlagen",
     "stopFailed": "Stoppen fehlgeschlagen",

@@ -632,6 +632,7 @@
     "appearance": "外观设置",
     "styles": "悬浮框样式",
     "styles.default": "默认",
+    "styles.dynamicIsland": "灵动岛",
     "opacity": "透明度",
     "startFailed": "启动失败",
     "stopFailed": "停止失败",

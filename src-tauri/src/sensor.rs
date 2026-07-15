@@ -185,9 +185,18 @@ pub async fn get_lhm_gpu_status() -> Result<Vec<(Option<f64>, Option<u32>)>, Str
                 types
             };
 
+            // 判断是否存在独显类型（NVIDIA/AMD 独显）
+            let has_dgpu = gpu_hardware_types.iter().any(|t| {
+                t.eq_ignore_ascii_case("GpuNvidia") || t.eq_ignore_ascii_case("GpuAmd")
+            });
+
             let mut results = Vec::new();
             for hw_type in &gpu_hardware_types {
-                if hw_type.eq_ignore_ascii_case("GpuIntel") { continue; }
+                // 当存在独显时跳过核显（避免重复），否则保留核显（纯核显电脑）
+                if has_dgpu && hw_type.eq_ignore_ascii_case("GpuIntel") {
+                    log::info!("跳过核显(LHML): 存在独显，忽略 GpuIntel");
+                    continue;
+                }
                 let temp = response.sensors.iter()
                     .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Temperature" && s.name == "GPU Core")
                     .map(|s| s.value)

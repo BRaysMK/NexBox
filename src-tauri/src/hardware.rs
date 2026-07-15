@@ -632,7 +632,7 @@ fn video_memory_type_name(code: Option<u16>) -> Option<String> {
 }
 
 fn get_gpus_from_wmi() -> Vec<GpuInfo> {
-    let mut gpus = Vec::new();
+    let mut all_gpus: Vec<(PsVideoController, GpuVendor, bool, f64)> = Vec::new();
 
     let gpu_cmd = "Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM, VideoProcessor, AdapterCompatibility, DriverDate, InstalledDisplayDrivers, VideoModeDescription, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate, DeviceID, PNPDeviceID, Status, InfFilename, VideoArchitecture, VideoMemoryType | ConvertTo-Json -Compress";
     if let Ok(gpu_results) = run_powershell::<PsVideoController>(gpu_cmd) {
@@ -643,7 +643,7 @@ fn get_gpus_from_wmi() -> Vec<GpuInfo> {
                 .map(|ram| ram as f64 / (1024.0 * 1024.0 * 1024.0))
                 .unwrap_or(0.0);
 
-            // 过滤核显（Intel 集成显卡和 AMD APU）
+            // 判断是否为核显（Intel 集成显卡和 AMD APU）
             let is_integrated = match vendor {
                 GpuVendor::Intel => !name_lower.contains("arc"),
                 GpuVendor::AMD => {
@@ -653,15 +653,29 @@ fn get_gpus_from_wmi() -> Vec<GpuInfo> {
                 _ => false,
             };
 
-            if is_integrated {
-                log::info!("跳过核显(WMI): {}, 厂商: {:?}, 显存: {:.1}GB",
+            all_gpus.push((g, vendor, is_integrated, memory_gb));
+        }
+
+        // 检查是否存在独显（非核显 GPU）
+        let has_dgpu = all_gpus.iter().any(|(_, _, is_igpu, _)| !is_igpu);
+
+        let mut gpus = Vec::new();
+        for (g, vendor, is_integrated, memory_gb) in all_gpus {
+            // 当存在独显时跳过核显，否则保留核显（纯核显电脑）
+            if is_integrated && has_dgpu {
+                log::info!("跳过核显(WMI): {}, 厂商: {:?}, 显存: {:.1}GB (存在独显)",
                           g.Name, vendor, memory_gb);
                 continue;
             }
 
-            log::info!("显卡(WMI): {}, 厂商: {:?}, 显存: {:.1}GB", 
-                      g.Name, vendor, memory_gb);
-            
+            if is_integrated {
+                log::info!("核显(WMI)(唯一): {}, 厂商: {:?}, 显存: {:.1}GB",
+                          g.Name, vendor, memory_gb);
+            } else {
+                log::info!("显卡(WMI): {}, 厂商: {:?}, 显存: {:.1}GB",
+                          g.Name, vendor, memory_gb);
+            }
+
             gpus.push(GpuInfo {
                 name: g.Name.clone(),
                 vendor,
@@ -685,9 +699,10 @@ fn get_gpus_from_wmi() -> Vec<GpuInfo> {
                 video_memory_type: video_memory_type_name(g.VideoMemoryType),
             });
         }
+        return gpus;
     }
 
-    gpus
+    Vec::new()
 }
 
 fn get_gpu_info() -> Vec<GpuInfo> {
@@ -1427,6 +1442,39 @@ pub async fn get_gpu_status(index: usize) -> Result<GpuStatus, String> {
                 temperature: gpu.temperature,
                 usage: gpu.usage,
             };
+        }
+
+        // NVML/nvidia-smi 失败时（如纯核显系统），回退到 LHML 传感器
+        if let Ok(response) = crate::sensor::read_lhm_sensors() {
+            let gpu_hardware_types: Vec<_> = response.sensors.iter()
+                .filter(|s| s.hardware_type.to_lowercase().starts_with("gpu"))
+                .map(|s| s.hardware_type.clone())
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            let has_dgpu = gpu_hardware_types.iter().any(|t| {
+                t.eq_ignore_ascii_case("GpuNvidia") || t.eq_ignore_ascii_case("GpuAmd")
+            });
+
+            for hw_type in &gpu_hardware_types {
+                if has_dgpu && hw_type.eq_ignore_ascii_case("GpuIntel") {
+                    continue;
+                }
+                let temp = response.sensors.iter()
+                    .filter(|s| s.hardware_type == *hw_type
+                        && s.sensor_type == "Temperature"
+                        && s.name == "GPU Core")
+                    .map(|s| s.value)
+                    .next();
+                let usage = response.sensors.iter()
+                    .filter(|s| s.hardware_type == *hw_type
+                        && s.sensor_type == "Load"
+                        && s.name == "GPU Core")
+                    .map(|s| s.value as u32)
+                    .next();
+                return GpuStatus { temperature: temp, usage };
+            }
         }
         
         GpuStatus {

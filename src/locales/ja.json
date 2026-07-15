@@ -682,6 +682,7 @@
     "appearance": "外観設定",
     "styles": "オーバーレイスタイル",
     "styles.default": "デフォルト",
+    "styles.dynamicIsland": "ダイナミックアイランド",
     "opacity": "不透明度",
     "startFailed": "起動に失敗しました",
     "stopFailed": "停止に失敗しました",

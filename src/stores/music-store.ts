@@ -373,7 +373,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       // ignore
     }
 
-    // 加载缓存的官方榜单（优先显示缓存，后台刷新）
+    // 加载缓存的官方榜单（优先显示缓存）
     try {
       const s = await getStore();
       const cached = await s.get<Playlist[]>("officialCharts");
@@ -381,7 +381,6 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         set({ officialCharts: cached });
       }
     } catch {}
-    get().loadOfficialCharts();
 
     // 防止 React Strict Mode 双重调用导致重复注册
     if (listenersRegistered) return;
@@ -442,12 +441,16 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           set({ loginInfo: info });
           get().loadUserPlaylists();
           get().loadLikedList();
+          get().loadOfficialCharts();
+          get().loadRecommendations();
         } else {
           // 后端没带数据，手动刷新
           await get().loginStatus();
           if (get().loginInfo?.logged_in) {
             get().loadUserPlaylists();
             get().loadLikedList();
+            get().loadOfficialCharts();
+            get().loadRecommendations();
           }
         }
       })
@@ -462,10 +465,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
     // 检查登录状态
     await get().loginStatus();
-    // 如果已登录, 加载歌单和喜欢列表
+    // 如果已登录, 加载歌单、喜欢列表和官方榜单
     if (get().loginInfo?.logged_in) {
       get().loadUserPlaylists();
       await get().loadLikedList();
+      get().loadOfficialCharts();
     }
   },
 

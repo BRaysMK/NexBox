@@ -3037,6 +3037,8 @@ setRightPanelView("tracks");
               </>
             ) : (
               <>
+                {loginInfo?.logged_in && (
+                  <>
                 <HStack justify="space-between" mb={3} flexShrink={0}>
                   <HStack spacing={2}>
                     <Sparkles size={16} color={activeColor} />
@@ -3044,16 +3046,14 @@ setRightPanelView("tracks");
                       推荐歌单
                     </Text>
                   </HStack>
-                  {loginInfo?.logged_in && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => storeActions.loadRecommendations()}
-                      sx={{ color: activeColor, _hover: { bg: hoverBg } }}
-                    >
-                      刷新
-                    </Button>
-                  )}
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => storeActions.loadRecommendations()}
+                    sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                  >
+                    刷新
+                  </Button>
                 </HStack>
 
                 {/* 官方榜单 */}
@@ -3108,6 +3108,8 @@ setRightPanelView("tracks");
                     )}
                   </HStack>
                 </VStack>
+                  </>
+                )}
 
                 <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
                   {!loginInfo?.logged_in ? (

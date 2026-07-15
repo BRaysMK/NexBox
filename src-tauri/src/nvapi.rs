@@ -5,6 +5,8 @@
 
 use serde::Serialize;
 use std::process::Command;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::sync::Mutex;
 use libloading::Library;
 
@@ -1474,9 +1476,13 @@ fn query_edid_monitor_names() -> Vec<String> {
     let full = format!("[Console]::OutputEncoding = [Text.Encoding]::UTF8; {}", cmd);
     let encoded = encode_ps_command(&full);
 
-    let output = match Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
-        .output() {
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded]);
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+    let output = match cmd.output() {
             Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
             _ => return Vec::new(),
         };

@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::fs;
 use std::io::Read;
 use std::process::Command;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use tauri::Emitter;
 
 // ─── Display enumeration ───
@@ -159,17 +161,7 @@ pub async fn get_displays() -> Result<Vec<DisplayInfo>, String> {
     }
 }
 
-/// 在应用启动时预填显示器信息缓存，确保热键路径也能正确获取设备名。
-#[cfg(target_os = "windows")]
-pub fn init() {
-    log::info!("display_filter::init — 预填显示器信息…");
-    enumerate_displays_inner();
-}
 
-#[cfg(not(target_os = "windows"))]
-pub fn init() {
-    // no-op on non-Windows
-}
 
 /// Check if a monitor name is a generic/placeholder (any language variant)
 fn is_generic_monitor_name(name: &str) -> bool {
@@ -241,9 +233,13 @@ fn run_powershell(script: &str) -> Result<String, String> {
     );
     let encoded = encode_ps_command(&full_script);
 
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
-        .output()
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded]);
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+    let output = cmd.output()
         .map_err(|e| format!("无法执行 PowerShell: {}", e))?;
 
     if !output.status.success() {

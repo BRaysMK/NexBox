@@ -770,6 +770,7 @@
     "appearance": "Appearance Settings",
     "styles": "Overlay Style",
     "styles.default": "Default",
+    "styles.dynamicIsland": "Dynamic Island",
     "opacity": "Opacity",
     "startFailed": "Failed to start",
     "stopFailed": "Failed to stop",

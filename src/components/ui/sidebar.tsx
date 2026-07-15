@@ -7,7 +7,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import deltaForceIcon from "@/assets/deltaforce.png";
 import epicGamesIcon from "@/assets/epic-games.png";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface NavItem {
   path: string;
@@ -27,6 +27,21 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
   showLabel: boolean;
 }) {
   const isCustom = !!item.customIcon;
+  const { getActiveColor } = useThemeColor();
+  const activeColor = getActiveColor();
+  const [bursts, setBursts] = useState<Array<{id: number, x: number, y: number}>>([]);
+  const nextId = useRef(0);
+
+  const handleBurst = useCallback((e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const id = nextId.current++;
+    setBursts(prev => [...prev, { id, x, y }]);
+    setTimeout(() => {
+      setBursts(prev => prev.filter(b => b.id !== id));
+    }, 450);
+  }, []);
 
   const iconElement = isCustom ? (
     <Image
@@ -63,29 +78,72 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
             as="span"
             role="button"
             tabIndex={0}
+            position="relative"
+            overflow="hidden"
+            onClick={handleBurst}
           >
-            <ChakraBox display="flex" alignItems="center" justifyContent="center" lineHeight={0}>
+            <ChakraBox display="flex" alignItems="center" justifyContent="center" lineHeight={0} position="relative" zIndex={1}>
               {iconElement}
             </ChakraBox>
-            <Text fontSize="2xs" fontWeight="medium" noOfLines={1} textAlign="center" lineHeight="1.1">
+            <Text fontSize="2xs" fontWeight="medium" noOfLines={1} textAlign="center" lineHeight="1.1" position="relative" zIndex={1}>
               {item.ariaLabel}
             </Text>
+            {bursts.map(b => (
+              <ChakraBox
+                key={b.id}
+                position="absolute"
+                left={0}
+                top={0}
+                w="48px"
+                h="48px"
+                borderRadius="xl"
+                pointerEvents="none"
+                zIndex={3}
+                bg="red.400"
+                opacity={0.7}
+                sx={{
+                  animation: "navBurstGrow 0.4s ease-out forwards",
+                }}
+              />
+            ))}
           </Flex>
         ) : (
-          <IconButton
-            aria-label={item.ariaLabel}
-            icon={iconElement}
-            variant="ghost"
-            borderRadius="xl"
-            bg={isActive ? activeBg : "transparent"}
-            color={isActive ? activeIconColor : iconColor}
-            _hover={{ bg: isActive ? activeBg : hoverBg }}
-            _active={{ transform: "scale(0.95)" }}
-            transition="all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
-            size="lg"
-            w="48px"
-            h="48px"
-          />
+          <ChakraBox position="relative" overflow="hidden" borderRadius="xl" onClick={handleBurst}>
+            <ChakraBox position="relative" zIndex={1}>
+              <IconButton
+                aria-label={item.ariaLabel}
+                icon={iconElement}
+                variant="ghost"
+                borderRadius="xl"
+                bg={isActive ? activeBg : "transparent"}
+                color={isActive ? activeIconColor : iconColor}
+                _hover={{ bg: isActive ? activeBg : hoverBg }}
+                _active={{ transform: "scale(0.95)" }}
+                transition="all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+                size="lg"
+                w="48px"
+                h="48px"
+              />
+            </ChakraBox>
+            {bursts.map(b => (
+              <ChakraBox
+                key={b.id}
+                position="absolute"
+                left={0}
+                top={0}
+                w="48px"
+                h="48px"
+                borderRadius="xl"
+                pointerEvents="none"
+                zIndex={3}
+                bg="red.400"
+                opacity={0.7}
+                sx={{
+                  animation: "navBurstGrow 0.4s ease-out forwards",
+                }}
+              />
+            ))}
+          </ChakraBox>
         )}
         {!showLabel && item.beta && (
           <Badge
@@ -145,6 +203,16 @@ export function Sidebar() {
   const isTop = navPosition === "top";
   
   const [showBlur, setShowBlur] = useState(false);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const styleId = "nav-burst-keyframes";
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `@keyframes navBurstGrow{from{transform:scale(0);opacity:0.8}to{transform:scale(3.5);opacity:0}}`;
+    document.head.appendChild(style);
+  }, []);
 
   useEffect(() => {
     if (liquidGlassEnabled) {

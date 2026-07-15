@@ -639,6 +639,7 @@
     "appearance": "Paramètres d'apparence",
     "styles": "Style de superposition",
     "styles.default": "Par défaut",
+    "styles.dynamicIsland": "Île dynamique",
     "opacity": "Opacité",
     "startFailed": "Échec du démarrage",
     "stopFailed": "Échec de l'arrêt",

@@ -126,7 +126,7 @@ function ToolCardComponent({
       size="md"
       onClick={() => handleToolClick(tool.id)}
     >
-      <VStack align="start" spacing={3}>
+      <VStack align="start" spacing={3} h="full">
         <Flex
           h={12}
           w={12}
@@ -320,7 +320,7 @@ function ThirdPartyToolCard({
         </HStack>
       )}
 
-      <VStack align="start" spacing={3}>
+      <VStack align="start" spacing={3} h="full">
         <Flex
           h={12}
           w={12}
@@ -444,7 +444,7 @@ function ToolSection({
           md: "repeat(3, 1fr)",
         }}
         gap={4}
-        alignItems="start"
+        alignItems="stretch"
       >
         {filteredTools.map((tool) => (
           <ToolCardComponent key={tool.id} tool={tool} categoryLabels={categoryLabels} />
@@ -592,10 +592,10 @@ function OfficialToolSection({
           md: "repeat(3, 1fr)",
         }}
         gap={4}
-        alignItems="start"
+        alignItems="stretch"
       >
         <LiquidGlassToolCard size={"md"} onClick={handleOpenMCTier}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -631,7 +631,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenSjmcl}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -667,7 +667,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenDdegame}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -703,7 +703,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenHuorong}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -739,7 +739,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenSteam}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -775,7 +775,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenEpicGames}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -811,7 +811,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenNvidiaApp}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -847,7 +847,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenPCL2}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -883,7 +883,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenOBS}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -919,7 +919,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenWallpaper}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -955,7 +955,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenTieZ}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -991,7 +991,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenPyisland}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -1027,7 +1027,7 @@ function OfficialToolSection({
         </LiquidGlassToolCard>
 
         <LiquidGlassToolCard size={"md"} onClick={handleOpenMR}>
-          <VStack align={"start"} spacing={3}>
+          <VStack align={"start"} spacing={3} h="full">
             <Flex
               h={12}
               w={12}
@@ -1151,7 +1151,7 @@ function ThirdPartyToolSection({
           md: "repeat(3, 1fr)",
         }}
         gap={4}
-        alignItems="start"
+        alignItems="stretch"
       >
         {sortedTools.map((tool) => (
           <ThirdPartyToolCard 

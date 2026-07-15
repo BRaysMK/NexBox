@@ -195,8 +195,8 @@ pub fn run() {
                 });
             }
 
-            // 预填显示器信息缓存，确保热键路径也能正确获取设备名
-            display_filter::init();
+            // 显示器信息改为前端按需加载 (get_displays 内部已有缓存逻辑)，
+            // 不在启动阶段预填，避免阻塞 WebView 加载导致白屏。
 
             match tray::init_tray(app.handle()) {
                 Ok(_) => log::info!("Tray initialized successfully"),
