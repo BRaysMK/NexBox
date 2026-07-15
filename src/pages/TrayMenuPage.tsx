@@ -47,6 +47,26 @@ export default function TrayMenuPage() {
   const bg = "#1a1a1a";
   const borderColor = "rgba(255,255,255,0.08)";
 
+  // 确保窗口背景完全透明（该窗口设置了 transparent: true）
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById("root");
+    const prevHtmlBg = html.style.background;
+    const prevBodyBg = body.style.background;
+    const prevRootBg = root?.style.background;
+
+    html.style.background = "transparent";
+    body.style.background = "transparent";
+    if (root) root.style.background = "transparent";
+
+    return () => {
+      html.style.background = prevHtmlBg;
+      body.style.background = prevBodyBg;
+      if (root) root.style.background = prevRootBg || "";
+    };
+  }, []);
+
   useEffect(() => {
     const unlisten = getCurrentWindow().onFocusChanged((event) => {
       if (!event.payload) {
@@ -87,7 +107,7 @@ export default function TrayMenuPage() {
   };
 
   return (
-    <Box w="100vw" h="100vh" p={0} m={0}>
+    <Box w="100vw" h="100vh" p={0} m={0} bg="transparent">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: -4 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

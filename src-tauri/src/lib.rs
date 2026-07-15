@@ -13,7 +13,6 @@ mod hardware;
 mod hardware_report;
 
 mod hotkey;
-mod island;
 mod music;
 mod network_optimize;
 mod netease_lyrics;
@@ -59,8 +58,6 @@ pub fn run() {
                             let _ = crosshair::toggle_crosshair_sync(app);
                         } else if shortcut.id() == hotkey::get_filter_shortcut_id() {
                             let _ = display_filter::toggle_filter_sync(app);
-                        } else if shortcut.id() == hotkey::get_island_shortcut_id() {
-                            let _ = island::toggle_island(app);
                         }
                     }
                 })
@@ -123,9 +120,6 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let _ = optimization::init_ace_auto_detect(app_handle).await;
             });
-
-            // Initialize island (Dynamic Island) state
-            app.manage(island::AppState::new());
 
             // Configure widget window (DWM clipping + close intercept)
             if let Some(widget_window) = app.get_webview_window("widget") {
@@ -213,7 +207,6 @@ pub fn run() {
             let _ = hotkey::init_overlay(app.handle(), "Shift+F10");
             let _ = hotkey::init_crosshair(app.handle(), "Shift+F9");
             let _ = hotkey::init_filter(app.handle(), "Shift+F8");
-            let _ = hotkey::init_island(app.handle(), "Shift+F11");
 
             Ok(())
         })
@@ -306,6 +299,7 @@ pub fn run() {
         optimization::get_peripheral_status,
         optimization::set_peripheral_settings,
         optimization::reset_peripheral_settings,
+        optimization::restart_graphics_driver,
         network_optimize::set_tcp_congestion,
         network_optimize::restore_tcp_congestion,
         network_optimize::set_tcp_chimney_off,
@@ -378,8 +372,6 @@ pub fn run() {
         hotkey::set_crosshair_hotkey,
         hotkey::get_filter_hotkey,
         hotkey::set_filter_hotkey,
-        hotkey::get_island_hotkey,
-        hotkey::set_island_hotkey,
         crosshair::toggle_crosshair,
         crosshair::get_crosshair_status,
         crosshair::update_crosshair_settings,
@@ -432,17 +424,6 @@ pub fn run() {
             tray::set_dont_ask_again,
             tray::exit_app,
             tray::check_update_and_show,
-            // === Island (Dynamic Island) 命令 ===
-            island::get_network_stats,
-            island::get_network_latency,
-            island::get_hardware_stats,
-            island::control_system_media,
-            island::fetch_netease_music_info,
-            island::get_random_cover_url,
-            island::fetch_latest_notification,
-            island::open_app_by_aumid,
-            island::force_window_topmost,
-            island::is_widget_visible,
             // === MCTier 命令 ===
             utils::cursor::get_cursor_position,
             utils::cursor::set_desktop_lyrics_click_through,

@@ -22,6 +22,7 @@ interface KaraokeLyricLineProps {
   line: KaraokeLine;
   nextLine?: KaraokeLine;
   isActive: boolean;
+  isPlaying: boolean;
   fontSize: number;
   activeColor: string;
   highlightColor: string;
@@ -34,6 +35,7 @@ function KaraokeLyricLineInner({
   line,
   nextLine,
   isActive,
+  isPlaying,
   fontSize,
   activeColor,
   highlightColor,
@@ -63,16 +65,18 @@ function KaraokeLyricLineInner({
     return () => clearTimeout(timer);
   }, [line.text, fontSize, isActive]);
 
-  // 动画循环：更新顶层 width（仅当前行运行）
+  // 动画循环：更新顶层 width（仅当前行 + 播放中运行）
   useEffect(() => {
-    if (!isActive || !overlayRef.current) return;
+    if (!isActive || !isPlaying || !overlayRef.current) return;
 
     const el = overlayRef.current;
     el.style.width = "0%";
 
     let rafId: number;
+    let running = true;
 
     const tick = () => {
+      if (!running) return;
       const t = audioRef ? audioRef.currentTime : 0;
       const progress = getLineProgress(line, nextLine, t);
 
@@ -89,9 +93,12 @@ function KaraokeLyricLineInner({
     };
 
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      running = false;
+      cancelAnimationFrame(rafId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, line, nextLine, scrollNeeded, audioRef]);
+  }, [isActive, isPlaying, line, nextLine, scrollNeeded, audioRef]);
 
   // ── 非当前行：简单显示 ──
   if (!isActive) {

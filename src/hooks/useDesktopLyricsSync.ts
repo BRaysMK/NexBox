@@ -161,19 +161,23 @@ export function useDesktopLyricsSync() {
     };
   }, []);
 
-  // RAF 时间插值 (60fps)
+  // RAF 时间插值 (60fps，仅播放时运行)
   useEffect(() => {
+    if (!isPlaying) return;
     let rafId: number;
+    let running = true;
     const tick = () => {
-      if (isPlayingRef.current) {
-        const elapsed = (performance.now() - lastSyncRef.current) / 1000;
-        setEstimatedTime(audioTimeRef.current + elapsed);
-      }
+      if (!running || !isPlayingRef.current) return;
+      const elapsed = (performance.now() - lastSyncRef.current) / 1000;
+      setEstimatedTime(audioTimeRef.current + elapsed);
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, []);
+    return () => {
+      running = false;
+      cancelAnimationFrame(rafId);
+    };
+  }, [isPlaying]);
 
   // 发送控制指令
   const sendControl = useCallback(async (action: ControlAction) => {

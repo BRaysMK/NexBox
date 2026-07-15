@@ -48,7 +48,6 @@
         "resolutionConverter": "Convertisseur de résolution",
         "dlssPreset": "Paramètres DLSS Delta Force",
         "epicFree": "Jeux gratuits Epic",
-        "dynamicIsland": "Dynamic Island",
     "diskHealth": "Santé du disque",
 "screenRecord": "Enregistrement d'écran"
     },
@@ -640,7 +639,6 @@
     "appearance": "Paramètres d'apparence",
     "styles": "Style de superposition",
     "styles.default": "Par défaut",
-    "styles.dynamicIsland": "Île dynamique",
     "opacity": "Opacité",
     "startFailed": "Échec du démarrage",
     "stopFailed": "Échec de l'arrêt",
@@ -822,7 +820,6 @@
     "resolutionConverterDesc": "Convertir les proportions d'image pour différentes résolutions",
     "shaderCacheDesc": "Nettoyer le cache des shaders NVIDIA/AMD pour libérer de l'espace disque",
     "dlssPresetDesc": "Changer les préréglages de modèle DLSS pour optimiser les graphismes du jeu",
-        "dynamicIslandDesc": "Île flottante en haut de l'écran, affiche la vitesse réseau/le matériel/la musique/les notifications",
     "diskHealthDesc": "Vérifier l'état de santé du disque et les informations SMART",
     "screenRecordDesc": "Enregistrement d'écran haute performance (encodage matériel)"
     },
@@ -1111,6 +1108,17 @@
       "optimization": "Optimisation",
       "thirdpartyTools": "Outils tiers"
     }
+  },
+  "gpuDriverRestart": {
+    "pageTitle": "Redémarrer le pilote graphique",
+    "pageDesc": "Simule Win+Ctrl+Maj+B pour redémarrer le pilote graphique (pour les cybercafés)",
+    "detailDesc": "Cliquez sur le bouton pour envoyer une commande de redémarrage du pilote graphique au système, équivalent à Win+Ctrl+Maj+B. L'écran deviendra brièvement noir ou scintillera et reviendra à la normale en quelques secondes.",
+    "restartBtn": "Redémarrer le pilote graphique",
+    "success": "Commande de redémarrage envoyée, l'écran va brièvement scintiller",
+    "error": "Échec du redémarrage du pilote graphique",
+    "waiting": "Exécution de la commande de redémarrage, veuillez patienter...",
+    "warningTitle": "Remarque",
+    "warningDesc": "Le redémarrage du pilote graphique provoquera un bref écran noir ou scintillement. Assurez-vous qu'aucune tâche importante (comme un jeu ou l'édition de fichiers) n'est en cours."
   },
   "closeDialog": {
     "title": "Confirmation de fermeture",

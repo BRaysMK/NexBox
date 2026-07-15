@@ -2246,7 +2246,7 @@ function AboutSettings() {
 
 function HotkeySettings() {
   const { t } = useTranslation();
-  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, islandHotkey, saveIslandHotkey } = useAppStartup();
+  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey } = useAppStartup();
   const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
@@ -2369,42 +2369,6 @@ function HotkeySettings() {
         </LiquidGlassCard>
       </Box>
 
-      <Box mb={6}>
-        <Text
-          fontSize="xs"
-          fontWeight="semibold"
-          color={subLabelColor}
-          mb={3}
-          textTransform="uppercase"
-          letterSpacing="0.05em"
-        >
-          {t("hotkeySettings.island") || "灵动岛"}
-        </Text>
-        <LiquidGlassCard px={4} py={3} boxShadow="sm">
-          <HStack justify="space-between">
-            <Box flex={1}>
-              <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                {t("hotkeySettings.islandToggle") || "切换灵动岛"}
-              </Text>
-              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                {t("hotkeySettings.islandToggleDesc") || "使用快捷键显示或隐藏灵动岛"}
-              </Text>
-            </Box>
-            <HotkeyRecorder
-              value={islandHotkey}
-              onChange={(val) => {
-                saveIslandHotkey(val);
-                toast({
-                  title: t("hotkeySettings.saved") || "快捷键已保存",
-                  status: "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
-          </HStack>
-        </LiquidGlassCard>
-      </Box>
     </Box>
   );
 }

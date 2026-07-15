@@ -31,9 +31,7 @@ import WindowsUpdatePage from "./pages/WindowsUpdatePage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
 import NvidiaDriverPage from "./pages/NvidiaDriverPage";
 import EpicFreePage from "./pages/EpicFreePage";
-import WidgetIslandPage from "./pages/WidgetIslandPage";
 import TrayMenuPage from "./pages/TrayMenuPage";
-import DynamicIslandPage from "./pages/DynamicIslandPage";
 import DesktopLyricsPage from "./pages/DesktopLyricsPage";
 import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import { useState, useEffect } from "react";
@@ -79,11 +77,6 @@ function App() {
   // Tray menu: render standalone, no main layout
   if (location.pathname === "/tray-menu") {
     return <TrayMenuPage />;
-  }
-
-  // Widget window: render WidgetIslandPage standalone, no main layout
-  if (location.pathname === "/widget") {
-    return <WidgetIslandPage />;
   }
 
   // Desktop lyrics window: render standalone, no main layout
@@ -288,11 +281,10 @@ function App() {
               <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
-              <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
-              <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+            <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
+            <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
-              <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
               <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
         </Routes>
       </AnimatePresence>
@@ -323,12 +315,11 @@ function App() {
             <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
-            <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
-            <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
-            <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
-            <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
+              <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
+              <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+              <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
+              <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
-            <Route path="/dynamic-island" element={<AnimatedPage><DynamicIslandPage /></AnimatedPage>} />
             <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
       </Routes>
     )}

@@ -27,7 +27,6 @@ import { ViewGrid } from "@/components/special/view-grid";
 import { ViewList } from "@/components/special/view-list";
 import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { IslandIcon } from "@/components/special/island-icon";
 import type { ViewItem } from "@/components/special/view-types";
 
 const tools: ViewItem[] = [
@@ -78,14 +77,6 @@ const tools: ViewItem[] = [
     titleKey: "sidebar.dlssPreset",
     descriptionKey: "builtinTools.dlssPresetDesc",
     color: "#76B900",
-  },
-  {
-    id: "dynamic-island",
-    path: "/dynamic-island",
-    icon: IslandIcon,
-    titleKey: "sidebar.dynamicIsland",
-    descriptionKey: "builtinTools.dynamicIslandDesc",
-    color: "#E91E63",
   },
   {
     id: "disk-health",

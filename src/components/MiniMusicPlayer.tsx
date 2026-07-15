@@ -2,32 +2,12 @@ import { Box, IconButton, Tooltip, useColorModeValue } from "@chakra-ui/react";
 import { useMusicPlayer } from "@/contexts/music-context";
 import { StopCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
 
 export function MiniMusicPlayer() {
   const { isPlaying, currentFileName, stopPlayback } = useMusicPlayer();
-  const [rotation, setRotation] = useState(0);
 
   const bgColor = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
-
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    let frameId: number;
-    let lastTime = performance.now();
-
-    const animate = (currentTime: number) => {
-      const delta = currentTime - lastTime;
-      lastTime = currentTime;
-      setRotation((prev) => (prev + delta * 0.12) % 360);
-      frameId = requestAnimationFrame(animate);
-    };
-
-    frameId = requestAnimationFrame(animate);
-
-    return () => cancelAnimationFrame(frameId);
-  }, [isPlaying]);
 
   if (!isPlaying) return null;
 
@@ -55,8 +35,10 @@ export function MiniMusicPlayer() {
             p={1}
             cursor="pointer"
             _hover={{ boxShadow: "lg" }}
-            sx={{ transition: "all 0.15s" }}
-            style={{ transform: `rotate(${rotation}deg)` }}
+            sx={{
+              transition: "all 0.15s",
+              animation: "spin-slow 8s linear infinite",
+            }}
           >
             <IconButton
               aria-label="Stop music"

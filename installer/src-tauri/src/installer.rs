@@ -9,6 +9,54 @@ use winreg::RegKey;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+/// UTF-16LE + Base64 编码 PowerShell 脚本
+/// 这是 Windows 上传递含非 ASCII 字符脚本的唯一可靠方式。
+/// `-EncodedCommand` 参数支持 UTF-16LE Base64，完全绕过系统代码页问题。
+fn encode_ps_command(script: &str) -> String {
+    let utf16: Vec<u8> = script
+        .encode_utf16()
+        .flat_map(|c| c.to_le_bytes())
+        .collect();
+    base64_encode(&utf16)
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b = [chunk[0] as u32, *chunk.get(1).unwrap_or(&0) as u32, *chunk.get(2).unwrap_or(&0) as u32];
+        let n = (b[0] << 16) | (b[1] << 8) | b[2];
+        out.push(CHARS[((n >> 18) & 0x3F) as usize] as char);
+        out.push(CHARS[((n >> 12) & 0x3F) as usize] as char);
+        out.push(if chunk.len() > 1 { CHARS[((n >> 6) & 0x3F) as usize] } else { b'=' } as char);
+        out.push(if chunk.len() > 2 { CHARS[(n & 0x3F) as usize] } else { b'=' } as char);
+    }
+    out
+}
+
+/// 通过 Base64 编码执行 PowerShell 脚本，避免系统代码页导致的乱码。
+/// 脚本以 UTF-8 传入，内部自动转为 UTF-16LE Base64。
+/// stdout 通过 `[Console]::OutputEncoding` 强制为 UTF-8 返回。
+fn run_powershell(script: &str) -> Result<String, String> {
+    let full_script = format!(
+        "[Console]::OutputEncoding = [Text.Encoding]::UTF8; {}",
+        script
+    );
+    let encoded = encode_ps_command(&full_script);
+
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("无法执行 PowerShell: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("PowerShell 执行失败: {}", stderr));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 #[derive(Serialize)]
 pub struct FileEntry {
     relative_path: String,
@@ -24,7 +72,7 @@ pub fn get_default_install_path() -> String {
         .unwrap_or_else(|_| "C:\\Program Files".to_string());
     Path::new(&program_files)
         .join("NexBox")
-        .to_string_lossy()
+        .display()
         .to_string()
 }
 
@@ -164,9 +212,15 @@ fn create_lnk_shortcut(name: &str, target_exe: &Path, location: &str) -> Result<
     };
 
     let folder = folder.ok_or_else(|| "无法获取系统目录路径".to_string())?;
-    let target_str = target_exe.to_string_lossy();
-    let workdir = target_exe.parent().unwrap_or(Path::new("")).to_string_lossy();
-    let shortcut_path = format!("{}\\{}.lnk", folder, name);
+    // 使用 display() 保留原始路径编码，再转义单引号
+    let target_str = target_exe.display().to_string().replace('\'', "''");
+    let workdir = target_exe
+        .parent()
+        .unwrap_or(Path::new(""))
+        .display()
+        .to_string()
+        .replace('\'', "''");
+    let shortcut_path = format!("{}\\{}.lnk", folder, name).replace('\'', "''");
 
     let ps_script = format!(
         "$sh = New-Object -ComObject WScript.Shell; \
@@ -174,21 +228,13 @@ fn create_lnk_shortcut(name: &str, target_exe: &Path, location: &str) -> Result<
          $lnk.TargetPath = '{exe}'; \
          $lnk.WorkingDirectory = '{wd}'; \
          $lnk.Save()",
-        sc = shortcut_path.replace('\'', "''"),
-        exe = target_str.replace('\'', "''"),
-        wd = workdir.replace('\'', "''"),
+        sc = shortcut_path,
+        exe = target_str,
+        wd = workdir,
     );
 
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("无法执行 PowerShell: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("PowerShell 创建快捷方式失败: {}", stderr));
-    }
+    run_powershell(&ps_script)
+        .map_err(|e| format!("创建快捷方式失败: {}", e))?;
     Ok(())
 }
 
@@ -199,17 +245,7 @@ fn get_special_folder_path(folder: &str) -> Option<String> {
         "[Environment]::GetFolderPath('CommonStartMenu') + '\\Programs'"
     };
 
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", ps_cmd])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .ok()?;
-
-    if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        None
-    }
+    run_powershell(ps_cmd).ok()
 }
 
 // === Registry operations ===
@@ -280,32 +316,23 @@ fn delete_existing_shortcuts(name: &str) {
 }
 
 fn fs2_available_space(path: &Path) -> Result<u64, std::io::Error> {
-    let path_str = path.to_string_lossy();
-    let drive = if path_str.len() >= 2 && path_str.as_bytes()[1] == b':' {
-        format!("{}", &path_str[..2])
-    } else {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "无效的路径",
-        ));
-    };
+    let path_str = path.display().to_string();
+    // 提取盘符（从路径开头取第一个字符 + ':'）
+    let drive_letter = path_str
+        .chars()
+        .next()
+        .filter(|c| c.is_ascii_alphabetic())
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "无效的路径"))?;
 
-    let ps_cmd = format!(
-        "(Get-PSDrive -Name '{}').Free",
-        drive.trim_end_matches(':')
-    );
+    let ps_cmd = format!("(Get-PSDrive -Name '{}').Free", drive_letter);
 
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_cmd])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let trimmed = stdout.trim();
-        if let Ok(bytes) = trimmed.parse::<u64>() {
-            return Ok(bytes);
+    match run_powershell(&ps_cmd) {
+        Ok(stdout) => {
+            if let Ok(bytes) = stdout.trim().parse::<u64>() {
+                return Ok(bytes);
+            }
         }
+        Err(_) => {}
     }
 
     Err(std::io::Error::new(

@@ -41,6 +41,7 @@ function ActiveKaraokeLine({
   fontSize,
   highlightColor,
   baseColor,
+  isPlaying,
 }: {
   line: KaraokeLine;
   nextLine?: KaraokeLine;
@@ -48,6 +49,7 @@ function ActiveKaraokeLine({
   fontSize: number;
   highlightColor: string;
   baseColor: string;
+  isPlaying: boolean;
 }) {
   const overlayRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,14 +83,16 @@ function ActiveKaraokeLine({
     return () => clearTimeout(timer);
   }, [line.text, fontSize]);
 
-  // RAF 更新进度
+  // RAF 更新进度（仅播放时运行）
   useEffect(() => {
-    if (!overlayRef.current) return;
+    if (!isPlaying || !overlayRef.current) return;
     const el = overlayRef.current;
     el.style.width = "0%";
 
     let rafId: number;
+    let running = true;
     const tick = () => {
+      if (!running) return;
       const t = currentTimeRef.current;
       const progress = getLineProgress(line, nextLine, t);
       el.style.width = `${(progress * 100).toFixed(2)}%`;
@@ -101,8 +105,11 @@ function ActiveKaraokeLine({
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [line, nextLine, scrollNeeded]);
+    return () => {
+      running = false;
+      cancelAnimationFrame(rafId);
+    };
+  }, [line, nextLine, scrollNeeded, isPlaying]);
 
   const sharedStyle: React.CSSProperties = {
     display: "inline-block",
@@ -230,6 +237,7 @@ function LyricsCanvasInner({
         fontSize={fontSize}
         highlightColor={highlightColor}
         baseColor={baseColor}
+        isPlaying={isPlaying}
       />
 
       {lineCount === 2 && nextLine && (

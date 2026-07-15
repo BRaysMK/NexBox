@@ -3154,3 +3154,41 @@ pub async fn batch_restore_registry_tweaks(names: Vec<String>) -> Result<PerfTwe
         })
     }
 }
+
+/// 重启显卡驱动（模拟 Win+Ctrl+Shift+B）
+/// 该快捷键会触发 Windows 图形栈重置，适用于网吧用户需要快速恢复显示异常的场景
+#[tauri::command]
+pub fn restart_graphics_driver() -> Result<PerfTweakResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    unsafe {
+        use winapi::um::winuser::{
+            keybd_event, KEYEVENTF_KEYUP,
+            VK_LCONTROL, VK_LSHIFT, VK_LWIN,
+        };
+
+        const VK_B: u8 = 0x42;
+
+        // 按下组合键：Win + Ctrl + Shift + B
+        keybd_event(VK_LWIN as u8, 0, 0, 0);
+        keybd_event(VK_LCONTROL as u8, 0, 0, 0);
+        keybd_event(VK_LSHIFT as u8, 0, 0, 0);
+        keybd_event(VK_B, 0, 0, 0);
+
+        // 短暂延迟确保系统注册该组合键
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // 释放按键（逆序）：B, Shift, Ctrl, Win
+        keybd_event(VK_B, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event(VK_LSHIFT as u8, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event(VK_LCONTROL as u8, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event(VK_LWIN as u8, 0, KEYEVENTF_KEYUP, 0);
+    }
+
+    Ok(PerfTweakResult {
+        success: true,
+        message: "已发送重启显卡驱动指令，屏幕可能会短暂闪烁".to_string(),
+    })
+}

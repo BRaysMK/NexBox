@@ -48,7 +48,6 @@
         "resolutionConverter": "Auflösungskonverter",
         "dlssPreset": "Delta Force DLSS-Einstellungen",
         "epicFree": "Epic Gratis-Spiele",
-        "dynamicIsland": "Dynamic Island",
     "diskHealth": "Festplatten-Gesundheit",
 "screenRecord": "Bildschirmaufnahme"
     },
@@ -640,7 +639,6 @@
     "appearance": "Darstellungseinstellungen",
     "styles": "Overlay-Stil",
     "styles.default": "Standard",
-    "styles.dynamicIsland": "Dynamic Island",
     "opacity": "Deckkraft",
     "startFailed": "Starten fehlgeschlagen",
     "stopFailed": "Stoppen fehlgeschlagen",
@@ -822,7 +820,6 @@
     "resolutionConverterDesc": "Seitenverhältnisse für verschiedene Auflösungen umrechnen",
     "shaderCacheDesc": "NVIDIA/AMD Shader-Cache bereinigen, um Speicherplatz freizugeben",
     "dlssPresetDesc": "DLSS-Modell-Voreinstellungen wechseln, um Spielgrafiken zu optimieren",
-        "dynamicIslandDesc": "Schwebende Insel oben auf dem Bildschirm, zeigt Netzwerkgeschwindigkeit/Hardware/Musik/Benachrichtigungen",
     "diskHealthDesc": "Festplatten-Gesundheit und SMART-Informationen prüfen",
     "screenRecordDesc": "Hochleistungs-Bildschirmaufnahme (Hardware-Codierung)"
     },
@@ -1110,6 +1107,17 @@
       "optimization": "Optimierung",
       "thirdpartyTools": "Drittanbieter-Tools"
     }
+  },
+  "gpuDriverRestart": {
+    "pageTitle": "Grafiktreiber Neustarten",
+    "pageDesc": "Simuliert Win+Strg+Umschalt+B zum Neustart des Grafiktreibers (für Internetcafé-Benutzer)",
+    "detailDesc": "Klicken Sie auf die Schaltfläche, um einen Neustartbefehl für den Grafiktreiber an das System zu senden, vergleichbar mit Win+Strg+Umschalt+B. Der Bildschirm wird kurz schwarz oder flackert und kehrt innerhalb weniger Sekunden zum Normalzustand zurück.",
+    "restartBtn": "Grafiktreiber Neustarten",
+    "success": "Neustartbefehl gesendet, Bildschirm flackert kurz",
+    "error": "Grafiktreiber-Neustart fehlgeschlagen",
+    "waiting": "Neustartbefehl wird ausgeführt, bitte warten...",
+    "warningTitle": "Hinweis",
+    "warningDesc": "Der Neustart des Grafiktreibers führt zu einem kurzen schwarzen Bildschirm oder Flackern. Stellen Sie sicher, dass keine wichtigen Vorgänge (wie Spiele oder Dateibearbeitung) ausgeführt werden."
   },
   "closeDialog": {
     "title": "Schließen bestätigen",

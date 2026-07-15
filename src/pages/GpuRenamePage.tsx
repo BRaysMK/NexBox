@@ -69,6 +69,7 @@ export default function GpuRenamePage() {
   const [restoring, setRestoring] = useState(false);
   const [tabIndex, setTabIndex] = useState(0);
   const [customName, setCustomName] = useState("");
+  const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -195,6 +196,29 @@ export default function GpuRenamePage() {
       });
     } finally {
       setRestoring(false);
+    }
+  };
+
+  const handleRestartDriver = async () => {
+    try {
+      setRestarting(true);
+      await invoke("restart_graphics_driver");
+      toast({
+        title: t("gpuDriverRestart.success"),
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: t("gpuDriverRestart.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setRestarting(false);
     }
   };
 
@@ -343,6 +367,26 @@ export default function GpuRenamePage() {
                 {t("gpuRename.restore")}
               </Button>
             )}
+
+            {/* 重启显卡驱动 */}
+            <Box w="full" pt={2}>
+              <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
+                {t("gpuDriverRestart.pageTitle")}
+              </Text>
+              <Text color={textColor} fontSize="xs" mb={3}>
+                {t("gpuDriverRestart.pageDesc")}
+              </Text>
+              <Button
+                colorScheme="red"
+                variant="outline"
+                onClick={handleRestartDriver}
+                isLoading={restarting}
+                loadingText={t("gpuDriverRestart.waiting")}
+                w="full"
+              >
+                {t("gpuDriverRestart.restartBtn")}
+              </Button>
+            </Box>
           </VStack>
 
           <Box w="full" mt={4} p={4} bg="blue.50" borderRadius="md" borderWidth="1px" borderColor="blue.200">

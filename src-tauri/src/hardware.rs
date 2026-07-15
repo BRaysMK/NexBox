@@ -313,6 +313,42 @@ struct PsDesktopMonitor {
     Availability: Option<u16>,
 }
 
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsWmiMonitorId {
+    UserFriendlyName: Option<String>,
+}
+
+/// Check if a monitor name is a generic/placeholder (any language variant)
+fn is_generic_monitor_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.contains("generic")
+        || lower.contains("即插即用")
+        || lower.contains("通用")
+        || lower.contains("pnp")
+        || lower.contains("standard monitor")
+        || lower.contains("digital display")
+        || lower.contains("analog display")
+}
+
+/// Query real monitor model names from EDID via WmiMonitorID (root\wmi namespace)
+fn query_edid_monitor_names() -> Vec<String> {
+    let cmd = "ConvertTo-Json -Compress @(Get-CimInstance -Namespace root\\wmi WmiMonitorID | ForEach-Object { $friendly = ''; if ($_.UserFriendlyNameLength -gt 0) { $arr = @($_.UserFriendlyName); $max = [Math]::Min($arr.Count, $_.UserFriendlyNameLength); for ($i = 0; $i -lt $max; $i++) { $c = [char]$arr[$i]; if ($c -eq [char]0) { break } $friendly += $c } }; [PSCustomObject]@{ UserFriendlyName = $friendly.Trim() } })";
+
+    match run_powershell::<PsWmiMonitorId>(cmd) {
+        Ok(results) => {
+            results
+                .into_iter()
+                .map(|m| m.UserFriendlyName.unwrap_or_default())
+                .collect()
+        }
+        Err(e) => {
+            log::warn!("EDID 显示器名称查询失败: {}", e);
+            Vec::new()
+        }
+    }
+}
+
 // 静态硬件信息缓存（不会变化的部分）
 #[derive(Debug, Clone)]
 struct StaticHardwareInfo {
@@ -1168,7 +1204,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         match run_powershell::<PsDesktopMonitor>(monitor_cmd) {
             Ok(results) => {
                 log::info!("获取到{}个显示器信息", results.len());
-                results.into_iter().map(|m| {
+                let mut monitors: Vec<MonitorInfo> = results.into_iter().map(|m| {
                     MonitorInfo {
                         name: m.Name.unwrap_or_else(|| "未知".to_string()),
                         manufacturer: m.MonitorManufacturerName.unwrap_or_else(|| "未知".to_string()),
@@ -1179,7 +1215,32 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                         status: m.Status.unwrap_or_else(|| "未知".to_string()),
                         availability: m.Availability,
                     }
-                }).collect::<Vec<MonitorInfo>>()
+                }).collect::<Vec<MonitorInfo>>();
+
+                // EDID 回退：如果显示器名称是通用的（如"通用即插即用显示器"），
+                // 尝试从 EDID (WmiMonitorID) 获取真实型号
+                let has_generic = monitors.iter().any(|m| is_generic_monitor_name(&m.name));
+                if has_generic {
+                    log::info!("检测到通用显示器名称，尝试从 EDID 获取真实型号...");
+                    let edid_names = query_edid_monitor_names();
+                    if !edid_names.is_empty() {
+                        for (i, m) in monitors.iter_mut().enumerate() {
+                            if is_generic_monitor_name(&m.name) {
+                                if let Some(edid_name) = edid_names.get(i) {
+                                    if !edid_name.is_empty() {
+                                        log::info!("显示器[{}]: EDID 替换 '{}' -> '{}'", i, m.name, edid_name);
+                                        m.name = edid_name.clone();
+                                    }
+                                } else if edid_names.len() == 1 && !edid_names[0].is_empty() {
+                                    log::info!("显示器[{}]: EDID 替换(单结果) '{}' -> '{}'", i, m.name, edid_names[0]);
+                                    m.name = edid_names[0].clone();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                monitors
             }
             Err(e) => {
                 if let Ok(mut errs) = errors_monitor.lock() {

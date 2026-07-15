@@ -113,6 +113,14 @@ export default function DesktopLyricsPage() {
     };
   }, [isLocked]);
 
+  // 解锁时，解锁按钮窗口消失但光标已在桌面歌词窗口内，
+  // mouseenter 不会触发（光标没有跨窗口边界），需要手动显示控制栏
+  useEffect(() => {
+    if (!isLocked) {
+      setIsHovered(true);
+    }
+  }, [isLocked]);
+
   // 监听独立解锁按钮窗口的点击事件
   useEffect(() => {
     const setup = async () => {

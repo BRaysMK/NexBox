@@ -31,6 +31,7 @@ interface KaraokeLyricsViewProps {
   subTextColor: string;
   scrollbarSx: Record<string, unknown>;
   audioRef?: HTMLAudioElement | null;
+  isPlaying: boolean;
 }
 
 /**
@@ -56,6 +57,7 @@ function KaraokeLyricsViewInner({
   subTextColor,
   scrollbarSx,
   audioRef,
+  isPlaying,
 }: KaraokeLyricsViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -193,6 +195,7 @@ function KaraokeLyricsViewInner({
                   line={line}
                   nextLine={lines[idx + 1]}
                   isActive={isActive}
+                  isPlaying={isPlaying}
                   fontSize={fontSize}
                   activeColor={activeColor}
                   highlightColor={highlightColor}

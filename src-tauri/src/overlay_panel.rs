@@ -809,7 +809,7 @@ mod win32 {
         let dpi_scale = dpi_x as f32 / 96.0;
 
         let logical_width = calculate_window_width(settings);
-        let logical_height = if settings.style == "dynamic_island" { 36 } else { 28 };
+        let logical_height = 28;
         let physical_width = (logical_width as f32 * dpi_scale) as i32;
         let physical_height = (logical_height as f32 * dpi_scale) as i32;
 
@@ -819,7 +819,7 @@ mod win32 {
         } else {
             let screen_width = GetSystemMetrics(SM_CXSCREEN);
             let default_x = (screen_width - physical_width) / 2;
-            let default_y = if settings.style == "dynamic_island" { 4 } else { 0 };
+            let default_y = 0;
             (default_x, default_y)
         };
 
@@ -1271,240 +1271,6 @@ mod win32 {
         DeleteObject(hfont as _);
     }
 
-    pub unsafe fn draw_overlay_content_dynamic_island(
-        hwnd: HWND,
-        settings: &super::OverlaySettings,
-        data: &super::OverlayHardwareData,
-    ) {
-        let dpi_scale = {
-            let dc = GetDC(hwnd);
-            let dpi = if dc.is_null() { 96 } else { GetDeviceCaps(dc, 88) };
-            if !dc.is_null() {
-                ReleaseDC(hwnd, dc);
-            }
-            dpi as f32 / 96.0
-        };
-
-        let hfont = create_compatible_font(dpi_scale, &settings.font);
-        if hfont.is_null() {
-            return;
-        }
-
-        // Build a temp DC just for measurement
-        let temp_dc = GetDC(ptr::null_mut());
-        let mut items = build_display_items(settings, data);
-        let padding = (16.0 * dpi_scale) as i32;
-        let item_gap = (16.0 * dpi_scale) as i32;
-        let content_width = measure_and_layout_items(temp_dc, hfont, &mut items, dpi_scale);
-        ReleaseDC(ptr::null_mut(), temp_dc);
-        let sep_count = if items.len() > 1 { items.len() as i32 - 1 } else { 0 };
-        let total_content_width = content_width + sep_count * item_gap + padding * 2;
-        let logical_height = 36;
-        let physical_height = (logical_height as f32 * dpi_scale) as i32;
-
-        let dib_width = total_content_width;
-        let dib_height = physical_height;
-
-        // --- Create 32-bit ARGB DIB section (like crosshair) ---
-        let screen_dc = GetDC(ptr::null_mut());
-        let mut bmi: BITMAPINFO = std::mem::zeroed();
-        bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
-        bmi.bmiHeader.biWidth = dib_width;
-        bmi.bmiHeader.biHeight = -dib_height;
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 32;
-        bmi.bmiHeader.biCompression = BI_RGB;
-
-        let mut bits: *mut std::ffi::c_void = ptr::null_mut();
-        let hbitmap = CreateDIBSection(screen_dc, &bmi, DIB_RGB_COLORS, &mut bits, ptr::null_mut(), 0);
-        ReleaseDC(ptr::null_mut(), screen_dc);
-
-        if hbitmap.is_null() {
-            DeleteObject(hfont as _);
-            return;
-        }
-
-        let mem_dc = CreateCompatibleDC(ptr::null_mut());
-        let old_bmp = SelectObject(mem_dc, hbitmap as HGDIOBJ);
-
-        // --- GDI+ anti-aliased rounded rect background ---
-        let mut graphics: *mut GpGraphics = ptr::null_mut();
-        if GdipCreateFromHDC(mem_dc, &mut graphics) != 0 {
-            SelectObject(mem_dc, old_bmp);
-            DeleteObject(hbitmap as HGDIOBJ);
-            DeleteDC(mem_dc);
-            DeleteObject(hfont as _);
-            return;
-        }
-
-        GdipSetSmoothingMode(graphics, SmoothingModeAntiAlias);
-
-        // Clear to fully transparent
-        let mut clear_brush: *mut GpSolidFill = ptr::null_mut();
-        GdipCreateSolidFill(0x00000000, &mut clear_brush);
-        GdipFillRectangle(graphics, clear_brush as *mut GpBrush, 0.0, 0.0, dib_width as f32, dib_height as f32);
-        GdipDeleteBrush(clear_brush as *mut GpBrush);
-
-        // Draw rounded rect with GDI+ (proper per-pixel alpha anti-aliasing)
-        let bg_argb: u32 = ((settings.opacity as u32) << 24) | 0x00111111;
-        let corner_r = dib_height as f32 * 0.5;
-        let mut bg_brush: *mut GpSolidFill = ptr::null_mut();
-        GdipCreateSolidFill(bg_argb, &mut bg_brush);
-
-        let mut path: *mut GpPath = ptr::null_mut();
-        GdipCreatePath(FillModeAlternate, &mut path);
-        if !path.is_null() {
-            let w = dib_width as f32;
-            let h = dib_height as f32;
-            let r = corner_r;
-            GdipAddPathArc(path, 0.0, 0.0, r * 2.0, r * 2.0, 180.0, 90.0);
-            GdipAddPathLine(path, r, 0.0, w - r, 0.0);
-            GdipAddPathArc(path, w - r * 2.0, 0.0, r * 2.0, r * 2.0, 270.0, 90.0);
-            GdipAddPathLine(path, w, r, w, h - r);
-            GdipAddPathArc(path, w - r * 2.0, h - r * 2.0, r * 2.0, r * 2.0, 0.0, 90.0);
-            GdipAddPathLine(path, w - r, h, r, h);
-            GdipAddPathArc(path, 0.0, h - r * 2.0, r * 2.0, r * 2.0, 90.0, 90.0);
-            GdipAddPathLine(path, 0.0, h - r, 0.0, r);
-            GdipClosePathFigure(path);
-            GdipFillPath(graphics, bg_brush as *mut GpBrush, path);
-            GdipDeletePath(path);
-        }
-        GdipDeleteBrush(bg_brush as *mut GpBrush);
-        GdipDeleteGraphics(graphics);
-
-        // --- Draw text using GDI ---
-        let old_font = SelectObject(mem_dc, hfont as _);
-        SetBkMode(mem_dc, TRANSPARENT as i32);
-
-        let gap = (10.0 * dpi_scale) as i32;
-        let mut current_x: i32 = padding;
-        let win_height_i32 = dib_height;
-
-        for (i, item) in items.iter().enumerate() {
-            if i > 0 {
-                current_x += item_gap;
-            }
-
-            if !item.label.is_empty() {
-                let wide_label: Vec<u16> = item.label.encode_utf16().chain(std::iter::once(0)).collect();
-                let mut label_rect = RECT {
-                    left: current_x,
-                    top: 0,
-                    right: current_x + item.label_width,
-                    bottom: win_height_i32,
-                };
-                SetTextColor(mem_dc, 0x00FFFFFF);
-                DrawTextW(
-                    mem_dc,
-                    wide_label.as_ptr(),
-                    (wide_label.len() - 1) as i32,
-                    &mut label_rect,
-                    DT_RIGHT | DT_VCENTER | DT_SINGLELINE,
-                );
-            }
-
-            let value_x = if item.label.is_empty() {
-                current_x
-            } else {
-                current_x + item.label_width + gap
-            };
-            let wide_value: Vec<u16> = item.value.encode_utf16().chain(std::iter::once(0)).collect();
-            let mut value_rect = RECT {
-                left: value_x,
-                top: 0,
-                right: value_x + item.value_width,
-                bottom: win_height_i32,
-            };
-
-            let mut color: u32 = 0x00FFFFFF;
-            if let Some(custom_color) = item.custom_color {
-                color = custom_color;
-            } else if !item.label.is_empty() && !item.value.contains("--") {
-                let mut num_str = String::new();
-                for ch in item.value.chars() {
-                    if ch.is_ascii_digit() || ch == '.' {
-                        num_str.push(ch);
-                    } else if !num_str.is_empty() {
-                        break;
-                    }
-                }
-                if !num_str.is_empty() {
-                    if let Ok(nf) = num_str.parse::<f32>() {
-                        let nv = nf as i32;
-                        if nv < 50 {
-                            color = 0x0000FF00;
-                        } else if nv < 80 {
-                            color = 0x0000FFFF;
-                        } else {
-                            color = 0x000000FF;
-                        }
-                    }
-                }
-            }
-
-            SetTextColor(mem_dc, color);
-            DrawTextW(
-                mem_dc,
-                wide_value.as_ptr(),
-                (wide_value.len() - 1) as i32,
-                &mut value_rect,
-                DT_LEFT | DT_VCENTER | DT_SINGLELINE,
-            );
-
-            current_x += item.total_width;
-        }
-
-        SelectObject(mem_dc, old_font);
-
-        // Fix alpha for text pixels: GDI sets RGB but alpha stays 0
-        if !bits.is_null() {
-            let pixels = std::slice::from_raw_parts_mut(
-                bits as *mut u32,
-                (dib_width * dib_height) as usize,
-            );
-            for pixel in pixels.iter_mut() {
-                let alpha = (*pixel >> 24) & 0xFF;
-                let rgb = *pixel & 0x00FFFFFF;
-                if alpha == 0 && rgb != 0 {
-                    *pixel = 0xFF000000 | rgb;
-                }
-            }
-        }
-
-        // --- Position and composite via UpdateLayeredWindow ---
-        let screen_width = GetSystemMetrics(SM_CXSCREEN);
-        let default_x = (screen_width - dib_width) / 2;
-        let use_x = settings.position_x.unwrap_or(default_x);
-        let use_y = settings.position_y.unwrap_or(4);
-
-        let ppt_dst = POINT { x: use_x, y: use_y };
-        let psize = SIZE { cx: dib_width, cy: dib_height };
-        let ppt_src = POINT { x: 0, y: 0 };
-        let blend = BLENDFUNCTION {
-            BlendOp: AC_SRC_OVER as u8,
-            BlendFlags: 0,
-            SourceConstantAlpha: 255,
-            AlphaFormat: AC_SRC_ALPHA as u8,
-        };
-
-        UpdateLayeredWindow(
-            hwnd,
-            ptr::null_mut(),
-            &ppt_dst,
-            &psize,
-            mem_dc,
-            &ppt_src,
-            0,
-            &blend,
-            ULW_ALPHA,
-        );
-
-        SelectObject(mem_dc, old_bmp);
-        DeleteObject(hbitmap as HGDIOBJ);
-        DeleteDC(mem_dc);
-        DeleteObject(hfont as _);
-    }
-
     pub unsafe extern "system" fn window_proc(
         hwnd: HWND,
         msg: u32,
@@ -1536,11 +1302,7 @@ mod win32 {
                 let data = super::collect_hardware_data();
                 *super::CURRENT_HARDWARE_DATA.lock().unwrap() = Some(data.clone());
                 let settings = super::get_or_init_settings();
-                if settings.style == "dynamic_island" {
-                    draw_overlay_content_dynamic_island(hwnd, &settings, &data);
-                } else {
-                    draw_overlay_content(hwnd, &settings, &data);
-                }
+                draw_overlay_content(hwnd, &settings, &data);
                 0
             }
             WM_NCHITTEST => {
@@ -1654,11 +1416,7 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
                     OVERLAY_HANDLE.store(hwnd, Ordering::SeqCst);
                     crate::game_fps::set_overlay_hwnd(hwnd as u64);
 
-                    if settings.style == "dynamic_island" {
-                        win32::draw_overlay_content_dynamic_island(hwnd, &settings, &CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default());
-                    } else {
-                        win32::draw_overlay_content(hwnd, &settings, &CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default());
-                    }
+                    win32::draw_overlay_content(hwnd, &settings, &CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default());
 
                     SetTimer(hwnd, 1, 100, None);
                     win32::install_topmost_guard();
@@ -1822,11 +1580,7 @@ pub async fn update_overlay_settings(settings: OverlaySettings) -> Result<Overla
                 if !hwnd.is_null() {
                     let data = CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default();
                     let current_settings = CURRENT_SETTINGS.lock().unwrap().clone().unwrap_or_default();
-                    if new_style == "dynamic_island" {
-                        win32::draw_overlay_content_dynamic_island(hwnd, &current_settings, &data);
-                    } else {
-                        win32::draw_overlay_content(hwnd, &current_settings, &data);
-                    }
+                    win32::draw_overlay_content(hwnd, &current_settings, &data);
                 }
             }
         }

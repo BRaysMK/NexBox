@@ -768,35 +768,6 @@ export default function OverlayPanelPage() {
                   </Text>
                 </VStack>
               </Box>
-              <Box
-                as="button"
-                onClick={() => updateSetting("style", "dynamic_island")}
-                bg={settings.style === "dynamic_island" ? hexToRgba(getActiveColor(), 0.12) : "transparent"}
-                border="2px solid"
-                borderColor={settings.style === "dynamic_island" ? getActiveColor() : "gray.600"}
-                borderRadius="xl"
-                p={3}
-                cursor="pointer"
-                textAlign="center"
-                transition="all 0.2s"
-                _hover={{
-                  borderColor: getActiveColor(),
-                  bg: settings.style === "dynamic_island" ? hexToRgba(getActiveColor(), 0.12) : hexToRgba(getActiveColor(), 0.08),
-                }}
-              >
-                <VStack spacing={2}>
-                  <Box
-                    w="64px"
-                    h="20px"
-                    bg="gray.500"
-                    borderRadius="full"
-                    opacity={0.6}
-                  />
-                  <Text fontSize="sm" fontWeight="medium" color={subTextColor}>
-                    {t("overlayPanel.styles.dynamicIsland") || "灵动岛"}
-                  </Text>
-                </VStack>
-              </Box>
             </VStack>
 
             {/* 右侧：字体选择 + 不透明度 */}

@@ -1,4 +1,4 @@
-﻿﻿import {
+﻿import {
   Box,
   Flex,
   Grid,
@@ -542,6 +542,38 @@ function OfficialToolSection({
     });
   };
 
+  const handleOpenWallpaper = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://www.wallpaperengine.io/zh-hans");
+    }).catch(() => {
+      window.open("https://www.wallpaperengine.io/zh-hans", "_blank");
+    });
+  };
+
+  const handleOpenTieZ = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://tiez.name666.top/zh/");
+    }).catch(() => {
+      window.open("https://tiez.name666.top/zh/", "_blank");
+    });
+  };
+
+  const handleOpenPyisland = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://pyisland.com/");
+    }).catch(() => {
+      window.open("https://pyisland.com/", "_blank");
+    });
+  };
+
+  const handleOpenMR = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://mineradio.cn/");
+    }).catch(() => {
+      window.open("https://mineradio.cn/", "_blank");
+    });
+  };
+
   return (
     <Box mb={8}>
       <HStack mb={4} spacing={3}>
@@ -881,6 +913,150 @@ function OfficialToolSection({
               </HStack>
               <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
                 {t("tools.obsDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenWallpaper}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("wallpaper") || ""}
+                alt={"Wallpaper Engine"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  Wallpaper Engine
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                在 Windows 桌面上使用精美绝伦的动态壁纸。
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenTieZ}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("tiez") || ""}
+                alt={"TieZ"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  TieZ
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                开源美观剪切板工具
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenPyisland}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("pyisland") || ""}
+                alt={"Pyisland"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  Pyisland
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                Windows 灵动岛新时代 — 打造现代控制中心
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenMR}>
+          <VStack align={"start"} spacing={3}>
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("mr") || ""}
+                alt={"Mineradio"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  Mineradio
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                随音乐律动的沉浸式可视化音乐播放器，把每一首歌，变成一场只属于你的私人视觉演出。
               </Text>
             </Box>
           </VStack>

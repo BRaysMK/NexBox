@@ -48,7 +48,6 @@
         "resolutionConverter": "解析度換算",
         "dlssPreset": "三角洲DLSS設定",
         "epicFree": "喜加一",
-        "dynamicIsland": "動態島",
     "diskHealth": "磁碟健康",
 "screenRecord": "螢幕錄製"
     },
@@ -622,7 +621,6 @@
     "appearance": "外觀設定",
     "styles": "懸浮框樣式",
     "styles.default": "預設",
-    "styles.dynamicIsland": "動態島",
     "opacity": "透明度",
     "startFailed": "啟動失敗",
     "stopFailed": "停止失敗",
@@ -804,7 +802,6 @@
     "resolutionConverterDesc": "換算不同解析度下的畫面比例",
     "shaderCacheDesc": "清理 NVIDIA/AMD 著色器快取釋放磁碟空間",
     "dlssPresetDesc": "切換DLSS模型預設以優化遊戲畫質",
-        "dynamicIslandDesc": "螢幕頂部懸浮島，顯示網速/硬體/音樂/通知",
     "diskHealthDesc": "檢測硬碟健康狀態與SMART資訊",
     "screenRecordDesc": "高效能螢幕錄製（硬體編碼）"
     },
@@ -1093,6 +1090,17 @@
       "optimization": "優化",
       "thirdpartyTools": "第三方工具"
     }
+  },
+  "gpuDriverRestart": {
+    "pageTitle": "重啟顯示卡驅動",
+    "pageDesc": "模擬 Win+Ctrl+Shift+B 快速鍵重啟顯示卡驅動（網咖使用者適用）",
+    "detailDesc": "點擊按鈕將向系統發送重啟顯示卡驅動的指令，效果等同於按下 Win+Ctrl+Shift+B。螢幕會短暫黑屏或閃爍，幾秒後恢復正常。此功能無需管理員權限。",
+    "restartBtn": "重啟顯示卡驅動",
+    "success": "已發送重啟指令，螢幕即將短暫閃爍",
+    "error": "重啟顯示卡驅動失敗",
+    "waiting": "正在執行重啟指令，請稍候...",
+    "warningTitle": "請注意",
+    "warningDesc": "重啟顯示卡驅動會導致螢幕短暫黑屏或閃爍，請先確認沒有正在進行的重要操作（如遊戲、檔案編輯等）。此功能適用於顯示卡顯示異常、花屏、卡頓等情形，僅限 Windows 系統使用。"
   },
   "closeDialog": {
     "title": "關閉確認",

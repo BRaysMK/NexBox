@@ -132,6 +132,18 @@ const rangeSliderSx = {
   },
 };
 
+/**
+ * 生成滑块进度背景的 inline style。
+ * 必须用 style 而非 sx 传递动态 background，否则 Emotion 会为
+ * 每个唯一百分比值生成一条新 CSS 规则，播放越久 <style> 标签越大，
+ * 浏览器样式重计算越慢 —— 这是"播放越久越卡"的根因。
+ */
+function sliderBgStyle(activeColor: string, pct: number, trackBg: string) {
+  return {
+    background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${pct}%, ${trackBg} ${pct}%, ${trackBg} 100%)`,
+  };
+}
+
 // ── 圆角播放控制图标 ──
 // 用 SVG path + Q 曲线实现圆角三角形，避免有棱有角
 
@@ -368,9 +380,9 @@ const ProgressSection = memo(function ProgressSection({
         tabIndex={-1}
         aria-hidden="true"
         flex={1}
+        style={sliderBgStyle(activeColor, localDuration ? (localCurrentTime / localDuration) * 100 : 0, sliderTrackBg)}
         sx={{
           ...rangeSliderSx,
-          background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
           "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
           "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
           "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
@@ -791,6 +803,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             subTextColor={effectiveSubTextColor}
             scrollbarSx={memoScrollbarSx}
             audioRef={audioRef}
+            isPlaying={isPlaying}
           />
         </VStack>
       </HStack>
@@ -909,7 +922,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               icon={volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
               size="md"
               variant="ghost"
-              onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
+              onClick={() => {
+                const s = useMusicStore.getState();
+                s.setVolume(volume === 0 ? s.prevVolume : 0);
+              }}
               sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
             />
             <Box
@@ -922,6 +938,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               value={volume}
               onChange={(e) => useMusicStore.getState().setVolume(parseFloat((e.target as HTMLInputElement).value))}
               tabIndex={-1}
+              style={sliderBgStyle(activeColor, volume * 100, sliderTrackBg)}
               sx={{
                 ...rangeSliderSx,
                 position: "absolute",
@@ -932,7 +949,6 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 opacity: 0,
                 ml: "0px",
                 transition: "width 0.25s ease, opacity 0.2s ease, margin-left 0.25s ease",
-                background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${volume * 100}%, ${sliderTrackBg} ${volume * 100}%, ${sliderTrackBg} 100%)`,
                 cursor: "pointer",
                 "&::-webkit-slider-thumb": {
                   ...rangeSliderSx["&::-webkit-slider-thumb"],
@@ -981,9 +997,9 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                     onChange={(e) => useMusicStore.getState().setLyricsFontSize(parseInt((e.target as HTMLInputElement).value))}
                     tabIndex={-1}
                     w="60px"
+                    style={sliderBgStyle(activeColor, ((lyricsFontSize - 17) / 11) * 100, sliderTrackBg)}
                     sx={{
                       ...rangeSliderSx,
-                      background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${((lyricsFontSize - 17) / 11) * 100}%, ${sliderTrackBg} ${((lyricsFontSize - 17) / 11) * 100}%, ${sliderTrackBg} 100%)`,
                       "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
                       "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
                       "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
@@ -1248,9 +1264,9 @@ const PlayerProgress = memo(function PlayerProgress({
         tabIndex={-1}
         aria-hidden="true"
         flex={1}
+        style={sliderBgStyle(activeColor, localDuration ? (localCurrentTime / localDuration) * 100 : 0, sliderTrackBg)}
         sx={{
           ...rangeSliderSx,
-          background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} ${localDuration ? (localCurrentTime / localDuration) * 100 : 0}%, ${sliderTrackBg} 100%)`,
           "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
           "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: activeColor },
           "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
@@ -1442,7 +1458,10 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
                 icon={volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 size="sm"
                 variant="ghost"
-                onClick={() => useMusicStore.getState().setVolume(volume === 0 ? 0.7 : 0)}
+                onClick={() => {
+                  const s = useMusicStore.getState();
+                  s.setVolume(volume === 0 ? s.prevVolume : 0);
+                }}
               />
             </Tooltip>
             <Box
@@ -1455,9 +1474,9 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
             onChange={(e) => useMusicStore.getState().setVolume(parseFloat((e.target as HTMLInputElement).value))}
             tabIndex={-1}
             w="60px"
+            style={sliderBgStyle(activeColor, volume * 100, sliderTrackBg)}
             sx={{
               ...rangeSliderSx,
-              background: `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${volume * 100}%, ${sliderTrackBg} ${volume * 100}%, ${sliderTrackBg} 100%)`,
               "&::-webkit-slider-thumb": {
                 ...rangeSliderSx["&::-webkit-slider-thumb"],
                 background: activeColor,
@@ -2172,20 +2191,18 @@ export default function MusicPage() {
   const handleArtistClick = useCallback((artist: Artist) => {
     previousViewRef.current = viewMode;
     const patched = { ...artist };
-    // 从歌曲卡片进入时 Artist 可能没有头像，用 album cover 或搜索结果补齐
-    if (!patched.pic_url) {
-      const state = useMusicStore.getState();
-      // 尝试从搜索结果中找同名歌手获取头像
-      const match = state.artistSearchResults.find(
-        (a) => a.id === artist.id || a.name === artist.name
-      );
-      if (match?.pic_url) patched.pic_url = match.pic_url;
-      // 再尝试用当前歌曲的封面
-      else if (state.currentSong?.cover) patched.pic_url = state.currentSong.cover;
-    }
     useMusicStore.setState({ selectedArtist: patched });
     storeActions.loadArtistSongs(patched.id || "");
     setViewMode("artistDetail");
+    // 歌手可能没有头像（从歌曲卡片进入时），异步搜索补齐
+    if (!patched.pic_url && patched.name) {
+      invoke<Artist[]>("music_artist_search", { keywords: patched.name, limit: 10 }).then((results) => {
+        const match = results.find((a) => a.id === artist.id || a.name === artist.name);
+        if (match?.pic_url) {
+          useMusicStore.setState({ selectedArtist: { ...patched, pic_url: match.pic_url } });
+        }
+      }).catch(() => {});
+    }
   }, [storeActions, viewMode]);
 
 // ── 我的歌单点击：在左侧面板切换到曲目视图 ──

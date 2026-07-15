@@ -28,7 +28,6 @@ import {
   Tv2,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { IslandIcon } from "@/components/special/island-icon";
 
 export type SearchCategory = "page" | "builtin-tool" | "optimization" | "thirdparty-tool";
 
@@ -189,14 +188,6 @@ export const searchIndex: SearchItem[] = [
       category: "builtin-tool",
       keywords: ["dlss", "预设", "preset", "三角洲", "delta", "force", "nvidia", "模型"],
     },
-    {
-    id: "dynamic-island",
-    nameKey: "sidebar.dynamicIsland",
-    path: "/dynamic-island",
-    icon: IslandIcon,
-    category: "builtin-tool",
-    keywords: ["灵动岛", "dynamic", "island", "悬浮", "网速", "监控", "音乐", "通知", "widget"],
-  },
   {
     id: "memory-limit",
     nameKey: "optimization.memoryLimit.title",

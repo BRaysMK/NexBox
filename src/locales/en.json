@@ -49,7 +49,6 @@
     "gpuRename": "GPU Rename",
     "dlssPreset": "Delta Force DLSS Settings",
     "epicFree": "Epic Free Games",
-    "dynamicIsland": "Dynamic Island",
     "diskHealth": "Disk Health",
 "screenRecord": "Screen Record"
   },
@@ -771,7 +770,6 @@
     "appearance": "Appearance Settings",
     "styles": "Overlay Style",
     "styles.default": "Default",
-    "styles.dynamicIsland": "Dynamic Island",
     "opacity": "Opacity",
     "startFailed": "Failed to start",
     "stopFailed": "Failed to stop",
@@ -967,7 +965,6 @@
     "resolutionConverterDesc": "Convert aspect ratios at different resolutions",
     "shaderCacheDesc": "Clean up NVIDIA/AMD shader cache to free disk space",
     "dlssPresetDesc": "Switch DLSS model presets to optimize game graphics",
-    "dynamicIslandDesc": "Floating island on screen, showing network speed/hardware/music/notifications",
     "diskHealthDesc": "Check disk health status and SMART information",
     "screenRecordDesc": "High-performance screen recording (hardware encoding)"
   },
@@ -1401,6 +1398,17 @@
     "warningTitle": "\u26a0\ufe0f Warning",
     "warningDesc": "After disabling Windows Update, you will no longer receive security patches and feature updates. It is recommended to manually check for updates periodically or re-enable when needed."
   },
+  "gpuDriverRestart": {
+    "pageTitle": "Restart Graphics Driver",
+    "pageDesc": "Simulate Win+Ctrl+Shift+B to restart graphics driver (for internet cafe users)",
+    "detailDesc": "Click the button to send a graphics driver restart command to the system, equivalent to pressing Win+Ctrl+Shift+B. The screen will briefly go black or flicker and return to normal within seconds. No administrator privileges required.",
+    "restartBtn": "Restart Graphics Driver",
+    "success": "Restart command sent, screen will flicker briefly",
+    "error": "Failed to restart graphics driver",
+    "waiting": "Executing restart command, please wait...",
+    "warningTitle": "Note",
+    "warningDesc": "Restarting the graphics driver will cause a brief black screen or flicker. Please ensure no important tasks (such as gaming or file editing) are in progress. Suitable for display anomalies, screen artifacts, stuttering, etc. Windows only."
+  },
   "shaderCache": {
     "title": "Shader Cache Cleanup",
     "vendorTitle": "GPU Vendor",
@@ -1480,9 +1488,6 @@
     "filter": "Filter",
     "filterToggle": "Toggle Display Filter",
     "filterToggleDesc": "Use shortcut to enable or disable the display filter",
-    "island": "Dynamic Island",
-    "islandToggle": "Toggle Dynamic Island",
-    "islandToggleDesc": "Use shortcut to show or hide the Dynamic Island",
     "saved": "Hotkey saved"
   },
   "diskHealth": {

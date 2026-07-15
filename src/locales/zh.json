@@ -50,7 +50,6 @@
     "resolutionConverter": "分辨率管理",
     "dlssPreset": "三角洲DLSS设置",
     "epicFree": "喜加一",
-    "dynamicIsland": "灵动岛",
     "nvidiaDriver": "显卡设置（仅NVIDIA）",
     "diskHealth": "磁盘健康",
 "screenRecord": "屏幕录制"
@@ -633,7 +632,6 @@
     "appearance": "外观设置",
     "styles": "悬浮框样式",
     "styles.default": "默认",
-    "styles.dynamicIsland": "灵动岛",
     "opacity": "透明度",
     "startFailed": "启动失败",
     "stopFailed": "停止失败",
@@ -829,7 +827,6 @@
     "resolutionConverterDesc": "管理显示器分辨率与画面比例",
     "shaderCacheDesc": "强制清理 NVIDIA/AMD 着色器缓存释放磁盘空间",
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
-    "dynamicIslandDesc": "屏幕顶部灵动岛，显示网速/硬件/音乐/通知",
     "nvidiaDriverDesc": "通过 NVAPI 直接控制 NVIDIA 驱动图形设置",
     "diskHealthDesc": "检测硬盘健康状态与SMART信息",
 "screenRecordDesc": "高性能屏幕录制（硬件编码）",
@@ -1276,6 +1273,17 @@
     "warningTitle": "⚠️ 请注意",
     "warningDesc": "关闭 Windows 更新后将不再接收安全补丁和功能更新。建议定期手动检查更新，或在需要时再开启。"
   },
+  "gpuDriverRestart": {
+    "pageTitle": "重启显卡驱动",
+    "pageDesc": "模拟 Win+Ctrl+Shift+B 快捷键重启显卡驱动（网吧用户适用）",
+    "detailDesc": "点击按钮将向系统发送重启显卡驱动的指令，效果等同于按下 Win+Ctrl+Shift+B。屏幕会短暂黑屏或闪烁，几秒后恢复正常。此功能无需管理员权限。",
+    "restartBtn": "重启显卡驱动",
+    "success": "已发送重启指令，屏幕即将短暂闪烁",
+    "error": "重启显卡驱动失败",
+    "waiting": "正在执行重启指令，请稍候...",
+    "warningTitle": "请注意",
+    "warningDesc": "重启显卡驱动会导致屏幕短暂黑屏或闪烁，请先确认没有正在进行的重要操作（如游戏、文件编辑等）。此功能适用于显卡显示异常、花屏、卡顿等情形，仅限 Windows 系统使用。"
+  },
   "networkOptimize": {
     "pageTitle": "网络优化",
     "pageDesc": "优化网络参数，配置 DNS 提升解析速度",
@@ -1506,9 +1514,6 @@
     "filter": "滤镜",
     "filterToggle": "切换滤镜",
     "filterToggleDesc": "使用快捷键开启或关闭滤镜",
-    "island": "灵动岛",
-    "islandToggle": "切换灵动岛",
-    "islandToggleDesc": "使用快捷键显示或隐藏灵动岛",
     "saved": "快捷键已保存"
   },
   "diskHealth": {

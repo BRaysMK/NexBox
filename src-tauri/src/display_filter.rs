@@ -6,6 +6,7 @@ use std::time::Duration;
 use std::path::PathBuf;
 use std::fs;
 use std::io::Read;
+use std::process::Command;
 use tauri::Emitter;
 
 // ─── Display enumeration ───
@@ -109,6 +110,39 @@ fn enumerate_displays_inner() -> Vec<DisplayInfo> {
         }
     }
 
+    // EDID 回退：EnumDisplayDevicesW 经常返回"通用即插即用显示器"，
+    // 导致 name 退化为 GDI 设备名（如 \\.\DISPLAY1）。
+    // 检测条件：名称以反斜杠开头（GDI 设备名）或包含通用显示器关键字
+    let is_fallback_name = |name: &str| -> bool {
+        if name.starts_with('\\') { return true; }
+        let prefix = name.split(" (").next().unwrap_or(name);
+        is_generic_monitor_name(prefix)
+    };
+    if data.displays.iter().any(|d| is_fallback_name(&d.name)) {
+        log::info!("检测到通用显示器名称，尝试从 EDID 获取真实型号...");
+        let edid_names = query_edid_monitor_names();
+        log::info!("EDID 查询结果: {} 个", edid_names.len());
+        if !edid_names.is_empty() {
+            for (i, d) in data.displays.iter_mut().enumerate() {
+                if is_fallback_name(&d.name) {
+                    if let Some(edid_name) = edid_names.get(i) {
+                        if !edid_name.is_empty() {
+                            let new_name = format!("{} ({}x{})", edid_name, d.width, d.height);
+                            log::info!("显示器[{}]: EDID 替换 '{}' -> '{}'", i, d.name, new_name);
+                            d.name = new_name;
+                        }
+                    } else if edid_names.len() == 1 && !edid_names[0].is_empty() {
+                        let new_name = format!("{} ({}x{})", edid_names[0], d.width, d.height);
+                        log::info!("显示器[{}]: EDID 替换(单结果) '{}' -> '{}'", i, d.name, new_name);
+                        d.name = new_name;
+                    }
+                }
+            }
+        } else {
+            log::warn!("EDID 查询无结果，保持原始名称");
+        }
+    }
+
     data.displays
 }
 
@@ -175,6 +209,69 @@ fn get_monitor_model_name(device_name: &str) -> String {
     }
     
     String::new()
+}
+
+/// UTF-16LE + Base64 编码 PowerShell 脚本，绕过系统代码页问题
+fn encode_ps_command(script: &str) -> String {
+    let utf16: Vec<u8> = script
+        .encode_utf16()
+        .flat_map(|c| c.to_le_bytes())
+        .collect();
+    base64_encode(&utf16)
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b = [chunk[0] as u32, *chunk.get(1).unwrap_or(&0) as u32, *chunk.get(2).unwrap_or(&0) as u32];
+        let n = (b[0] << 16) | (b[1] << 8) | b[2];
+        out.push(CHARS[((n >> 18) & 0x3F) as usize] as char);
+        out.push(CHARS[((n >> 12) & 0x3F) as usize] as char);
+        out.push(if chunk.len() > 1 { CHARS[((n >> 6) & 0x3F) as usize] } else { b'=' } as char);
+        out.push(if chunk.len() > 2 { CHARS[(n & 0x3F) as usize] } else { b'=' } as char);
+    }
+    out
+}
+
+fn run_powershell(script: &str) -> Result<String, String> {
+    let full_script = format!(
+        "[Console]::OutputEncoding = [Text.Encoding]::UTF8; {}",
+        script
+    );
+    let encoded = encode_ps_command(&full_script);
+
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
+        .output()
+        .map_err(|e| format!("无法执行 PowerShell: {}", e))?;
+
+    if !output.status.success() {
+        return Ok(String::new());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// 通过 EDID (WmiMonitorID) 获取真实显示器型号
+fn query_edid_monitor_names() -> Vec<String> {
+    #[allow(non_snake_case)]
+    #[derive(serde::Deserialize)]
+    struct PsWmiMonitorId {
+        UserFriendlyName: Option<String>,
+    }
+
+    let cmd = "ConvertTo-Json -Compress @(Get-CimInstance -Namespace root\\wmi WmiMonitorID | ForEach-Object { $friendly = ''; if ($_.UserFriendlyNameLength -gt 0) { $arr = @($_.UserFriendlyName); $max = [Math]::Min($arr.Count, $_.UserFriendlyNameLength); for ($i = 0; $i -lt $max; $i++) { $c = [char]$arr[$i]; if ($c -eq [char]0) { break } $friendly += $c } }; [PSCustomObject]@{ UserFriendlyName = $friendly.Trim() } })";
+
+    let json_str = match run_powershell(cmd) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+
+    serde_json::from_str::<Vec<PsWmiMonitorId>>(&json_str)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| m.UserFriendlyName.unwrap_or_default())
+        .collect()
 }
 
 // ─── Per-display state ───

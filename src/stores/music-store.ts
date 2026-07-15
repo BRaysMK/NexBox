@@ -170,13 +170,14 @@ function startTimeSync() {
   if (timeSyncTimer) return;
   timeSyncTimer = setInterval(() => {
     const state = useMusicStore.getState();
-    if (state.audioRef && state.desktopLyricsVisible) {
+    // 仅桌面歌词可见且正在播放时同步时间，暂停时跳过以节省 CPU
+    if (state.audioRef && state.desktopLyricsVisible && state.isPlaying) {
       emit("desktop-lyrics:time", {
         currentTime: state.audioRef.currentTime,
         isPlaying: state.isPlaying,
       });
     }
-  }, 100);
+  }, 200);
 }
 export function stopTimeSync() {
   if (timeSyncTimer) {
@@ -265,6 +266,8 @@ async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalC
   }
 }
 
+let playSongSeq = 0;
+
 export const useMusicStore = create<MusicState>((set, get) => ({
   currentSong: null,
   isPlaying: false,
@@ -350,7 +353,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const dlBaseColor = await store.get<string>("desktopLyricsBaseColor");
       const dlLineCount = await store.get<1 | 2>("desktopLyricsLineCount");
       const dlLocked = await store.get<boolean>("desktopLyricsLocked");
-      if (vol != null) set({ volume: vol });
+      if (vol != null) set({ volume: vol, prevVolume: vol > 0 ? vol : 0.7 });
       if (mode) set({ playMode: mode });
       if (quality) set({ playbackQuality: quality });
       if (fontSize != null) set({ lyricsFontSize: fontSize });
@@ -538,6 +541,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     const audio = state.audioRef;
     if (!audio) return;
 
+    // 立即停止当前播放，防止旧歌在新 URL 获取期间播完并触发 ended → nextTrack 竞态
+    // 同时递增序列号，使任何正在飞行中的 playSong 调用被忽略
+    const mySeq = ++playSongSeq;
+    audio.pause();
+    audio.src = "";
+
     // 设置播放队列
     if (queue) {
       const idx = queue.findIndex((s) => s.id === song.id);
@@ -556,6 +565,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         quality: state.playbackQuality,
       });
 
+      // 检查是否有更新的 playSong 调用覆盖了本次请求
+      if (mySeq !== playSongSeq) return;
+
       if (!result.playable || !result.url) {
         console.warn("Cannot play:", result.message);
         set({ isPlaying: false });
@@ -563,9 +575,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       }
 
       const audioUrl = await getProxyAudioUrl(result.url, state.proxyPort);
+
+      if (mySeq !== playSongSeq) return;
+
       audio.src = audioUrl;
       audio.volume = state.volume;
       await audio.play();
+
+      if (mySeq !== playSongSeq) return;
+
       set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort, currentQuality: result.quality, currentBitrate: result.br });
       // 推送歌曲数据到桌面歌词
       if (get().desktopLyricsVisible) {
@@ -575,6 +593,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       // 异步加载歌词（不阻塞播放）
       get().loadLyrics(song.id);
     } catch (e) {
+      if (mySeq !== playSongSeq) return;
       console.error("Play failed:", e);
     }
   },

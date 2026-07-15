@@ -5,11 +5,30 @@
  * CSS 控制视觉显隐：默认半透明，hover 时完全显示。
  * 点击时调用 Rust 命令 unlock_lyrics 完成解锁流程。
  */
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Unlock } from "lucide-react";
 
 export default function LyricsUnlockBtnPage() {
+  // 确保窗口背景完全透明（该窗口设置了 transparent: true）
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const root = document.getElementById("root");
+    const prevHtmlBg = html.style.background;
+    const prevBodyBg = body.style.background;
+    const prevRootBg = root?.style.background;
+
+    html.style.background = "transparent";
+    body.style.background = "transparent";
+    if (root) root.style.background = "transparent";
+
+    return () => {
+      html.style.background = prevHtmlBg;
+      body.style.background = prevBodyBg;
+      if (root) root.style.background = prevRootBg || "";
+    };
+  }, []);
   const handleUnlock = useCallback(async () => {
     try {
       await invoke("unlock_lyrics");
