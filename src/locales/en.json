@@ -1028,8 +1028,8 @@
       "homeHardwareModelDesc": "Show a brief summary of CPU/GPU/RAM/Motherboard/Storage on the homepage",
       "searchBarLabel": "Search Bar",
       "searchBarDesc": "Show the global search bar in the title bar",
-      "feedbackLabel": "Feedback Banner",
-      "feedbackDesc": "Show feedback banner at the bottom of home page",
+      "feedbackLabel": "Image Carousel",
+      "feedbackDesc": "Show image carousel on the home page",
       "splash": "Animation",
       "splashLogoLabel": "Splash Logo",
       "splashLogoDesc": "Customize the logo image shown during startup",
@@ -1276,8 +1276,6 @@
       "shaderCacheDesc": "Force enable shader cache, reduce game stuttering"
     },
     "performance": {
-      "largeSysCache": "Enable Large System Cache",
-      "largeSysCacheDesc": "LargeSystemCache=1, suitable for 16GB+ RAM (requires reboot)",
       "intelTSX": "Enable Intel TSX",
       "intelTSXDesc": "Enable Transactional Synchronization Extensions (Intel only)",
       "mergeSvcHost": "Merge ServiceHost Processes",

@@ -811,6 +811,19 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         } else {
           await win.hide();
           stopTimeSync();
+          // 通知桌面歌词页面解锁并停止轮询，防止在隐藏窗口后仍显示解锁按钮
+          emit("desktop-lyrics:settings", {
+            fontSize: get().desktopLyricsFontSize,
+            highlightColor: get().desktopLyricsHighlightColor,
+            baseColor: get().desktopLyricsBaseColor,
+            lineCount: get().desktopLyricsLineCount,
+            isLocked: false,
+          });
+          try {
+            await invoke("hide_lyrics_unlock_btn");
+          } catch {
+            // ignore
+          }
         }
       }
     } catch (e) {

@@ -19,7 +19,7 @@ mod netease_lyrics;
 mod nvapi;
 mod optimization;
 mod overlay_panel;
-
+mod vertical_overlay;
 
 mod sensor;
 mod shader_cache;
@@ -357,6 +357,13 @@ pub fn run() {
         overlay_panel::reset_overlay_position,
         overlay_panel::run_pawnio_setup,
 
+        vertical_overlay::start_vertical_overlay,
+        vertical_overlay::stop_vertical_overlay,
+        vertical_overlay::save_vertical_overlay_position,
+        vertical_overlay::set_vertical_overlay_click_through,
+        vertical_overlay::reset_vertical_overlay_position,
+        vertical_overlay::resize_vertical_overlay,
+
         hardware_report::export_hardware_report,
         hardware_report::get_hardware_recording_status,
         hardware_report::clear_hardware_data,
@@ -442,6 +449,7 @@ pub fn run() {
                 hardware::cleanup_hardware_cache();
                 display_filter::cleanup();
                 overlay_panel::cleanup();
+                vertical_overlay::cleanup(app_handle);
                 crosshair::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);

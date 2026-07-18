@@ -896,8 +896,8 @@
       "homeHardwareModelDesc": "在主页显示 CPU/GPU/内存/主板/硬盘的型号摘要",
       "searchBarLabel": "搜索框",
       "searchBarDesc": "在标题栏显示全局搜索框",
-      "feedbackLabel": "问题反馈卡片",
-      "feedbackDesc": "在首页底部显示问题反馈卡片",
+      "feedbackLabel": "图片轮播",
+      "feedbackDesc": "在首页显示图片轮播",
       "splash": "动画",
       "splashLogoLabel": "启动动画 Logo",
       "splashLogoDesc": "自定义启动动画中显示的 Logo 图片",
@@ -1151,8 +1151,6 @@
       "shaderCacheDesc": "强制开启着色器缓存，减少游戏卡顿"
     },
     "performance": {
-      "largeSysCache": "启用大系统缓存",
-      "largeSysCacheDesc": "LargeSystemCache=1，适合 16GB+ 内存（需重启）",
       "intelTSX": "启用 Intel TSX",
       "intelTSXDesc": "启用事务性同步扩展，提升多线程性能（仅 Intel）",
       "mergeSvcHost": "合并 ServiceHost 进程",

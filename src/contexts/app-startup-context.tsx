@@ -86,6 +86,7 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
     { id: "fps", label: "FPS", enabled: true },
     { id: "cpu_temp", label: "CPU温度", enabled: false },
     { id: "cpu_usage", label: "CPU占用", enabled: true },
+    { id: "cpu_fan_speed", label: "CPU风扇转速", enabled: false },
     { id: "cpu_clock", label: "CPU频率", enabled: false },
     { id: "cpu_voltage", label: "CPU电压", enabled: false },
     { id: "cpu_power", label: "CPU功耗", enabled: false },
@@ -263,9 +264,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
       if (saved) {
         setOverlayHotkey(saved);
         await invoke("set_overlay_hotkey", { shortcut: saved });
-      } else {
-        await invoke("set_overlay_hotkey", { shortcut: DEFAULT_OVERLAY_HOTKEY });
       }
+      // 没有保存值则无需调用，Rust 端已用默认值初始化
     } catch (error) {
       console.error("Failed to load overlay hotkey:", error);
     }
@@ -288,9 +288,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
       if (saved) {
         setCrosshairHotkey(saved);
         await invoke("set_crosshair_hotkey", { shortcut: saved });
-      } else {
-        await invoke("set_crosshair_hotkey", { shortcut: DEFAULT_CROSSHAIR_HOTKEY });
       }
+      // 没有保存值则无需调用，Rust 端已用默认值初始化
     } catch (error) {
       console.error("Failed to load crosshair hotkey:", error);
     }
@@ -325,9 +324,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
       if (saved) {
         setFilterHotkey(saved);
         await invoke("set_filter_hotkey", { shortcut: saved });
-      } else {
-        await invoke("set_filter_hotkey", { shortcut: DEFAULT_FILTER_HOTKEY });
       }
+      // 没有保存值则无需调用，Rust 端已用默认值初始化
     } catch (error) {
       console.error("Failed to load filter hotkey:", error);
     }
@@ -347,17 +345,17 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSettingsRef = useRef<OverlaySettings | null>(null);
 
-  const saveOverlaySettings = async (settings: OverlaySettings) => {
-    setOverlaySettings(settings);
-    pendingSettingsRef.current = settings;
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-    }
-    saveTimerRef.current = setTimeout(async () => {
-      saveTimerRef.current = null;
-      const s = pendingSettingsRef.current;
-      if (s) {
-        invoke("update_overlay_settings", { settings: s });
+const saveOverlaySettings = async (settings: OverlaySettings) => {
+	setOverlaySettings(settings);
+	pendingSettingsRef.current = settings;
+	if (saveTimerRef.current) {
+	clearTimeout(saveTimerRef.current);
+	}
+	saveTimerRef.current = setTimeout(async () => {
+	saveTimerRef.current = null;
+	const s = pendingSettingsRef.current;
+	if (s) {
+	invoke("update_overlay_settings", { settings: s });
         try {
           await store.set("overlay-settings", s);
           await store.save();

@@ -40,6 +40,7 @@ const ITEM_ICONS: Record<string, React.FC<{ size?: number }>> = {
   cpu_clock: Clock,
   cpu_voltage: Zap,
   cpu_power: Zap,
+  cpu_fan_speed: Fan,
   gpu_temp: Thermometer,
   gpu_usage: Activity,
   gpu_fan_speed: Fan,

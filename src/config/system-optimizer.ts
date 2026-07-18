@@ -307,17 +307,7 @@ export const optimizerItems: OptimizerItem[] = [
     requiresReboot: false,
   },
 
-  // ============== 系统性能调优（9 项） ==============
-  {
-    id: "largeSysCache",
-    regName: "启用大系统缓存",
-    category: "performance",
-    icon: Cpu,
-    color: COLORS[0],
-    titleKey: "systemOptimizer.performance.largeSysCache",
-    descKey: "systemOptimizer.performance.largeSysCacheDesc",
-    requiresReboot: true,
-  },
+  // ============== 系统性能调优（8 项） ==============
   {
     id: "intelTSX",
     regName: "启用Intel TSX",

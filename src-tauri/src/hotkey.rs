@@ -30,6 +30,11 @@ pub fn init_overlay(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(),
 pub fn update_overlay(app_handle: &tauri::AppHandle, new_shortcut: &str) -> Result<(), String> {
     let old_shortcut = get_overlay_shortcut();
 
+    // 新旧热键相同，无需更新
+    if old_shortcut == new_shortcut {
+        return Ok(());
+    }
+
     #[cfg(target_os = "windows")]
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -89,6 +94,11 @@ pub fn init_crosshair(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(
 pub fn update_crosshair(app_handle: &tauri::AppHandle, new_shortcut: &str) -> Result<(), String> {
     let old_shortcut = get_crosshair_shortcut();
 
+    // 新旧热键相同，无需更新
+    if old_shortcut == new_shortcut {
+        return Ok(());
+    }
+
     #[cfg(target_os = "windows")]
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -147,6 +157,11 @@ pub fn init_filter(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), 
 
 pub fn update_filter(app_handle: &tauri::AppHandle, new_shortcut: &str) -> Result<(), String> {
     let old_shortcut = get_filter_shortcut();
+
+    // 新旧热键相同，无需更新
+    if old_shortcut == new_shortcut {
+        return Ok(());
+    }
 
     #[cfg(target_os = "windows")]
     {

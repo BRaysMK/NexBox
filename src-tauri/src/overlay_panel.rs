@@ -32,6 +32,7 @@ fn default_display_items() -> DisplayItems {
             DisplayItem { id: "fps".to_string(), label: "FPS".to_string(), enabled: false },
             DisplayItem { id: "cpu_temp".to_string(), label: "CPU温度".to_string(), enabled: false },
             DisplayItem { id: "cpu_usage".to_string(), label: "CPU占用".to_string(), enabled: true },
+            DisplayItem { id: "cpu_fan_speed".to_string(), label: "CPU风扇转速".to_string(), enabled: false },
             DisplayItem { id: "cpu_clock".to_string(), label: "CPU频率".to_string(), enabled: false },
             DisplayItem { id: "cpu_voltage".to_string(), label: "CPU电压".to_string(), enabled: false },
             DisplayItem { id: "cpu_power".to_string(), label: "CPU功耗".to_string(), enabled: false },
@@ -108,6 +109,7 @@ pub struct OverlayHardwareData {
     memory_usage: Option<f64>,
     delta_password: Option<String>,
     game_ping: Option<u32>,
+    cpu_fan_speed: Option<u32>,
     gpu_fan_speed: Option<u32>,
     gpu_power: Option<u32>,
     gpu_clock: Option<u32>,
@@ -135,6 +137,7 @@ impl Default for OverlayHardwareData {
             memory_usage: None,
             delta_password: None,
             game_ping: None,
+            cpu_fan_speed: None,
             gpu_fan_speed: None,
             gpu_power: None,
             gpu_clock: None,
@@ -152,10 +155,10 @@ impl Default for OverlayHardwareData {
     }
 }
 
-static CURRENT_SETTINGS: Mutex<Option<OverlaySettings>> = Mutex::new(None);
-static CURRENT_HARDWARE_DATA: Mutex<Option<OverlayHardwareData>> = Mutex::new(None);
+pub static CURRENT_SETTINGS: Mutex<Option<OverlaySettings>> = Mutex::new(None);
+pub static CURRENT_HARDWARE_DATA: Mutex<Option<OverlayHardwareData>> = Mutex::new(None);
 
-fn get_or_init_settings() -> OverlaySettings {
+pub fn get_or_init_settings() -> OverlaySettings {
     let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
     if settings_lock.is_none() {
         *settings_lock = Some(OverlaySettings::default());
@@ -240,7 +243,7 @@ fn build_netease_song_text(title: Option<&str>, artist: Option<&str>) -> Option<
 
 static LAST_LHML_UPDATE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-fn collect_hardware_data() -> OverlayHardwareData {
+pub fn collect_hardware_data() -> OverlayHardwareData {
     let fps = crate::game_fps::get_cached_fps();
 
     let delta_password = crate::delta_force::get_cached_delta_password();
@@ -263,11 +266,11 @@ fn collect_hardware_data() -> OverlayHardwareData {
     };
 
     // 从 LHML (NexBoxMonitor) 获取硬件传感器数据
-    let (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage) =
+    let (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, cpu_fan_speed, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage) =
         if use_cached_lhml {
             let prev = CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default();
             (
-                prev.cpu_usage, prev.cpu_temp, prev.cpu_clock, prev.cpu_voltage, prev.cpu_power, prev.ssd_temp, prev.memory_usage, prev.gpu_temp, prev.gpu_usage, prev.gpu_fan_speed, prev.gpu_power, prev.gpu_clock, prev.gpu_vram_used, prev.gpu_vram_total, prev.gpu_memory_clock, prev.gpu_voltage
+                prev.cpu_usage, prev.cpu_temp, prev.cpu_clock, prev.cpu_voltage, prev.cpu_power, prev.cpu_fan_speed, prev.ssd_temp, prev.memory_usage, prev.gpu_temp, prev.gpu_usage, prev.gpu_fan_speed, prev.gpu_power, prev.gpu_clock, prev.gpu_vram_used, prev.gpu_vram_total, prev.gpu_memory_clock, prev.gpu_voltage
             )
         } else {
         match crate::sensor::read_lhm_sensors() {
@@ -389,6 +392,39 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     .or_else(|| extract_sensor(&response.sensors, "Load", "GpuIntel", &["GPU Core"], false));
                 let gpu_usage = gpu_usage_result.as_ref().map(|(v, _)| *v as u32);
                 let gpu_usage_name = gpu_usage_result.as_ref().map(|(_, n)| n.clone());
+
+                // CPU 风扇
+                // LHML 中 CPU 风扇传感器出现在 SuperIO（Nuvoton 等）或 Motherboard 硬件类型下
+                // 名称通常为 "Fan #1"、"CPU Fan"、"CPU1 Fan" 等，优先取第一个非零值风扇作为 CPU 风扇
+                let cpu_fan_speed = {
+                    let fan = extract_sensor(&response.sensors, "Fan", "SuperIO", &["Fan #1", "Fan #2", "CPU Fan", "CPU1 Fan", "CPUFAN"], false)
+                        .or_else(|| {
+                            // 取 SuperIO 下第一个非零 RPM 的风扇
+                            response.sensors.iter()
+                                .filter(|s| s.sensor_type == "Fan"
+                                    && s.hardware_type.eq_ignore_ascii_case("SuperIO")
+                                    && s.value > 0.0)
+                                .next()
+                                .map(|s| (s.value, s.name.clone()))
+                        })
+                        .or_else(|| {
+                            // 兜底：任意 SuperIO 风扇
+                            response.sensors.iter()
+                                .filter(|s| s.sensor_type == "Fan"
+                                    && s.hardware_type.eq_ignore_ascii_case("SuperIO"))
+                                .next()
+                                .map(|s| (s.value, s.name.clone()))
+                        })
+                        .or_else(|| {
+                            // 再兜底：Motherboard 下的风扇
+                            response.sensors.iter()
+                                .filter(|s| s.sensor_type == "Fan"
+                                    && s.hardware_type.eq_ignore_ascii_case("Motherboard"))
+                                .next()
+                                .map(|s| (s.value, s.name.clone()))
+                        });
+                    fan.map(|(v, _)| v as u32)
+                };
 
                 // GPU 风扇（所有风扇平均，RPM）
                 // 尝试多种前缀：NVIDIA 常见 "GPU Fan #0", "GPU"，AMD 常见 "Fans"
@@ -512,11 +548,11 @@ fn collect_hardware_data() -> OverlayHardwareData {
                     gpu_voltage,
                 );
 
-                (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage)
+                (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, cpu_fan_speed, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage)
             }
             Err(e) => {
                 log::warn!("LHML 传感器读取失败: {e}");
-                (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
+                (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
             }
         }
     };
@@ -537,6 +573,7 @@ fn collect_hardware_data() -> OverlayHardwareData {
         memory_usage,
         delta_password,
         game_ping,
+        cpu_fan_speed,
         gpu_fan_speed,
         gpu_power,
         gpu_clock,
@@ -564,6 +601,7 @@ fn collect_hardware_data() -> OverlayHardwareData {
             memory_usage: new_data.memory_usage.or(prev.memory_usage),
             delta_password: new_data.delta_password.or_else(|| prev.delta_password.clone()),
             game_ping: new_data.game_ping.or(prev.game_ping),
+            cpu_fan_speed: new_data.cpu_fan_speed.or(prev.cpu_fan_speed),
             gpu_fan_speed: new_data.gpu_fan_speed.or(prev.gpu_fan_speed),
             gpu_power: new_data.gpu_power.or(prev.gpu_power),
             gpu_clock: new_data.gpu_clock.or(prev.gpu_clock),
@@ -981,6 +1019,10 @@ mod win32 {
                         None => ("--".to_string(), None),
                     };
                     items.push(DisplayItem { label: "FPS".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: color });
+                }
+                "cpu_fan_speed" => {
+                    let val = data.cpu_fan_speed.map(|v| format!("{}RPM", v)).unwrap_or_else(|| "--RPM".to_string());
+                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
                 }
                 "gpu_fan_speed" => {
                     let val = data.gpu_fan_speed.map(|v| format!("{}RPM", v)).unwrap_or_else(|| "--RPM".to_string());
@@ -1754,8 +1796,27 @@ pub fn stop_overlay() -> Result<OverlayResult, String> {
     Err("此功能仅支持 Windows 系统".to_string())
 }
 
+/// Check if Win32 overlay is active.
+pub fn is_overlay_active() -> bool {
+    OVERLAY_ACTIVE.load(Ordering::SeqCst)
+}
+
 /// Toggle overlay on/off. Used by global hotkey.
 pub fn toggle_overlay(app_handle: &tauri::AppHandle) -> Result<OverlayResult, String> {
+    // 如果当前样式是竖排面板，使用 Tauri 窗口方案
+    let settings = get_or_init_settings();
+    if settings.style == "vertical_panel" {
+        return crate::vertical_overlay::toggle_vertical_overlay(app_handle);
+    }
+
+    // 如果竖排悬浮框正在运行，先停止它
+    if crate::vertical_overlay::is_vertical_overlay_active() {
+        let handle = app_handle.clone();
+        let _ = tauri::async_runtime::block_on(async {
+            crate::vertical_overlay::stop_vertical_overlay(handle).await
+        });
+    }
+
     let result = if OVERLAY_ACTIVE.load(Ordering::SeqCst) {
         stop_overlay()
     } else {
@@ -1771,14 +1832,50 @@ pub fn toggle_overlay(app_handle: &tauri::AppHandle) -> Result<OverlayResult, St
 }
 
 #[tauri::command]
-pub async fn start_overlay_panel(settings: Option<OverlaySettings>) -> Result<OverlayResult, String> {
-    let settings = settings.unwrap_or_default();
+pub async fn start_overlay_panel(
+    app_handle: tauri::AppHandle,
+    settings: Option<OverlaySettings>,
+) -> Result<OverlayResult, String> {
+    let settings = settings.unwrap_or_else(get_or_init_settings);
+
+    if settings.style == "vertical_panel" {
+        return crate::vertical_overlay::start_vertical_overlay(app_handle, Some(settings)).await;
+    }
+
+    // 如果竖排悬浮框正在运行，先停止它
+    if crate::vertical_overlay::is_vertical_overlay_active() {
+        let handle = app_handle.clone();
+        let _ = crate::vertical_overlay::stop_vertical_overlay(handle).await;
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
     start_overlay(settings)
 }
 
 #[tauri::command]
-pub async fn stop_overlay_panel() -> Result<OverlayResult, String> {
-    stop_overlay()
+pub async fn stop_overlay_panel(app_handle: tauri::AppHandle) -> Result<OverlayResult, String> {
+    // 停止 Win32 overlay
+    let win32_result = if OVERLAY_ACTIVE.load(Ordering::SeqCst) {
+        stop_overlay()
+    } else {
+        Ok(OverlayResult {
+            success: true,
+            message: "Win32 悬浮框未运行".to_string(),
+        })
+    };
+
+    // 停止竖排悬浮框
+    let vertical_result = crate::vertical_overlay::stop_vertical_overlay(app_handle).await;
+
+    // 任一成功即视为成功
+    if win32_result.is_ok() || vertical_result.is_ok() {
+        Ok(OverlayResult {
+            success: true,
+            message: "悬浮框已关闭".to_string(),
+        })
+    } else {
+        Err("悬浮框关闭失败".to_string())
+    }
 }
 
 #[tauri::command]
@@ -1788,7 +1885,7 @@ pub async fn toggle_overlay_panel(app_handle: tauri::AppHandle) -> Result<Overla
 
 #[tauri::command]
 pub async fn get_overlay_panel_status() -> Result<bool, String> {
-    Ok(OVERLAY_ACTIVE.load(Ordering::SeqCst))
+    Ok(OVERLAY_ACTIVE.load(Ordering::SeqCst) || crate::vertical_overlay::is_vertical_overlay_active())
 }
 
 #[tauri::command]
@@ -1802,7 +1899,7 @@ pub async fn get_overlay_hardware_data() -> Result<OverlayHardwareData, String> 
 }
 
 #[tauri::command]
-pub async fn update_overlay_settings(settings: OverlaySettings) -> Result<OverlayResult, String> {
+pub async fn update_overlay_settings(app_handle: tauri::AppHandle, settings: OverlaySettings) -> Result<OverlayResult, String> {
     let (old_style, old_font) = {
         let lock = CURRENT_SETTINGS.lock().unwrap();
         let s = lock.as_ref();
@@ -1811,20 +1908,49 @@ pub async fn update_overlay_settings(settings: OverlaySettings) -> Result<Overla
     let new_style = settings.style.clone();
     let new_font = settings.font.clone();
 
+    let _old_was_vertical = old_style.as_deref() == Some("vertical_panel");
+    let new_is_vertical = new_style == "vertical_panel";
+
+    // 保存新设置
     {
         let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
-        *settings_lock = Some(settings);
+        *settings_lock = Some(settings.clone());
     }
 
-    if OVERLAY_ACTIVE.load(Ordering::SeqCst) {
+    // 检查是否有 overlay 处于活跃状态
+    let win32_active = OVERLAY_ACTIVE.load(Ordering::SeqCst);
+    let vertical_active = crate::vertical_overlay::is_vertical_overlay_active();
+    let any_active = win32_active || vertical_active;
+
+    // 如果有任何悬浮框处于活跃状态
+    if any_active {
         let style_changed = old_style.as_deref() != Some(&new_style);
         let font_changed = old_font.as_deref() != Some(&new_font);
+
         if style_changed || font_changed {
-            let new_settings = CURRENT_SETTINGS.lock().unwrap().clone().unwrap_or_default();
-            stop_overlay()?;
-            std::thread::sleep(std::time::Duration::from_millis(200));
-            start_overlay(new_settings)?;
+            // 停止当前的 overlay
+            if win32_active {
+                stop_overlay()?;
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            if vertical_active {
+                let _ = crate::vertical_overlay::stop_vertical_overlay(app_handle.clone()).await;
+                std::thread::sleep(Duration::from_millis(200));
+            }
+
+            // 如果有活跃的 overlay，启动新样式的 overlay
+            if any_active {
+                if new_is_vertical {
+                    let _ = crate::vertical_overlay::start_vertical_overlay(app_handle, Some(settings)).await;
+                } else {
+                    start_overlay(settings)?;
+                }
+            }
+        } else if new_is_vertical {
+            // 竖排面板且样式未变，仅推送设置更新
+            let _ = app_handle.emit("vertical-overlay-settings", &settings);
         } else {
+            // Win32 overlay 且样式未变，直接重绘
             #[cfg(target_os = "windows")]
             unsafe {
                 let hwnd = OVERLAY_HANDLE.load(Ordering::SeqCst);
@@ -2029,6 +2155,7 @@ pub fn start_hardware_poller() {
                 cpu_clock: data.cpu_clock.map(|v| v as f64),
                 cpu_voltage: data.cpu_voltage,
                 cpu_power: data.cpu_power,
+                cpu_fan_speed: data.cpu_fan_speed.map(|v| v as f64),
                 gpu_usage: data.gpu_usage.map(|v| v as f64),
                 gpu_temp: data.gpu_temp,
                 gpu_clock: data.gpu_clock.map(|v| v as f64),

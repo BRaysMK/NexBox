@@ -67,6 +67,7 @@ interface HardwareData {
   cpu_clock: number | null;
   cpu_voltage: number | null;
   cpu_power: number | null;
+  cpu_fan_speed: number | null;
   gpu_temp: number | null;
   gpu_usage: number | null;
   gpu_fan_speed: number | null;
@@ -86,6 +87,7 @@ const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
   { id: "fps", label: "FPS", enabled: false },
   { id: "cpu_temp", label: "CPU温度", enabled: false },
   { id: "cpu_usage", label: "CPU占用", enabled: true },
+  { id: "cpu_fan_speed", label: "CPU风扇转速", enabled: false },
   { id: "cpu_clock", label: "CPU频率", enabled: false },
   { id: "cpu_voltage", label: "CPU电压", enabled: false },
   { id: "cpu_power", label: "CPU功耗", enabled: false },
@@ -262,8 +264,9 @@ export default function OverlayPanelPage() {
     cpu_temp: null,
     cpu_clock: null,
     cpu_voltage: null,
-    cpu_power: null,
-    gpu_temp: null,
+  cpu_power: null,
+  cpu_fan_speed: null,
+  gpu_temp: null,
     gpu_usage: null,
     gpu_fan_speed: null,
     gpu_power: null,
@@ -337,6 +340,7 @@ export default function OverlayPanelPage() {
           cpu_clock: data.cpu_clock ?? prev.cpu_clock,
           cpu_voltage: data.cpu_voltage ?? prev.cpu_voltage,
           cpu_power: data.cpu_power ?? prev.cpu_power,
+          cpu_fan_speed: data.cpu_fan_speed ?? prev.cpu_fan_speed,
           gpu_temp: data.gpu_temp ?? prev.gpu_temp,
           gpu_usage: data.gpu_usage ?? prev.gpu_usage,
           gpu_fan_speed: data.gpu_fan_speed ?? prev.gpu_fan_speed,
@@ -430,6 +434,20 @@ export default function OverlayPanelPage() {
 
     try {
       const newDragMode = !isDragMode;
+      // 竖排面板模式使用 Tauri 窗口自身的拖动/穿透机制
+      if (settings.style === "vertical_panel") {
+        // 竖排面板的拖动由窗口自身处理，这里仅提示用户
+        toast({
+          title: newDragMode
+            ? "请在悬浮框上拖动，完成后点击悬浮框右上角图标固定"
+            : t("overlayPanel.positionSaved") || "位置已保存",
+          status: newDragMode ? "info" : "success",
+          duration: 3000,
+          isClosable: true,
+        });
+        setIsDragMode(newDragMode);
+        return;
+      }
       await invoke("set_overlay_drag_mode", { enabled: newDragMode });
       setIsDragMode(newDragMode);
       
@@ -474,9 +492,16 @@ export default function OverlayPanelPage() {
     }
 
     try {
-      await invoke("reset_overlay_position");
-      const currentSettings = await invoke<OverlaySettings>("get_overlay_current_settings");
-      saveOverlaySettings(currentSettings);
+      // 竖排面板模式使用独立的重置位置命令
+      if (settings.style === "vertical_panel") {
+        await invoke("reset_vertical_overlay_position");
+        const currentSettings = await invoke<OverlaySettings>("get_overlay_current_settings");
+        saveOverlaySettings(currentSettings);
+      } else {
+        await invoke("reset_overlay_position");
+        const currentSettings = await invoke<OverlaySettings>("get_overlay_current_settings");
+        saveOverlaySettings(currentSettings);
+      }
       toast({
         title: t("overlayPanel.positionReset") || "位置已恢复默认",
         status: "success",
@@ -797,6 +822,34 @@ export default function OverlayPanelPage() {
                   </Text>
                 </VStack>
               </Box>
+{/* TODO: 竖排面板样式暂未完工，翻译尚未完成，先隐藏 */}
+              {/* <Box
+                as="button"
+                onClick={() => updateSetting("style", "vertical_panel")}
+                bg={settings.style === "vertical_panel" ? hexToRgba(getActiveColor(), 0.12) : "transparent"}
+                border="2px solid"
+                borderColor={settings.style === "vertical_panel" ? getActiveColor() : "gray.600"}
+                borderRadius="xl"
+                p={3}
+                cursor="pointer"
+                textAlign="center"
+                transition="all 0.2s"
+                _hover={{
+                  borderColor: getActiveColor(),
+                  bg: settings.style === "vertical_panel" ? hexToRgba(getActiveColor(), 0.12) : hexToRgba(getActiveColor(), 0.08),
+                }}
+              >
+                <VStack spacing={2}>
+                  <Box display="flex" flexDirection="column" gap="3px" alignItems="center">
+                    <Box w="48px" h="5px" bg="gray.500" borderRadius="sm" opacity={0.6} />
+                    <Box w="48px" h="5px" bg="gray.500" borderRadius="sm" opacity={0.6} />
+                    <Box w="48px" h="5px" bg="gray.500" borderRadius="sm" opacity={0.6} />
+                  </Box>
+                  <Text fontSize="sm" fontWeight="medium" color={subTextColor}>
+                    {t("overlayPanel.styles.verticalPanel") || "竖排面板"}
+                  </Text>
+                </VStack>
+              </Box> */}
             </VStack>
 
             {/* 右侧：字体选择 + 不透明度 */}

@@ -34,6 +34,7 @@ import EpicFreePage from "./pages/EpicFreePage";
 import TrayMenuPage from "./pages/TrayMenuPage";
 import DesktopLyricsPage from "./pages/DesktopLyricsPage";
 import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
+import VerticalOverlayPage from "./pages/VerticalOverlayPage";
 import { useState, useEffect } from "react";
 
 import {
@@ -65,7 +66,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "5.4.8";
+const CURRENT_VERSION = "5.4.9";
 
 function App() {
   const { t } = useTranslation();
@@ -87,6 +88,11 @@ function App() {
   // Lyrics unlock button window: tiny standalone overlay
   if (location.pathname === "/lyrics-unlock-btn") {
     return <LyricsUnlockBtnPage />;
+  }
+
+  // Vertical overlay window: standalone, no main layout
+  if (location.pathname === "/vertical-overlay") {
+    return <VerticalOverlayPage />;
   }
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

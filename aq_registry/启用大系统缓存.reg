@@ -1,8 +1,0 @@
-Windows Registry Editor Version 5.00
-
-; 启用大系统缓存
-; 让 Windows 使用更多内存作为文件系统缓存
-; 适合内存充裕（16GB+）的台式机
-
-[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management]
-"LargeSystemCache"=dword:00000001

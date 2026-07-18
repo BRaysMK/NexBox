@@ -982,8 +982,6 @@
       "shaderCacheDesc": "シェーダーキャッシュを強制有効化、ゲームカクつき削減"
     },
     "performance": {
-      "largeSysCache": "ラージシステムキャッシュ有効",
-      "largeSysCacheDesc": "LargeSystemCache=1、16GB+RAM推奨（再起動必要）",
       "intelTSX": "Intel TSX有効化",
       "intelTSXDesc": "Transactional Synchronization Extensions有効化（Intelのみ）",
       "mergeSvcHost": "ServiceHostプロセス統合",
@@ -1143,8 +1141,8 @@
       "randomQuoteDesc": "ホームページにランダム名言カードを表示",
       "gameLauncherLabel": "クイック起動",
       "gameLauncherDesc": "ホームページにクイック起動カードを表示",
-      "feedbackLabel": "フィードバックバナー",
-      "feedbackDesc": "ホームページの下部にフィードバックバナーを表示",
+      "feedbackLabel": "画像カルーセル",
+      "feedbackDesc": "ホームページに画像カルーセルを表示",
       "splash": "アニメーション",
       "splashLogoLabel": "スプラッシュロゴ",
       "splashLogoDesc": "起動時に表示されるロゴ画像をカスタマイズ",

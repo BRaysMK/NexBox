@@ -29,6 +29,7 @@ pub struct HardwareSnapshot {
     pub cpu_clock: Option<f64>,
     pub cpu_voltage: Option<f64>,
     pub cpu_power: Option<f64>,
+    pub cpu_fan_speed: Option<f64>,
     // GPU
     pub gpu_usage: Option<f64>,
     pub gpu_temp: Option<f64>,
@@ -742,6 +743,7 @@ const CHARTS = [
     { id:'cpuPower',     label:'CPU 功耗',      field:'cpu_power',        color:'#f39c12', unit:'W' },
     { id:'cpuClock',     label:'CPU 频率',      field:'cpu_clock',        color:'#ffc312', unit:'MHz' },
     { id:'cpuVoltage',   label:'CPU 电压',      field:'cpu_voltage',      color:'#fd79a8', unit:'V' },
+    { id:'cpuFan',       label:'CPU 风扇转速',  field:'cpu_fan_speed',    color:'#fdcb6e', unit:'RPM' },
     { id:'gpuUsage',     label:'GPU 占用率',   field:'gpu_usage',        color:'#ff7675', unit:'%' },
     { id:'gpuTemp',      label:'GPU 温度',      field:'gpu_temp',         color:'#e74c3c', unit:'°C' },
     { id:'gpuPower',     label:'GPU 功耗',      field:'gpu_power',        color:'#ff6b35', unit:'W' },
