@@ -58,7 +58,7 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
   );
 
   return (
-    <Link key={item.path} to={item.path} style={{ transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)", flexShrink: 0, display: "flex" }}>
+    <Link key={item.path} to={item.path} className="jelly-bounce-nav-button" style={{ transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)", flexShrink: 0, display: "flex" }}>
       <ChakraBox position="relative">
         {showLabel ? (
           <Flex
@@ -169,7 +169,7 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
 export function Sidebar() {
   const location = useLocation();
   const { t } = useTranslation();
-  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur, jellyBounceEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const [showLabel, setShowLabel] = useState(() => {
     return localStorage.getItem("nexbox_sidebar_show_label") === "true";
@@ -178,6 +178,29 @@ export function Sidebar() {
     const saved = localStorage.getItem("nexbox_nav_position");
     return saved === "top" ? "top" : "left";
   });
+
+  // 果冻弹跳效果：当导航栏状态切换（位置/标签/可见性）时触发
+  const sidebarContentRef = useRef<HTMLDivElement>(null);
+  const sidebarContainerRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
+
+  const triggerJellyBounce = useCallback(() => {
+    if (!jellyBounceEnabled) return;
+    // 触发内容区弹跳
+    const contentEl = sidebarContentRef.current;
+    if (contentEl) {
+      contentEl.classList.remove("jelly-bouncing");
+      void contentEl.offsetWidth;
+      contentEl.classList.add("jelly-bouncing");
+    }
+    // 触发外层容器弹跳
+    const containerEl = sidebarContainerRef.current;
+    if (containerEl) {
+      containerEl.classList.remove("jelly-bouncing");
+      void containerEl.offsetWidth;
+      containerEl.classList.add("jelly-bouncing");
+    }
+  }, [jellyBounceEnabled]);
   
   useEffect(() => {
     const handler = (e: CustomEvent) => {
@@ -202,6 +225,41 @@ export function Sidebar() {
 
   const isTop = navPosition === "top";
   
+  const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood"];
+  const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
+
+  const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const path of hideableNavPaths) {
+      initial[path] = localStorage.getItem(getNavStorageKey(path)) !== "false";
+    }
+    return initial;
+  });
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const { path, visible } = e.detail || {};
+      if (path) {
+        setNavVisibility(prev => ({ ...prev, [path]: visible }));
+      }
+    };
+    window.addEventListener("nav-visibility-changed", handler as EventListener);
+    return () => { window.removeEventListener("nav-visibility-changed", handler as EventListener); };
+  }, []);
+
+  // 监听导航栏状态变化/页面切换，触发果冻弹跳动画（跳过初次渲染）
+  const navVisibilityKey = JSON.stringify(navVisibility);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      return;
+    }
+    triggerJellyBounce();
+  }, [navPosition, showLabel, navVisibilityKey, location.pathname, triggerJellyBounce]);
+
+  useEffect(() => {
+    isFirstRender.current = false;
+  }, []);
+
   const [showBlur, setShowBlur] = useState(false);
 
   useEffect(() => {
@@ -251,8 +309,20 @@ export function Sidebar() {
   ];
 
   const sidebarContent = (
-    <Flex direction="row" wrap="wrap" gap={3} align="center" justify="center" transition="gap 0.4s cubic-bezier(0.4, 0, 0.2, 1)">
-      {navItems.map((item) => (
+    <Flex
+      ref={sidebarContentRef}
+      className="jelly-bounce-sidebar-content"
+      direction="row" wrap="wrap" gap={3} align="center" justify="center" transition="gap 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
+      onAnimationEnd={(e: React.AnimationEvent) => {
+        if (e.animationName === "jellyBounce") {
+          sidebarContentRef.current?.classList.remove("jelly-bouncing");
+        }
+      }}
+    >
+      {navItems.filter(item => {
+        if (item.path === "/" || item.path === "/settings") return true;
+        return navVisibility[item.path] !== false;
+      }).map((item) => (
         <NavButton
           key={item.path}
           item={item}
@@ -304,7 +374,9 @@ export function Sidebar() {
 
   return (
     <ChakraBox
+      ref={sidebarContainerRef}
       id="main-sidebar"
+      className={isTop ? "jelly-bounce-sidebar-top" : "jelly-bounce-sidebar-left"}
       {...containerStyles}
       bg={liquidGlassEnabled ? glassBgColor : defaultBgColor}
       border="1px solid"
@@ -314,6 +386,12 @@ export function Sidebar() {
       sx={{
         ...containerStyles.sx,
         willChange: "auto",
+      }}
+      onAnimationEnd={(e: React.AnimationEvent) => {
+        const name = e.animationName;
+        if (name === "jellyBounceSidebarLeft" || name === "jellyBounceSidebarTop") {
+          sidebarContainerRef.current?.classList.remove("jelly-bouncing");
+        }
       }}
     >
       <ChakraBox

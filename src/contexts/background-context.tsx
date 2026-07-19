@@ -29,6 +29,7 @@ interface BackgroundContextType {
   activePresetIndex: number;
   presetBackgrounds: PresetBackground[];
   carouselEnabled: boolean;
+  jellyBounceEnabled: boolean;
   setBackgroundMode: (mode: BackgroundMode) => void;
   setCustomBgImages: (images: string[]) => void;
   addCustomBgImage: (image: string) => boolean;
@@ -40,6 +41,7 @@ interface BackgroundContextType {
   setBackgroundBlur: (blur: number) => void;
   setActivePresetIndex: (index: number) => void;
   setCarouselEnabled: (enabled: boolean) => void;
+  setJellyBounceEnabled: (enabled: boolean) => void;
 }
 
 const BackgroundContext = createContext<BackgroundContextType>({
@@ -53,6 +55,7 @@ const BackgroundContext = createContext<BackgroundContextType>({
   activePresetIndex: 0,
   presetBackgrounds: PRESET_BACKGROUNDS,
   carouselEnabled: false,
+  jellyBounceEnabled: false,
   setBackgroundMode: () => {},
   setCustomBgImages: () => {},
   addCustomBgImage: () => false,
@@ -64,6 +67,7 @@ const BackgroundContext = createContext<BackgroundContextType>({
   setBackgroundBlur: () => {},
   setActivePresetIndex: () => {},
   setCarouselEnabled: () => {},
+  setJellyBounceEnabled: () => {},
 });
 
 export function useBackground() {
@@ -83,6 +87,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [backgroundBlur, setBackgroundBlur] = useState(0);
   const [activePresetIndex, setActivePresetIndex] = useState(0);
   const [carouselEnabled, setCarouselEnabled] = useState(false);
+  const [jellyBounceEnabled, setJellyBounceEnabled] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isFirstLaunch, setIsFirstLaunch] = useState(false);
 
@@ -90,7 +95,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     async function loadSettings() {
       try {
         // 批量读取所有设置，减少 store IO 调用次数
-        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedBgBlur, savedActivePreset, savedCarousel, hasLaunched] =
+        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, hasLaunched] =
           await Promise.all([
             store.get<string>("background-mode"),
             store.get<string[]>("custom-bg-images"),
@@ -101,6 +106,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
             store.get<number>("background-blur"),
             store.get<number>("active-preset-index"),
             store.get<boolean>("carousel-enabled"),
+            store.get<boolean>("jelly-bounce-enabled"),
             store.get<boolean>("has-launched"),
           ]);
 
@@ -151,6 +157,9 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         if (savedBgBlur !== null && savedBgBlur !== undefined) {
           setBackgroundBlur(savedBgBlur);
         }
+        if (savedJellyBounce !== null && savedJellyBounce !== undefined) {
+          setJellyBounceEnabled(savedJellyBounce);
+        }
 
         setIsLoaded(true);
       } catch (error) {
@@ -188,6 +197,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         await store.set("liquid-glass-blur", liquidGlassBlur);
         await store.set("background-blur", backgroundBlur);
         await store.set("carousel-enabled", carouselEnabled);
+        await store.set("jelly-bounce-enabled", jellyBounceEnabled);
 
         await store.save();
       } catch (error) {
@@ -196,7 +206,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     }
 
     saveSettings();
-  }, [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, backgroundBlur, activePresetIndex, carouselEnabled, isLoaded]);
+  }, [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, isLoaded]);
 
   // 预设壁纸轮播定时器
   const carouselTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -249,6 +259,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     activePresetIndex,
     presetBackgrounds: PRESET_BACKGROUNDS,
     carouselEnabled,
+    jellyBounceEnabled,
     setBackgroundMode,
     setCustomBgImages,
     addCustomBgImage,
@@ -260,7 +271,8 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     setBackgroundBlur,
     setActivePresetIndex,
     setCarouselEnabled,
-  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, backgroundBlur, activePresetIndex, carouselEnabled, addCustomBgImage, removeCustomBgImage]);
+    setJellyBounceEnabled,
+  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, addCustomBgImage, removeCustomBgImage]);
 
   return (
     <BackgroundContext.Provider value={value}>

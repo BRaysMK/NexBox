@@ -60,7 +60,7 @@ export function LiquidGlassCard({
 
   return (
     <Box
-      className={className}
+      className={`jelly-bounce-card${className ? ` ${className}` : ""}`}
       {...cardStyles}
       position="relative"
       {...props}

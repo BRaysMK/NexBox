@@ -2,6 +2,7 @@
 
 import { Box, useColorModeValue } from "@chakra-ui/react";
 import { ReactNode, useEffect, useRef, useState, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { Sidebar } from "./sidebar";
 import { TitleBar } from "./title-bar";
 import { useBackground } from "@/contexts/background-context";
@@ -33,9 +34,10 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const bgColor = useColorModeValue("#fafafa", "#0a0a0a");
-  const { backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, activePresetIndex, presetBackgrounds, backgroundBlur } = useBackground();
+  const { backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, activePresetIndex, presetBackgrounds, backgroundBlur, jellyBounceEnabled } = useBackground();
   const { config } = useThemeColor();
   const navPosition = useNavPosition();
+  const location = useLocation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoReady, setVideoReady] = useState(false);
   const idCounter = useRef(0);
@@ -124,6 +126,38 @@ export function MainLayout({ children }: MainLayoutProps) {
       document.body.style.overflow = "";
     };
   }, [navPosition]);
+
+  // 果冻弹跳效果开关：在 body 上添加/移除 class，供全局 CSS 使用
+  useEffect(() => {
+    if (jellyBounceEnabled) {
+      document.body.classList.add("jelly-bounce-enabled");
+    } else {
+      document.body.classList.remove("jelly-bounce-enabled");
+      document.body.classList.remove("jelly-bounce-active");
+    }
+    return () => {
+      document.body.classList.remove("jelly-bounce-enabled");
+      document.body.classList.remove("jelly-bounce-active");
+    };
+  }, [jellyBounceEnabled]);
+
+  // 路由切换时触发果冻弹跳动画：在 body 添加 .jelly-bounce-active，
+  // 所有带 jelly-bounce-* className 的元素会播放动画。动画时长后移除 class。
+  // 这样异步加载的内容（如三角洲改枪码列表）不会在挂载时触发动画，避免布局跳动。
+  useEffect(() => {
+    if (!jellyBounceEnabled) return;
+    // 移除再添加以重新触发 CSS animation
+    document.body.classList.remove("jelly-bounce-active");
+    void document.body.offsetWidth; // 强制 reflow
+    document.body.classList.add("jelly-bounce-active");
+    const timer = setTimeout(() => {
+      document.body.classList.remove("jelly-bounce-active");
+    }, 700);
+    return () => {
+      clearTimeout(timer);
+      document.body.classList.remove("jelly-bounce-active");
+    };
+  }, [location.pathname, jellyBounceEnabled]);
 
   const isNavTop = navPosition === "top";
 

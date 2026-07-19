@@ -54,6 +54,7 @@ export function LiquidGlassMenuItem({
 
   return (
     <Box
+      className="jelly-bounce-menu-item"
       onClick={onClick}
       cursor="pointer"
       borderRadius="lg"

@@ -73,3 +73,110 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* ============================================================
+   果冻弹跳缩放动画（scale 弹性，非上下位移）
+   ============================================================ */
+@keyframes jellyBounce {
+  0% {
+    transform: scale(1) translateZ(0);
+  }
+  18% {
+    transform: scale(1.05) translateZ(0);
+  }
+  38% {
+    transform: scale(0.97) translateZ(0);
+  }
+  58% {
+    transform: scale(1.02) translateZ(0);
+  }
+  76% {
+    transform: scale(0.99) translateZ(0);
+  }
+  100% {
+    transform: scale(1) translateZ(0);
+  }
+}
+
+/* 果冻弹跳的轻量版（用于导航栏按钮） */
+@keyframes jellyBounceSubtle {
+  0% {
+    transform: scale(1) translateZ(0);
+  }
+  22% {
+    transform: scale(1.06) translateZ(0);
+  }
+  48% {
+    transform: scale(0.97) translateZ(0);
+  }
+  72% {
+    transform: scale(1.015) translateZ(0);
+  }
+  100% {
+    transform: scale(1) translateZ(0);
+  }
+}
+
+/* 导航栏外层容器专用（侧边模式，需保留 translateY(-50%) 定位） */
+@keyframes jellyBounceSidebarLeft {
+  0%   { transform: translateY(-50%) translateZ(0) scale(1); }
+  18%  { transform: translateY(-50%) translateZ(0) scale(1.05); }
+  38%  { transform: translateY(-50%) translateZ(0) scale(0.97); }
+  58%  { transform: translateY(-50%) translateZ(0) scale(1.02); }
+  76%  { transform: translateY(-50%) translateZ(0) scale(0.99); }
+  100% { transform: translateY(-50%) translateZ(0) scale(1); }
+}
+
+/* 导航栏外层容器专用（顶部模式，需保留 translateX(-50%) 定位） */
+@keyframes jellyBounceSidebarTop {
+  0%   { transform: translateX(-50%) translateZ(0) scale(1); }
+  18%  { transform: translateX(-50%) translateZ(0) scale(1.05); }
+  38%  { transform: translateX(-50%) translateZ(0) scale(0.97); }
+  58%  { transform: translateX(-50%) translateZ(0) scale(1.02); }
+  76%  { transform: translateX(-50%) translateZ(0) scale(0.99); }
+  100% { transform: translateX(-50%) translateZ(0) scale(1); }
+}
+
+/* ============================================================
+   触发规则
+   ============================================================ */
+
+/* 路由切换时，JS 在 body 添加 .jelly-bounce-active，
+   所有带 jelly-bounce-* className 的元素播放动画。
+   动画结束后 JS 移除该 class，这样异步加载的内容不会触发动画。 */
+body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-card,
+body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-tool-card,
+body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-menu-item,
+body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-button {
+  animation: jellyBounce 0.62s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-nav-button {
+  animation: jellyBounceSubtle 0.56s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-sidebar-left {
+  animation: jellyBounceSidebarLeft 0.62s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-sidebar-top {
+  animation: jellyBounceSidebarTop 0.62s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 导航栏状态切换时触发（通过 JS 添加 .jelly-bouncing class） */
+body.jelly-bounce-enabled .jelly-bounce-sidebar-content.jelly-bouncing {
+  animation: jellyBounce 0.62s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.jelly-bounce-enabled .jelly-bounce-nav-button.jelly-bouncing {
+  animation: jellyBounceSubtle 0.56s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.jelly-bounce-enabled .jelly-bounce-sidebar-left.jelly-bouncing {
+  animation: jellyBounceSidebarLeft 0.62s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.jelly-bounce-enabled .jelly-bounce-sidebar-top.jelly-bouncing {
+  animation: jellyBounceSidebarTop 0.62s cubic-bezier(0.4, 0, 0.2, 1);
+}
+

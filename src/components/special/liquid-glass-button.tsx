@@ -32,7 +32,7 @@ export function LiquidGlassButton({ children, className, ...props }: LiquidGlass
 
   return (
     <Button
-      className={className}
+      className={`jelly-bounce-button${className ? ` ${className}` : ""}`}
       bg={glassBg}
       color={getContrastTextColor()}
       border="1px solid"

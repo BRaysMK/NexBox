@@ -103,6 +103,7 @@ function GeneralSettings() {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
   });
   const [sidebarShowLabel, setSidebarShowLabel] = useState(false);
+  const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const [pageTransitionMode, setPageTransitionMode] = useState<"slide" | "fade" | "off">("fade");
   const [autoStart, setAutoStart] = useState(false);
@@ -211,6 +212,13 @@ function GeneralSettings() {
     if (savedSidebarShowLabel !== null) {
       setSidebarShowLabel(savedSidebarShowLabel === "true");
     }
+
+    const visibilityMap: Record<string, boolean> = {};
+    for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood"]) {
+      const key = `nexbox_nav_visible_${p.replace(/\//g, "").replace(/-/g, "_")}`;
+      visibilityMap[p] = localStorage.getItem(key) !== "false";
+    }
+    setNavVisibility(visibilityMap);
 
     const savedNavPosition = localStorage.getItem("nexbox_nav_position");
     if (savedNavPosition === "top") {
@@ -321,6 +329,14 @@ function GeneralSettings() {
     setSidebarShowLabel(newValue);
     localStorage.setItem("nexbox_sidebar_show_label", String(newValue));
     window.dispatchEvent(new CustomEvent("sidebar-show-label-changed", { detail: newValue }));
+  };
+
+  const handleNavItemToggle = (path: string) => {
+    const key = `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
+    const newValue = !navVisibility[path];
+    setNavVisibility(prev => ({ ...prev, [path]: newValue }));
+    localStorage.setItem(key, String(newValue));
+    window.dispatchEvent(new CustomEvent("nav-visibility-changed", { detail: { path, visible: newValue } }));
   };
 
   const handleNavPositionChange = (value: string) => {
@@ -796,6 +812,31 @@ function GeneralSettings() {
                 width="100px"
               />
             </HStack>
+            <Divider />
+            {[
+              { path: "/hardware", label: t("sidebar.hardware") },
+              { path: "/tools", label: t("sidebar.tools") },
+              { path: "/builtin-tools", label: t("sidebar.builtinTools") },
+              { path: "/optimization", label: t("sidebar.optimization") },
+              { path: "/music", label: t("sidebar.music") },
+              { path: "/delta-force", label: t("sidebar.deltaForce") },
+              { path: "/epic-free", label: t("sidebar.epicFree") },
+              { path: "/mood", label: t("sidebar.mood") },
+            ].map((item, idx) => (
+              <Box key={item.path}>
+                {idx > 0 && <Divider />}
+                <HStack justify="space-between" py={2}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {item.label}
+                  </Text>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={navVisibility[item.path] !== false}
+                    onChange={() => handleNavItemToggle(item.path)}
+                  />
+                </HStack>
+              </Box>
+            ))}
           </VStack>
         </LiquidGlassCard>
       </Box>
@@ -912,6 +953,8 @@ function AppearanceSettings() {
     setActivePresetIndex,
     carouselEnabled,
     setCarouselEnabled,
+    jellyBounceEnabled,
+    setJellyBounceEnabled,
   } = useBackground();
   const videoPreviewSrc = useMemo(() => dynamicBgVideo ? convertFileSrc(dynamicBgVideo) : null, [dynamicBgVideo]);
   const titleColor = useColorModeValue("gray.800", "#ffffff");
@@ -1093,6 +1136,47 @@ function AppearanceSettings() {
               </Slider>
             </Box>
           )}
+        </LiquidGlassCard>
+      </Box>
+
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          {t("settings.appearanceSettings.jellyBounce")}
+          <Badge
+            ml={2}
+            fontSize="0.6rem"
+            colorScheme="pink"
+            variant="subtle"
+            px={2}
+            py={0.5}
+            borderRadius="full"
+          >
+            BETA
+          </Badge>
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between">
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("settings.appearanceSettings.jellyBounceLabel")}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("settings.appearanceSettings.jellyBounceDesc")}
+              </Text>
+            </Box>
+            <ThemeSwitch
+              size="md"
+              isChecked={jellyBounceEnabled}
+              onChange={() => setJellyBounceEnabled(!jellyBounceEnabled)}
+            />
+          </HStack>
         </LiquidGlassCard>
       </Box>
 
@@ -2378,6 +2462,27 @@ export default function SettingsPage() {
   const { t } = useTranslation();
   const { config } = useThemeColor();
   const transitionMode = useTransitionMode();
+  const { jellyBounceEnabled } = useBackground();
+  const isFirstRender = useRef(true);
+
+  // 子菜单切换时触发果冻弹跳动画（跳过首次挂载，避免与路由切换动画重复）
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (!jellyBounceEnabled) return;
+    document.body.classList.remove("jelly-bounce-active");
+    void document.body.offsetWidth; // 强制 reflow
+    document.body.classList.add("jelly-bounce-active");
+    const timer = setTimeout(() => {
+      document.body.classList.remove("jelly-bounce-active");
+    }, 700);
+    return () => {
+      clearTimeout(timer);
+      document.body.classList.remove("jelly-bounce-active");
+    };
+  }, [activeItem, jellyBounceEnabled]);
 
   return (
     <Flex gap={6} pt={8}>

@@ -54,7 +54,7 @@ export function LiquidGlassToolCard({
   if (!liquidGlassEnabled) {
     return (
       <Box
-        className={className}
+        className={`jelly-bounce-tool-card${className ? ` ${className}` : ""}`}
         onClick={onClick}
         cursor={cursor}
         bg={defaultBg}
@@ -80,7 +80,7 @@ export function LiquidGlassToolCard({
 
   return (
     <Box
-      className={className}
+      className={`jelly-bounce-tool-card${className ? ` ${className}` : ""}`}
       onClick={onClick}
       cursor={cursor}
       bg={isHovering ? glassHoverBg : glassBg}
