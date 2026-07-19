@@ -19,11 +19,15 @@ fn get_powershell_path() -> String {
 #[tauri::command]
 pub async fn set_tcp_congestion() -> Result<PerfTweakResult, String> {
     run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$current = netsh int tcp show supplemental | Select-String "拥塞控制提供程序|Congestion Control Provider"
+$ErrorActionPreference = 'Stop'
+$current = netsh int tcp show supplemental 2>&1 | Select-String "拥塞控制提供程序|Congestion Control Provider"
 $hasCtcp = $current -match "CTCP|CUBIC"
 if (-not $hasCtcp) {
-    netsh int tcp set supplemental Internet congestionprovider=ctcp 2>&1 | Out-Null
+    $output = netsh int tcp set supplemental Internet congestionprovider=ctcp 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "TCP 拥塞控制设置失败: $output"
+        exit 1
+    }
 }
 Write-Output 'OK'
 "#)
@@ -32,8 +36,12 @@ Write-Output 'OK'
 #[tauri::command]
 pub async fn restore_tcp_congestion() -> Result<PerfTweakResult, String> {
     run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-netsh int tcp set supplemental Internet congestionprovider=newreno 2>&1 | Out-Null
+$ErrorActionPreference = 'Stop'
+$output = netsh int tcp set supplemental Internet congestionprovider=newreno 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "TCP 拥塞控制恢复失败: $output"
+    exit 1
+}
 Write-Output 'OK'
 "#)
 }
@@ -43,8 +51,12 @@ Write-Output 'OK'
 #[tauri::command]
 pub async fn set_tcp_chimney_off() -> Result<PerfTweakResult, String> {
     run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-netsh int tcp set global chimney=disabled 2>&1 | Out-Null
+$ErrorActionPreference = 'Stop'
+$output = netsh int tcp set global chimney=disabled 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "TCP Chimney Offload 设置失败: $output"
+    exit 1
+}
 Write-Output 'OK'
 "#)
 }
@@ -52,8 +64,12 @@ Write-Output 'OK'
 #[tauri::command]
 pub async fn restore_tcp_chimney() -> Result<PerfTweakResult, String> {
     run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-netsh int tcp set global chimney=enabled 2>&1 | Out-Null
+$ErrorActionPreference = 'Stop'
+$output = netsh int tcp set global chimney=enabled 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "TCP Chimney Offload 恢复失败: $output"
+    exit 1
+}
 Write-Output 'OK'
 "#)
 }
@@ -299,17 +315,25 @@ try {
 #[tauri::command]
 pub async fn batch_network_enable() -> Result<PerfTweakResult, String> {
     run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Stop'
 
 # TCP Congestion
-$current = netsh int tcp show supplemental | Select-String "拥塞控制提供程序|Congestion Control Provider"
+$current = netsh int tcp show supplemental 2>&1 | Select-String "拥塞控制提供程序|Congestion Control Provider"
 $hasCtcp = $current -match "CTCP|CUBIC"
 if (-not $hasCtcp) {
-    netsh int tcp set supplemental Internet congestionprovider=ctcp 2>&1 | Out-Null
+    $output = netsh int tcp set supplemental Internet congestionprovider=ctcp 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "TCP 拥塞控制设置失败: $output"
+        exit 1
+    }
 }
 
 # Chimney Offload
-netsh int tcp set global chimney=disabled 2>&1 | Out-Null
+$output = netsh int tcp set global chimney=disabled 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "TCP Chimney Offload 设置失败: $output"
+    exit 1
+}
 
 # Nagle Optimization
 $interfaces = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
@@ -338,13 +362,21 @@ Write-Output 'OK'
 #[tauri::command]
 pub async fn batch_network_disable() -> Result<PerfTweakResult, String> {
     run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Stop'
 
 # TCP Congestion - restore
-netsh int tcp set supplemental Internet congestionprovider=newreno 2>&1 | Out-Null
+$output = netsh int tcp set supplemental Internet congestionprovider=newreno 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "TCP 拥塞控制恢复失败: $output"
+    exit 1
+}
 
 # Chimney Offload - restore
-netsh int tcp set global chimney=enabled 2>&1 | Out-Null
+$output = netsh int tcp set global chimney=enabled 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "TCP Chimney Offload 恢复失败: $output"
+    exit 1
+}
 
 # Nagle - restore
 $interfaces = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"

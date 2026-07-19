@@ -27,6 +27,10 @@ fn default_font() -> String {
     "Microsoft YaHei".to_string()
 }
 
+fn default_font_color() -> String {
+    "#ffffff".to_string()
+}
+
 fn default_display_items() -> DisplayItems {
         vec![
             DisplayItem { id: "fps".to_string(), label: "FPS".to_string(), enabled: false },
@@ -72,10 +76,15 @@ pub struct OverlaySettings {
     pub style: String,
     #[serde(default = "default_font")]
     pub font: String,
+    #[serde(default = "default_font_color")]
+    pub font_color: String,
     #[serde(default)]
     pub position_x: Option<i32>,
     #[serde(default)]
     pub position_y: Option<i32>,
+    /// 三角洲密码选中的地图名称列表（空 = 显示全部）
+    #[serde(default)]
+    pub delta_password_maps: Vec<String>,
 }
 
 impl Default for OverlaySettings {
@@ -86,8 +95,10 @@ impl Default for OverlaySettings {
             opacity: 255,
             style: "default".to_string(),
             font: "Microsoft YaHei".to_string(),
+            font_color: "#ffffff".to_string(),
             position_x: None,
             position_y: None,
+            delta_password_maps: Vec::new(),
         }
     }
 }
@@ -246,7 +257,15 @@ static LAST_LHML_UPDATE: std::sync::atomic::AtomicU64 = std::sync::atomic::Atomi
 pub fn collect_hardware_data() -> OverlayHardwareData {
     let fps = crate::game_fps::get_cached_fps();
 
-    let delta_password = crate::delta_force::get_cached_delta_password();
+    let selected_maps = {
+        let settings = get_or_init_settings();
+        settings.delta_password_maps.clone()
+    };
+    let delta_password = if selected_maps.is_empty() {
+        crate::delta_force::get_cached_delta_password()
+    } else {
+        crate::delta_force::get_cached_delta_password_filtered(&selected_maps)
+    };
 
     let game_ping = crate::game_ping::get_cached_ping();
 
@@ -1022,19 +1041,19 @@ mod win32 {
                 }
                 "cpu_fan_speed" => {
                     let val = data.cpu_fan_speed.map(|v| format!("{}RPM", v)).unwrap_or_else(|| "--RPM".to_string());
-                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "gpu_fan_speed" => {
                     let val = data.gpu_fan_speed.map(|v| format!("{}RPM", v)).unwrap_or_else(|| "--RPM".to_string());
-                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "gpu_power" => {
                     let val = data.gpu_power.map(|v| format!("{}W", v)).unwrap_or_else(|| "--W".to_string());
-                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "gpu_clock" => {
                     let val = data.gpu_clock.map(|v| format!("{}MHz", v)).unwrap_or_else(|| "--MHz".to_string());
-                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "gpu_vram" => {
                     let val = match (data.gpu_vram_used, data.gpu_vram_total) {
@@ -1045,15 +1064,15 @@ mod win32 {
                         }
                         _ => "--G/--G".to_string(),
                     };
-                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "gpu_memory_clock" => {
                     let val = data.gpu_memory_clock.map(|v| format!("{}MHz", v)).unwrap_or_else(|| "--MHz".to_string());
-                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "gpu_voltage" => {
                     let val = data.gpu_voltage.map(|v| format!("{:.3}V", v)).unwrap_or_else(|| "--V".to_string());
-                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "GPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "cpu_temp" => {
                     let val = data.cpu_temp.map(|v| format!("{:.0}°C", v)).unwrap_or_else(|| "--°C".to_string());
@@ -1061,7 +1080,7 @@ mod win32 {
                 }
                 "cpu_clock" => {
                     let val = data.cpu_clock.map(|v| format!("{}MHz", v)).unwrap_or_else(|| "--MHz".to_string());
-                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: Some(0x0000FF00u32) });
+                    items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "cpu_voltage" => {
                     let val = data.cpu_voltage.map(|v| format!("{:.3}V", v)).unwrap_or_else(|| "--V".to_string());
@@ -1134,6 +1153,7 @@ mod win32 {
             return;
         }
 
+        let font_color = parse_hex_color(&settings.font_color);
         let temp_dc = GetDC(ptr::null_mut());
         let mut items = build_display_items(settings, data);
         let padding = (16.0 * dpi_scale) as i32;
@@ -1212,7 +1232,7 @@ mod win32 {
                     right: current_x + item.label_width,
                     bottom: win_height_i32,
                 };
-                SetTextColor(mem_dc, 0x00FFFFFF);
+                SetTextColor(mem_dc, font_color);
                 DrawTextW(
                     mem_dc,
                     wide_label.as_ptr(),
@@ -1235,10 +1255,12 @@ mod win32 {
                 bottom: win_height_i32,
             };
 
-            let mut color: u32 = 0x00FFFFFF;
+            let mut color: u32 = font_color;
             if let Some(custom_color) = item.custom_color {
                 color = custom_color;
-            } else if !item.label.is_empty() && !item.value.contains("--") {
+            } else if !item.label.is_empty() && !item.value.contains("--")
+                && (item.value.contains("°C") || item.value.contains('%') || item.value.bytes().all(|b| b.is_ascii_digit()))
+            {
                 let mut num_str = String::new();
                 for ch in item.value.chars() {
                     if ch.is_ascii_digit() || ch == '.' {
@@ -1341,6 +1363,7 @@ mod win32 {
             return;
         }
 
+        let font_color = parse_hex_color(&settings.font_color);
         // Build a temp DC just for measurement
         let temp_dc = GetDC(ptr::null_mut());
         let mut items = build_display_items(settings, data);
@@ -1444,7 +1467,7 @@ mod win32 {
                     right: current_x + item.label_width,
                     bottom: win_height_i32,
                 };
-                SetTextColor(mem_dc, 0x00FFFFFF);
+                SetTextColor(mem_dc, font_color);
                 DrawTextW(
                     mem_dc,
                     wide_label.as_ptr(),
@@ -1467,10 +1490,12 @@ mod win32 {
                 bottom: win_height_i32,
             };
 
-            let mut color: u32 = 0x00FFFFFF;
+            let mut color: u32 = font_color;
             if let Some(custom_color) = item.custom_color {
                 color = custom_color;
-            } else if !item.label.is_empty() && !item.value.contains("--") {
+            } else if !item.label.is_empty() && !item.value.contains("--")
+                && (item.value.contains("°C") || item.value.contains('%') || item.value.bytes().all(|b| b.is_ascii_digit()))
+            {
                 let mut num_str = String::new();
                 for ch in item.value.chars() {
                     if ch.is_ascii_digit() || ch == '.' {
@@ -1944,6 +1969,7 @@ pub async fn update_overlay_settings(app_handle: tauri::AppHandle, settings: Ove
                     let _ = crate::vertical_overlay::start_vertical_overlay(app_handle, Some(settings)).await;
                 } else {
                     start_overlay(settings)?;
+                    let _ = app_handle.emit("overlay-status-changed", ());
                 }
             }
         } else if new_is_vertical {

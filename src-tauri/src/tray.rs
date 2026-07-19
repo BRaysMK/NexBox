@@ -117,6 +117,14 @@ pub fn set_dont_ask_again(value: bool) {
 
 #[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
+    // 先隐藏所有窗口，避免退出时 WebView2 销毁后短暂露出原生标题栏
+    for label in &["main", "widget", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
+        if let Some(w) = app.get_webview_window(label) {
+            let _ = w.hide();
+        }
+    }
+    // 给 Windows 消息队列一点时间处理隐藏操作
+    std::thread::sleep(std::time::Duration::from_millis(50));
     app.exit(0);
 }
 

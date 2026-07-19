@@ -107,42 +107,49 @@ pub async fn get_delta_passwords() -> Result<Vec<DeltaPasswordItem>, String> {
     Ok(passwords)
 }
 
-pub fn get_cached_delta_password() -> Option<String> {
+fn get_cached_delta_password_items() -> Option<Vec<DeltaPasswordItem>> {
     {
         let cache = DELTA_PASSWORD_CACHE.lock().unwrap();
         if let Some((data, time)) = cache.as_ref() {
             if time.elapsed().as_secs() < 300 {
-        if data.is_empty() {
-          return None;
-        }
-        // 返回所有地图-密码对，按顺序拼接，例如 "零号大坝：3333 航天基地：2222"
-        let joined = data
-          .iter()
-          .map(|item| format!("{}：{}", item.name, item.password))
-          .collect::<Vec<_>>()
-          .join("  ");
-        return Some(joined);
+                return if data.is_empty() { None } else { Some(data.clone()) };
             }
         }
     }
 
     match fetch_delta_passwords_from_api() {
         Some(passwords) => {
-            if !passwords.is_empty() {
-        let joined = passwords
-          .iter()
-          .map(|item| format!("{}：{}", item.name, item.password))
-          .collect::<Vec<_>>()
-          .join("  ");
-        let mut cache = DELTA_PASSWORD_CACHE.lock().unwrap();
-        *cache = Some((passwords, std::time::Instant::now()));
-        Some(joined)
-            } else {
-                None
+            if passwords.is_empty() {
+                return None;
             }
+            let mut cache = DELTA_PASSWORD_CACHE.lock().unwrap();
+            *cache = Some((passwords.clone(), std::time::Instant::now()));
+            Some(passwords)
         }
         None => None,
     }
+}
+
+pub fn get_cached_delta_password_filtered(selected_maps: &[String]) -> Option<String> {
+    let items = get_cached_delta_password_items()?;
+    let filtered: Vec<_> = if selected_maps.is_empty() {
+        items
+    } else {
+        items.into_iter().filter(|item| selected_maps.contains(&item.name)).collect()
+    };
+    if filtered.is_empty() {
+        return None;
+    }
+    let joined = filtered
+        .iter()
+        .map(|item| format!("{}：{}", item.name, item.password))
+        .collect::<Vec<_>>()
+        .join("  ");
+    Some(joined)
+}
+
+pub fn get_cached_delta_password() -> Option<String> {
+    get_cached_delta_password_filtered(&[])
 }
 
 #[tauri::command]

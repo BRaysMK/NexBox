@@ -818,6 +818,57 @@ fn build_gamma_ramp(
 
 // ─── Per-display DC helpers ───
 
+/// 轻量级枚举：仅收集显示器 GDI 设备名并填充 DISPLAY_DEVICES 缓存。
+/// 不调用 EnumDisplayDevicesW / EDID / PowerShell，适用于清理路径等不应阻塞的场景。
+#[cfg(target_os = "windows")]
+fn enumerate_device_names_only() -> Vec<String> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        EnumDisplayMonitors, GetMonitorInfoW,
+        HDC, HMONITOR, MONITORINFOEXW,
+    };
+
+    struct MonitorData {
+        device_names: Vec<String>,
+    }
+
+    unsafe extern "system" fn monitor_enum_proc(
+        hmonitor: HMONITOR,
+        _hdc: HDC,
+        _rect: *mut windows_sys::Win32::Foundation::RECT,
+        lparam: isize,
+    ) -> i32 {
+        let data = &mut *(lparam as *mut MonitorData);
+        let mut info: MONITORINFOEXW = std::mem::zeroed();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _) != 0 {
+            let device_name = String::from_utf16_lossy(
+                &info.szDevice[..info.szDevice.iter().position(|&c| c == 0).unwrap_or(info.szDevice.len())],
+            );
+            data.device_names.push(device_name);
+        }
+        1
+    }
+
+    let mut data = MonitorData {
+        device_names: Vec::new(),
+    };
+    unsafe {
+        EnumDisplayMonitors(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            Some(monitor_enum_proc),
+            &mut data as *mut _ as isize,
+        );
+    }
+    if data.device_names.is_empty() {
+        data.device_names.push("DISPLAY1".to_string());
+    }
+    if let Ok(mut lock) = DISPLAY_DEVICES.lock() {
+        *lock = Some(data.device_names.clone());
+    }
+    data.device_names
+}
+
 #[cfg(target_os = "windows")]
 fn get_display_dc(
     display_index: usize,
@@ -832,15 +883,10 @@ fn get_display_dc(
         if let Some(ref names) = *lock {
             names.clone()
         } else {
-            // 缓存为空 → 立即枚举一次（处理热键路径先于页面加载的情况）
+            // 缓存为空 → 轻量枚举（不触发 EnumDisplayDevicesW / EDID / PowerShell）
             drop(lock);
-            log::info!("get_display_dc[{}]: DISPLAY_DEVICES 缓存为空，即时枚举显示器", display_index);
-            enumerate_displays_inner();
-            // Re-lock and try again
-            let lock2 = DISPLAY_DEVICES
-                .lock()
-                .map_err(|_| "无法获取显示器列表锁".to_string())?;
-            lock2.as_ref().map(|n| n.clone()).unwrap_or_default()
+            log::info!("get_display_dc[{}]: DISPLAY_DEVICES 缓存为空，轻量枚举设备名", display_index);
+            enumerate_device_names_only()
         }
     };
 

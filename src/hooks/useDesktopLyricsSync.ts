@@ -34,7 +34,8 @@ export type ControlAction =
   | "next"
   | "toggle-shuffle"
   | "lock"
-  | "unlock";
+  | "unlock"
+  | "close";
 
 export function useDesktopLyricsSync() {
   const [song, setSong] = useState<Song | null>(null);

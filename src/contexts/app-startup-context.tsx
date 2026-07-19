@@ -42,9 +42,11 @@ interface OverlaySettings {
   opacity: number;
   style: string;
   font: string;
+  font_color: string;
   _version?: number;
   position_x?: number | null;
   position_y?: number | null;
+  delta_password_maps?: string[];
 }
 
 interface ThirdPartyTool {
@@ -108,8 +110,10 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   opacity: 255,
   style: "default",
   font: "Microsoft YaHei",
+  font_color: "#ffffff",
   position_x: null,
   position_y: null,
+  delta_password_maps: [],
 };
 
 const AppStartupContext = createContext<AppStartupContextType>({

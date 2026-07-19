@@ -20,6 +20,11 @@ static DWM_PID_HITS: AtomicU64 = AtomicU64::new(0);
 static DWM_TOTAL_EVENTS: AtomicU64 = AtomicU64::new(0);
 static ETW_STARTED: AtomicBool = AtomicBool::new(false);
 
+// L3: Alt+Tab 切换结束后延迟重查标志（由 SWITCHEND Hook 设置，fps_counter_loop 消费）
+static PENDING_RESYNC: AtomicBool = AtomicBool::new(false);
+// L3: SWITCHEND Hook 句柄
+static SWITCH_HOOK_HANDLE: Mutex<usize> = Mutex::new(0);
+
 #[cfg(target_os = "windows")]
 mod win32_fps {
     use super::*;
@@ -57,6 +62,27 @@ mod win32_fps {
     const PROCESS_TRACE_MODE_EVENT_RECORD: u32 = 0x10000000;
     const EVENT_CONTROL_CODE_ENABLE_PROVIDER: u32 = 1;
 
+    /// 判断给定窗口是否为自身 overlay 窗口（需跳过，避免把 overlay 当成游戏目标）
+    fn is_self_window(hwnd: HWND) -> bool {
+        let overlay_hwnd = OVERLAY_HWND.load(Ordering::Relaxed) as usize;
+        overlay_hwnd != 0 && hwnd as usize == overlay_hwnd
+    }
+
+    /// 刷新目标进程/窗口句柄，并重置所有帧计数器。
+    /// 调用方需保证 hwnd/pid 已经过校验（非空、非自身窗口）。
+    unsafe fn refresh_target(hwnd: HWND, pid: u32) {
+        CURRENT_PID.store(pid, Ordering::Relaxed);
+        CURRENT_HWND.store(hwnd as u64, Ordering::Relaxed);
+        DXGI_FRAME_COUNTER.store(0, Ordering::Relaxed);
+        DWM_FRAME_COUNTER.store(0, Ordering::Relaxed);
+        DXGI_PID_HITS.store(0, Ordering::Relaxed);
+        DWM_PID_HITS.store(0, Ordering::Relaxed);
+        DWM_TOTAL_EVENTS.store(0, Ordering::Relaxed);
+        TOTAL_EVENTS.store(0, Ordering::Relaxed);
+        LAST_DWM_TS.store(0, Ordering::Relaxed);
+        DWM_SAMPLE_LOGGED.store(false, Ordering::Relaxed);
+    }
+
     unsafe extern "system" fn on_foreground_changed(
         _hook: HWINEVENTHOOK,
         _event: u32,
@@ -69,24 +95,14 @@ mod win32_fps {
         if !FPS_ACTIVE.load(Ordering::SeqCst) {
             return;
         }
-        let overlay_hwnd = OVERLAY_HWND.load(Ordering::Relaxed) as usize;
-        if overlay_hwnd != 0 && hwnd as usize == overlay_hwnd {
+        if is_self_window(hwnd) {
             return;
         }
         let mut pid = 0u32;
         GetWindowThreadProcessId(hwnd, &mut pid);
         if pid != 0 {
             log::info!("FPS监控: 前台窗口切换 PID={} hwnd={:#X}", pid, hwnd as usize);
-            CURRENT_PID.store(pid, Ordering::Relaxed);
-            CURRENT_HWND.store(hwnd as u64, Ordering::Relaxed);
-            DXGI_FRAME_COUNTER.store(0, Ordering::Relaxed);
-            DWM_FRAME_COUNTER.store(0, Ordering::Relaxed);
-            DXGI_PID_HITS.store(0, Ordering::Relaxed);
-            DWM_PID_HITS.store(0, Ordering::Relaxed);
-            DWM_TOTAL_EVENTS.store(0, Ordering::Relaxed);
-            TOTAL_EVENTS.store(0, Ordering::Relaxed);
-            LAST_DWM_TS.store(0, Ordering::Relaxed);
-            DWM_SAMPLE_LOGGED.store(false, Ordering::Relaxed);
+            refresh_target(hwnd, pid);
         }
     }
 
@@ -216,6 +232,92 @@ mod win32_fps {
             UnhookWinEvent(*lock as *mut std::ffi::c_void);
             *lock = 0;
         }
+    }
+
+    /// EVENT_SYSTEM_SWITCHEND 事件常量（Alt+Tab 切换结束）。
+    /// 不直接使用 windows_sys 导入以避免 feature/命名冲突，使用字面量 0x0015。
+    const EVT_SWITCH_END: u32 = 0x0015;
+
+    /// Alt+Tab 切换结束时触发：设置延迟重查标志，由 fps_counter_loop 消费。
+    unsafe extern "system" fn on_switch_end(
+        _hook: HWINEVENTHOOK,
+        _event: u32,
+        _hwnd: HWND,
+        _id_object: i32,
+        _id_child: i32,
+        _id_event_thread: u32,
+        _dw_event_time: u32,
+    ) {
+        if !FPS_ACTIVE.load(Ordering::SeqCst) {
+            return;
+        }
+        PENDING_RESYNC.store(true, Ordering::Relaxed);
+    }
+
+    pub unsafe fn register_switch_hook() -> bool {
+        let hook = SetWinEventHook(
+            EVT_SWITCH_END,
+            EVT_SWITCH_END,
+            ptr::null_mut(),
+            Some(on_switch_end),
+            0,
+            0,
+            WINEVENT_OUTOFCONTEXT,
+        );
+        if !hook.is_null() {
+            let mut lock = SWITCH_HOOK_HANDLE.lock().unwrap();
+            *lock = hook as usize;
+            log::info!("FPS监控: SWITCHEND Hook 注册成功");
+            true
+        } else {
+            log::warn!("FPS监控: SWITCHEND Hook 注册失败");
+            false
+        }
+    }
+
+    pub unsafe fn unregister_switch_hook() {
+        let mut lock = SWITCH_HOOK_HANDLE.lock().unwrap();
+        if *lock != 0 {
+            UnhookWinEvent(*lock as *mut std::ffi::c_void);
+            *lock = 0;
+        }
+    }
+
+    /// 主动查询当前前台窗口并同步 CURRENT_PID/CURRENT_HWND。
+    /// - force=false：仅在前台窗口/进程与当前记录不一致时刷新（L1 定期轮询用）
+    /// - force=true ：无视一致性强制刷新（L2 自愈 / SWITCHEND 重查用）
+    /// 返回 true 表示发生了刷新。
+    pub unsafe fn sync_foreground_if_stale(force: bool) -> bool {
+        let fg = GetForegroundWindow();
+        if fg.is_null() {
+            return false;
+        }
+        if is_self_window(fg) {
+            return false;
+        }
+
+        let cur_hwnd = CURRENT_HWND.load(Ordering::Relaxed) as usize;
+        if !force && fg as usize == cur_hwnd {
+            return false;
+        }
+
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(fg, &mut pid);
+        if pid == 0 {
+            return false;
+        }
+
+        let cur_pid = CURRENT_PID.load(Ordering::Relaxed);
+        if !force && pid == cur_pid {
+            return false;
+        }
+
+        log::info!(
+            "FPS监控(轮询): 前台变化 detected hwnd={:#X} pid={} (旧 pid={} hwnd={:#X})",
+            fg as usize, pid, cur_pid, cur_hwnd
+        );
+        refresh_target(fg, pid);
+        true
     }
 
     pub unsafe fn get_initial_foreground_pid() -> u32 {
@@ -374,10 +476,32 @@ pub fn clear_overlay_hwnd() {
 fn fps_counter_loop() {
     let mut smoothed: f64 = -1.0;
     let mut tick_count: u32 = 0;
+    let mut low_fps_streak: u32 = 0;
+    const LOW_FPS_THRESHOLD: f64 = 2.0;
+    const LOW_FPS_TRIGGER_TICKS: u32 = 3;
+    const SYNC_EVERY_TICKS: u32 = 2;
+
     while FPS_ACTIVE.load(Ordering::SeqCst) {
         thread::sleep(Duration::from_millis(500));
         if !FPS_ACTIVE.load(Ordering::SeqCst) {
             break;
+        }
+
+        tick_count += 1;
+
+        #[cfg(target_os = "windows")]
+        unsafe {
+            // 消费 SWITCHEND 延迟重查标志（Alt+Tab 切换结束）
+            if PENDING_RESYNC.swap(false, Ordering::Relaxed) {
+                log::info!("FPS监控: SWITCHEND 触发前台重查");
+                if win32_fps::sync_foreground_if_stale(true) {
+                    smoothed = -1.0;
+                }
+            }
+            // L1: 每 ~1s 主动同步前台窗口（兜底 EVENT_SYSTEM_FOREGROUND 漏发）
+            if tick_count % SYNC_EVERY_TICKS == 0 {
+                let _ = win32_fps::sync_foreground_if_stale(false);
+            }
         }
 
         let dxgi_count = DXGI_FRAME_COUNTER.swap(0, Ordering::Relaxed);
@@ -389,7 +513,6 @@ fn fps_counter_loop() {
         let etw_ok = ETW_STARTED.load(Ordering::Relaxed);
         let hwnd = CURRENT_HWND.load(Ordering::Relaxed);
 
-        tick_count += 1;
         if tick_count <= 30 || tick_count % 20 == 0 {
             let pid = CURRENT_PID.load(Ordering::Relaxed);
             log::info!(
@@ -411,6 +534,26 @@ fn fps_counter_loop() {
             smoothed = 0.3 * current_fps + 0.7 * smoothed;
         }
 
+        // L2: 连续低 FPS 自愈（仅当 ETW 在运行时才计入，避免会话未启动误判）
+        #[cfg(target_os = "windows")]
+        unsafe {
+            if current_fps <= LOW_FPS_THRESHOLD && ETW_STARTED.load(Ordering::Relaxed) {
+                low_fps_streak += 1;
+                if low_fps_streak >= LOW_FPS_TRIGGER_TICKS {
+                    log::warn!(
+                        "FPS监控: 连续 {} tick 低帧率({}), 触发前台重查",
+                        low_fps_streak, current_fps
+                    );
+                    if win32_fps::sync_foreground_if_stale(true) {
+                        smoothed = -1.0;
+                    }
+                    low_fps_streak = 0;
+                }
+            } else {
+                low_fps_streak = 0;
+            }
+        }
+
         let final_fps = smoothed.round() as u32;
         CURRENT_FPS.store(current_fps.round() as u32, Ordering::Relaxed);
         SMOOTHED_FPS.store(final_fps, Ordering::Relaxed);
@@ -430,6 +573,9 @@ pub fn start_fps_monitor() {
 
         if !win32_fps::register_foreground_hook() {
             log::warn!("FPS监控: 前台窗口Hook注册失败，FPS可能不准确");
+        }
+        if !win32_fps::register_switch_hook() {
+            log::warn!("FPS监控: SWITCHEND Hook注册失败，Alt+Tab恢复可能延迟");
         }
 
         thread::spawn(|| {
@@ -457,8 +603,10 @@ pub fn stop_fps_monitor() {
     unsafe {
         win32_fps::stop_etw_trace();
         win32_fps::unregister_foreground_hook();
+        win32_fps::unregister_switch_hook();
     }
 
+    PENDING_RESYNC.store(false, Ordering::Relaxed);
     CURRENT_PID.store(0, Ordering::Relaxed);
     CURRENT_HWND.store(0, Ordering::Relaxed);
     DXGI_FRAME_COUNTER.store(0, Ordering::Relaxed);

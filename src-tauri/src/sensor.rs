@@ -69,11 +69,30 @@ impl SensorBridge {
         }
     }
 
-    /// 优雅关闭子进程
+    /// 优雅关闭子进程（最多等待 3 秒，超时则强制终止）
     pub fn shutdown(&mut self) {
         let _ = writeln!(self.writer, r#"{{"cmd":"exit"}}"#);
         let _ = self.writer.flush();
-        let _ = self.child.wait();
+        let start = std::time::Instant::now();
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => {
+                    if start.elapsed() > std::time::Duration::from_secs(3) {
+                        log::warn!("NexBoxMonitor 子进程未在 3s 内退出，强制终止");
+                        let _ = self.child.kill();
+                        let _ = self.child.wait();
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                Err(e) => {
+                    log::warn!("等待 NexBoxMonitor 退出出错: {}", e);
+                    let _ = self.child.kill();
+                    break;
+                }
+            }
+        }
     }
 }
 

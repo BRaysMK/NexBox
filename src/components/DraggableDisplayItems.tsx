@@ -1,7 +1,7 @@
-import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast, Button } from "@chakra-ui/react";
+import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast, Button, IconButton } from "@chakra-ui/react";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock, Download, Music4 } from "lucide-react";
+import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock, Download, Music4, Settings } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   DndContext,
@@ -32,6 +32,7 @@ interface DraggableDisplayItemsProps {
   onReorder: (items: DisplayItem[]) => void;
   onToggle: (id: string, enabled: boolean) => void;
   disabledItems?: string[];
+  onDeltaPasswordSettings?: () => void;
 }
 
 const ITEM_ICONS: Record<string, React.FC<{ size?: number }>> = {
@@ -62,11 +63,13 @@ function SortableItem({
   onToggle,
   enabledCount,
   disabled,
+  onSettingsClick,
 }: {
   item: DisplayItem;
   onToggle: (id: string, enabled: boolean) => void;
   enabledCount: number;
   disabled?: boolean;
+  onSettingsClick?: () => void;
 }) {
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const iconColor = useColorModeValue("gray.500", "#999999");
@@ -132,6 +135,21 @@ function SortableItem({
       <Text color={textColor} fontSize="sm" flex={1}>
         {item.label}
       </Text>
+      {item.id === "delta_password" && onSettingsClick && (
+        <IconButton
+          aria-label="地图设置"
+          icon={<Settings size={15} />}
+          size="xs"
+          variant="ghost"
+          color={getActiveColor()}
+          _hover={{ bg: hexToRgba(getActiveColor(), 0.1) }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSettingsClick();
+          }}
+          mr={1}
+        />
+      )}
       {item.id === "cpu_temp" && (
         <Button
           size="xs"
@@ -183,6 +201,7 @@ export function DraggableDisplayItems({
   onReorder,
   onToggle,
   disabledItems = [],
+  onDeltaPasswordSettings,
 }: DraggableDisplayItemsProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -226,6 +245,7 @@ export function DraggableDisplayItems({
               onToggle={onToggle}
               enabledCount={enabledCount}
               disabled={disabledItems.includes(item.id)}
+              onSettingsClick={item.id === "delta_password" ? onDeltaPasswordSettings : undefined}
             />
           ))}
         </Box>

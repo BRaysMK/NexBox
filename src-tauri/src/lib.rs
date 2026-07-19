@@ -30,6 +30,7 @@ mod thirdparty_tools;
 mod tray;
 mod utils;
 mod video_bg;
+mod wmi_query;
 use tauri::Manager;
 
 
@@ -444,11 +445,19 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         match event {
+            tauri::RunEvent::ExitRequested { .. } => {
+                // 退出流程开始前隐藏所有窗口，避免 WebView2 销毁后闪现原生标题栏
+                for label in &["main", "widget", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
+                    if let Some(w) = app_handle.get_webview_window(label) {
+                        let _ = w.hide();
+                    }
+                }
+            }
             tauri::RunEvent::Exit => {
                 sensor::stop_sensor_process(app_handle);
                 hardware::cleanup_hardware_cache();
+                overlay_panel::cleanup(); // 先停后台轮询线程(FPS/传感器)，再恢复 Gamma
                 display_filter::cleanup();
-                overlay_panel::cleanup();
                 vertical_overlay::cleanup(app_handle);
                 crosshair::cleanup();
                 tray::cleanup();

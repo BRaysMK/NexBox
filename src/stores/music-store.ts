@@ -409,6 +409,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           case "unlock":
             get().setDesktopLyricsLocked(false);
             break;
+          case "close":
+            get().setDesktopLyricsVisible(false);
+            break;
         }
       })
     );

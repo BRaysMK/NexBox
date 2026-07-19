@@ -4,7 +4,7 @@
  * 锁定状态的解锁按钮由独立小窗口（/lyrics-unlock-btn）提供，
  * 不受 WebView2 穿透影响。
  *
- * [上一句] [播放/暂停] [下一句] [随机播放] | [锁定]
+ * [上一句] [播放/暂停] [下一句] [随机播放] | [锁定] | [关闭]
  */
 
 import { memo } from "react";
@@ -15,6 +15,7 @@ import {
   Play,
   Pause,
   Lock,
+  X,
 } from "lucide-react";
 import type { PlayMode } from "@/types/music";
 import type { ControlAction } from "@/hooks/useDesktopLyricsSync";
@@ -127,6 +128,26 @@ function LyricsControlBarInner({
         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
         <Lock size={16} />
+      </button>
+
+      {/* 分隔线 */}
+      <div
+        style={{
+          width: "1px",
+          height: "16px",
+          background: "rgba(255,255,255,0.2)",
+          margin: "0 2px",
+        }}
+      />
+
+      <button
+        style={btnBase}
+        onClick={() => onControl("close")}
+        title="关闭桌面歌词"
+        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        <X size={16} />
       </button>
     </div>
   );

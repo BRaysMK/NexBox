@@ -10,7 +10,7 @@
  * - 数值颜色渐变（绿→黄→红）
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -52,6 +52,7 @@ interface OverlaySettings {
   opacity: number;
   style: string;
   font: string;
+  font_color: string;
   position_x?: number | null;
   position_y?: number | null;
 }
@@ -137,6 +138,7 @@ const DEFAULT_SETTINGS: OverlaySettings = {
   opacity: 200,
   style: "vertical_panel",
   font: "Microsoft YaHei",
+  font_color: "#ffffff",
 };
 
 // ===== 工具函数 =====
@@ -193,11 +195,11 @@ function getItemValue(item: DisplayItemConfig, data: HardwareData | null): strin
   }
 }
 
-/** 获取数值颜色（绿→黄→红） */
-function getValueColor(value: string): string {
-  if (value === "--" || value === "") return "rgba(255,255,255,0.5)";
+/** 获取数值颜色（绿→黄→红），仅温度/占用/FPS 使用动态色，其余用 fallback */
+function getValueColor(value: string, fallback: string = "#ffffff"): string {
+  if (value === "--" || value === "") return fallback;
   const num = parseFloat(value);
-  if (isNaN(num)) return "#ffffff";
+  if (isNaN(num)) return fallback;
 
   // 温度类
   if (value.includes("°C")) {
@@ -211,19 +213,14 @@ function getValueColor(value: string): string {
     if (num < 80) return "#ffcc00";
     return "#ff4444";
   }
-  // 延迟
-  if (value.includes("ms")) {
-    if (num < 30) return "#00ff88";
-    if (num < 80) return "#ffcc00";
-    return "#ff4444";
-  }
-  // FPS
-  if (value.match(/^\d+$/) && !value.includes("MHz") && !value.includes("V") && !value.includes("W") && !value.includes("RPM") && !value.includes("MB")) {
+  // FPS（纯数字）
+  if (/^\d+$/.test(value)) {
     if (num >= 120) return "#00ff88";
     if (num >= 60) return "#ffcc00";
     return "#ff4444";
   }
-  return "#ffffff";
+  // 瓦数、转速、频率、电压、延迟等 → 字体颜色
+  return fallback;
 }
 
 // ===== 主组件 =====
@@ -231,11 +228,7 @@ function getValueColor(value: string): string {
 export default function VerticalOverlayPage() {
   const [hardwareData, setHardwareData] = useState<HardwareData | null>(null);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_SETTINGS);
-  const [isDragMode, setIsDragMode] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isDragModeRef = useRef(isDragMode);
-  isDragModeRef.current = isDragMode;
-
   const win = getCurrentWindow();
 
   // 强制背景透明（与桌面歌词窗口相同处理）
@@ -310,36 +303,6 @@ export default function VerticalOverlayPage() {
     return () => clearTimeout(timer);
   }, [settings.display_items, settings.custom_items, hardwareData]);
 
-  // 拖动模式切换
-  const toggleDragMode = useCallback(async () => {
-    const newDragMode = !isDragMode;
-    setIsDragMode(newDragMode);
-
-    // 拖动模式：关闭穿透允许交互；退出拖动：恢复穿透
-    await invoke("set_vertical_overlay_click_through", { enabled: !newDragMode });
-
-    if (!newDragMode) {
-      // 退出拖动模式，保存位置
-      try {
-        const pos = await win.outerPosition();
-        await invoke("save_vertical_overlay_position", { x: pos.x, y: pos.y });
-      } catch {
-        // ignore
-      }
-    }
-  }, [isDragMode, win]);
-
-  // 拖动窗口
-  const handleDragStart = useCallback(async (e: React.MouseEvent) => {
-    if (!isDragModeRef.current) return;
-    e.preventDefault();
-    try {
-      await win.startDragging();
-    } catch {
-      // ignore
-    }
-  }, [win]);
-
   // 计算启用的项
   const enabledItems = settings.display_items.filter((i) => i.enabled);
   const enabledCustomItems = settings.custom_items.filter((i) => i.enabled);
@@ -363,57 +326,26 @@ export default function VerticalOverlayPage() {
         color: "#ffffff",
         userSelect: "none",
         WebkitUserSelect: "none",
-        backdropFilter: "blur(10px)",
-        WebkitBackdropFilter: "blur(10px)",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
-        cursor: isDragMode ? "move" : "default",
+        border: "none",
       }}
-      onMouseDown={handleDragStart}
+      onMouseDown={async (e) => {
+        e.preventDefault();
+        try {
+          await win.startDragging();
+          // 拖动结束，保存位置并恢复鼠标穿透
+          const pos = await win.outerPosition();
+          await invoke("save_vertical_overlay_position", { x: pos.x, y: pos.y });
+          await invoke("set_vertical_overlay_click_through", { enabled: true });
+        } catch {
+          // ignore
+        }
+      }}
     >
-      {/* 拖动按钮 */}
-      <div
-        style={{
-          position: "absolute",
-          top: "4px",
-          right: "6px",
-          width: "18px",
-          height: "18px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          opacity: isDragMode ? 0.9 : 0.35,
-          transition: "opacity 0.2s",
-          zIndex: 10,
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleDragMode();
-        }}
-        title={isDragMode ? "点击固定位置" : "点击拖动"}
-      >
-        {isDragMode ? (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9800" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 17v5" />
-            <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
-          </svg>
-        ) : (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 9l-3 3 3 3" />
-            <path d="M9 5l3-3 3 3" />
-            <path d="M15 19l-3 3-3-3" />
-            <path d="M19 9l3 3-3 3" />
-            <path d="M2 12h20" />
-            <path d="M12 2v20" />
-          </svg>
-        )}
-      </div>
-
       {/* 内置项列表 */}
       {enabledItems.map((item) => {
-        const value = getItemValue(item, hardwareData);
+        const rawValue = getItemValue(item, hardwareData);
         const IconComp = ITEM_ICONS[item.id] ?? Gauge;
-        const valueColor = getValueColor(value);
+        const valueColor = getValueColor(rawValue, settings.font_color);
         return (
           <div
             key={item.id}
@@ -425,12 +357,12 @@ export default function VerticalOverlayPage() {
               borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
             }}
           >
-            <IconComp size={14} style={{ flexShrink: 0, color: "rgba(255,255,255,0.5)" }} />
-            <span style={{ flex: 1, whiteSpace: "nowrap", color: "rgba(255,255,255,0.7)" }}>
+            <IconComp size={14} style={{ flexShrink: 0, color: settings.font_color }} />
+            <span style={{ flex: 1, whiteSpace: "nowrap", color: settings.font_color }}>
               {item.label}
             </span>
             <span style={{ textAlign: "right", fontWeight: 600, whiteSpace: "nowrap", color: valueColor }}>
-              {value}
+              {rawValue}
             </span>
           </div>
         );
@@ -448,8 +380,8 @@ export default function VerticalOverlayPage() {
             borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
           }}
         >
-          <span style={{ flexShrink: 0, width: 14, textAlign: "center", color: "rgba(255,255,255,0.5)" }}>•</span>
-          <span style={{ flex: 1, whiteSpace: "nowrap", color: "rgba(255,255,255,0.7)" }}>
+          <span style={{ flexShrink: 0, width: 14, textAlign: "center", color: settings.font_color }}>•</span>
+          <span style={{ flex: 1, whiteSpace: "nowrap", color: settings.font_color }}>
             {item.text}
           </span>
           <span style={{ textAlign: "right", fontWeight: 600, whiteSpace: "nowrap", color: item.color }}>
@@ -460,7 +392,7 @@ export default function VerticalOverlayPage() {
 
       {/* 空状态 */}
       {enabledItems.length === 0 && enabledCustomItems.length === 0 && (
-        <div style={{ textAlign: "center", padding: "12px 0", color: "rgba(255,255,255,0.4)" }}>
+        <div style={{ textAlign: "center", padding: "12px 0", color: settings.font_color, opacity: 0.5 }}>
           请在设置中启用显示项
         </div>
       )}

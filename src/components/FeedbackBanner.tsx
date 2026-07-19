@@ -14,6 +14,11 @@ const carouselImages: CarouselImage[] = [
     alt: "Kuaikuai",
     url: "http://www.kkidc.com/i/U84px5s6v",
   },
+  {
+    src: "/feedback-banner.png",
+    alt: "Feedback",
+    url: "https://nexbox.top/feedback",
+  },
 ];
 
 export function useFeedbackEnabled() {
@@ -50,7 +55,7 @@ export function FeedbackBanner() {
     intervalRef.current = setInterval(() => {
       setDirection(1);
       setCurrentIndex((prev) => (prev + 1) % images.length);
-    }, 4000);
+    }, 5000);
   }, [images.length]);
 
   useEffect(() => {
@@ -63,20 +68,10 @@ export function FeedbackBanner() {
   }, [isPaused, images.length, startAutoPlay]);
 
   const handleClick = async () => {
+    const url = images[currentIndex].url;
+    if (!url) return;
     const { open } = await import("@tauri-apps/plugin-shell");
-    open(images[currentIndex].url);
-  };
-
-  const goTo = (index: number) => {
-    setDirection(index > currentIndex ? 1 : -1);
-    setCurrentIndex(index);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (!isPaused && images.length > 1) {
-      intervalRef.current = setInterval(() => {
-        setDirection(1);
-        setCurrentIndex((prev) => (prev + 1) % images.length);
-      }, 4000);
-    }
+    open(url);
   };
 
   const variants = {
@@ -93,13 +88,21 @@ export function FeedbackBanner() {
       borderColor={borderColor}
       bg={cardBg}
       cursor="pointer"
-      maxW="360px"
+      w="360px"
+      h="200px"
       _hover={{ borderColor: "purple.500" }}
       transition="border-color 0.2s"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      <Box position="relative" onClick={handleClick}>
+      <Flex
+        w="full"
+        h="full"
+        align="center"
+        justify="center"
+        position="relative"
+        onClick={handleClick}
+      >
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={currentIndex}
@@ -109,38 +112,19 @@ export function FeedbackBanner() {
             animate="center"
             exit="exit"
             transition={{ duration: 0.3, ease: "easeInOut" }}
+            style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: cardBg }}
           >
             <Image
               src={images[currentIndex].src}
               alt={images[currentIndex].alt}
-              w="100%"
+              maxW="100%"
+              maxH="100%"
               objectFit="contain"
               display="block"
             />
           </motion.div>
         </AnimatePresence>
-      </Box>
-
-      {images.length > 1 && (
-        <Flex justify="center" gap={2} py={2}>
-          {images.map((_, index) => (
-            <Box
-              key={index}
-              w={2}
-              h={2}
-              borderRadius="full"
-              bg={index === currentIndex ? "purple.500" : "gray.500"}
-              opacity={index === currentIndex ? 1 : 0.5}
-              cursor="pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                goTo(index);
-              }}
-              transition="all 0.2s"
-            />
-          ))}
-        </Flex>
-      )}
+      </Flex>
     </Box>
   );
 }

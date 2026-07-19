@@ -5,6 +5,8 @@ use std::thread;
 use thiserror::Error;
 use sysinfo::System;
 
+use crate::wmi_query;
+
 #[derive(Error, Debug)]
 pub enum HardwareError {
     #[error("PowerShell执行失败: {0}")]
@@ -164,154 +166,7 @@ pub struct HardwareInfo {
     pub monitor: Vec<MonitorInfo>,
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsProcessor {
-    Name: String,
-    NumberOfCores: u32,
-    NumberOfLogicalProcessors: u32,
-    MaxClockSpeed: u32,
-    L2CacheSize: Option<u32>,
-    L2CacheSpeed: Option<u32>,
-    L3CacheSize: Option<u32>,
-    L3CacheSpeed: Option<u32>,
-    LoadPercentage: Option<u16>,
-    Manufacturer: Option<String>,
-    Architecture: Option<u16>,
-    SocketDesignation: Option<String>,
-    CurrentClockSpeed: Option<u32>,
-    ExtClock: Option<u32>,
-    ProcessorId: Option<String>,
-    Family: Option<u32>,
-    Stepping: Option<String>,
-    Revision: Option<u16>,
-    NumberOfEnabledCore: Option<u32>,
-    VoltageCaps: Option<u32>,
-}
 
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsVideoController {
-    Name: String,
-    DriverVersion: Option<String>,
-    AdapterRAM: Option<u64>,
-    VideoProcessor: Option<String>,
-    AdapterCompatibility: Option<String>,
-    DriverDate: Option<String>,
-    InstalledDisplayDrivers: Option<String>,
-    VideoModeDescription: Option<String>,
-    CurrentHorizontalResolution: Option<u32>,
-    CurrentVerticalResolution: Option<u32>,
-    CurrentRefreshRate: Option<u32>,
-    DeviceID: Option<String>,
-    PNPDeviceID: Option<String>,
-    Status: Option<String>,
-    InfFilename: Option<String>,
-    VideoArchitecture: Option<u16>,
-    VideoMemoryType: Option<u16>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case, dead_code)]
-struct PsBaseBoard {
-    Manufacturer: Option<String>,
-    Product: Option<String>,
-    SerialNumber: Option<String>,
-    Version: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsComputerSystem {
-    Manufacturer: Option<String>,
-    Model: Option<String>,
-    SystemType: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsBios {
-    SMBIOSBIOSVersion: Option<String>,
-    Manufacturer: Option<String>,
-    ReleaseDate: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsSystemEnclosure {
-    ChassisTypes: Option<Vec<u16>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsPhysicalMemory {
-    Manufacturer: Option<String>,
-    PartNumber: Option<String>,
-    Capacity: u64,
-    Speed: Option<u32>,
-    BankLabel: Option<String>,
-    FormFactor: Option<u16>,
-    MemoryType: Option<u16>,
-    ConfiguredClockSpeed: Option<u32>,
-    ConfiguredVoltage: Option<u32>,
-    DataWidth: Option<u32>,
-    TotalWidth: Option<u32>,
-    SerialNumber: Option<String>,
-    TypeDetail: Option<u16>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsDiskDrive {
-    Model: String,
-    Size: u64,
-    InterfaceType: Option<String>,
-    SerialNumber: Option<String>,
-    FirmwareRevision: Option<String>,
-    MediaType: Option<String>,
-    BytesPerSector: Option<u32>,
-    Partitions: Option<u32>,
-    Status: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsSoundDevice {
-    Name: String,
-    Manufacturer: Option<String>,
-    Status: Option<String>,
-    DeviceID: Option<String>,
-    PNPDeviceID: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsNetworkAdapter {
-    Name: String,
-    Manufacturer: Option<String>,
-    AdapterType: Option<String>,
-    MACAddress: Option<String>,
-    Speed: Option<u64>,
-    NetConnectionID: Option<String>,
-    ServiceName: Option<String>,
-    Index: Option<u32>,
-    MaxSpeed: Option<u64>,
-    #[serde(rename = "GUID")]
-    GUID: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsDesktopMonitor {
-    Name: Option<String>,
-    MonitorManufacturerName: Option<String>,
-    ScreenWidth: Option<u32>,
-    ScreenHeight: Option<u32>,
-    DisplayFrequency: Option<u32>,
-    PNPDeviceID: Option<String>,
-    Status: Option<String>,
-    Availability: Option<u16>,
-}
 
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
@@ -428,15 +283,29 @@ fn run_powershell<T: for<'de> Deserialize<'de>>(command: &str) -> Result<Vec<T>,
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout_trimmed = stdout.trim();
 
     // 尝试解析为数组，如果失败则尝试解析为单个对象并包装到数组中
-    match serde_json::from_str::<Vec<T>>(&stdout) {
+    match serde_json::from_str::<Vec<T>>(&stdout_trimmed) {
         Ok(results) => Ok(results),
-        Err(_) => {
-            if let Ok(single) = serde_json::from_str::<T>(&stdout) {
-                Ok(vec![single])
-            } else {
-                Ok(vec![])
+        Err(e_vec) => {
+            match serde_json::from_str::<T>(&stdout_trimmed) {
+                Ok(single) => Ok(vec![single]),
+                Err(e_single) => {
+                    let preview: String = if stdout_trimmed.len() > 300 {
+                        format!("{}...", &stdout_trimmed[..300])
+                    } else {
+                        stdout_trimmed.to_string()
+                    };
+                    log::warn!(
+                        "PowerShell JSON 解析失败 (type={}): vec_err={:?} single_err={:?}\n  原始输出: {}",
+                        std::any::type_name::<T>(),
+                        e_vec,
+                        e_single,
+                        preview
+                    );
+                    Ok(vec![])
+                }
             }
         }
     }
@@ -476,7 +345,7 @@ fn get_nvidia_gpus_with_nvml() -> Result<Vec<GpuInfo>, HardwareError> {
             .sys_driver_version()
             .map_err(|e| HardwareError::NvmlError(e.to_string()))?;
 
-        log::info!(
+        log::debug!(
             "NVIDIA GPU (NVML): {}, 显存: {:.1}GB, 温度: {:?}°C, 占用: {:?}%",
             name,
             memory_gb,
@@ -632,18 +501,19 @@ fn video_memory_type_name(code: Option<u16>) -> Option<String> {
 }
 
 fn get_gpus_from_wmi() -> Vec<GpuInfo> {
-    let mut all_gpus: Vec<(PsVideoController, GpuVendor, bool, f64)> = Vec::new();
+    // GPU entry: (name, vendor, is_integrated, memory_gb, raw fields map)
+    let mut all_gpus: Vec<(String, GpuVendor, bool, f64, std::collections::HashMap<String, wmi::Variant>)> = Vec::new();
 
-    let gpu_cmd = "Get-WmiObject Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM, VideoProcessor, AdapterCompatibility, DriverDate, InstalledDisplayDrivers, VideoModeDescription, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate, DeviceID, PNPDeviceID, Status, InfFilename, VideoArchitecture, VideoMemoryType | ConvertTo-Json -Compress";
-    if let Ok(gpu_results) = run_powershell::<PsVideoController>(gpu_cmd) {
-        for g in gpu_results {
-            let name_lower = g.Name.to_lowercase();
-            let vendor = detect_gpu_vendor(&g.Name);
-            let memory_gb = g.AdapterRAM
+    if let Ok(gpu_results) = wmi_query::wmi_query("SELECT Name, DriverVersion, AdapterRAM, VideoProcessor, AdapterCompatibility, DriverDate, InstalledDisplayDrivers, VideoModeDescription, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate, DeviceID, PNPDeviceID, Status, InfFilename, VideoArchitecture, VideoMemoryType FROM Win32_VideoController") {
+        for row in gpu_results {
+            let name = row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string());
+            let name_lower = name.to_lowercase();
+            let vendor = detect_gpu_vendor(&name);
+            let memory_gb = row.get("AdapterRAM")
+                .and_then(|v| wmi_query::v_u64(v))
                 .map(|ram| ram as f64 / (1024.0 * 1024.0 * 1024.0))
                 .unwrap_or(0.0);
 
-            // 判断是否为核显（Intel 集成显卡和 AMD APU）
             let is_integrated = match vendor {
                 GpuVendor::Intel => !name_lower.contains("arc"),
                 GpuVendor::AMD => {
@@ -653,50 +523,44 @@ fn get_gpus_from_wmi() -> Vec<GpuInfo> {
                 _ => false,
             };
 
-            all_gpus.push((g, vendor, is_integrated, memory_gb));
+            all_gpus.push((name, vendor, is_integrated, memory_gb, row));
         }
 
-        // 检查是否存在独显（非核显 GPU）
-        let has_dgpu = all_gpus.iter().any(|(_, _, is_igpu, _)| !is_igpu);
+        let has_dgpu = all_gpus.iter().any(|(_, _, is_igpu, _, _)| !is_igpu);
 
         let mut gpus = Vec::new();
-        for (g, vendor, is_integrated, memory_gb) in all_gpus {
-            // 当存在独显时跳过核显，否则保留核显（纯核显电脑）
+        for (name, vendor, is_integrated, memory_gb, row) in all_gpus {
             if is_integrated && has_dgpu {
-                log::info!("跳过核显(WMI): {}, 厂商: {:?}, 显存: {:.1}GB (存在独显)",
-                          g.Name, vendor, memory_gb);
+                log::info!("跳过核显(WMI): {}, 厂商: {:?}, 显存: {:.1}GB (存在独显)", name, vendor, memory_gb);
                 continue;
             }
-
             if is_integrated {
-                log::info!("核显(WMI)(唯一): {}, 厂商: {:?}, 显存: {:.1}GB",
-                          g.Name, vendor, memory_gb);
+                log::info!("核显(WMI)(唯一): {}, 厂商: {:?}, 显存: {:.1}GB", name, vendor, memory_gb);
             } else {
-                log::info!("显卡(WMI): {}, 厂商: {:?}, 显存: {:.1}GB",
-                          g.Name, vendor, memory_gb);
+                log::info!("显卡(WMI): {}, 厂商: {:?}, 显存: {:.1}GB", name, vendor, memory_gb);
             }
 
             gpus.push(GpuInfo {
-                name: g.Name.clone(),
+                name,
                 vendor,
                 memory_gb,
-                driver_version: g.DriverVersion.unwrap_or_else(|| "未知".to_string()),
+                driver_version: row.get("DriverVersion").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
                 temperature: None,
                 usage: None,
-                video_processor: g.VideoProcessor.unwrap_or_else(|| "未知".to_string()),
-                adapter_compatibility: g.AdapterCompatibility.unwrap_or_else(|| "未知".to_string()),
-                driver_date: g.DriverDate.unwrap_or_else(|| "未知".to_string()),
-                installed_drivers: g.InstalledDisplayDrivers.unwrap_or_else(|| "未知".to_string()),
-                video_mode: g.VideoModeDescription.unwrap_or_else(|| "未知".to_string()),
-                resolution_width: g.CurrentHorizontalResolution,
-                resolution_height: g.CurrentVerticalResolution,
-                refresh_rate: g.CurrentRefreshRate,
-                device_id: g.DeviceID.unwrap_or_else(|| "未知".to_string()),
-                pnp_device_id: g.PNPDeviceID.unwrap_or_else(|| "未知".to_string()),
-                status: g.Status.unwrap_or_else(|| "未知".to_string()),
-                inf_filename: g.InfFilename.unwrap_or_else(|| "未知".to_string()),
-                video_architecture: video_architecture_name(g.VideoArchitecture),
-                video_memory_type: video_memory_type_name(g.VideoMemoryType),
+                video_processor: row.get("VideoProcessor").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                adapter_compatibility: row.get("AdapterCompatibility").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                driver_date: row.get("DriverDate").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                installed_drivers: row.get("InstalledDisplayDrivers").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                video_mode: row.get("VideoModeDescription").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                resolution_width: row.get("CurrentHorizontalResolution").and_then(|v| wmi_query::v_u32(v)),
+                resolution_height: row.get("CurrentVerticalResolution").and_then(|v| wmi_query::v_u32(v)),
+                refresh_rate: row.get("CurrentRefreshRate").and_then(|v| wmi_query::v_u32(v)),
+                device_id: row.get("DeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                pnp_device_id: row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                inf_filename: row.get("InfFilename").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                video_architecture: video_architecture_name(row.get("VideoArchitecture").and_then(|v| wmi_query::v_u16(v))),
+                video_memory_type: video_memory_type_name(row.get("VideoMemoryType").and_then(|v| wmi_query::v_u16(v))),
             });
         }
         return gpus;
@@ -706,11 +570,13 @@ fn get_gpus_from_wmi() -> Vec<GpuInfo> {
 }
 
 fn get_gpu_info() -> Vec<GpuInfo> {
-    // 同时获取WMI扩展信息（所有GPU的详细参数）
-    let wmi_gpus = get_gpus_from_wmi();
+    // WMI 和 NVML 并行获取，减少总等待时间
+    let wmi_handle = thread::spawn(|| get_gpus_from_wmi());
+    let nvml_result = get_nvidia_gpus_with_nvml();
+    let wmi_gpus = wmi_handle.join().unwrap_or_default();
 
     // 尝试用NVML获取NVIDIA显卡（最好的方式）
-    if let Ok(mut nvml_gpus) = get_nvidia_gpus_with_nvml() {
+    if let Ok(mut nvml_gpus) = nvml_result {
         if !nvml_gpus.is_empty() {
             // 合并WMI扩展字段到NVML结果
             for gpu in nvml_gpus.iter_mut() {
@@ -824,7 +690,7 @@ fn get_cpu_dynamic_info() -> Option<u16> {
     let total_usage: f32 = cpus.iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / cpus.len() as f32;
     let usage = total_usage.round() as u16;
     
-    log::info!("CPU占用 (sysinfo): {}%", usage);
+    log::debug!("CPU占用 (sysinfo): {}%", usage);
     Some(usage)
 }
 
@@ -963,7 +829,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
     {
         let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
         if let Some(ref info) = *cache {
-            log::info!("从缓存获取静态硬件信息");
+            log::debug!("从缓存获取静态硬件信息");
             return Ok(info.clone());
         }
     }
@@ -975,7 +841,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
     {
         let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
         if let Some(ref info) = *cache {
-            log::info!("从缓存获取静态硬件信息");
+            log::debug!("从缓存获取静态硬件信息");
             return Ok(info.clone());
         }
     }
@@ -986,33 +852,34 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_cpu = errors.clone();
     let cpu_handle = thread::spawn(move || {
-        let cpu_cmd = "Get-WmiObject Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L2CacheSize, L2CacheSpeed, L3CacheSize, L3CacheSpeed, LoadPercentage, Manufacturer, Architecture, SocketDesignation, CurrentClockSpeed, ExtClock, ProcessorId, Family, Stepping, Revision, NumberOfEnabledCore, VoltageCaps | ConvertTo-Json -Compress";
-        match run_powershell::<PsProcessor>(cpu_cmd) {
-            Ok(cpu_results) => {
-                log::info!("获取到{}个CPU信息", cpu_results.len());
-                cpu_results.into_iter().next().map(|p| {
-                    log::info!("CPU型号: {}", p.Name);
+        let wql = "SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L2CacheSize, L2CacheSpeed, L3CacheSize, L3CacheSpeed, LoadPercentage, Manufacturer, Architecture, SocketDesignation, CurrentClockSpeed, ExtClock, ProcessorId, Family, Stepping, Revision, NumberOfEnabledCore, VoltageCaps FROM Win32_Processor";
+        match wmi_query::wmi_query(wql) {
+            Ok(results) => {
+                log::info!("获取到{}个CPU信息", results.len());
+                results.into_iter().next().map(|row| {
+                    let name = wmi_query::v_str(row.get("Name").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知CPU".to_string());
+                    log::info!("CPU型号: {}", name);
                     CpuInfo {
-                        name: p.Name,
-                        manufacturer: p.Manufacturer.unwrap_or_else(|| "未知".to_string()),
-                        cores: p.NumberOfCores,
-                        threads: p.NumberOfLogicalProcessors,
-                        max_clock_speed: p.MaxClockSpeed,
-                        l2_cache_size: p.L2CacheSize.unwrap_or(0),
-                        l3_cache_size: p.L3CacheSize.unwrap_or(0),
-                        load_percentage: p.LoadPercentage,
-                        architecture: architecture_name(p.Architecture),
-                        socket: p.SocketDesignation.unwrap_or_else(|| "未知".to_string()),
-                        l2_cache_speed: p.L2CacheSpeed,
-                        l3_cache_speed: p.L3CacheSpeed,
-                        current_clock_speed: p.CurrentClockSpeed,
-                        ext_clock: p.ExtClock,
-                        processor_id: p.ProcessorId.unwrap_or_else(|| "未知".to_string()),
-                        family: p.Family.unwrap_or(0),
-                        stepping: p.Stepping.unwrap_or_else(|| "未知".to_string()),
-                        revision: p.Revision.map(|r| r.to_string()).unwrap_or_else(|| "未知".to_string()),
-                        enabled_cores: p.NumberOfEnabledCore,
-                        voltage_caps: p.VoltageCaps.map(|v| format!("{} mV", v)),
+                        name,
+                        manufacturer: wmi_query::v_str(row.get("Manufacturer").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知".to_string()),
+                        cores: wmi_query::v_u32(row.get("NumberOfCores").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        threads: wmi_query::v_u32(row.get("NumberOfLogicalProcessors").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        max_clock_speed: wmi_query::v_u32(row.get("MaxClockSpeed").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        l2_cache_size: wmi_query::v_u32(row.get("L2CacheSize").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        l3_cache_size: wmi_query::v_u32(row.get("L3CacheSize").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        load_percentage: wmi_query::v_u16(row.get("LoadPercentage").unwrap_or(&wmi::Variant::Null)),
+                        architecture: architecture_name(wmi_query::v_u16(row.get("Architecture").unwrap_or(&wmi::Variant::Null))),
+                        socket: wmi_query::v_str(row.get("SocketDesignation").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知".to_string()),
+                        l2_cache_speed: wmi_query::v_u32(row.get("L2CacheSpeed").unwrap_or(&wmi::Variant::Null)),
+                        l3_cache_speed: wmi_query::v_u32(row.get("L3CacheSpeed").unwrap_or(&wmi::Variant::Null)),
+                        current_clock_speed: wmi_query::v_u32(row.get("CurrentClockSpeed").unwrap_or(&wmi::Variant::Null)),
+                        ext_clock: wmi_query::v_u32(row.get("ExtClock").unwrap_or(&wmi::Variant::Null)),
+                        processor_id: wmi_query::v_str(row.get("ProcessorId").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知".to_string()),
+                        family: wmi_query::v_u32(row.get("Family").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        stepping: wmi_query::v_str(row.get("Stepping").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知".to_string()),
+                        revision: wmi_query::v_u16(row.get("Revision").unwrap_or(&wmi::Variant::Null)).map(|r| r.to_string()).unwrap_or_else(|| "未知".to_string()),
+                        enabled_cores: wmi_query::v_u32(row.get("NumberOfEnabledCore").unwrap_or(&wmi::Variant::Null)),
+                        voltage_caps: wmi_query::v_u16(row.get("VoltageCaps").unwrap_or(&wmi::Variant::Null)).map(|v| format!("{} mV", v)),
                     }
                 })
             }
@@ -1051,65 +918,91 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_mobo = errors.clone();
     let mobo_handle = thread::spawn(move || {
-        // 同时查询主板、系统信息、BIOS、机箱
-        let mobo_cmd = "Get-WmiObject Win32_BaseBoard | Select-Object Manufacturer, Product, SerialNumber, Version | ConvertTo-Json -Compress";
-        let sys_cmd = "Get-WmiObject Win32_ComputerSystem | Select-Object Manufacturer, Model, SystemType | ConvertTo-Json -Compress";
-        let bios_cmd = "Get-WmiObject Win32_BIOS | Select-Object SMBIOSBIOSVersion, Manufacturer, Name, ReleaseDate, SerialNumber | ConvertTo-Json -Compress";
-        let chassis_cmd = "Get-WmiObject Win32_SystemEnclosure | Select-Object ChassisTypes, Manufacturer, Version, SerialNumber | ConvertTo-Json -Compress";
 
-        let mobo_result = run_powershell::<PsBaseBoard>(mobo_cmd).ok().and_then(|r| r.into_iter().next());
-        let sys_result = run_powershell::<PsComputerSystem>(sys_cmd).ok().and_then(|r| r.into_iter().next());
-        let bios_result = run_powershell::<PsBios>(bios_cmd).ok().and_then(|r| r.into_iter().next());
-        let chassis_result = run_powershell::<PsSystemEnclosure>(chassis_cmd).ok().and_then(|r| r.into_iter().next());
+        // 4 个独立的 WMI COM 查询（无需 PowerShell）
+        let mobo_rows = wmi_query::wmi_query("SELECT Manufacturer, Product, SerialNumber, Version FROM Win32_BaseBoard").unwrap_or_default();
+        let sys_rows  = wmi_query::wmi_query("SELECT Manufacturer, Model, SystemType FROM Win32_ComputerSystem").unwrap_or_default();
+        let bios_rows = wmi_query::wmi_query("SELECT Manufacturer, SMBIOSBIOSVersion, ReleaseDate FROM Win32_BIOS").unwrap_or_default();
+        let chassis_rows = wmi_query::wmi_query("SELECT ChassisTypes FROM Win32_SystemEnclosure").unwrap_or_default();
 
-        if let Some(ref m) = mobo_result {
-            log::info!("主板: {} {}", m.Manufacturer.as_deref().unwrap_or(""), m.Product.as_deref().unwrap_or(""));
+        let mobo_row = mobo_rows.first();
+        let sys_row = sys_rows.first();
+        let bios_row = bios_rows.first();
+        let chassis_row = chassis_rows.first();
+
+        // 日志
+        if let Some(m) = mobo_row {
+            let manu = m.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            let prod = m.get("Product").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            log::info!("主板: {} {}", manu, prod);
+        } else if let Some(s) = sys_row {
+            let manu = s.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            let model = s.get("Model").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            log::info!("主板(Win32_BaseBoard 为空，回退 Win32_ComputerSystem): {} {}", manu, model);
         }
-        if let Some(ref b) = bios_result {
-            log::info!("BIOS: {}", b.SMBIOSBIOSVersion.as_deref().unwrap_or(""));
+        if let Some(b) = bios_row {
+            let ver = b.get("SMBIOSBIOSVersion").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            log::info!("BIOS: {}", ver);
         }
 
-        if let Ok(mut errs) = errors_mobo.lock() {
-            if mobo_result.is_none() { errs.push("主板: WMI查询失败".to_string()); }
+        // 主板信息为空时上报 warning
+        if mobo_row.is_none() {
+            if let Ok(mut errs) = errors_mobo.lock() {
+                errs.push("主板: WMI查询失败 (Win32_BaseBoard 返回空，已用 Win32_ComputerSystem 回退)".to_string());
+            }
         }
 
-        mobo_result.map(|m| MotherboardInfo {
-            product: m.Product.unwrap_or_else(|| "未知".to_string()),
-            manufacturer: m.Manufacturer.unwrap_or_else(|| "未知".to_string()),
-            serial_number: m.SerialNumber.unwrap_or_else(|| "未知".to_string()),
-            version: m.Version.unwrap_or_else(|| "未知".to_string()),
-            bios_vendor: bios_result.as_ref().and_then(|b| b.Manufacturer.clone()).unwrap_or_else(|| "未知".to_string()),
-            bios_version: bios_result.as_ref().and_then(|b| b.SMBIOSBIOSVersion.clone()).unwrap_or_else(|| "未知".to_string()),
-            bios_release_date: bios_result.as_ref().and_then(|b| b.ReleaseDate.clone()).unwrap_or_else(|| "未知".to_string()),
-            system_manufacturer: sys_result.as_ref().and_then(|s| s.Manufacturer.clone()).unwrap_or_else(|| "未知".to_string()),
-            system_model: sys_result.as_ref().and_then(|s| s.Model.clone()).unwrap_or_else(|| "未知".to_string()),
-            system_type: sys_result.as_ref().and_then(|s| s.SystemType.clone()).unwrap_or_else(|| "未知".to_string()),
-            chassis_type: chassis_type_name(&chassis_result.as_ref().and_then(|c| c.ChassisTypes.clone())),
+        // 兜底：BaseBoard 为空时用 ComputerSystem 的 Manufacturer / Model
+        let product = mobo_row
+            .and_then(|m| m.get("Product").and_then(|v| wmi_query::v_str(v)))
+            .or_else(|| sys_row.and_then(|s| s.get("Model").and_then(|v| wmi_query::v_str(v))))
+            .unwrap_or_else(|| "未知".to_string());
+        let manufacturer = mobo_row
+            .and_then(|m| m.get("Manufacturer").and_then(|v| wmi_query::v_str(v)))
+            .or_else(|| sys_row.and_then(|s| s.get("Manufacturer").and_then(|v| wmi_query::v_str(v))))
+            .unwrap_or_else(|| "未知".to_string());
+
+        let chassis_types = chassis_row
+            .and_then(|c| c.get("ChassisTypes"))
+            .map(|v| wmi_query::v_u16_arr(v))
+            .filter(|a| !a.is_empty());
+
+        Some(MotherboardInfo {
+            product,
+            manufacturer,
+            serial_number: mobo_row.and_then(|m| m.get("SerialNumber").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            version: mobo_row.and_then(|m| m.get("Version").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            bios_vendor: bios_row.and_then(|b| b.get("Manufacturer").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            bios_version: bios_row.and_then(|b| b.get("SMBIOSBIOSVersion").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            bios_release_date: bios_row.and_then(|b| b.get("ReleaseDate").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            system_manufacturer: sys_row.and_then(|s| s.get("Manufacturer").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            system_model: sys_row.and_then(|s| s.get("Model").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            system_type: sys_row.and_then(|s| s.get("SystemType").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            chassis_type: chassis_type_name(&chassis_types),
         })
     });
 
     let errors_mem = errors.clone();
     let mem_handle = thread::spawn(move || {
-        let mem_cmd = "Get-WmiObject Win32_PhysicalMemory | Select-Object Manufacturer, PartNumber, Capacity, Speed, BankLabel, FormFactor, MemoryType, ConfiguredClockSpeed, ConfiguredVoltage, DataWidth, TotalWidth, SerialNumber, TypeDetail | ConvertTo-Json -Compress";
-        match run_powershell::<PsPhysicalMemory>(mem_cmd) {
+        match wmi_query::wmi_query("SELECT Manufacturer, PartNumber, Capacity, Speed, BankLabel, FormFactor, MemoryType, ConfiguredClockSpeed, ConfiguredVoltage, DataWidth, TotalWidth, SerialNumber, TypeDetail FROM Win32_PhysicalMemory") {
             Ok(results) => {
                 log::info!("获取到{}个内存条信息", results.len());
-                results.into_iter().map(|mem| {
-                    let capacity_gb = mem.Capacity as f64 / (1024.0 * 1024.0 * 1024.0);
+                results.into_iter().map(|row| {
+                    let capacity_bytes = row.get("Capacity").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0) as f64;
                     MemoryInfo {
-                        manufacturer: mem.Manufacturer.unwrap_or_else(|| "未知".to_string()),
-                        part_number: mem.PartNumber.unwrap_or_else(|| "未知".to_string()).trim().to_string(),
-                        capacity_gb,
-                        speed_mhz: mem.Speed.unwrap_or(0),
-                        bank_label: mem.BankLabel.unwrap_or_else(|| "未知".to_string()),
-                        form_factor: memory_form_factor_name(mem.FormFactor),
-                        memory_type: memory_type_name(mem.MemoryType),
-                        configured_clock_speed: mem.ConfiguredClockSpeed,
-                        configured_voltage: mem.ConfiguredVoltage,
-                        data_width: mem.DataWidth,
-                        total_width: mem.TotalWidth,
-                        serial_number: mem.SerialNumber.unwrap_or_else(|| "未知".to_string()),
-                        type_detail: mem.TypeDetail.map(|d| d.to_string()).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        part_number: row.get("PartNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()).trim().to_string(),
+                        capacity_gb: capacity_bytes / (1024.0 * 1024.0 * 1024.0),
+                        speed_mhz: row.get("Speed").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0),
+                        bank_label: row.get("BankLabel").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        form_factor: memory_form_factor_name(row.get("FormFactor").and_then(|v| wmi_query::v_u16(v))),
+                        memory_type: memory_type_name(row.get("MemoryType").and_then(|v| wmi_query::v_u16(v))),
+                        configured_clock_speed: row.get("ConfiguredClockSpeed").and_then(|v| wmi_query::v_u32(v)),
+                        configured_voltage: row.get("ConfiguredVoltage").and_then(|v| wmi_query::v_u32(v)),
+                        data_width: row.get("DataWidth").and_then(|v| wmi_query::v_u32(v)),
+                        total_width: row.get("TotalWidth").and_then(|v| wmi_query::v_u32(v)),
+                        serial_number: row.get("SerialNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        type_detail: row.get("TypeDetail").and_then(|v| wmi_query::v_u16(v)).map(|d| d.to_string()).unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<MemoryInfo>>()
             }
@@ -1124,24 +1017,23 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_disk = errors.clone();
     let disk_handle = thread::spawn(move || {
-        let disk_cmd = "Get-WmiObject Win32_DiskDrive | Select-Object Model, Size, InterfaceType, SerialNumber, FirmwareRevision, MediaType, BytesPerSector, Partitions, Status, PNPDeviceID | ConvertTo-Json -Compress";
-        match run_powershell::<PsDiskDrive>(disk_cmd) {
+        match wmi_query::wmi_query("SELECT Model, Size, InterfaceType, SerialNumber, FirmwareRevision, MediaType, BytesPerSector, Partitions, Status, PNPDeviceID FROM Win32_DiskDrive") {
             Ok(results) => {
                 log::info!("获取到{}个硬盘信息", results.len());
-                results.into_iter().map(|d| {
-                    let size_gb = d.Size as f64 / (1024.0 * 1024.0 * 1024.0);
-                    let media_type = d.MediaType.as_deref().unwrap_or("").to_string();
+                results.into_iter().map(|row| {
+                    let size_gb = row.get("Size").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0) as f64 / (1024.0 * 1024.0 * 1024.0);
+                    let media_type = row.get("MediaType").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
                     let is_ssd = media_type.to_lowercase().contains("ssd") || media_type.to_lowercase().contains("solid state");
                     DiskDetailInfo {
-                        model: d.Model,
+                        model: row.get("Model").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
                         size_gb,
-                        interface_type: d.InterfaceType.unwrap_or_else(|| "未知".to_string()),
-                        serial_number: d.SerialNumber.unwrap_or_else(|| "未知".to_string()),
-                        firmware_revision: d.FirmwareRevision.unwrap_or_else(|| "未知".to_string()),
+                        interface_type: row.get("InterfaceType").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        serial_number: row.get("SerialNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        firmware_revision: row.get("FirmwareRevision").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
                         media_type: if media_type.is_empty() { "未知".to_string() } else { media_type },
-                        bytes_per_sector: d.BytesPerSector,
-                        partitions: d.Partitions.unwrap_or(0),
-                        status: d.Status.unwrap_or_else(|| "未知".to_string()),
+                        bytes_per_sector: row.get("BytesPerSector").and_then(|v| wmi_query::v_u32(v)),
+                        partitions: row.get("Partitions").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0),
+                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
                         is_ssd,
                     }
                 }).collect::<Vec<DiskDetailInfo>>()
@@ -1157,17 +1049,36 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_sound = errors.clone();
     let sound_handle = thread::spawn(move || {
-        let sound_cmd = r#"Get-WmiObject Win32_SoundDevice | Where-Object { $_.Status -eq 'OK' -and $_.PNPDeviceID -notlike 'USB\*' -and $_.PNPDeviceID -notlike 'HID\*' -and $_.PNPDeviceID -notlike 'SWD\*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VB-Audio*' -and $_.Name -notlike '*Voicemeeter*' -and $_.Name -notlike '*CABLE*' -and $_.Name -notlike '*Sonic*Studio*' -and $_.Name -notlike '*NVIDIA*Virtual*' -and $_.Name -notlike '*Steam*Streaming*' -and $_.Name -notlike '*Oculus*' -and $_.Name -notlike '*Wave*Link*' -and $_.Name -notlike '*Elgato*Sound*Capture*' -and $_.Name -notlike '*Nahimic*' -and $_.Name -notlike '*DTS*' -and $_.Name -notlike '*Dolby*' -and $_.Name -notlike '*Bluetooth*' -and $_.Name -notlike '*Hands-Free*' -and $_.Name -notlike '*S/PDIF*' } | Select-Object Name, Manufacturer, Status, DeviceID, PNPDeviceID | ConvertTo-Json -Compress"#;
-        match run_powershell::<PsSoundDevice>(sound_cmd) {
+        match wmi_query::wmi_query("SELECT Name, Manufacturer, Status, DeviceID, PNPDeviceID FROM Win32_SoundDevice") {
             Ok(results) => {
-                log::info!("获取到{}个声卡信息", results.len());
-                results.into_iter().map(|s| {
+                let sound_filter_keywords = [
+                    "Virtual", "VB-Audio", "Voicemeeter", "CABLE", "Sonic Studio",
+                    "NVIDIA Virtual", "Steam Streaming", "Oculus", "Wave Link",
+                    "Elgato Sound Capture", "Nahimic", "DTS", "Dolby",
+                    "Bluetooth", "Hands-Free", "S/PDIF",
+                ];
+                let filtered: Vec<_> = results.into_iter()
+                    .filter(|row| {
+                        let status = row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let pnp = row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let name = row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        if status != "OK" { return false; }
+                        let pnp_lower = pnp.to_lowercase();
+                        if pnp_lower.starts_with("usb\\") || pnp_lower.starts_with("hid\\") || pnp_lower.starts_with("swd\\") {
+                            return false;
+                        }
+                        let name_lower = name.to_lowercase();
+                        !sound_filter_keywords.iter().any(|kw| name_lower.contains(&kw.to_lowercase()))
+                    })
+                    .collect();
+                log::info!("获取到{}个声卡信息", filtered.len());
+                filtered.into_iter().map(|row| {
                     SoundCardInfo {
-                        name: s.Name,
-                        manufacturer: s.Manufacturer.unwrap_or_else(|| "未知".to_string()),
-                        status: s.Status.unwrap_or_else(|| "未知".to_string()),
-                        device_id: s.DeviceID.unwrap_or_else(|| "未知".to_string()),
-                        pnp_device_id: s.PNPDeviceID.unwrap_or_else(|| "未知".to_string()),
+                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        device_id: row.get("DeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        pnp_device_id: row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<SoundCardInfo>>()
             }
@@ -1182,25 +1093,44 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_network = errors.clone();
     let network_handle = thread::spawn(move || {
-        let network_cmd = r#"Get-WmiObject Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -and $_.NetEnabled -eq $true -and $_.PNPDeviceID -notlike 'SWD\*' -and $_.Name -notlike '*Hyper-V*' -and $_.Name -notlike '*vEthernet*' -and $_.Name -notlike '*Virtual*' -and $_.Name -notlike '*VirtualBox*' -and $_.Name -notlike '*VMware*' -and $_.Name -notlike '*Bluetooth*' -and $_.Name -notlike '*Tailscale*' -and $_.Name -notlike '*ZeroTier*' -and $_.Name -notlike '*WSL*' -and $_.Name -notlike '*Docker*' -and $_.Name -notlike '*Npcap*' -and $_.Name -notlike '*WireGuard*' -and $_.Name -notlike '*OpenVPN*' -and $_.Name -notlike '*TAP-Windows*' -and $_.Name -notlike '*WAN Miniport*' -and $_.Name -notlike '*VPN*' -and $_.Name -notlike '*Proton*' -and $_.Name -notlike '*Nord*' -and $_.Name -notlike '*Cloudflare*WARP*' -and $_.AdapterType -notlike '*Loopback*' } | Select-Object Name, Manufacturer, AdapterType, MACAddress, Speed, NetConnectionID, ServiceName, Index, MaxSpeed, GUID | ConvertTo-Json -Compress"#;
-        match run_powershell::<PsNetworkAdapter>(network_cmd) {
+        use wmi::Variant;
+        match wmi_query::wmi_query("SELECT Name, Manufacturer, AdapterType, MACAddress, Speed, NetConnectionID, ServiceName, Index, MaxSpeed, GUID, PhysicalAdapter, NetEnabled, PNPDeviceID FROM Win32_NetworkAdapter") {
             Ok(results) => {
-                log::info!("获取到{}个网卡信息", results.len());
-                results.into_iter().map(|n| {
-                    // Speed is in bits per second, convert to Mbps
-                    let speed_mbps = n.Speed.map(|s| s / 1_000_000).unwrap_or(0);
-                    let max_speed = n.MaxSpeed.map(|s| s / 1_000_000);
+                let net_filter_keywords = [
+                    "Hyper-V", "vEthernet", "Virtual", "VirtualBox", "VMware",
+                    "Bluetooth", "Tailscale", "ZeroTier", "WSL", "Docker",
+                    "Npcap", "WireGuard", "OpenVPN", "TAP-Windows", "WAN Miniport",
+                    "VPN", "Proton", "Nord", "Cloudflare WARP",
+                ];
+                let filtered: Vec<_> = results.into_iter()
+                    .filter(|row| {
+                        let physical = matches!(row.get("PhysicalAdapter"), Some(Variant::Bool(true)));
+                        let enabled = matches!(row.get("NetEnabled"), Some(Variant::Bool(true)));
+                        if !physical || !enabled { return false; }
+                        let pnp = row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        if pnp.to_lowercase().starts_with("swd\\") { return false; }
+                        let name = row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let adapter = row.get("AdapterType").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let name_lower = name.to_lowercase();
+                        !net_filter_keywords.iter().any(|kw| name_lower.contains(&kw.to_lowercase()))
+                            && !adapter.to_lowercase().contains("loopback")
+                    })
+                    .collect();
+                log::info!("获取到{}个网卡信息", filtered.len());
+                filtered.into_iter().map(|row| {
+                    let speed_bps = row.get("Speed").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0);
+                    let max_bps = row.get("MaxSpeed").and_then(|v| wmi_query::v_u64(v));
                     NetworkCardInfo {
-                        name: n.Name,
-                        manufacturer: n.Manufacturer.unwrap_or_else(|| "未知".to_string()),
-                        adapter_type: n.AdapterType.unwrap_or_else(|| "未知".to_string()),
-                        mac_address: n.MACAddress.unwrap_or_else(|| "未知".to_string()),
-                        speed_mbps,
-                        connection_name: n.NetConnectionID.unwrap_or_else(|| "未知".to_string()),
-                        service_name: n.ServiceName.unwrap_or_else(|| "未知".to_string()),
-                        index: n.Index.unwrap_or(0),
-                        max_speed,
-                        guid: n.GUID.unwrap_or_else(|| "未知".to_string()),
+                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        adapter_type: row.get("AdapterType").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        mac_address: row.get("MACAddress").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        speed_mbps: speed_bps / 1_000_000,
+                        connection_name: row.get("NetConnectionID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        service_name: row.get("ServiceName").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        index: row.get("Index").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0),
+                        max_speed: max_bps.map(|s| s / 1_000_000),
+                        guid: row.get("GUID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<NetworkCardInfo>>()
             }
@@ -1213,22 +1143,32 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         }
     });
 
-    let errors_monitor = errors.clone();
     let monitor_handle = thread::spawn(move || {
-        let monitor_cmd = "Get-WmiObject Win32_DesktopMonitor | Where-Object { $_.Name -ne $null -and $_.PNPDeviceID -ne $null } | Select-Object Name, MonitorManufacturerName, ScreenWidth, ScreenHeight, DisplayFrequency, PNPDeviceID, Status, Availability | ConvertTo-Json -Compress";
-        match run_powershell::<PsDesktopMonitor>(monitor_cmd) {
+        // Win32_DesktopMonitor 在现代 Windows 上已废弃，非必须查询
+        match wmi_query::wmi_query("SELECT Name, MonitorManufacturerName, ScreenWidth, ScreenHeight, DisplayFrequency, PNPDeviceID, Status, Availability FROM Win32_DesktopMonitor") {
             Ok(results) => {
-                log::info!("获取到{}个显示器信息", results.len());
-                let mut monitors: Vec<MonitorInfo> = results.into_iter().map(|m| {
+                if results.is_empty() {
+                    log::debug!("Win32_DesktopMonitor 查询为空（该类在此系统上不可用，非错误）");
+                    return Vec::new();
+                }
+                let filtered: Vec<_> = results.into_iter()
+                    .filter(|row| {
+                        let name_ok = row.get("Name").map_or(false, |v| wmi_query::v_nonempty(v));
+                        let pnp_ok = row.get("PNPDeviceID").map_or(false, |v| wmi_query::v_nonempty(v));
+                        name_ok && pnp_ok
+                    })
+                    .collect();
+                log::info!("获取到{}个显示器信息", filtered.len());
+                let mut monitors: Vec<MonitorInfo> = filtered.into_iter().map(|row| {
                     MonitorInfo {
-                        name: m.Name.unwrap_or_else(|| "未知".to_string()),
-                        manufacturer: m.MonitorManufacturerName.unwrap_or_else(|| "未知".to_string()),
-                        screen_width: m.ScreenWidth,
-                        screen_height: m.ScreenHeight,
-                        refresh_rate: m.DisplayFrequency,
-                        pnp_device_id: m.PNPDeviceID.unwrap_or_else(|| "未知".to_string()),
-                        status: m.Status.unwrap_or_else(|| "未知".to_string()),
-                        availability: m.Availability,
+                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("MonitorManufacturerName").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        screen_width: row.get("ScreenWidth").and_then(|v| wmi_query::v_u32(v)),
+                        screen_height: row.get("ScreenHeight").and_then(|v| wmi_query::v_u32(v)),
+                        refresh_rate: row.get("DisplayFrequency").and_then(|v| wmi_query::v_u32(v)),
+                        pnp_device_id: row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        availability: row.get("Availability").and_then(|v| wmi_query::v_u16(v)),
                     }
                 }).collect::<Vec<MonitorInfo>>();
 
@@ -1258,9 +1198,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                 monitors
             }
             Err(e) => {
-                if let Ok(mut errs) = errors_monitor.lock() {
-                    errs.push(format!("显示器: {}", e));
-                }
+                log::debug!("Win32_DesktopMonitor 不可用: {}（非错误，该类在现代 Windows 上已废弃）", e);
                 Vec::new()
             }
         }
@@ -1640,8 +1578,8 @@ struct PsPartitionRaw {
 fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
     let ps_script = r#"
 $disks = Get-PhysicalDisk -ErrorAction SilentlyContinue
-$wmiDisks = Get-WmiObject Win32_DiskDrive -ErrorAction SilentlyContinue
-$diskLayout = Get-WmiObject -Namespace root\Microsoft\Windows\Storage -Class MSFT_Disk -ErrorAction SilentlyContinue
+$wmiDisks = Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue
+$diskLayout = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -Class MSFT_Disk -ErrorAction SilentlyContinue
 
 # Try multiple methods to get reliability/SMART data
 $reliabilityMap = @{}
@@ -1657,7 +1595,7 @@ try {
 # Method 2: WMI MSFT_StorageReliabilityCounter
 if ($reliabilityMap.Count -eq 0) {
     try {
-        $relWmi = Get-WmiObject -Namespace root\Microsoft\Windows\Storage -Class MSFT_StorageReliabilityCounter -ErrorAction SilentlyContinue
+        $relWmi = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -Class MSFT_StorageReliabilityCounter -ErrorAction SilentlyContinue
         if ($relWmi) {
             foreach ($r in $relWmi) {
                 $did = if ($r.DeviceId) { $r.DeviceId } else { "PhysicalDrive$($r.PSComputerName)" }

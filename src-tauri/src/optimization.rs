@@ -360,115 +360,65 @@ pub struct PowerPlanResult {
     current_plan: String,
 }
 
+/// 已知的高性能/Normal GUID（系统内置计划）。
+const KNOWN_HIGH_PERF_GUID: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+
+/// 通过名称关键词匹配，在系统电源计划中查找高性能方案。
+fn find_high_performance_guid(plans: &[(String, String, bool)]) -> Option<String> {
+    // 优先级：卓越性能 > 高性能/Ultimate
+    let candidates: &[&[&str]] = &[
+        &["卓越性能", "Ultimate Performance"],
+        &["高性能", "High performance", "Ultimate"],
+    ];
+    for keywords in candidates {
+        for (guid, name, _) in plans {
+            let lower = name.to_lowercase();
+            if keywords.iter().any(|kw| lower.contains(&kw.to_lowercase())) {
+                return Some(guid.clone());
+            }
+        }
+    }
+    None
+}
+
 #[tauri::command]
 pub async fn set_high_performance_power_plan() -> Result<PowerPlanResult, String> {
-    if cfg!(target_os = "windows") {
-        let get_current_script = r#"
-            powercfg /getactivescheme
-        "#;
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
 
-        let current_result = Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                get_current_script,
-            ])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
+    // 1. 记录当前计划（直接调 powercfg，不经过 PowerShell）
+    let previous_plan = get_active_plan_internal()
+        .map(|(guid, name)| format!("{} ({})", name, guid));
 
-        let previous_plan = match current_result {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                if let Some(line) = stdout.lines().next() {
-                    Some(line.to_string())
-                } else {
-                    None
-                }
-            }
-            Err(_) => None,
-        };
+    // 2. 枚举所有系统计划，尝试按名称匹配高性能方案
+    let system_plans = get_system_plans_internal();
+    let target_guid = find_high_performance_guid(&system_plans)
+        .unwrap_or_else(|| KNOWN_HIGH_PERF_GUID.to_string());
 
-        let set_script = r#"
-            $highPerf = powercfg /list | Select-String "高性能|High performance|Ultimate" | Select-Object -First 1
-            if ($highPerf) {
-                $guid = ($highPerf -split '\s+')[3]
-                if ($guid -match '^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$') {
-                    powercfg /setactive $guid
-                    Write-Host "Switched to: $guid"
-                    exit 0
-                }
-            }
-            
-            $ultimate = powercfg /list | Select-String "卓越性能|Ultimate Performance" | Select-Object -First 1
-            if ($ultimate) {
-                $guid = ($ultimate -split '\s+')[3]
-                if ($guid -match '^[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$') {
-                    powercfg /setactive $guid
-                    Write-Host "Switched to: $guid"
-                    exit 0
-                }
-            }
-            
-            $highPerfGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
-            powercfg /setactive $highPerfGuid
-            Write-Host "Switched to: $highPerfGuid"
-            exit 0
-        "#;
+    // 3. 直接调用 powercfg /setactive
+    let result = run_powercfg(&["/setactive", &target_guid]);
 
-        let result = Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                set_script,
-            ])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
+    match result {
+        Ok(output) if output.status.success() => {
+            // 4. 验证切换结果（直接调 powercfg）
+            let current_plan = match get_active_plan_internal() {
+                Some((guid, name)) => format!("{} ({})", name, guid),
+                None => "高性能".to_string(),
+            };
 
-        match result {
-            Ok(output) => {
-                if output.status.success() {
-                    let verify_result = Command::new("powershell")
-                        .args(&[
-                            "-NoProfile",
-                            "-ExecutionPolicy",
-                            "Bypass",
-                            "-Command",
-                            "powercfg /getactivescheme",
-                        ])
-                        .creation_flags(CREATE_NO_WINDOW)
-                        .output();
-
-                    let current_plan = match verify_result {
-                        Ok(verify_output) => {
-                            let stdout = String::from_utf8_lossy(&verify_output.stdout).to_string();
-                            if let Some(line) = stdout.lines().next() {
-                                line.to_string()
-                            } else {
-                                "高性能".to_string()
-                            }
-                        }
-                        Err(_) => "高性能".to_string(),
-                    };
-
-                    Ok(PowerPlanResult {
-                        success: true,
-                        message: "已切换到高性能电源计划".to_string(),
-                        previous_plan,
-                        current_plan,
-                    })
-                } else {
-                    let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    Err(format!("切换电源计划失败: {}", error_msg))
-                }
-            }
-            Err(e) => Err(format!("执行电源计划切换命令失败: {}", e)),
+            Ok(PowerPlanResult {
+                success: true,
+                message: "已切换到高性能电源计划".to_string(),
+                previous_plan,
+                current_plan,
+            })
         }
-    } else {
-        Err("此功能仅支持 Windows 系统".to_string())
+        Ok(output) => {
+            let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
+            Err(format!("切换电源计划失败: {}", error_msg))
+        }
+        Err(e) => Err(format!("执行电源计划切换命令失败: {}", e)),
     }
 }
 
@@ -2014,19 +1964,19 @@ fn parse_powercfg_list(output: &str) -> Vec<(String, String, bool)> {
     plans
 }
 
-fn run_powercfg_ps(script: &str) -> std::io::Result<std::process::Output> {
-    let full_script = format!(
-        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; {}",
-        script
-    );
-    Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &full_script])
+/// 直接调用 powercfg.exe（通过 cmd 设置 UTF-8 代码页），避免 PowerShell 启动开销。
+/// `chcp 65001` 确保中文输出不乱码。
+fn run_powercfg(args: &[&str]) -> std::io::Result<std::process::Output> {
+    let powercfg_args = args.join(" ");
+    let full_cmd = format!("chcp 65001 >nul && powercfg {}", powercfg_args);
+    Command::new("cmd")
+        .args(&["/C", &full_cmd])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
 }
 
 fn get_system_plans_internal() -> Vec<(String, String, bool)> {
-    let result = run_powercfg_ps("powercfg /list");
+    let result = run_powercfg(&["/list"]);
 
     match result {
         Ok(output) => {
@@ -2038,7 +1988,7 @@ fn get_system_plans_internal() -> Vec<(String, String, bool)> {
 }
 
 fn get_active_plan_internal() -> Option<(String, String)> {
-    let result = run_powercfg_ps("powercfg /getactivescheme");
+    let result = run_powercfg(&["/getactivescheme"]);
 
     match result {
         Ok(output) => {

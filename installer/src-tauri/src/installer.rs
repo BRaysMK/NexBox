@@ -4,10 +4,22 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
 use winreg::enums::*;
 use winreg::RegKey;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+extern "system" {
+    fn GetDiskFreeSpaceExW(
+        lpDirectoryName: *const u16,
+        lpFreeBytesAvailableToCaller: *mut u64,
+        lpTotalNumberOfBytes: *mut u64,
+        lpTotalNumberOfFreeBytes: *mut u64,
+    ) -> i32;
+}
 
 /// UTF-16LE + Base64 编码 PowerShell 脚本
 /// 这是 Windows 上传递含非 ASCII 字符脚本的唯一可靠方式。
@@ -324,19 +336,62 @@ fn fs2_available_space(path: &Path) -> Result<u64, std::io::Error> {
         .filter(|c| c.is_ascii_alphabetic())
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "无效的路径"))?;
 
-    let ps_cmd = format!("(Get-PSDrive -Name '{}').Free", drive_letter);
+    // 方案1: Win32 API GetDiskFreeSpaceExW —— 不依赖 PowerShell，不受安全软件/执行策略影响
+    #[cfg(target_os = "windows")]
+    {
+        let root_path = format!("{}:\\", drive_letter);
+        let wide_path: Vec<u16> = std::ffi::OsStr::new(&root_path)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
 
-    match run_powershell(&ps_cmd) {
-        Ok(stdout) => {
-            if let Ok(bytes) = stdout.trim().parse::<u64>() {
-                return Ok(bytes);
+        let mut free_bytes: u64 = 0;
+        let mut total_bytes: u64 = 0;
+        let mut total_free_bytes: u64 = 0;
+
+        unsafe {
+            let result = GetDiskFreeSpaceExW(
+                wide_path.as_ptr(),
+                &mut free_bytes as *mut u64,
+                &mut total_bytes as *mut u64,
+                &mut total_free_bytes as *mut u64,
+            );
+            if result != 0 {
+                return Ok(free_bytes);
             }
+            // API 调用失败，记录错误信息供排查
+            let api_error = std::io::Error::last_os_error();
+            eprintln!(
+                "GetDiskFreeSpaceExW({}) 失败: {}，回退到 PowerShell",
+                root_path, api_error
+            );
         }
-        Err(_) => {}
     }
 
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "无法获取磁盘空间信息",
-    ))
+    // 方案2: PowerShell Get-CimInstance Win32_LogicalDisk（降级方案）
+    let ps_cmd = format!(
+        "(Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='{}:'\").FreeSpace",
+        drive_letter
+    );
+    match run_powershell(&ps_cmd) {
+        Ok(stdout) => {
+            // 清理可能的 BOM 字符（U+FEFF）
+            let cleaned = stdout.trim().trim_start_matches('\u{feff}');
+            if let Ok(bytes) = cleaned.parse::<u64>() {
+                return Ok(bytes);
+            }
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!(
+                    "无法解析磁盘空间数值 (盘符 {}:): '{}'",
+                    drive_letter,
+                    stdout.trim()
+                ),
+            ))
+        }
+        Err(e) => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("无法获取磁盘空间 (盘符 {}:): {}", drive_letter, e),
+        )),
+    }
 }

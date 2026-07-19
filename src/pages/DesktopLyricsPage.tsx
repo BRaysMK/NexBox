@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useDesktopLyricsSync } from "@/hooks/useDesktopLyricsSync";
+import type { ControlAction } from "@/hooks/useDesktopLyricsSync";
 import { LyricsCanvas } from "@/components/desktop-lyrics/LyricsCanvas";
 import { LyricsControlBar } from "@/components/desktop-lyrics/LyricsControlBar";
 import {
@@ -168,7 +169,7 @@ export default function DesktopLyricsPage() {
 
   // 控制指令
   const handleControl = useCallback(
-    (action: "play-pause" | "prev" | "next" | "toggle-shuffle" | "lock" | "unlock") => {
+    (action: ControlAction) => {
       if (action === "lock") {
         lock();
       } else if (action === "unlock") {

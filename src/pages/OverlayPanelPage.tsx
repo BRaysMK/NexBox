@@ -17,12 +17,21 @@ import {
   IconButton,
   SimpleGrid,
   Input,
+  Checkbox,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
 } from "@chakra-ui/react";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, ArrowLeft, Trash2, Plus, Move, RotateCcw, Download } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Trash2, Plus, Move, RotateCcw, Download, Settings } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
@@ -56,8 +65,10 @@ interface OverlaySettings {
   opacity: number;
   style: string;
   font: string;
+  font_color: string;
   position_x?: number | null;
   position_y?: number | null;
+  delta_password_maps?: string[];
 }
 
 interface HardwareData {
@@ -112,6 +123,7 @@ const DEFAULT_SETTINGS: OverlaySettings = {
   opacity: 200,
   style: "default",
   font: "Microsoft YaHei",
+  font_color: "#ffffff",
 };
 
 const BUILTIN_CHINESE_FONTS = [
@@ -284,6 +296,14 @@ export default function OverlayPanelPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isDragMode, setIsDragMode] = useState(false);
   const [isNvidia, setIsNvidia] = useState(true);
+  const [availableMaps, setAvailableMaps] = useState<string[]>([]);
+  const [selectedMaps, setSelectedMaps] = useState<string[]>([]);
+
+  const {
+    isOpen: isMapSettingsOpen,
+    onOpen: onMapSettingsOpen,
+    onClose: onMapSettingsClose,
+  } = useDisclosure();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.600", "gray.400");
@@ -434,18 +454,26 @@ export default function OverlayPanelPage() {
 
     try {
       const newDragMode = !isDragMode;
-      // 竖排面板模式使用 Tauri 窗口自身的拖动/穿透机制
+      // 竖排面板模式：开关鼠标穿透来启用/退出拖动
       if (settings.style === "vertical_panel") {
-        // 竖排面板的拖动由窗口自身处理，这里仅提示用户
-        toast({
-          title: newDragMode
-            ? "请在悬浮框上拖动，完成后点击悬浮框右上角图标固定"
-            : t("overlayPanel.positionSaved") || "位置已保存",
-          status: newDragMode ? "info" : "success",
-          duration: 3000,
-          isClosable: true,
-        });
-        setIsDragMode(newDragMode);
+        if (newDragMode) {
+          await invoke("set_vertical_overlay_click_through", { enabled: false });
+          setIsDragMode(true);
+          toast({
+            title: "可在悬浮框面板上拖动，拖完自动固定",
+            status: "info",
+            duration: 3000,
+            isClosable: true,
+          });
+        } else {
+          setIsDragMode(false);
+          toast({
+            title: t("overlayPanel.positionSaved") || "位置已保存",
+            status: "success",
+            duration: 2000,
+            isClosable: true,
+          });
+        }
         return;
       }
       await invoke("set_overlay_drag_mode", { enabled: newDragMode });
@@ -586,6 +614,43 @@ export default function OverlayPanelPage() {
     return `${value}${suffix}`;
   };
 
+  const openMapSettings = async () => {
+    // Initialize selected maps from current settings
+    const currentMaps = settings.delta_password_maps || [];
+    setSelectedMaps(currentMaps);
+
+    // Fetch available maps from the API
+    try {
+      const passwords = await invoke<Array<{ name: string; password: string }>>("get_delta_passwords");
+      const mapNames = passwords.map(p => p.name);
+      setAvailableMaps(mapNames);
+      // Auto-select all maps if no selection exists
+      if (currentMaps.length === 0 && mapNames.length > 0) {
+        setSelectedMaps(mapNames);
+      }
+    } catch {
+      setAvailableMaps([]);
+    }
+    onMapSettingsOpen();
+  };
+
+  const toggleMapSelection = (mapName: string) => {
+    setSelectedMaps(prev =>
+      prev.includes(mapName)
+        ? prev.filter(m => m !== mapName)
+        : [...prev, mapName]
+    );
+  };
+
+  const saveMapSettings = () => {
+    const newSettings = {
+      ...settings,
+      delta_password_maps: selectedMaps,
+    };
+    saveOverlaySettings(newSettings);
+    onMapSettingsClose();
+  };
+
   return (
     <Box pt={8} pb={8}>
       <HStack justify="space-between" mb={6}>
@@ -717,6 +782,7 @@ export default function OverlayPanelPage() {
                 onReorder={reorderDisplayItems}
                 onToggle={updateDisplayItem}
                 disabledItems={[]}
+                onDeltaPasswordSettings={openMapSettings}
               />
             </Box>
 
@@ -822,8 +888,7 @@ export default function OverlayPanelPage() {
                   </Text>
                 </VStack>
               </Box>
-{/* TODO: 竖排面板样式暂未完工，翻译尚未完成，先隐藏 */}
-              {/* <Box
+              <Box
                 as="button"
                 onClick={() => updateSetting("style", "vertical_panel")}
                 bg={settings.style === "vertical_panel" ? hexToRgba(getActiveColor(), 0.12) : "transparent"}
@@ -849,7 +914,7 @@ export default function OverlayPanelPage() {
                     {t("overlayPanel.styles.verticalPanel") || "竖排面板"}
                   </Text>
                 </VStack>
-              </Box> */}
+              </Box>
             </VStack>
 
             {/* 右侧：字体选择 + 不透明度 */}
@@ -866,6 +931,18 @@ export default function OverlayPanelPage() {
                   direction="up"
                 />
               </Box>
+              <Box>
+                <Text fontSize="sm" fontWeight="medium" mb={2} color={subTextColor}>
+                  {t("overlayPanel.fontColor") || "字体颜色"}
+                </Text>
+                <HStack spacing={3}>
+                  <CustomColorPicker
+                    color={settings.font_color}
+                    onChange={(c) => updateSetting("font_color", c)}
+                  />
+                  <Text fontSize="sm" color={subTextColor}>{settings.font_color}</Text>
+                </HStack>
+              </Box>
               <SliderControl
                 label={t("overlayPanel.opacity") || "透明度"}
                 value={Math.round(settings.opacity / 255 * 100)}
@@ -878,6 +955,56 @@ export default function OverlayPanelPage() {
           </HStack>
         </SettingCard>
       </VStack>
+
+      {/* 三角洲密码地图选择弹窗 */}
+      <Modal isOpen={isMapSettingsOpen} onClose={onMapSettingsClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>选择显示的地图</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text fontSize="sm" color={subTextColor} mb={3}>
+              勾选需要在悬浮框显示的地图密码，未勾选的地图将不会显示。
+            </Text>
+            {availableMaps.length === 0 ? (
+              <Text fontSize="sm" color="gray.500" fontStyle="italic">
+                正在加载地图列表...
+              </Text>
+            ) : (
+              <VStack align="stretch" spacing={2}>
+                {availableMaps.map((mapName) => (
+                  <Checkbox
+                    key={mapName}
+                    isChecked={selectedMaps.includes(mapName)}
+                    onChange={() => toggleMapSelection(mapName)}
+                    sx={{
+                      '& .chakra-checkbox__control[data-checked]': {
+                        bg: getActiveColor(),
+                        borderColor: getActiveColor(),
+                      },
+                    }}
+                  >
+                    {mapName}
+                  </Checkbox>
+                ))}
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onMapSettingsClose}>
+              取消
+            </Button>
+            <Button
+              bg={getActiveColor()}
+              color="white"
+              _hover={{ bg: getHoverColor() }}
+              onClick={saveMapSettings}
+            >
+              确认
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
