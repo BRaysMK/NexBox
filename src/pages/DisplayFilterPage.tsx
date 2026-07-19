@@ -315,12 +315,14 @@ export default function DisplayFilterPage() {
   }, [activeDisplayIndex]);
 
   useEffect(() => {
-    loadDisplays();
+    // 延迟加载显示器列表，避免进入页面时阻塞渲染导致卡顿
+    const timer = setTimeout(() => loadDisplays(), 200);
     loadSettings();
     loadPresets();
     loadCustomSettings();
     loadIccPresets();
     loadUserFilterPresets();
+    return () => clearTimeout(timer);
   }, [loadDisplays, loadSettings, loadPresets, loadCustomSettings, loadIccPresets, loadUserFilterPresets]);
 
   useEffect(() => {

@@ -455,18 +455,22 @@ export default function ResolutionConverterPage() {
 
   // 加载 NVIDIA 显示器列表和已注入分辨率
   useEffect(() => {
-    (async () => {
-      try {
-        const dispList = await invoke<NvidiaDisplay[]>("list_nvidia_displays");
-        setDisplays(dispList);
-        if (dispList.length > 0) {
-          await loadDisplayModes(dispList[0].device_name);
+    // 延迟加载显示器列表，避免进入页面时阻塞渲染导致卡顿
+    const timer = setTimeout(() => {
+      (async () => {
+        try {
+          const dispList = await invoke<NvidiaDisplay[]>("list_nvidia_displays");
+          setDisplays(dispList);
+          if (dispList.length > 0) {
+            await loadDisplayModes(dispList[0].device_name);
+          }
+        } catch (e) {
+          console.error("加载 NVIDIA 显示器列表失败:", e);
         }
-      } catch (e) {
-        console.error("加载 NVIDIA 显示器列表失败:", e);
-      }
-      await loadInjectedResolutions();
-    })();
+        await loadInjectedResolutions();
+      })();
+    }, 200);
+    return () => clearTimeout(timer);
   }, []);
 
   const content = (

@@ -346,6 +346,45 @@ export default function VerticalOverlayPage() {
         const rawValue = getItemValue(item, hardwareData);
         const IconComp = ITEM_ICONS[item.id] ?? Gauge;
         const valueColor = getValueColor(rawValue, settings.font_color);
+
+        // 三角洲密码单独处理：每张地图竖着排列
+        if (item.id === "delta_password" && rawValue !== "--") {
+          const entries = rawValue.split(/\s{2,}/).filter(Boolean);
+          return (
+            <div key={item.id} style={{ padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: entries.length > 1 ? "4px" : 0 }}>
+                <IconComp size={14} style={{ flexShrink: 0, color: settings.font_color }} />
+                <span style={{ flex: 1, whiteSpace: "nowrap", color: settings.font_color, fontWeight: 500 }}>
+                  {item.label}
+                </span>
+              </div>
+              {entries.length > 0 ? (
+                <div style={{ paddingLeft: "22px", display: "flex", flexDirection: "column", gap: "2px" }}>
+                  {entries.map((entry, idx) => {
+                    const colonIdx = entry.indexOf("：");
+                    const mapName = colonIdx > 0 ? entry.slice(0, colonIdx) : entry;
+                    const password = colonIdx > 0 ? entry.slice(colonIdx + 1) : "";
+                    return (
+                      <div key={idx} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
+                        <span style={{ color: "rgba(255,255,255,0.5)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {mapName}
+                        </span>
+                        <span style={{ fontWeight: 600, whiteSpace: "nowrap", color: "#ffcc00" }}>
+                          {password}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span style={{ paddingLeft: "22px", textAlign: "right", fontWeight: 600, whiteSpace: "nowrap", color: valueColor }}>
+                  {rawValue}
+                </span>
+              )}
+            </div>
+          );
+        }
+
         return (
           <div
             key={item.id}

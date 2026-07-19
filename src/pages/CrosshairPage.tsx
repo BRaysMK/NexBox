@@ -152,7 +152,9 @@ export default function CrosshairPage() {
 
   useEffect(() => {
     loadSettings();
-    loadDisplays();
+    // 延迟加载显示器列表，避免进入页面时阻塞渲染导致卡顿
+    const timer = setTimeout(() => loadDisplays(), 200);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {

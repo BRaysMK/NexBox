@@ -3,6 +3,7 @@ mod auto_start;
 mod music_api;
 mod crosshair;
 mod delta_force;
+mod display_cache;
 mod display_filter;
 mod downloader;
 mod game_fps;

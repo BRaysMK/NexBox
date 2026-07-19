@@ -2,9 +2,6 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
-use std::process::Command;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 use tauri::Emitter;
 
 static CROSSHAIR_ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -70,6 +67,7 @@ fn get_settings() -> CrosshairSettings {
 pub async fn get_crosshair_displays() -> Result<Vec<DisplayInfo>, String> {
     #[cfg(target_os = "windows")]
     {
+        let result = tauri::async_runtime::spawn_blocking(|| {
         use windows_sys::Win32::Graphics::Gdi::{
             EnumDisplayMonitors, GetMonitorInfoW,
             HDC, HMONITOR, MONITORINFOEXW,
@@ -146,7 +144,7 @@ pub async fn get_crosshair_displays() -> Result<Vec<DisplayInfo>, String> {
             is_generic_monitor_name(prefix)
         };
         if data.displays.iter().any(|d| is_fallback(&d.name)) {
-            let edid_names = query_edid_monitor_names();
+            let edid_names = crate::display_cache::get_edid_monitor_names();
             if !edid_names.is_empty() {
                 for (i, d) in data.displays.iter_mut().enumerate() {
                     if is_fallback(&d.name) {
@@ -161,6 +159,8 @@ pub async fn get_crosshair_displays() -> Result<Vec<DisplayInfo>, String> {
         }
 
         Ok(data.displays)
+        });
+        result.await.map_err(|e| format!("枚举显示器失败: {}", e))?
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -206,53 +206,6 @@ fn get_monitor_model_name(device_name: &str) -> String {
 
     String::new()
 }
-
-fn base64_encode(data: &[u8]) -> String {
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
-    for chunk in data.chunks(3) {
-        let b = [chunk[0] as u32, *chunk.get(1).unwrap_or(&0) as u32, *chunk.get(2).unwrap_or(&0) as u32];
-        let n = (b[0] << 16) | (b[1] << 8) | b[2];
-        out.push(CHARS[((n >> 18) & 0x3F) as usize] as char);
-        out.push(CHARS[((n >> 12) & 0x3F) as usize] as char);
-        out.push(if chunk.len() > 1 { CHARS[((n >> 6) & 0x3F) as usize] } else { b'=' } as char);
-        out.push(if chunk.len() > 2 { CHARS[(n & 0x3F) as usize] } else { b'=' } as char);
-    }
-    out
-}
-
-fn encode_ps_command(script: &str) -> String {
-    let utf16: Vec<u8> = script.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
-    base64_encode(&utf16)
-}
-
-fn query_edid_monitor_names() -> Vec<String> {
-    #[allow(non_snake_case)]
-    #[derive(serde::Deserialize)]
-    struct PsWmiMonitorId { UserFriendlyName: Option<String> }
-
-    let cmd = "ConvertTo-Json -Compress @(Get-CimInstance -Namespace root\\wmi WmiMonitorID | ForEach-Object { $friendly = ''; if ($_.UserFriendlyNameLength -gt 0) { $arr = @($_.UserFriendlyName); $max = [Math]::Min($arr.Count, $_.UserFriendlyNameLength); for ($i = 0; $i -lt $max; $i++) { $c = [char]$arr[$i]; if ($c -eq [char]0) { break } $friendly += $c } }; [PSCustomObject]@{ UserFriendlyName = $friendly.Trim() } })";
-    let full = format!("[Console]::OutputEncoding = [Text.Encoding]::UTF8; {}", cmd);
-    let encoded = encode_ps_command(&full);
-
-    let mut cmd = Command::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded]);
-    #[cfg(windows)]
-    {
-        cmd.creation_flags(0x08000000);
-    }
-    let output = match cmd.output() {
-            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
-            _ => return Vec::new(),
-        };
-
-    serde_json::from_str::<Vec<PsWmiMonitorId>>(&output)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|m| m.UserFriendlyName.unwrap_or_default())
-        .collect()
-}
-
 #[cfg(target_os = "windows")]
 mod win32 {
     use windows_sys::Win32::Foundation::*;
