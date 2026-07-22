@@ -49,8 +49,9 @@
         "dlssPreset": "Delta Force DLSS-Einstellungen",
         "epicFree": "Epic Gratis-Spiele",
     "diskHealth": "Festplatten-Gesundheit",
-"screenRecord": "Bildschirmaufnahme"
-    },
+"screenRecord": "Bildschirmaufnahme",
+    "audioEq": "EQ-Tuner"
+  },
   "optimization": {
     "pageTitle": "Optimieren",
     "pageDesc": "Systemoptimierung und Leistungstools",
@@ -440,7 +441,6 @@
       "optimizer": "Optimizer",
       "cpu-z": "CPU-Z",
       "gpu-z": "GPU-Z",
-      "clash-verge": "Clash Verge",
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
@@ -459,7 +459,6 @@
       "optimizer": "Windows-Systemoptimierungstool",
       "cpu-z": "CPU-Informationserkennungstool",
       "gpu-z": "GPU-Informationserkennungstool",
-      "clash-verge": "Professionelles Netzwerk-Proxy-Tool",
       "processLasso": "Systemprozess-Optimierungstool",
       "process-lasso": "Systemprozess-Optimierungstool",
       "fxsound": "Audioverbesserungstool",
@@ -824,8 +823,9 @@
     "shaderCacheDesc": "NVIDIA/AMD Shader-Cache bereinigen, um Speicherplatz freizugeben",
     "dlssPresetDesc": "DLSS-Modell-Voreinstellungen wechseln, um Spielgrafiken zu optimieren",
     "diskHealthDesc": "Festplatten-Gesundheit und SMART-Informationen prüfen",
-    "screenRecordDesc": "Hochleistungs-Bildschirmaufnahme (Hardware-Codierung)"
-    },
+"screenRecordDesc": "Hochleistungs-Bildschirmaufnahme (Hardware-Codierung)",
+    "audioEqDesc": "Systemweite Audio-Equalizer-Anpassung"
+  },
   "gpuRename": {
     "title": "GPU-Umbenennung",
     "loading": "Laden...",
@@ -1223,6 +1223,45 @@
       "recordingStopped": "Aufnahme gestoppt, Datei gespeichert unter: {{path}}",
       "recordingError": "Aufnahmefehler: {{message}}"
     }
+  },
+  "audioEq": {
+    "title": "EQ-Tuner",
+    "loading": "Laden...",
+    "virtualSoundCard": "Virtuelle Soundkarte",
+    "virtualSoundCardDesc": "FxSound virtuellen Audiotreiber installieren, um systemweites EQ zu aktivieren",
+    "installed": "Installiert",
+    "notInstalled": "Nicht installiert",
+    "serviceRunning": "Dienst läuft",
+    "installDriver": "Treiber installieren",
+    "uninstallDriver": "Treiber deinstallieren",
+    "installing": "Installation...",
+    "uninstalling": "Deinstallation...",
+    "installSuccess": "Installation erfolgreich",
+    "installFailed": "Installation fehlgeschlagen",
+    "uninstallSuccess": "Deinstallation erfolgreich",
+    "uninstallFailed": "Deinstallation fehlgeschlagen",
+    "installHint": "Die Treiberinstallation erfordert Administratorrechte. Bitte führen Sie NexBox als Administrator aus.",
+    "eqEngine": "EQ-Engine",
+    "eqEngineDesc": "Audio-Verarbeitungs-Engine starten, um EQ-Effekte anzuwenden",
+    "running": "Läuft",
+    "stopped": "Gestoppt",
+    "startEngine": "Engine starten",
+    "stopEngine": "Engine stoppen",
+    "starting": "Startet...",
+    "engineStarted": "EQ-Engine gestartet",
+    "engineStartFailed": "EQ-Engine konnte nicht gestartet werden",
+    "engineStopped": "EQ-Engine gestoppt",
+    "engineStopFailed": "EQ-Engine konnte nicht gestoppt werden",
+    "installDriverFirst": "Bitte installieren Sie zuerst den virtuellen Soundkartentreiber",
+    "presets": "Voreinstellungen",
+    "equalizer": "Equalizer",
+    "reset": "Zurücksetzen",
+    "presetApplied": "Voreinstellung angewendet",
+    "usageGuide": "Benutzerhandbuch",
+    "step1": "Klicken Sie auf „Treiber installieren“, um den FxSound virtuellen Audiotreiber zu installieren (Administratorrechte erforderlich)",
+    "step2": "Klicken Sie nach der Installation auf „Engine starten“, um die EQ-Audio-Verarbeitungs-Engine zu starten",
+    "step3": "Wählen Sie eine Voreinstellung oder ziehen Sie die Band-Schieberegler, um EQ-Parameter anzupassen. Die Frequenzgangkurve wird in Echtzeit aktualisiert.",
+    "step4": "Klicken Sie nach Abschluss auf „Engine stoppen“, um die Audioverarbeitung zu beenden. Sie können den Treiber jederzeit deinstallieren."
   }
 }
 

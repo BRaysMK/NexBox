@@ -52,7 +52,8 @@
     "epicFree": "喜加一",
     "nvidiaDriver": "显卡设置（仅NVIDIA）",
     "diskHealth": "磁盘健康",
-"screenRecord": "屏幕录制"
+"screenRecord": "屏幕录制",
+    "audioEq": "EQ调音"
   },
   "optimization": {
     "pageTitle": "优化",
@@ -415,7 +416,6 @@
       "optimizer": "Optimizer",
       "cpu-z": "CPU-Z",
       "gpu-z": "GPU-Z",
-      "clash-verge": "Clash Verge",
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
@@ -441,7 +441,6 @@
       "optimizer": "Windows系统优化工具",
       "cpu-z": "CPU信息检测工具",
       "gpu-z": "显卡信息检测工具",
-      "clash-verge": "专业网络代理工具",
       "processLasso": "系统进程优化工具",
       "process-lasso": "系统进程优化工具",
       "fxsound": "音频增强工具",
@@ -765,6 +764,33 @@
     "driverVersion": "驱动版本",
     "noGpuFound": "未检测到显卡"
   },
+  "dlssQuality": {
+    "label": "DLSS 质量级别",
+    "default": {
+      "name": "默认",
+      "description": "由游戏自行决定，不做强制覆盖"
+    },
+    "ultraPerformance": {
+      "name": "超高性能",
+      "description": "约 33% 渲染分辨率，帧率最大化"
+    },
+    "performance": {
+      "name": "性能",
+      "description": "50% 渲染分辨率，高帧率优先"
+    },
+    "balanced": {
+      "name": "平衡",
+      "description": "约 58% 渲染分辨率，兼顾画质与性能"
+    },
+    "quality": {
+      "name": "质量",
+      "description": "约 67% 渲染分辨率，画质优先"
+    },
+    "dlaa": {
+      "name": "DLAA",
+      "description": "100% 渲染分辨率 + AI 抗锯齿"
+    }
+  },
   "dlssIndicator": {
     "title": "DLSS 指示器",
     "description": "在画面左下角显示 DLSS 标识",
@@ -833,6 +859,7 @@
     "nvidiaDriverDesc": "通过 NVAPI 直接控制 NVIDIA 驱动图形设置",
     "diskHealthDesc": "检测硬盘健康状态与SMART信息",
 "screenRecordDesc": "高性能屏幕录制（硬件编码）",
+    "audioEqDesc": "系统级音频均衡器调音",
     "resolutionManagement": "显示器分辨率管理",
     "selectDisplay": "选择显示器",
     "selectResolution": "选择分辨率",
@@ -1594,6 +1621,47 @@
       "recordingStopped": "录制已停止，文件已保存到: {{path}}",
       "recordingError": "录制出错: {{message}}"
     }
+  },
+  "audioEq": {
+    "title": "EQ 调音",
+    "loading": "加载中...",
+    "virtualSoundCard": "虚拟声卡",
+    "virtualSoundCardDesc": "安装 FxSound 虚拟音频驱动以启用系统级 EQ",
+    "installed": "已安装",
+    "notInstalled": "未安装",
+    "needsReboot": "需要重启",
+    "rebootHint": "驱动已被标记为删除，需要重启电脑才能完成卸载。重启后请再次运行卸载以清理残留。",
+    "serviceRunning": "服务运行中",
+    "installDriver": "安装声卡",
+    "uninstallDriver": "卸载声卡",
+    "installing": "安装中...",
+    "uninstalling": "卸载中...",
+    "installSuccess": "安装成功",
+    "installFailed": "安装失败",
+    "uninstallSuccess": "卸载成功",
+    "uninstallFailed": "卸载失败",
+    "installHint": "安装驱动需要管理员权限，请以管理员身份运行 NexBox",
+    "eqEngine": "EQ 引擎",
+    "eqEngineDesc": "启动音频处理引擎以应用 EQ 效果",
+    "running": "运行中",
+    "stopped": "已停止",
+    "startEngine": "启动引擎",
+    "stopEngine": "停止引擎",
+    "starting": "启动中...",
+    "engineStarted": "EQ 引擎已启动",
+    "engineStartFailed": "启动 EQ 引擎失败",
+    "engineStopped": "EQ 引擎已停止",
+    "engineStopFailed": "停止 EQ 引擎失败",
+    "installDriverFirst": "请先安装虚拟声卡驱动",
+    "presets": "预设",
+    "equalizer": "均衡器",
+    "reset": "重置",
+    "presetApplied": "预设已应用",
+    "usageGuide": "使用指南",
+    "step1": "点击“安装声卡”按钮安装 FxSound 虚拟音频驱动（需要管理员权限）",
+    "step2": "安装成功后，点击“启动引擎”按钮启动 EQ 音频处理引擎",
+    "step3": "选择预设或拖动频段滑块调整 EQ 参数，频率响应曲线将实时更新",
+    "step4": "使用完毕后，点击“停止引擎”关闭音频处理，可随时卸载声卡驱动"
   }
 }
 

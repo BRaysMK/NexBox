@@ -76,17 +76,7 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             website_url: Some("https://www.techpowerup.com/gpuz/".to_string()),
             check_executable: None,
         },
-        ThirdPartyTool {
-            id: "clash-verge".to_string(),
-            name: "Clash Verge".to_string(),
-            description: "专业网络代理工具".to_string(),
-            category: "network".to_string(),
-            tool_type: "install".to_string(),
-            download_url: String::new(),
-            file_name: String::new(),
-            website_url: Some("https://github.com/Clash-Verge-rev/clash-verge-rev".to_string()),
-            check_executable: Some("clash-verge.exe".to_string()),
-        },
+
         ThirdPartyTool {
             id: "process-lasso".to_string(),
             name: "Process Lasso".to_string(),

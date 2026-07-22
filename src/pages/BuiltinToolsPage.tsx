@@ -14,6 +14,7 @@ import {
   Zap,
   Monitor,
   HardDrive,
+  Volume2,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
@@ -85,6 +86,14 @@ const tools: ViewItem[] = [
     titleKey: "sidebar.diskHealth",
     descriptionKey: "builtinTools.diskHealthDesc",
     color: "#00B4D8",
+  },
+  {
+    id: "audio-eq",
+    path: "/audio-eq",
+    icon: Volume2,
+    titleKey: "sidebar.audioEq",
+    descriptionKey: "builtinTools.audioEqDesc",
+    color: "#E74C3C",
   },
   {
     id: "nvidia-driver",

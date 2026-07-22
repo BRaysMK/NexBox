@@ -50,7 +50,8 @@
     "dlssPreset": "Delta Force DLSS Settings",
     "epicFree": "Epic Free Games",
     "diskHealth": "Disk Health",
-"screenRecord": "Screen Record"
+"screenRecord": "Screen Record",
+    "audioEq": "EQ Tuner"
   },
   "optimization": {
     "pageTitle": "Optimize",
@@ -557,7 +558,6 @@
       "optimizer": "Optimizer",
       "cpu-z": "CPU-Z",
       "gpu-z": "GPU-Z",
-      "clash-verge": "Clash Verge",
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
@@ -583,7 +583,6 @@
       "optimizer": "Windows system optimization tool",
       "cpu-z": "CPU information detection tool",
       "gpu-z": "GPU information detection tool",
-      "clash-verge": "Professional network proxy tool",
       "processLasso": "System process optimization tool",
       "process-lasso": "System process optimization tool",
       "fxsound": "Audio enhancement tool",
@@ -969,7 +968,8 @@
     "shaderCacheDesc": "Clean up NVIDIA/AMD shader cache to free disk space",
     "dlssPresetDesc": "Switch DLSS model presets to optimize game graphics",
     "diskHealthDesc": "Check disk health status and SMART information",
-    "screenRecordDesc": "High-performance screen recording (hardware encoding)"
+    "screenRecordDesc": "High-performance screen recording (hardware encoding)",
+    "audioEqDesc": "System-level audio equalizer tuning"
   },
   "gpuRename": {
     "title": "GPU Rename",
@@ -1568,6 +1568,47 @@
       "recordingStopped": "Recording stopped, file saved to: {{path}}",
       "recordingError": "Recording error: {{message}}"
     }
+  },
+  "audioEq": {
+    "title": "EQ Tuner",
+    "loading": "Loading...",
+    "virtualSoundCard": "Virtual Sound Card",
+    "virtualSoundCardDesc": "Install FxSound virtual audio driver to enable system-level EQ",
+    "installed": "Installed",
+    "notInstalled": "Not Installed",
+    "needsReboot": "Reboot Required",
+    "rebootHint": "The driver has been marked for deletion. A system restart is required to complete the uninstallation. After rebooting, run the uninstall again to clean up remaining files.",
+    "serviceRunning": "Service Running",
+    "installDriver": "Install Driver",
+    "uninstallDriver": "Uninstall Driver",
+    "installing": "Installing...",
+    "uninstalling": "Uninstalling...",
+    "installSuccess": "Installation Successful",
+    "installFailed": "Installation Failed",
+    "uninstallSuccess": "Uninstallation Successful",
+    "uninstallFailed": "Uninstallation Failed",
+    "installHint": "Installing the driver requires administrator privileges. Please run NexBox as administrator.",
+    "eqEngine": "EQ Engine",
+    "eqEngineDesc": "Start the audio processing engine to apply EQ effects",
+    "running": "Running",
+    "stopped": "Stopped",
+    "startEngine": "Start Engine",
+    "stopEngine": "Stop Engine",
+    "starting": "Starting...",
+    "engineStarted": "EQ Engine Started",
+    "engineStartFailed": "Failed to Start EQ Engine",
+    "engineStopped": "EQ Engine Stopped",
+    "engineStopFailed": "Failed to Stop EQ Engine",
+    "installDriverFirst": "Please install the virtual sound card driver first",
+    "presets": "Presets",
+    "equalizer": "Equalizer",
+    "reset": "Reset",
+    "presetApplied": "Preset Applied",
+    "usageGuide": "Usage Guide",
+    "step1": "Click \"Install Driver\" to install the FxSound virtual audio driver (requires admin privileges)",
+    "step2": "After installation, click \"Start Engine\" to launch the EQ audio processing engine",
+    "step3": "Select a preset or drag the band sliders to adjust EQ parameters. The frequency response curve updates in real-time.",
+    "step4": "When done, click \"Stop Engine\" to stop audio processing. You can uninstall the driver at any time."
   }
 }
 

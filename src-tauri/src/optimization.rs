@@ -1916,8 +1916,8 @@ fn get_builtin_plan_metadata(id: &str) -> (String, String) {
         "AMD电源计划" => ("AMD电源计划".to_string(), "AMD官方推荐高性能电源方案，适合Ryzen平台".to_string()),
         "ggOSDesktopGaming" => ("ggOS Desktop Gaming".to_string(), "桌面游戏场景深度优化，降低延迟提升帧率".to_string()),
         "Intel大核心电源计划" => ("Intel大核心电源计划".to_string(), "Intel大小核调度优化，优先使用大核心运行游戏".to_string()),
-        "amd" => ("AMD （社区推荐）".to_string(), "AMD平台通用高性能电源方案".to_string()),
-        "intel" => ("Intel（社区推荐）".to_string(), "Intel平台通用高性能电源方案".to_string()),
+        "PowerX-v2" => ("PowerX v2".to_string(), "极致性能电源方案，最大化系统响应与游戏帧率".to_string()),
+        "卓越性能" => ("卓越性能".to_string(), "Windows 卓越性能电源计划，解锁最高性能模式".to_string()),
         _ => (id.to_string(), String::new()),
     }
 }
@@ -2016,6 +2016,14 @@ fn find_plan_guid_by_name(system_plans: &[(String, String, bool)], plan_name: &s
         if name.contains(plan_name) {
             return Some(guid.clone());
         }
+        // 去掉末尾括号内的作者/后缀信息再匹配
+        // 例如 "英特尔-KF系列提升平均帧计划(毒药制作" -> "英特尔-KF系列提升平均帧计划"
+        if let Some(pos) = name.rfind('(') {
+            let base_name = name[..pos].trim();
+            if base_name.contains(plan_name) || plan_name.contains(base_name) {
+                return Some(guid.clone());
+            }
+        }
     }
     None
 }
@@ -2059,7 +2067,7 @@ pub async fn get_builtin_power_plans(app: tauri::AppHandle) -> Result<Vec<Builti
     let active_plan = get_active_plan_internal();
     let active_guid = active_plan.as_ref().map(|(g, _)| g.as_str()).unwrap_or("");
 
-    let builtin_ids = ["ACMEPCAMD", "AMD电源计划", "ggOSDesktopGaming", "Intel大核心电源计划", "amd", "intel"];
+    let builtin_ids = ["ACMEPCAMD", "AMD电源计划", "ggOSDesktopGaming", "Intel大核心电源计划", "PowerX-v2", "卓越性能"];
 
     let mut plans = Vec::new();
 

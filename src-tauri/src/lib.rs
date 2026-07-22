@@ -1,4 +1,6 @@
 mod announcement;
+mod audio_engine;
+mod audio_eq;
 mod auto_start;
 mod music_api;
 mod crosshair;
@@ -341,6 +343,17 @@ pub fn run() {
         display_filter::apply_icc_preset,
         display_filter::delete_icc_preset,
         display_filter::export_preset_as_icc,
+        // === EQ 调音命令 ===
+        audio_eq::check_virtual_audio_driver,
+        audio_eq::install_virtual_audio_driver,
+        audio_eq::uninstall_virtual_audio_driver,
+        audio_eq::start_eq_engine,
+        audio_eq::stop_eq_engine,
+        audio_eq::get_eq_engine_status,
+        audio_eq::get_eq_presets,
+        audio_eq::apply_eq_preset,
+        audio_eq::get_default_audio_device,
+        audio_eq::update_eq_bands,
         thirdparty_tools::get_thirdparty_tools,
         thirdparty_tools::get_tool_install_path,
         thirdparty_tools::get_tool_download_path,
@@ -461,6 +474,7 @@ pub fn run() {
                 display_filter::cleanup();
                 vertical_overlay::cleanup(app_handle);
                 crosshair::cleanup();
+                audio_eq::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);
                 nvapi::cleanup();

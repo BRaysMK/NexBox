@@ -189,6 +189,14 @@ export const searchIndex: SearchItem[] = [
       keywords: ["dlss", "预设", "preset", "三角洲", "delta", "force", "nvidia", "模型"],
     },
   {
+    id: "audio-eq",
+    nameKey: "sidebar.audioEq",
+    path: "/audio-eq",
+    icon: Volume2,
+    category: "builtin-tool",
+    keywords: ["EQ", "调音", "均衡器", "音频", "声卡", "equalizer", "audio", "fxsound", "音效"],
+  },
+  {
     id: "memory-limit",
     nameKey: "optimization.memoryLimit.title",
     path: "/optimize/memory-limit",

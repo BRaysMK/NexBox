@@ -1864,7 +1864,8 @@ function AboutSettings() {
   const subLabelColor = useColorModeValue("gray.500", "#888888");
   const dividerColor = useColorModeValue("gray.200", "#333333");
   const appNameColor = useColorModeValue("gray.400", "#888888");
-  const logoSrc = useColorModeValue("/logo/NexBoxW.png", "/logo/NexBoxB.png");
+  const graphicLogoSrc = useColorModeValue("/logo/NBB.png", "/logo/NBW.png");
+  const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
@@ -2049,29 +2050,17 @@ function AboutSettings() {
       </Text>
 
       <LiquidGlassCard p={6} boxShadow="sm" mb={6}>
-        <HStack mb={4}>
-          <Box
-            w="56px"
-            h="56px"
-            borderRadius="xl"
-            flexShrink={0}
-            boxShadow="md"
-            overflow="hidden"
-          >
-            <img
-              src={logoSrc}
-              alt="NexBox Logo"
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          </Box>
-          <VStack align="start" spacing={1} ml={2}>
-            <Text fontSize="2xl" fontWeight="bold" color={labelColor}>
-              {t("common.appFullName")}
-            </Text>
-            <Text fontSize="sm" color={appNameColor}>
-              {t("common.appName")}
-            </Text>
-          </VStack>
+        <HStack spacing={4} justify="center" align="center" mb={4}>
+          <img
+            src={graphicLogoSrc}
+            alt="NexBox"
+            style={{ height: "72px", width: "auto", objectFit: "contain" }}
+          />
+          <img
+            src={textLogoSrc}
+            alt="新境盒"
+            style={{ height: "40px", width: "auto", objectFit: "contain" }}
+          />
         </HStack>
 
         <Divider my={4} borderColor={dividerColor} />

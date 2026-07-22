@@ -197,8 +197,7 @@ function ThirdPartyToolCard({
         return Cpu;
       case "gpu-z":
         return Monitor;
-      case "clash-verge":
-        return Network;
+
       case "gamepp":
         return Bot;
       case "fxsound":

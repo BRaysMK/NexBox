@@ -71,12 +71,14 @@ function SystemPlanCard({
   plan,
   onActivate,
   onDelete,
-  isOperating,
+  activateLoading,
+  deleteLoading,
 }: {
   plan: SystemPowerPlan;
   onActivate: () => void;
   onDelete: () => void;
-  isOperating: boolean;
+  activateLoading: boolean;
+  deleteLoading: boolean;
 }) {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.800", "#e0e0e0");
@@ -141,7 +143,7 @@ function SystemPlanCard({
                   size="xs"
                   leftIcon={<CheckCircle size={12} />}
                   onClick={onActivate}
-                  isLoading={isOperating}
+                  isLoading={activateLoading}
                   loadingText={t("optimization.powerManagement.activating")}
                   colorScheme="green"
                 >
@@ -151,7 +153,7 @@ function SystemPlanCard({
                   size="xs"
                   leftIcon={<Trash2 size={12} />}
                   onClick={onDelete}
-                  isLoading={isOperating}
+                  isLoading={deleteLoading}
                   loadingText={t("optimization.powerManagement.deleting")}
                   colorScheme="red"
                   variant="outline"
@@ -171,12 +173,14 @@ function BuiltinPlanCard({
   plan,
   onImport,
   onImportAndActivate,
-  isOperating,
+  importLoading,
+  importActivateLoading,
 }: {
   plan: BuiltinPowerPlan;
   onImport: () => void;
   onImportAndActivate: () => void;
-  isOperating: boolean;
+  importLoading: boolean;
+  importActivateLoading: boolean;
 }) {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.800", "#e0e0e0");
@@ -252,7 +256,7 @@ function BuiltinPlanCard({
                   size="xs"
                   leftIcon={<Download size={12} />}
                   onClick={onImport}
-                  isLoading={isOperating}
+                  isLoading={importLoading}
                   loadingText={t("optimization.powerManagement.importing")}
                   colorScheme="orange"
                   variant="outline"
@@ -263,7 +267,7 @@ function BuiltinPlanCard({
                   size="xs"
                   leftIcon={<Play size={12} />}
                   onClick={onImportAndActivate}
-                  isLoading={isOperating}
+                  isLoading={importActivateLoading}
                   loadingText={t("optimization.powerManagement.importing")}
                   colorScheme="orange"
                 >
@@ -305,7 +309,7 @@ export default function PowerManagementPage() {
   const [systemPlans, setSystemPlans] = useState<SystemPowerPlan[]>([]);
   const [activePlan, setActivePlan] = useState<ActivePowerPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [operatingPlanId, setOperatingPlanId] = useState<string | null>(null);
+  const [operating, setOperating] = useState<{ planId: string; action: string } | null>(null);
   const [isImportingAll, setIsImportingAll] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ guid: string; name: string } | null>(null);
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
@@ -339,7 +343,7 @@ export default function PowerManagementPage() {
   }, [loadData]);
 
   const handleImport = async (planId: string) => {
-    setOperatingPlanId(planId);
+    setOperating({ planId, action: "import" });
     try {
       const result: PowerPlanOperationResult = await invoke(
         "import_power_plan",
@@ -363,12 +367,12 @@ export default function PowerManagementPage() {
         isClosable: true,
       });
     }
-    setOperatingPlanId(null);
+    setOperating(null);
     await loadData();
   };
 
   const handleImportAndActivate = async (planId: string) => {
-    setOperatingPlanId(planId);
+    setOperating({ planId, action: "importAndActivate" });
     try {
       const result: PowerPlanOperationResult = await invoke(
         "import_and_activate_power_plan",
@@ -392,12 +396,12 @@ export default function PowerManagementPage() {
         isClosable: true,
       });
     }
-    setOperatingPlanId(null);
+    setOperating(null);
     await loadData();
   };
 
   const handleActivate = async (guid: string) => {
-    setOperatingPlanId(guid);
+    setOperating({ planId: guid, action: "activate" });
     try {
       const result: PowerPlanOperationResult = await invoke(
         "activate_power_plan",
@@ -421,7 +425,7 @@ export default function PowerManagementPage() {
         isClosable: true,
       });
     }
-    setOperatingPlanId(null);
+    setOperating(null);
     await loadData();
   };
 
@@ -433,7 +437,7 @@ export default function PowerManagementPage() {
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     onDeleteClose();
-    setOperatingPlanId(deleteTarget.guid);
+    setOperating({ planId: deleteTarget.guid, action: "delete" });
     try {
       const result: PowerPlanOperationResult = await invoke(
         "delete_power_plan",
@@ -457,7 +461,7 @@ export default function PowerManagementPage() {
         isClosable: true,
       });
     }
-    setOperatingPlanId(null);
+    setOperating(null);
     setDeleteTarget(null);
     await loadData();
   };
@@ -615,7 +619,8 @@ export default function PowerManagementPage() {
                         plan={plan}
                         onActivate={() => handleActivate(plan.guid)}
                         onDelete={() => handleDeleteClick(plan.guid, plan.name)}
-                        isOperating={operatingPlanId !== null && operatingPlanId === plan.guid}
+                        activateLoading={operating?.planId === plan.guid && operating?.action === "activate"}
+                        deleteLoading={operating?.planId === plan.guid && operating?.action === "delete"}
                       />
                     </motion.div>
                   ))}
@@ -658,7 +663,8 @@ export default function PowerManagementPage() {
                         plan={plan}
                         onImport={() => handleImport(plan.id)}
                         onImportAndActivate={() => handleImportAndActivate(plan.id)}
-                        isOperating={operatingPlanId !== null && (operatingPlanId === plan.id || (plan.guid && operatingPlanId === plan.guid))}
+                        importLoading={operating?.planId === plan.id && operating?.action === "import"}
+                        importActivateLoading={operating?.planId === plan.id && operating?.action === "importAndActivate"}
                       />
                     </motion.div>
                   ))}

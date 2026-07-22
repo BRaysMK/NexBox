@@ -1,5 +1,6 @@
 import {
   Box,
+  Flex,
   Text,
   Heading,
   VStack,
@@ -24,11 +25,12 @@ import {
   MenuOptionGroup,
   MenuItemOption,
   Spinner,
+  Divider,
 } from "@chakra-ui/react";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { Cpu, ArrowLeft, Zap, Eye, FileText, Settings, ChevronDown, Check, Monitor } from "lucide-react";
+import { Cpu, ArrowLeft, Zap, Eye, FileText, Settings, ChevronDown, Check, Monitor, Thermometer } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -47,11 +49,16 @@ interface DLSSApplyResult {
   success: boolean;
   message: string;
   preset: string;
+  quality: string;
+  texture_quality: string;
+  antialiasing: string;
 }
 
 interface DLSSPresetStatus {
   preset: string;
-  quality: number;
+  quality: string;
+  texture_quality: string;
+  antialiasing: string;
 }
 
 interface DLSSSettingsStatus {
@@ -79,6 +86,46 @@ const getDLSSPresets = (t: (key: string) => string): DLSSModelPreset[] => [
   { id: "K", name: t("deltaForce.dlssModels.K.name"), description: t("deltaForce.dlssModels.K.description"), recommended: true },
   { id: "L", name: t("deltaForce.dlssModels.L.name"), description: t("deltaForce.dlssModels.L.description"), recommended: true },
   { id: "M", name: t("deltaForce.dlssModels.M.name"), description: t("deltaForce.dlssModels.M.description"), recommended: true },
+];
+
+interface DLSSQualityOption {
+  id: string;
+  name: string;
+  description: string;
+}
+const getDLSSQualityOptions = (t: (key: string) => string): DLSSQualityOption[] => [
+  { id: "default", name: t("dlssQuality.default.name"), description: t("dlssQuality.default.description") },
+  { id: "dlaa", name: "DLAA", description: "100% 渲染分辨率" },
+  { id: "quality", name: t("dlssQuality.quality.name"), description: "约 67% 渲染分辨率" },
+  { id: "balanced", name: t("dlssQuality.balanced.name"), description: "约 58% 渲染分辨率" },
+  { id: "performance", name: t("dlssQuality.performance.name"), description: "50% 渲染分辨率" },
+  { id: "ultra_performance", name: t("dlssQuality.ultraPerformance.name"), description: "约 33% 渲染分辨率" },
+];
+
+interface TextureQualityOption {
+  id: string;
+  name: string;
+  description: string;
+}
+const getTextureQualityOptions = (t: (key: string) => string): TextureQualityOption[] => [
+  { id: "default", name: "默认", description: "不修改" },
+  { id: "high_quality", name: "高质量", description: "最高纹理过滤质量" },
+  { id: "quality", name: "质量", description: "平衡画质与性能" },
+  { id: "performance", name: "性能", description: "偏性能取向" },
+  { id: "high_performance", name: "高性能", description: "最高性能取向" },
+];
+
+interface AntialiasingOption {
+  id: string;
+  name: string;
+  description: string;
+}
+const getAntialiasingOptions = (t: (key: string) => string): AntialiasingOption[] => [
+  { id: "default", name: "默认", description: "不修改" },
+  { id: "off", name: "关", description: "关闭透明度超采样" },
+  { id: "2x", name: "2x 超采样", description: "2倍透明度超采样" },
+  { id: "4x", name: "4x 超采样", description: "4倍透明度超采样" },
+  { id: "8x", name: "8x 超采样", description: "8倍透明度超采样" },
 ];
 
 const getPresetReferences = (t: (key: string) => string): PresetReference[] => [
@@ -138,9 +185,15 @@ function DLSSCard() {
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const toast = useToast();
   const [selectedPreset, setSelectedPreset] = useState("K");
+  const [selectedQuality, setSelectedQuality] = useState("default");
+  const [selectedTextureQuality, setSelectedTextureQuality] = useState("default");
+  const [selectedAntialiasing, setSelectedAntialiasing] = useState("default");
   const [isApplying, setIsApplying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const dlssPresets = getDLSSPresets(t);
+  const dlssQualityOptions = getDLSSQualityOptions(t);
+  const textureQualityOptions = getTextureQualityOptions(t);
+  const antialiasingOptions = getAntialiasingOptions(t);
 
   useEffect(() => {
     const style = document.createElement("style");
@@ -153,7 +206,10 @@ function DLSSCard() {
   useEffect(() => {
     invoke<DLSSPresetStatus>("get_dlss_preset_status")
       .then((status) => {
-        setSelectedPreset(status.preset);
+        setSelectedPreset(status.preset || "K");
+        setSelectedQuality(status.quality || "default");
+        setSelectedTextureQuality(status.texture_quality || "default");
+        setSelectedAntialiasing(status.antialiasing || "default");
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
@@ -161,7 +217,6 @@ function DLSSCard() {
 
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const subTextColor = useColorModeValue("gray.500", "#888888");
-  const selectBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const hoverBg = useColorModeValue("gray.100", "#252525");
   const menuListBg = useColorModeValue("white", "#1a1a1a");
@@ -171,6 +226,9 @@ function DLSSCard() {
     try {
       const result = await invoke<DLSSApplyResult>("apply_dlss_model_preset", {
         preset: selectedPreset,
+        quality: selectedQuality,
+        textureQuality: selectedTextureQuality,
+        antialiasing: selectedAntialiasing,
       });
       toast({
         title: result.message,
@@ -190,6 +248,9 @@ function DLSSCard() {
   };
 
   const currentPreset = dlssPresets.find(p => p.id === selectedPreset);
+  const currentQuality = dlssQualityOptions.find(q => q.id === selectedQuality);
+  const currentTextureQuality = textureQualityOptions.find(q => q.id === selectedTextureQuality);
+  const currentAntialiasing = antialiasingOptions.find(a => a.id === selectedAntialiasing);
 
   return (
     <SectionCard title={t("deltaForce.dlssPreset")} icon={<Settings size={18} />}>
@@ -199,24 +260,13 @@ function DLSSCard() {
             {t("dlssPreset.presetLabel")}
           </Text>
           <Menu matchWidth>
-            <MenuButton
-              as={Box}
-              bg="transparent"
-              p={0}
-              border="none"
-              w="full"
-              cursor="pointer"
-            >
+            <MenuButton as={Box} bg="transparent" p={0} border="none" w="full" cursor="pointer">
               <LiquidGlassCard px={3} py={1.5}>
                 <HStack justify="space-between">
                   <HStack spacing={2}>
                     <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentPreset?.name}</Badge>
-                    <Text fontSize="xs" color={subTextColor} noOfLines={1}>
-                      {currentPreset?.description}
-                    </Text>
-                    {currentPreset?.recommended && (
-                      <Badge colorScheme="green" fontSize="8px">推荐</Badge>
-                    )}
+                    <Text fontSize="xs" color={subTextColor} noOfLines={1}>{currentPreset?.description}</Text>
+                    {currentPreset?.recommended && <Badge colorScheme="green" fontSize="8px">{t("deltaForce.recommended")}</Badge>}
                   </HStack>
                   <ChevronDown size={16} />
                 </HStack>
@@ -224,23 +274,106 @@ function DLSSCard() {
             </MenuButton>
             <MenuList bg={menuListBg} borderColor={borderColor} maxH="300px" overflowY="auto">
               {dlssPresets.map(preset => (
-                <MenuItem
-                  key={preset.id}
-                  onClick={() => setSelectedPreset(preset.id)}
-                  bg={selectedPreset === preset.id ? hoverBg : "transparent"}
-                  _hover={{ bg: hoverBg }}
-                >
+                <MenuItem key={preset.id} onClick={() => setSelectedPreset(preset.id)} bg={selectedPreset === preset.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
                   <HStack spacing={3} w="full" justify="space-between">
                     <HStack spacing={2}>
                       <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{preset.name}</Badge>
                       <Text fontSize="sm" color={textColor}>{preset.description}</Text>
                     </HStack>
                     <HStack spacing={2}>
-                      {preset.recommended && (
-                        <Badge colorScheme="green" fontSize="8px">{t("deltaForce.recommended")}</Badge>
-                      )}
+                      {preset.recommended && <Badge colorScheme="green" fontSize="8px">{t("deltaForce.recommended")}</Badge>}
                       {selectedPreset === preset.id && <Check size={14} color={themeConfig.primaryColor} />}
                     </HStack>
+                  </HStack>
+                </MenuItem>
+              ))}
+            </MenuList>
+          </Menu>
+        </Box>
+
+        <Box>
+          <Text fontSize="sm" fontWeight="medium" color={textColor} mb={2}>{t("dlssQuality.label")}</Text>
+          <Menu matchWidth>
+            <MenuButton as={Box} bg="transparent" p={0} border="none" w="full" cursor="pointer">
+              <LiquidGlassCard px={3} py={1.5}>
+                <HStack justify="space-between">
+                  <HStack spacing={2}>
+                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentQuality?.name}</Badge>
+                    <Text fontSize="xs" color={subTextColor} noOfLines={1}>{currentQuality?.description}</Text>
+                  </HStack>
+                  <ChevronDown size={16} />
+                </HStack>
+              </LiquidGlassCard>
+            </MenuButton>
+            <MenuList bg={menuListBg} borderColor={borderColor} maxH="300px" overflowY="auto">
+              {dlssQualityOptions.map(option => (
+                <MenuItem key={option.id} onClick={() => setSelectedQuality(option.id)} bg={selectedQuality === option.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
+                  <HStack spacing={3} w="full" justify="space-between">
+                    <HStack spacing={2}>
+                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{option.name}</Badge>
+                      <Text fontSize="sm" color={textColor}>{option.description}</Text>
+                    </HStack>
+                    {selectedQuality === option.id && <Check size={14} color={themeConfig.primaryColor} />}
+                  </HStack>
+                </MenuItem>
+              ))}
+            </MenuList>
+          </Menu>
+        </Box>
+
+        <Box>
+          <Text fontSize="sm" fontWeight="medium" color={textColor} mb={2}>纹理过滤质量</Text>
+          <Menu matchWidth>
+            <MenuButton as={Box} bg="transparent" p={0} border="none" w="full" cursor="pointer">
+              <LiquidGlassCard px={3} py={1.5}>
+                <HStack justify="space-between">
+                  <HStack spacing={2}>
+                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentTextureQuality?.name}</Badge>
+                    <Text fontSize="xs" color={subTextColor} noOfLines={1}>{currentTextureQuality?.description}</Text>
+                  </HStack>
+                  <ChevronDown size={16} />
+                </HStack>
+              </LiquidGlassCard>
+            </MenuButton>
+            <MenuList bg={menuListBg} borderColor={borderColor} maxH="300px" overflowY="auto">
+              {textureQualityOptions.map(option => (
+                <MenuItem key={option.id} onClick={() => setSelectedTextureQuality(option.id)} bg={selectedTextureQuality === option.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
+                  <HStack spacing={3} w="full" justify="space-between">
+                    <HStack spacing={2}>
+                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{option.name}</Badge>
+                      <Text fontSize="sm" color={textColor}>{option.description}</Text>
+                    </HStack>
+                    {selectedTextureQuality === option.id && <Check size={14} color={themeConfig.primaryColor} />}
+                  </HStack>
+                </MenuItem>
+              ))}
+            </MenuList>
+          </Menu>
+        </Box>
+
+        <Box>
+          <Text fontSize="sm" fontWeight="medium" color={textColor} mb={2}>抗锯齿-透明度</Text>
+          <Menu matchWidth>
+            <MenuButton as={Box} bg="transparent" p={0} border="none" w="full" cursor="pointer">
+              <LiquidGlassCard px={3} py={1.5}>
+                <HStack justify="space-between">
+                  <HStack spacing={2}>
+                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentAntialiasing?.name}</Badge>
+                    <Text fontSize="xs" color={subTextColor} noOfLines={1}>{currentAntialiasing?.description}</Text>
+                  </HStack>
+                  <ChevronDown size={16} />
+                </HStack>
+              </LiquidGlassCard>
+            </MenuButton>
+            <MenuList bg={menuListBg} borderColor={borderColor} maxH="300px" overflowY="auto">
+              {antialiasingOptions.map(option => (
+                <MenuItem key={option.id} onClick={() => setSelectedAntialiasing(option.id)} bg={selectedAntialiasing === option.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
+                  <HStack spacing={3} w="full" justify="space-between">
+                    <HStack spacing={2}>
+                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{option.name}</Badge>
+                      <Text fontSize="sm" color={textColor}>{option.description}</Text>
+                    </HStack>
+                    {selectedAntialiasing === option.id && <Check size={14} color={themeConfig.primaryColor} />}
                   </HStack>
                 </MenuItem>
               ))}
@@ -271,8 +404,6 @@ function DLSSCard() {
 }
 
 function GpuInfoCard() {
-  const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
   const { config: themeConfig } = useThemeColor();
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -290,81 +421,27 @@ function GpuInfoCard() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const getVendorColor = (vendor: GpuVendor) => {
-    switch (vendor) {
-      case GpuVendor.NVIDIA:
-        return "green";
-      case GpuVendor.AMD:
-        return "red";
-      case GpuVendor.Intel:
-        return "blue";
-      default:
-        return "gray";
-    }
-  };
-
-  const cardContent = (
-    <VStack align="stretch" spacing={3}>
-      {isLoading ? (
-        <HStack justify="center" py={2}>
-          <Spinner size="sm" color={themeConfig.primaryColor} />
-          <Text color={subTextColor} fontSize="sm">{t("deltaForce.loading")}</Text>
-        </HStack>
-      ) : gpuInfo ? (
-        <>
-          <HStack spacing={3}>
-            <Box p={2} borderRadius="lg" bg={hexToRgba(themeConfig.primaryColor, 0.15)}>
-              <Monitor size={20} color={themeConfig.primaryColor} />
-            </Box>
-            <VStack align="start" spacing={0} flex={1}>
-              <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
-                {gpuInfo.name}
-              </Text>
-              <HStack spacing={2}>
-                <Badge colorScheme={getVendorColor(gpuInfo.vendor)} fontSize="xs" borderRadius="full">
-                  {gpuInfo.vendor}
-                </Badge>
-                {gpuInfo.memory_gb > 0 && (
-                  <Text fontSize="xs" color={subTextColor}>
-                    {gpuInfo.memory_gb.toFixed(1)}GB
-                  </Text>
-                )}
-              </HStack>
-            </VStack>
-          </HStack>
-          {gpuInfo.driver_version && gpuInfo.driver_version !== "未知" && (
-            <HStack spacing={2} fontSize="xs" color={subTextColor}>
-              <Text>{t("dlssPreset.driverVersion")}:</Text>
-              <Text fontWeight="medium" color={textColor}>
-                {gpuInfo.driver_version}
-              </Text>
-            </HStack>
-          )}
-        </>
-      ) : (
-        <Text color={subTextColor} fontSize="sm">{t("dlssPreset.noGpuFound")}</Text>
-      )}
-    </VStack>
-  );
-
-  if (liquidGlassEnabled) {
-    return (
-      <LiquidGlassCard p={4}>
-        {cardContent}
-      </LiquidGlassCard>
-    );
-  }
+  if (isLoading || !gpuInfo) return null;
 
   return (
-    <Box
-      bg={useColorModeValue("white", "#111111")}
-      borderRadius="xl"
-      p={4}
-      border="1px solid"
-      borderColor={useColorModeValue("gray.200", "#333333")}
-    >
-      {cardContent}
-    </Box>
+    <SectionCard title="显卡" icon={<Monitor size={18} />}>
+      <VStack align="stretch" spacing={3}>
+        <HStack justify="space-between">
+          <Text fontSize="xs" color={subTextColor}>型号</Text>
+          <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={2} maxW="70%" textAlign="right">
+            {gpuInfo.name}
+          </Text>
+        </HStack>
+        <HStack justify="space-between">
+          <Text fontSize="xs" color={subTextColor}>显存</Text>
+          <Text fontSize="sm" fontWeight="bold" color={textColor}>{gpuInfo.memory_gb.toFixed(0)} GB</Text>
+        </HStack>
+        <HStack justify="space-between">
+          <Text fontSize="xs" color={subTextColor}>驱动</Text>
+          <Text fontSize="sm" fontWeight="bold" color={textColor}>{gpuInfo.driver_version}</Text>
+        </HStack>
+      </VStack>
+    </SectionCard>
   );
 }
 
@@ -522,10 +599,11 @@ export default function DLSSPresetPage() {
         <Box position="relative" zIndex={10}>
           <DLSSCard />
         </Box>
-        <VStack align="stretch" spacing={4} justify="space-between">
+        <Flex direction="column" h="full">
           <GpuInfoCard />
+          <Box flex={1} minH={4} />
           <DLSSIndicatorCard />
-        </VStack>
+        </Flex>
       </Grid>
 
       <PresetReferenceTable />

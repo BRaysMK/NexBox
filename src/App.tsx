@@ -35,6 +35,7 @@ import TrayMenuPage from "./pages/TrayMenuPage";
 import DesktopLyricsPage from "./pages/DesktopLyricsPage";
 import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
+import AudioEqPage from "./pages/AudioEqPage";
 import { useState, useEffect } from "react";
 
 import {
@@ -288,7 +289,8 @@ function App() {
             <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
             <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
-            <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+              <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+              <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
@@ -323,6 +325,7 @@ function App() {
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
               <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+              <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
               <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />

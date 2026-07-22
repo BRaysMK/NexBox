@@ -49,8 +49,9 @@
         "dlssPreset": "Paramètres DLSS Delta Force",
         "epicFree": "Jeux gratuits Epic",
     "diskHealth": "Santé du disque",
-"screenRecord": "Enregistrement d'écran"
-    },
+"screenRecord": "Enregistrement d'écran",
+    "audioEq": "Égaliseur EQ"
+  },
   "optimization": {
     "pageTitle": "Optimiser",
     "pageDesc": "Outils d'optimisation système et de performances",
@@ -440,7 +441,6 @@
       "optimizer": "Optimizer",
       "cpu-z": "CPU-Z",
       "gpu-z": "GPU-Z",
-      "clash-verge": "Clash Verge",
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
@@ -459,7 +459,6 @@
       "optimizer": "Outil d'optimisation du système Windows",
       "cpu-z": "Outil de détection d'informations CPU",
       "gpu-z": "Outil de détection d'informations GPU",
-      "clash-verge": "Outil de proxy réseau professionnel",
       "processLasso": "Outil d'optimisation des processus système",
       "process-lasso": "Outil d'optimisation des processus système",
       "fxsound": "Outil d'amélioration audio",
@@ -824,8 +823,9 @@
     "shaderCacheDesc": "Nettoyer le cache des shaders NVIDIA/AMD pour libérer de l'espace disque",
     "dlssPresetDesc": "Changer les préréglages de modèle DLSS pour optimiser les graphismes du jeu",
     "diskHealthDesc": "Vérifier l'état de santé du disque et les informations SMART",
-    "screenRecordDesc": "Enregistrement d'écran haute performance (encodage matériel)"
-    },
+"screenRecordDesc": "Enregistrement d'écran haute performance (encodage matériel)",
+    "audioEqDesc": "Réglage d'égaliseur audio au niveau système"
+  },
   "gpuRename": {
     "title": "Renommage GPU",
     "loading": "Chargement...",
@@ -1224,6 +1224,45 @@
       "recordingStopped": "Enregistrement arrêté, fichier enregistré sous: {{path}}",
       "recordingError": "Erreur d'enregistrement: {{message}}"
     }
+  },
+  "audioEq": {
+    "title": "Égaliseur EQ",
+    "loading": "Chargement...",
+    "virtualSoundCard": "Carte son virtuelle",
+    "virtualSoundCardDesc": "Installer le pilote audio virtuel FxSound pour activer l'EQ système",
+    "installed": "Installé",
+    "notInstalled": "Non installé",
+    "serviceRunning": "Service en cours",
+    "installDriver": "Installer le pilote",
+    "uninstallDriver": "Désinstaller le pilote",
+    "installing": "Installation...",
+    "uninstalling": "Désinstallation...",
+    "installSuccess": "Installation réussie",
+    "installFailed": "Échec de l'installation",
+    "uninstallSuccess": "Désinstallation réussie",
+    "uninstallFailed": "Échec de la désinstallation",
+    "installHint": "L'installation du pilote nécessite des privilèges d'administrateur. Veuillez exécuter NexBox en tant qu'administrateur.",
+    "eqEngine": "Moteur EQ",
+    "eqEngineDesc": "Démarrer le moteur de traitement audio pour appliquer les effets EQ",
+    "running": "En cours",
+    "stopped": "Arrêté",
+    "startEngine": "Démarrer le moteur",
+    "stopEngine": "Arrêter le moteur",
+    "starting": "Démarrage...",
+    "engineStarted": "Moteur EQ démarré",
+    "engineStartFailed": "Échec du démarrage du moteur EQ",
+    "engineStopped": "Moteur EQ arrêté",
+    "engineStopFailed": "Échec de l'arrêt du moteur EQ",
+    "installDriverFirst": "Veuillez d'abord installer le pilote de carte son virtuelle",
+    "presets": "Préréglages",
+    "equalizer": "Égaliseur",
+    "reset": "Réinitialiser",
+    "presetApplied": "Préréglage appliqué",
+    "usageGuide": "Guide d'utilisation",
+    "step1": "Cliquez sur « Installer le pilote » pour installer le pilote audio virtuel FxSound (nécessite des privilèges d'administrateur)",
+    "step2": "Après l'installation, cliquez sur « Démarrer le moteur » pour lancer le moteur de traitement audio EQ",
+    "step3": "Sélectionnez un préréglage ou faites glisser les curseurs de bande pour ajuster les paramètres EQ. La courbe de réponse en fréquence se met à jour en temps réel.",
+    "step4": "Lorsque vous avez terminé, cliquez sur « Arrêter le moteur » pour arrêter le traitement audio. Vous pouvez désinstaller le pilote à tout moment."
   }
 }
 

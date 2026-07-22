@@ -40,11 +40,17 @@ pub struct DLSSApplyResult {
     pub success: bool,
     pub message: String,
     pub preset: String,
+    pub quality: String,
+    pub texture_quality: String,
+    pub antialiasing: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DLSSPresetStatus {
     pub preset: String,
+    pub quality: String,
+    pub texture_quality: String,
+    pub antialiasing: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -223,21 +229,91 @@ fn get_npi_path() -> Result<PathBuf, String> {
     Err("未找到NVIDIA Profile Inspector，请确保已安装或将其放在程序目录下".to_string())
 }
 
-fn generate_nip_config(preset: &str) -> Vec<u8> {
-    let preset_value = match preset.to_uppercase().as_str() {
-        "A" => "1",
-        "B" => "2",
-        "C" => "3",
-        "D" => "4",
-        "E" => "5",
-        "F" => "6",
-        "G" => "7",
-        "J" => "10",
-        "K" => "11",
-        "L" => "12",
-        "M" => "13",
-        _ => "11",
+fn make_profile_setting(name: &str, setting_id: u32, value: u32) -> String {
+    format!(
+        r#"      <ProfileSetting>
+        <SettingNameInfo>{name}</SettingNameInfo>
+        <SettingID>{id}</SettingID>
+        <SettingValue>{val}</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>"#,
+        name = name,
+        id = setting_id,
+        val = value,
+    )
+}
+
+fn generate_nip_config(preset: &str, quality_level: &str, texture_quality: &str, antialiasing: &str) -> Vec<u8> {
+    let preset_value: u32 = match preset.to_uppercase().as_str() {
+        "A" => 1, "B" => 2, "C" => 3, "D" => 4, "E" => 5, "F" => 6, "G" => 7,
+        "J" => 10, "K" => 11, "L" => 12, "M" => 13,
+        _ => 11,
     };
+
+    let mut settings = vec![
+        make_profile_setting("Vertical Sync Tear Control", 5912412, 2525368439),
+        make_profile_setting("DLSS Model Preset Profile", 6505105, 2),
+        make_profile_setting("Enable DeepDVC Feature", 9963648, 0),
+        make_profile_setting("Vertical Sync", 11041231, 1620202130),
+        make_profile_setting("Saturation value for DeepDVC", 11250451, 50),
+        make_profile_setting("Intensity value for DeepDVC", 11250466, 50),
+        make_profile_setting("Flag to control smooth AFR behavior", 270198627, 0),
+        make_profile_setting("Override DLSSG mode", 271614616, 1),
+        make_profile_setting("Override DLSSG multi-frame count", 273507943, 0),
+        make_profile_setting("Override maximum DLSSG dynamic multi frame count", 274083087, 0),
+        make_profile_setting("VRR requested state", 278196727, 0),
+    ];
+
+    // DLSS 质量级别覆盖 (非 default 时添加)
+    if quality_level != "default" {
+        let (forced_quality, forced_scaling) = match quality_level {
+            "ultra_performance" => (5u32, 0x21u32),
+            "performance"       => (0u32, 0x32u32),
+            "balanced"          => (1u32, 0x3Au32),
+            "quality"           => (2u32, 0x42u32),
+            "dlaa"              => (4u32, 0x64u32),
+            _ => (0u32, 0u32),
+        };
+        settings.push(make_profile_setting("DLSS - Forced Quality Level", 279951208, forced_quality));
+        settings.push(make_profile_setting("DLSS - Forced Scaling Ratio", 283385333, forced_scaling));
+    }
+
+    // 纹理过滤质量 (SettingID: 0x00CE2751 = 13510289)
+    if texture_quality != "default" {
+        let val = match texture_quality {
+            "high_quality"    => 0xFFFFFFF6u32, // High Quality
+            "quality"         => 0x00000000u32, // Quality
+            "performance"     => 0x0000000Au32, // Performance
+            "high_performance" => 0x00000014u32, // High Performance
+            _ => 0,
+        };
+        if val != 0 || texture_quality == "quality" {
+            settings.push(make_profile_setting("Texture filtering - Quality", 13510289, val));
+        }
+    }
+
+    // 抗锯齿 - 透明度超采样 (SettingID: 0x10D48A85 = 282364549)
+    if antialiasing != "default" {
+        let val = match antialiasing {
+            "off"     => 0x00000000u32, // Off
+            "2x"      => 0x00000014u32, // 2x Supersampling
+            "4x"      => 0x00000024u32, // 4x Supersampling
+            "8x"      => 0x00000034u32, // 8x Supersampling
+            _ => 0,
+        };
+        if val != 0 || antialiasing == "off" {
+            settings.push(make_profile_setting("Antialiasing - Transparency Supersampling", 282364549, val));
+        }
+    }
+
+    // DLSS 相关（始终包含）
+    settings.push(make_profile_setting("Override DLSSG Target Frame Rate", 282018085, 0));
+    settings.push(make_profile_setting("Override DLSS-FG preset", 283385329, 0));
+    settings.push(make_profile_setting("Override DLSS-SR presets", 283385331, preset_value));
+    settings.push(make_profile_setting("Enable DLSS-SR override", 283385345, 1));
+    settings.push(make_profile_setting("Enable DLSS-FG override", 283385347, 0));
+
+    let settings_xml = settings.join("\n");
 
     let xml_content = format!(
         r#"<?xml version="1.0" encoding="utf-16"?>
@@ -248,122 +324,26 @@ fn generate_nip_config(preset: &str) -> Vec<u8> {
       <string>deltaforceclient-win64-shipping.exe</string>
     </Executeables>
     <Settings>
-      <ProfileSetting>
-        <SettingNameInfo>Vertical Sync Tear Control</SettingNameInfo>
-        <SettingID>5912412</SettingID>
-        <SettingValue>2525368439</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>DLSS Model Preset Profile</SettingNameInfo>
-        <SettingID>6505105</SettingID>
-        <SettingValue>2</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Enable DeepDVC Feature</SettingNameInfo>
-        <SettingID>9963648</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Vertical Sync</SettingNameInfo>
-        <SettingID>11041231</SettingID>
-        <SettingValue>1620202130</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Saturation value for DeepDVC</SettingNameInfo>
-        <SettingID>11250451</SettingID>
-        <SettingValue>50</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Intensity value for DeepDVC</SettingNameInfo>
-        <SettingID>11250466</SettingID>
-        <SettingValue>50</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Flag to control smooth AFR behavior</SettingNameInfo>
-        <SettingID>270198627</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Override DLSSG mode</SettingNameInfo>
-        <SettingID>271614616</SettingID>
-        <SettingValue>1</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Override DLSSG multi-frame count</SettingNameInfo>
-        <SettingID>273507943</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Override maximum DLSSG dynamic multi frame count</SettingNameInfo>
-        <SettingID>274083087</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>VRR requested state</SettingNameInfo>
-        <SettingID>278196727</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Override DLSSG Target Frame Rate</SettingNameInfo>
-        <SettingID>282018085</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Override DLSS-FG preset</SettingNameInfo>
-        <SettingID>283385329</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Override DLSS-SR presets</SettingNameInfo>
-        <SettingID>283385331</SettingID>
-        <SettingValue>{}</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Enable DLSS-SR override</SettingNameInfo>
-        <SettingID>283385345</SettingID>
-        <SettingValue>1</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Enable DLSS-FG override</SettingNameInfo>
-        <SettingID>283385347</SettingID>
-        <SettingValue>0</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
+{}
     </Settings>
   </Profile>
 </ArrayOfProfile>"#,
-        preset_value
+        settings_xml,
     );
 
-    let mut bytes: Vec<u8> = vec![0xFF, 0xFE];
-    bytes.extend(
-        xml_content.encode_utf16().collect::<Vec<u16>>()
-            .iter()
-            .flat_map(|&c| c.to_le_bytes())
-    );
+    // UTF-16LE BOM
+    let mut bytes = vec![0xFF, 0xFE];
+    for c in xml_content.encode_utf16() {
+        bytes.extend_from_slice(&c.to_le_bytes());
+    }
     bytes
 }
 
 #[tauri::command]
-pub async fn apply_dlss_model_preset(preset: String) -> Result<DLSSApplyResult, String> {
+pub async fn apply_dlss_model_preset(preset: String, quality: String, texture_quality: String, antialiasing: String) -> Result<DLSSApplyResult, String> {
     let npi_path = get_npi_path()?;
 
-    let config_content = generate_nip_config(&preset);
+    let config_content = generate_nip_config(&preset, &quality, &texture_quality, &antialiasing);
 
     let temp_dir = std::env::temp_dir();
     let temp_path = temp_dir.join("delta_force_dlss.nip");
@@ -391,6 +371,9 @@ pub async fn apply_dlss_model_preset(preset: String) -> Result<DLSSApplyResult, 
         // 保存当前应用的预设状态，供前端查询
         let status = DLSSPresetStatus {
             preset: preset.clone(),
+            quality: quality.clone(),
+            texture_quality: texture_quality.clone(),
+            antialiasing: antialiasing.clone(),
         };
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(parent_dir) = exe_path.parent() {
@@ -399,10 +382,18 @@ pub async fn apply_dlss_model_preset(preset: String) -> Result<DLSSApplyResult, 
             }
         }
 
+        let mut parts = vec![format!("DLSS预设: {}", preset)];
+        if quality != "default" { parts.push(format!("质量: {}", quality)); }
+        if texture_quality != "default" { parts.push(format!("纹理: {}", texture_quality)); }
+        if antialiasing != "default" { parts.push(format!("抗锯齿: {}", antialiasing)); }
+
         Ok(DLSSApplyResult {
             success: true,
-            message: format!("DLSS预设: {}", preset),
+            message: parts.join(" / "),
             preset,
+            quality,
+            texture_quality,
+            antialiasing,
         })
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -597,7 +588,7 @@ pub async fn get_dlss_preset_status() -> Result<DLSSPresetStatus, String> {
         }
     }
 
-    Ok(DLSSPresetStatus { preset: "K".to_string() })
+    Ok(DLSSPresetStatus { preset: "K".to_string(), quality: "default".to_string(), texture_quality: "default".to_string(), antialiasing: "default".to_string() })
 }
 
 /// 在独立 WebView 窗口中打开外部平台链接，iframe 内嵌支持完整跳转

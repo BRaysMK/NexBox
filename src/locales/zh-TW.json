@@ -49,8 +49,9 @@
         "dlssPreset": "三角洲DLSS設定",
         "epicFree": "喜加一",
     "diskHealth": "磁碟健康",
-"screenRecord": "螢幕錄製"
-    },
+"screenRecord": "螢幕錄製",
+    "audioEq": "EQ調音"
+  },
   "optimization": {
     "pageTitle": "優化",
     "pageDesc": "系統優化與效能提升工具",
@@ -422,7 +423,6 @@
       "optimizer": "Optimizer",
       "cpu-z": "CPU-Z",
       "gpu-z": "GPU-Z",
-      "clash-verge": "Clash Verge",
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
@@ -441,7 +441,6 @@
       "optimizer": "Windows系統優化工具",
       "cpu-z": "CPU資訊檢測工具",
       "gpu-z": "顯示卡資訊檢測工具",
-      "clash-verge": "專業網路代理工具",
       "processLasso": "系統程序優化工具",
       "process-lasso": "系統程序優化工具",
       "fxsound": "音訊增強工具",
@@ -806,8 +805,9 @@
     "shaderCacheDesc": "清理 NVIDIA/AMD 著色器快取釋放磁碟空間",
     "dlssPresetDesc": "切換DLSS模型預設以優化遊戲畫質",
     "diskHealthDesc": "檢測硬碟健康狀態與SMART資訊",
-    "screenRecordDesc": "高效能螢幕錄製（硬體編碼）"
-    },
+"screenRecordDesc": "高效能螢幕錄製（硬體編碼）",
+    "audioEqDesc": "系統級音訊等化器調音"
+  },
   "gpuRename": {
     "title": "顯卡改寫",
     "loading": "載入中...",
@@ -1206,6 +1206,45 @@
       "recordingStopped": "錄製已停止，檔案已儲存到: {{path}}",
       "recordingError": "錄製出錯: {{message}}"
     }
+  },
+  "audioEq": {
+    "title": "EQ 調音",
+    "loading": "載入中...",
+    "virtualSoundCard": "虛擬音效卡",
+    "virtualSoundCardDesc": "安裝 FxSound 虛擬音訊驅動以啟用系統級 EQ",
+    "installed": "已安裝",
+    "notInstalled": "未安裝",
+    "serviceRunning": "服務執行中",
+    "installDriver": "安裝音效卡",
+    "uninstallDriver": "解除安裝音效卡",
+    "installing": "安裝中...",
+    "uninstalling": "解除安裝中...",
+    "installSuccess": "安裝成功",
+    "installFailed": "安裝失敗",
+    "uninstallSuccess": "解除安裝成功",
+    "uninstallFailed": "解除安裝失敗",
+    "installHint": "安裝驅動需要管理員權限，請以管理員身分執行 NexBox",
+    "eqEngine": "EQ 引擎",
+    "eqEngineDesc": "啟動音訊處理引擎以套用 EQ 效果",
+    "running": "執行中",
+    "stopped": "已停止",
+    "startEngine": "啟動引擎",
+    "stopEngine": "停止引擎",
+    "starting": "啟動中...",
+    "engineStarted": "EQ 引擎已啟動",
+    "engineStartFailed": "啟動 EQ 引擎失敗",
+    "engineStopped": "EQ 引擎已停止",
+    "engineStopFailed": "停止 EQ 引擎失敗",
+    "installDriverFirst": "請先安裝虛擬音效卡驅動",
+    "presets": "預設",
+    "equalizer": "等化器",
+    "reset": "重設",
+    "presetApplied": "預設已套用",
+    "usageGuide": "使用指南",
+    "step1": "點擊「安裝音效卡」按鈕安裝 FxSound 虛擬音訊驅動（需要管理員權限）",
+    "step2": "安裝成功後，點擊「啟動引擎」按鈕啟動 EQ 音訊處理引擎",
+    "step3": "選擇預設或拖動頻段滑桿調整 EQ 參數，頻率響應曲線將即時更新",
+    "step4": "使用完畢後，點擊「停止引擎」關閉音訊處理，可隨時解除安裝音效卡驅動"
   }
 }
 

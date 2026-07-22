@@ -49,8 +49,9 @@
         "dlssPreset": "デルタフォースDLSS設定",
         "epicFree": "Epic 無料ゲーム",
     "diskHealth": "ディスク健全性",
-"screenRecord": "画面録画"
-    },
+"screenRecord": "画面録画",
+    "audioEq": "EQチューニング"
+  },
   "optimization": {
     "pageTitle": "最適化",
     "pageDesc": "システム最適化とパフォーマンスツール",
@@ -483,7 +484,6 @@
       "optimizer": "Optimizer",
       "cpu-z": "CPU-Z",
       "gpu-z": "GPU-Z",
-      "clash-verge": "Clash Verge",
       "processLasso": "Process Lasso",
       "process-lasso": "Process Lasso",
       "fxsound": "FxSound",
@@ -502,7 +502,6 @@
       "optimizer": "Windowsシステム最適化ツール",
       "cpu-z": "CPU情報検出ツール",
       "gpu-z": "GPU情報検出ツール",
-      "clash-verge": "プロフェッショナルネットワークプロキシツール",
       "processLasso": "システムプロセス最適化ツール",
       "process-lasso": "システムプロセス最適化ツール",
       "fxsound": "オーディオ強化ツール",
@@ -867,8 +866,9 @@
     "shaderCacheDesc": "NVIDIA/AMDのシェーダーキャッシュをクリーンアップしてディスクスペースを解放",
     "dlssPresetDesc": "DLSSモデルプリセットを切り替えてゲームグラフィックを最適化",
     "diskHealthDesc": "ディスクの健全性とSMART情報を確認",
-    "screenRecordDesc": "高性能画面録画（ハードウェアエンコード）"
-    },
+"screenRecordDesc": "高性能画面録画（ハードウェアエンコード）",
+    "audioEqDesc": "システムレベルのオーディオイコライザー調整"
+  },
   "gpuRename": {
     "title": "GPU名前変更",
     "loading": "読み込み中...",
@@ -1433,6 +1433,45 @@
       "recordingStopped": "録画を停止しました。ファイル保存先: {{path}}",
       "recordingError": "録画エラー: {{message}}"
     }
+  },
+  "audioEq": {
+    "title": "EQチューニング",
+    "loading": "読み込み中...",
+    "virtualSoundCard": "仮想サウンドカード",
+    "virtualSoundCardDesc": "FxSound 仮想オーディオドライバーをインストールしてシステムレベルの EQ を有効化",
+    "installed": "インストール済み",
+    "notInstalled": "未インストール",
+    "serviceRunning": "サービス実行中",
+    "installDriver": "ドライバーをインストール",
+    "uninstallDriver": "ドライバーをアンインストール",
+    "installing": "インストール中...",
+    "uninstalling": "アンインストール中...",
+    "installSuccess": "インストール成功",
+    "installFailed": "インストール失敗",
+    "uninstallSuccess": "アンインストール成功",
+    "uninstallFailed": "アンインストール失敗",
+    "installHint": "ドライバーのインストールには管理者権限が必要です。NexBox を管理者として実行してください。",
+    "eqEngine": "EQ エンジン",
+    "eqEngineDesc": "オーディオ処理エンジンを起動して EQ エフェクトを適用",
+    "running": "実行中",
+    "stopped": "停止",
+    "startEngine": "エンジン起動",
+    "stopEngine": "エンジン停止",
+    "starting": "起動中...",
+    "engineStarted": "EQ エンジンが起動しました",
+    "engineStartFailed": "EQ エンジンの起動に失敗しました",
+    "engineStopped": "EQ エンジンが停止しました",
+    "engineStopFailed": "EQ エンジンの停止に失敗しました",
+    "installDriverFirst": "先に仮想サウンドカードドライバーをインストールしてください",
+    "presets": "プリセット",
+    "equalizer": "イコライザー",
+    "reset": "リセット",
+    "presetApplied": "プリセットを適用しました",
+    "usageGuide": "使用ガイド",
+    "step1": "「ドライバーをインストール」をクリックして FxSound 仮想オーディオドライバーをインストールします（管理者権限が必要）",
+    "step2": "インストール後、「エンジン起動」をクリックして EQ オーディオ処理エンジンを起動します",
+    "step3": "プリセットを選択するか、バンドスライダーをドラッグして EQ パラメーターを調整します。周波数応答曲線がリアルタイムで更新されます。",
+    "step4": "完了したら、「エンジン停止」をクリックしてオーディオ処理を停止します。ドライバーはいつでもアンインストールできます。"
   }
 }
 
