@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
+import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 import deltaForceIcon from "@/assets/deltaforce.png";
 import epicGamesIcon from "@/assets/epic-games.png";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -169,8 +170,9 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
 export function Sidebar() {
   const location = useLocation();
   const { t } = useTranslation();
-  const { liquidGlassEnabled, liquidGlassBlur, jellyBounceEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, jellyBounceEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
+  const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
   const [showLabel, setShowLabel] = useState(() => {
     return localStorage.getItem("nexbox_sidebar_show_label") === "true";
   });
@@ -282,6 +284,12 @@ export function Sidebar() {
   }, [liquidGlassEnabled]);
 
   const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+  const isReal = liquidGlassEnabled && liquidGlassMode === "real";
+  const backdropFilter = isReal
+    ? (svgSupported
+        ? `url(#nexbox-liquid-glass-filter) saturate(1.4)`
+        : `saturate(1.4) brightness(1.05)`)
+    : `blur(${effectiveBlur}px)`;
 
   const defaultBgColor = useColorModeValue("rgba(255,255,255,0.9)", "rgba(17,17,17,0.95)");
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
@@ -376,12 +384,12 @@ export function Sidebar() {
     <ChakraBox
       ref={sidebarContainerRef}
       id="main-sidebar"
-      className={isTop ? "jelly-bounce-sidebar-top" : "jelly-bounce-sidebar-left"}
+      className={`${isTop ? "jelly-bounce-sidebar-top" : "jelly-bounce-sidebar-left"}${isReal ? " real-liquid-glass" : ""}`}
       {...containerStyles}
       bg={liquidGlassEnabled ? glassBgColor : defaultBgColor}
       border="1px solid"
-      borderColor={glassBorderColor}
-      backdropFilter={`blur(${effectiveBlur}px)`}
+      borderColor={liquidGlassEnabled ? glassBorderColor : defaultBorderColor}
+      backdropFilter={backdropFilter}
       transition="max-width 0.25s cubic-bezier(0.95, 0, 1, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
       sx={{
         ...containerStyles.sx,
@@ -394,11 +402,13 @@ export function Sidebar() {
         }
       }}
     >
-      <ChakraBox
-        style={getBorderGlowStyle(glowColor)}
-        opacity={liquidGlassEnabled ? 1 : 0}
-        transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
-      />
+      {!isReal && (
+        <ChakraBox
+          style={getBorderGlowStyle(glowColor)}
+          opacity={liquidGlassEnabled ? 1 : 0}
+          transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+        />
+      )}
       {sidebarContent}
     </ChakraBox>
   );

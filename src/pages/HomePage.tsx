@@ -49,7 +49,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <Box pt={8} pr={4} pb={4} pl={4} h="calc(100vh - 120px)" position="relative">
+    <Box pt={8} pr={4} pb={4} pl={4} h="calc(100vh - 120px)" position="relative" overflowX="hidden">
       <Flex gap={6} h="100%" align="flex-start">
         <Box flex={1}>
           <Text fontSize="3xl" fontWeight="bold" color={textColor}>

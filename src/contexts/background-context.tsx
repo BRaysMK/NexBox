@@ -18,6 +18,8 @@ const PRESET_BACKGROUNDS: PresetBackground[] = [
   { id: 4, name: "预设4", path: "/backgrounds/preset4.png" },
 ];
 
+type LiquidGlassMode = "normal" | "real";
+
 interface BackgroundContextType {
   backgroundMode: BackgroundMode;
   customBgImages: string[];
@@ -25,6 +27,7 @@ interface BackgroundContextType {
   dynamicBgVideo: string | null;
   liquidGlassEnabled: boolean;
   liquidGlassBlur: number;
+  liquidGlassMode: LiquidGlassMode;
   backgroundBlur: number;
   activePresetIndex: number;
   presetBackgrounds: PresetBackground[];
@@ -38,6 +41,7 @@ interface BackgroundContextType {
   setDynamicBgVideo: (video: string | null) => void;
   setLiquidGlassEnabled: (enabled: boolean) => void;
   setLiquidGlassBlur: (blur: number) => void;
+  setLiquidGlassMode: (mode: LiquidGlassMode) => void;
   setBackgroundBlur: (blur: number) => void;
   setActivePresetIndex: (index: number) => void;
   setCarouselEnabled: (enabled: boolean) => void;
@@ -51,6 +55,7 @@ const BackgroundContext = createContext<BackgroundContextType>({
   dynamicBgVideo: null,
   liquidGlassEnabled: false,
   liquidGlassBlur: 1,
+  liquidGlassMode: "normal",
   backgroundBlur: 0,
   activePresetIndex: 0,
   presetBackgrounds: PRESET_BACKGROUNDS,
@@ -64,6 +69,7 @@ const BackgroundContext = createContext<BackgroundContextType>({
   setDynamicBgVideo: () => {},
   setLiquidGlassEnabled: () => {},
   setLiquidGlassBlur: () => {},
+  setLiquidGlassMode: () => {},
   setBackgroundBlur: () => {},
   setActivePresetIndex: () => {},
   setCarouselEnabled: () => {},
@@ -84,6 +90,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [dynamicBgVideo, setDynamicBgVideo] = useState<string | null>(null);
   const [liquidGlassEnabled, setLiquidGlassEnabled] = useState(false);
   const [liquidGlassBlur, setLiquidGlassBlur] = useState(1);
+  const [liquidGlassMode, setLiquidGlassMode] = useState<LiquidGlassMode>("normal");
   const [backgroundBlur, setBackgroundBlur] = useState(0);
   const [activePresetIndex, setActivePresetIndex] = useState(0);
   const [carouselEnabled, setCarouselEnabled] = useState(false);
@@ -93,7 +100,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     async function loadSettings() {
       try {
         // 批量读取所有设置，减少 store IO 调用次数
-        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, hasLaunched] =
+        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedLiquidGlassMode, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, hasLaunched] =
           await Promise.all([
             store.get<string>("background-mode"),
             store.get<string[]>("custom-bg-images"),
@@ -101,12 +108,21 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
             store.get<string>("dynamic-bg-video"),
             store.get<boolean>("liquid-glass-enabled"),
             store.get<number>("liquid-glass-blur"),
+            store.get<string>("liquid-glass-mode"),
             store.get<number>("background-blur"),
             store.get<number>("active-preset-index"),
             store.get<boolean>("carousel-enabled"),
             store.get<boolean>("jelly-bounce-enabled"),
             store.get<boolean>("has-launched"),
           ]);
+
+        // 兼容旧版 liquid-glass-enhanced 设置
+        const savedLiquidGlassEnhanced = await store.get<boolean>("liquid-glass-enhanced");
+        if (savedLiquidGlassEnhanced === true && !savedLiquidGlassMode) {
+          setLiquidGlassMode("real");
+          persist("liquid-glass-mode", "real");
+          persistDelete("liquid-glass-enhanced");
+        }
 
         // 检测是否首次启动
         if (!hasLaunched) {
@@ -149,6 +165,9 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         }
         if (savedLiquidGlassBlur !== null && savedLiquidGlassBlur !== undefined) {
           setLiquidGlassBlur(savedLiquidGlassBlur);
+        }
+        if (savedLiquidGlassMode === "normal" || savedLiquidGlassMode === "real") {
+          setLiquidGlassMode(savedLiquidGlassMode);
         }
         if (savedBgBlur !== null && savedBgBlur !== undefined) {
           setBackgroundBlur(savedBgBlur);
@@ -256,6 +275,11 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     persist("liquid-glass-blur", blur);
   }, [persist]);
 
+  const setLiquidGlassModePersist = useCallback((mode: LiquidGlassMode) => {
+    setLiquidGlassMode(mode);
+    persist("liquid-glass-mode", mode);
+  }, [persist]);
+
   const setBackgroundBlurPersist = useCallback((blur: number) => {
     setBackgroundBlur(blur);
     persist("background-blur", blur);
@@ -334,6 +358,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     dynamicBgVideo,
     liquidGlassEnabled,
     liquidGlassBlur,
+    liquidGlassMode,
     backgroundBlur,
     activePresetIndex,
     presetBackgrounds: PRESET_BACKGROUNDS,
@@ -347,11 +372,12 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     setDynamicBgVideo: setDynamicBgVideoPersist,
     setLiquidGlassEnabled: setLiquidGlassEnabledPersist,
     setLiquidGlassBlur: setLiquidGlassBlurPersist,
+    setLiquidGlassMode: setLiquidGlassModePersist,
     setBackgroundBlur: setBackgroundBlurPersist,
     setActivePresetIndex: setActivePresetIndexPersist,
     setCarouselEnabled: setCarouselEnabledPersist,
     setJellyBounceEnabled: setJellyBounceEnabledPersist,
-  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setBackgroundBlurPersist, setActivePresetIndexPersist, setCarouselEnabledPersist, setJellyBounceEnabledPersist]);
+  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setLiquidGlassModePersist, setBackgroundBlurPersist, setActivePresetIndexPersist, setCarouselEnabledPersist, setJellyBounceEnabledPersist]);
 
   return (
     <BackgroundContext.Provider value={value}>

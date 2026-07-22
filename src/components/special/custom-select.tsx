@@ -1,13 +1,19 @@
-import { Box, HStack, Text, useColorModeValue } from "@chakra-ui/react";
+import { Box, HStack, Text, Badge, useColorModeValue } from "@chakra-ui/react";
 import { LuChevronDown, LuCheck } from "react-icons/lu";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { LiquidGlassCard } from "./liquid-glass-card";
 
+interface SelectOption {
+  value: string;
+  label: string;
+  badge?: string;
+}
+
 interface CustomSelectProps {
   value: string;
   onChange: (value: string) => void;
-  options: { value: string; label: string }[];
+  options: SelectOption[];
   width?: string;
   placeholder?: string;
   direction?: "up" | "down";
@@ -188,7 +194,21 @@ export function CustomSelect({
                 transition="all 0.15s"
               >
                 <HStack justify="space-between">
-                  <Text fontSize="sm">{option.label}</Text>
+                  <HStack spacing={2}>
+                    <Text fontSize="sm">{option.label}</Text>
+                    {option.badge && (
+                      <Badge
+                        fontSize="0.55rem"
+                        colorScheme="purple"
+                        variant="subtle"
+                        px={1.5}
+                        py={0.5}
+                        borderRadius="full"
+                      >
+                        {option.badge}
+                      </Badge>
+                    )}
+                  </HStack>
                   {option.value === value && <LuCheck size={14} />}
                 </HStack>
               </Box>

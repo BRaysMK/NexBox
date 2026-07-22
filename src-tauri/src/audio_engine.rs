@@ -1106,7 +1106,6 @@ pub struct AudioEngine {
     stop_flag: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     params: Arc<RwLock<EqParams>>,
-    effects: Arc<std::sync::Mutex<Option<SoundEffects>>>,
 }
 
 impl AudioEngine {
@@ -1125,7 +1124,7 @@ impl AudioEngine {
             .map_err(|e| format!("Failed to spawn audio thread: {}", e))?;
 
         thread::sleep(Duration::from_millis(100));
-        Ok(Self { stop_flag, thread: Some(thread), params, effects: fx })
+        Ok(Self { stop_flag, thread: Some(thread), params })
     }
 
     pub fn stop(&mut self) {

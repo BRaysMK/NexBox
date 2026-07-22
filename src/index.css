@@ -1,5 +1,38 @@
+/* 自定义字体 */
+@font-face {
+  font-family: "Sinter-Regular";
+  src: url("/fonts/Sinter-Regular.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MiSans";
+  src: url("/fonts/MiSansVF.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "AiDianFengYaHei";
+  src: url("/fonts/AiDianFengYaHei.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Cubic";
+  src: url("/fonts/Cubic.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--app-font-family, "Sinter-Regular"), Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -178,5 +211,51 @@ body.jelly-bounce-enabled .jelly-bounce-sidebar-left.jelly-bouncing {
 
 body.jelly-bounce-enabled .jelly-bounce-sidebar-top.jelly-bouncing {
   animation: jellyBounceSidebarTop 0.62s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================
+   真实液态玻璃效果 (Real Liquid Glass Effect)
+   参考 Mineradio 项目：SVG feDisplacementMap 实现边缘折射
+   配合多层 inset 阴影营造深度感
+   ============================================================ */
+
+/* 基础类：SVG 折射液态玻璃
+   不设置 position，避免覆盖组件自身的 position（如 sidebar 的 fixed） */
+.real-liquid-glass {
+  isolation: isolate;
+}
+
+/* ── 多层 inset 阴影：模拟玻璃边缘高光 + 内部深度 ──
+   白色 inset 阴影：模拟玻璃边缘的光线折射（细微高光）
+   深色 inset 阴影：模拟玻璃内部的深度和暗角
+   外部阴影：投影 */
+.real-liquid-glass {
+  box-shadow:
+    inset 0 0 2px 1px rgba(255, 255, 255, 0.18),
+    inset 0 0 10px 4px rgba(255, 255, 255, 0.06),
+    inset 0 4px 16px rgba(0, 0, 0, 0.04),
+    inset 0 8px 24px rgba(0, 0, 0, 0.03),
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+/* 暗色模式：减弱白色高光，增强深色阴影 */
+.chakra-ui-dark .real-liquid-glass {
+  box-shadow:
+    inset 0 0 2px 1px rgba(255, 255, 255, 0.10),
+    inset 0 0 10px 4px rgba(255, 255, 255, 0.03),
+    inset 0 4px 16px rgba(0, 0, 0, 0.12),
+    inset 0 8px 24px rgba(0, 0, 0, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.20),
+    0 8px 24px rgba(0, 0, 0, 0.10);
+}
+
+/* SVG 滤镜容器：隐藏不占空间 */
+.real-liquid-glass-svg-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 

@@ -51,6 +51,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { useFont } from "@/contexts/font-context";
 import { PRESET_COLORS, hexToRgba } from "@/lib/color-utils";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { fetchLatestRelease, compareVersions, fetchReleaseByTag, type GiteeRelease } from "@/lib/update-checker";
@@ -932,6 +933,7 @@ function AppearanceSettings() {
   const { t } = useTranslation();
   const { colorMode, toggleColorMode } = useColorMode();
   const { getActiveColor } = useThemeColor();
+  const { font, setFont, fontOptions, importCustomFont, removeCustomFont, importing } = useFont();
   const {
     backgroundMode,
     customBgImages,
@@ -946,6 +948,8 @@ function AppearanceSettings() {
     setLiquidGlassEnabled,
     liquidGlassBlur,
     setLiquidGlassBlur,
+    liquidGlassMode,
+    setLiquidGlassMode,
     backgroundBlur,
     setBackgroundBlur,
     activePresetIndex,
@@ -1085,6 +1089,129 @@ function AppearanceSettings() {
           textTransform="uppercase"
           letterSpacing="0.05em"
         >
+          {t("settings.appearanceSettings.font")}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <VStack spacing={0} align="stretch">
+            <HStack justify="space-between">
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.appearanceSettings.fontLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.appearanceSettings.fontDesc")}
+                </Text>
+              </Box>
+              <CustomSelect
+                value={font}
+                onChange={(val) => setFont(val)}
+                options={fontOptions.map((opt) => ({
+                  value: opt.value,
+                  label: opt.label,
+                }))}
+                width="180px"
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.appearanceSettings.importCustomFontLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.appearanceSettings.importCustomFontDesc")}
+                </Text>
+              </Box>
+              <HStack spacing={2}>
+                {importing && <Text fontSize="xs" color={subLabelColor}>{t("settings.appearanceSettings.importingFont")}</Text>}
+                <LiquidGlassButton
+                  size="xs"
+                  variant="outline"
+                  borderRadius="md"
+                  leftIcon={<LuUpload size={12} />}
+                  isLoading={importing}
+                  onClick={() => {
+                    const input = document.getElementById("custom-font-upload") as HTMLInputElement;
+                    input?.click();
+                  }}
+                >
+                  {t("settings.appearanceSettings.importFontButton")}
+                </LiquidGlassButton>
+              </HStack>
+            </HStack>
+            {fontOptions.filter(f => f.isCustom).length > 0 && (
+              <>
+                <Divider />
+                {fontOptions.filter(f => f.isCustom).map((cf) => (
+                  <HStack key={cf.value} justify="space-between" py={2}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {cf.label}
+                    </Text>
+                    <HStack spacing={2}>
+                      <Box
+                        w="24px"
+                        h="24px"
+                        borderRadius="md"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        cursor="pointer"
+                        transition="all 0.2s"
+                        _hover={{ bg: "rgba(255,0,0,0.1)" }}
+                        onClick={() => removeCustomFont(cf.value)}
+                        title={t("settings.appearanceSettings.removeFont")}
+                      >
+                        <LuX size={14} color="red" />
+                      </Box>
+                    </HStack>
+                  </HStack>
+                ))}
+              </>
+            )}
+          </VStack>
+        </LiquidGlassCard>
+        <input
+          id="custom-font-upload"
+          type="file"
+          accept=".ttf,.otf,.woff,.woff2"
+          style={{ display: "none" }}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              try {
+                await importCustomFont(file);
+              } catch (err) {
+                if (err instanceof Error && err.message === "DUPLICATE_FONT") {
+                  toast({
+                    title: t("settings.appearanceSettings.duplicateFont"),
+                    status: "warning",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                } else {
+                  toast({
+                    title: t("settings.appearanceSettings.importFontFailed"),
+                    status: "error",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }
+              }
+            }
+            e.target.value = "";
+          }}
+        />
+      </Box>
+
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
           {t("settings.appearanceSettings.liquidGlass")}
           <Badge
             ml={2}
@@ -1115,6 +1242,29 @@ function AppearanceSettings() {
             />
           </HStack>
           {liquidGlassEnabled && (
+            <Box mt={4} pt={3} borderTop="1px solid" borderColor={useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)")}>
+              <HStack justify="space-between" mb={2}>
+                <Text fontSize="sm" color={labelColor}>
+                  {t("settings.appearanceSettings.liquidGlassModeLabel")}
+                </Text>
+                <CustomSelect
+                  value={liquidGlassMode}
+                  onChange={(val) => setLiquidGlassMode(val as "normal" | "real")}
+                  width="160px"
+                  options={[
+                    { value: "normal", label: t("settings.appearanceSettings.liquidGlassModeNormal") },
+                    { value: "real", label: t("settings.appearanceSettings.liquidGlassModeReal") },
+                  ]}
+                />
+              </HStack>
+              <Text fontSize="xs" color={subLabelColor} mt={1}>
+                {liquidGlassMode === "real"
+                  ? t("settings.appearanceSettings.liquidGlassModeRealDesc")
+                  : t("settings.appearanceSettings.liquidGlassModeNormalDesc")}
+              </Text>
+            </Box>
+          )}
+          {liquidGlassEnabled && liquidGlassMode === "normal" && (
             <Box mt={4} pt={3} borderTop="1px solid" borderColor={useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)")}>
               <HStack justify="space-between" mb={2}>
                 <Text fontSize="sm" color={labelColor}>
@@ -1869,7 +2019,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "5.6.3";
+  const currentVersion = "5.8.4";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);

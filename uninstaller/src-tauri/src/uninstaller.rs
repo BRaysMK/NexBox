@@ -7,52 +7,6 @@ use std::os::windows::process::CommandExt;
 use winreg::enums::*;
 use winreg::RegKey;
 
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-/// UTF-16LE + Base64 编码 PowerShell 脚本
-/// `-EncodedCommand` 期望 UTF-16LE Base64，完全绕过系统代码页问题。
-fn encode_ps_command(script: &str) -> String {
-    let utf16: Vec<u8> = script
-        .encode_utf16()
-        .flat_map(|c| c.to_le_bytes())
-        .collect();
-    base64_encode(&utf16)
-}
-
-fn base64_encode(data: &[u8]) -> String {
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
-    for chunk in data.chunks(3) {
-        let b = [chunk[0] as u32, *chunk.get(1).unwrap_or(&0) as u32, *chunk.get(2).unwrap_or(&0) as u32];
-        let n = (b[0] << 16) | (b[1] << 8) | b[2];
-        out.push(CHARS[((n >> 18) & 0x3F) as usize] as char);
-        out.push(CHARS[((n >> 12) & 0x3F) as usize] as char);
-        out.push(if chunk.len() > 1 { CHARS[((n >> 6) & 0x3F) as usize] } else { b'=' } as char);
-        out.push(if chunk.len() > 2 { CHARS[(n & 0x3F) as usize] } else { b'=' } as char);
-    }
-    out
-}
-
-fn run_powershell(script: &str) -> Result<String, String> {
-    let full_script = format!(
-        "[Console]::OutputEncoding = [Text.Encoding]::UTF8; {}",
-        script
-    );
-    let encoded = encode_ps_command(&full_script);
-
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("无法执行 PowerShell: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("PowerShell 执行失败: {}", stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
 #[derive(Serialize)]
 pub struct UninstallInfo {
     pub install_dir: String,
@@ -206,13 +160,44 @@ fn delete_shortcut(name: &str, location: &str) -> Result<(), String> {
 }
 
 fn get_special_folder_path(folder: &str) -> Option<String> {
-    let ps_cmd = if folder == "Desktop" {
-        "[Environment]::GetFolderPath('Desktop')"
+    if folder == "Desktop" {
+        dirs::desktop_dir().map(|p| p.to_string_lossy().to_string())
     } else {
-        "[Environment]::GetFolderPath('CommonStartMenu') + '\\Programs'"
-    };
+        get_common_programs_path()
+    }
+}
 
-    run_powershell(ps_cmd).ok()
+#[cfg(target_os = "windows")]
+fn get_common_programs_path() -> Option<String> {
+    use std::os::windows::ffi::OsStringExt;
+
+    extern "system" {
+        fn SHGetFolderPathW(
+            hwnd: *mut std::ffi::c_void,
+            csidl: i32,
+            h_token: *mut std::ffi::c_void,
+            dw_flags: u32,
+            psz_path: *mut u16,
+        ) -> i32;
+    }
+
+    const CSIDL_COMMON_PROGRAMS: i32 = 0x0017;
+    let mut buf = vec![0u16; 260]; // MAX_PATH
+
+    unsafe {
+        let result = SHGetFolderPathW(
+            std::ptr::null_mut(),
+            CSIDL_COMMON_PROGRAMS,
+            std::ptr::null_mut(),
+            0,
+            buf.as_mut_ptr(),
+        );
+        if result == 0 {
+            let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+            return Some(std::ffi::OsString::from_wide(&buf[..len]).to_string_lossy().to_string());
+        }
+    }
+    None
 }
 
 fn unregister_uninstall() -> Result<(), String> {
@@ -222,5 +207,45 @@ fn unregister_uninstall() -> Result<(), String> {
     hklm.delete_subkey_all(uninstall_path)
         .map_err(|e| format!("无法删除注册表键: {}", e))?;
 
+    // Also clean up old Inno Setup registry entries
+    cleanup_old_innosetup_registry();
+
     Ok(())
+}
+
+/// Remove leftover Inno Setup uninstall registry entries.
+/// This handles the case where a user installs the new version
+/// over an old INNO installation without the installer catching it.
+fn cleanup_old_innosetup_registry() {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+
+    let hive_paths = [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    ];
+
+    for hive in &hive_paths {
+        if let Ok(uninstall_key) = hklm.open_subkey_with_flags(hive, KEY_ALL_ACCESS) {
+            let to_delete: Vec<String> = uninstall_key
+                .enum_keys()
+                .filter_map(|k| k.ok())
+                .filter(|k| k.ends_with("_is1"))
+                .filter(|key_name| {
+                    if let Ok(subkey) =
+                        uninstall_key.open_subkey_with_flags(key_name, KEY_READ)
+                    {
+                        if let Ok(name) = subkey.get_value::<String, _>("DisplayName") {
+                            return name.contains("新境盒")
+                                || name.to_lowercase().contains("nexbox");
+                        }
+                    }
+                    false
+                })
+                .collect();
+
+            for key_name in &to_delete {
+                let _ = uninstall_key.delete_subkey_all(key_name);
+            }
+        }
+    }
 }

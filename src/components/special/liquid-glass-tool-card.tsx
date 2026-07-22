@@ -3,6 +3,7 @@
 import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { useGlowEffect, getBorderGlowStyle } from "@/hooks/use-glow-effect";
+import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 import { useState, useEffect } from "react";
 
 interface LiquidGlassToolCardProps extends BoxProps {
@@ -14,22 +15,23 @@ interface LiquidGlassToolCardProps extends BoxProps {
   size?: "sm" | "md" | "lg";
 }
 
-export function LiquidGlassToolCard({ 
-  children, 
-  onClick, 
+export function LiquidGlassToolCard({
+  children,
+  onClick,
   cursor = "pointer",
   isDashed = false,
   className,
   size = "sm",
-  ...props 
+  ...props
 }: LiquidGlassToolCardProps) {
-  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode } = useBackground();
   const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
-  
+  const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
+
   const defaultBg = useColorModeValue("gray.50", "#111111");
   const defaultHoverBg = useColorModeValue("gray.100", "#222222");
   const defaultBorder = useColorModeValue("gray.200", "#333333");
-  
+
   const glassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassHoverBg = useColorModeValue("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");
   const glassBorder = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
@@ -47,9 +49,15 @@ export function LiquidGlassToolCard({
   }, [liquidGlassEnabled]);
 
   const effectiveBlur = showBlur ? liquidGlassBlur : 0;
-
   const padding = size === "sm" ? 3 : size === "md" ? 4 : 5;
   const borderRadius = size === "sm" ? "lg" : "xl";
+  const isReal = liquidGlassEnabled && liquidGlassMode === "real" && !isDashed;
+
+  const backdropFilter = isReal
+    ? (svgSupported
+        ? `url(#nexbox-liquid-glass-filter) saturate(1.4)`
+        : `saturate(1.4) brightness(1.05)`)
+    : `blur(${effectiveBlur}px)`;
 
   if (!liquidGlassEnabled) {
     return (
@@ -80,7 +88,7 @@ export function LiquidGlassToolCard({
 
   return (
     <Box
-      className={`jelly-bounce-tool-card${className ? ` ${className}` : ""}`}
+      className={`jelly-bounce-tool-card${isReal ? " real-liquid-glass" : ""}${className ? ` ${className}` : ""}`}
       onClick={onClick}
       cursor={cursor}
       bg={isHovering ? glassHoverBg : glassBg}
@@ -88,7 +96,8 @@ export function LiquidGlassToolCard({
       p={padding}
       border={isDashed ? "1px dashed" : "1px solid"}
       borderColor={glassBorder}
-      backdropFilter={`blur(${effectiveBlur}px)`}
+      backdropFilter={backdropFilter}
+      WebkitBackdropFilter={backdropFilter}
       transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
       position="relative"
       onMouseMove={handleMouseMove}
@@ -103,9 +112,7 @@ export function LiquidGlassToolCard({
       }}
       {...props}
     >
-      <Box
-        style={getBorderGlowStyle(glowColor)}
-      />
+      {!isReal && <Box style={getBorderGlowStyle(glowColor)} />}
       {children}
     </Box>
   );

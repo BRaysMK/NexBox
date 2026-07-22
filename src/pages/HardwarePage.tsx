@@ -655,6 +655,32 @@ export default function HardwarePage() {
         </Heading>
         <HStack gap={2}>
           <Button
+            size="sm"
+            variant="outline"
+            colorScheme="blue"
+            leftIcon={<Download size={15} />}
+            onClick={async () => {
+              try {
+                await invoke("run_pawnio_setup");
+                toast({
+                  title: "安装程序已启动",
+                  status: "success",
+                  duration: 3000,
+                  isClosable: true,
+                });
+              } catch (e) {
+                toast({
+                  title: typeof e === "string" ? e : "启动失败",
+                  status: "error",
+                  duration: 3000,
+                  isClosable: true,
+                });
+              }
+            }}
+          >
+            安装驱动（获取CPU温度）
+          </Button>
+          <Button
             leftIcon={<Trash2 size={16} />}
             size="sm"
             variant="outline"

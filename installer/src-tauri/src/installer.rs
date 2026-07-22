@@ -1,3 +1,4 @@
+use mslnk::ShellLink;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -136,23 +137,25 @@ pub fn install(
     // Extract payload ZIP to target directory
     extract_payload(&target)?;
 
+    // Register uninstaller first (before shortcuts, so registry is always written)
+    register_uninstall(&target_dir, env!("NEXBOX_APP_VERSION"))
+        .map_err(|e| format!("无法注册卸载信息: {}", e))?;
+
     // Remove any existing shortcuts to avoid duplicates from old version
     delete_existing_shortcuts("新境盒");
 
-    // Create Start Menu shortcut
+    // Create Start Menu shortcut (non-fatal — installation succeeds regardless)
     let exe_path = target.join("nexbox.exe");
-    create_lnk_shortcut("新境盒", &exe_path, "StartMenu")
-        .map_err(|e| format!("无法创建开始菜单快捷方式: {}", e))?;
-
-    // Create Desktop shortcut if requested
-    if create_desktop_shortcut {
-        create_lnk_shortcut("新境盒", &exe_path, "Desktop")
-            .map_err(|e| format!("无法创建桌面快捷方式: {}", e))?;
+    if let Err(e) = create_lnk_shortcut("新境盒", &exe_path, "StartMenu") {
+        eprintln!("创建开始菜单快捷方式失败 (非致命): {}", e);
     }
 
-    // Register uninstaller
-    register_uninstall(&target_dir, env!("NEXBOX_APP_VERSION"))
-        .map_err(|e| format!("无法注册卸载信息: {}", e))?;
+    // Create Desktop shortcut if requested (non-fatal)
+    if create_desktop_shortcut {
+        if let Err(e) = create_lnk_shortcut("新境盒", &exe_path, "Desktop") {
+            eprintln!("创建桌面快捷方式失败 (非致命): {}", e);
+        }
+    }
 
     Ok(())
 }
@@ -214,50 +217,65 @@ fn extract_payload(target_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// === Shortcut creation via PowerShell ===
+// === Shortcut creation via native Windows IShellLink API ===
 
 fn create_lnk_shortcut(name: &str, target_exe: &Path, location: &str) -> Result<(), String> {
-    let folder = if location == "Desktop" {
-        get_special_folder_path("Desktop")
-    } else {
-        get_special_folder_path("StartMenu")
-    };
+    let folder = get_special_folder_path(location)
+        .ok_or_else(|| "无法获取系统目录路径".to_string())?;
 
-    let folder = folder.ok_or_else(|| "无法获取系统目录路径".to_string())?;
-    // 使用 display() 保留原始路径编码，再转义单引号
-    let target_str = target_exe.display().to_string().replace('\'', "''");
-    let workdir = target_exe
-        .parent()
-        .unwrap_or(Path::new(""))
-        .display()
-        .to_string()
-        .replace('\'', "''");
-    let shortcut_path = format!("{}\\{}.lnk", folder, name).replace('\'', "''");
+    let shortcut_path = Path::new(&folder).join(format!("{}.lnk", name));
+    let workdir = target_exe.parent().unwrap_or(Path::new(""));
 
-    let ps_script = format!(
-        "$sh = New-Object -ComObject WScript.Shell; \
-         $lnk = $sh.CreateShortcut('{sc}'); \
-         $lnk.TargetPath = '{exe}'; \
-         $lnk.WorkingDirectory = '{wd}'; \
-         $lnk.Save()",
-        sc = shortcut_path,
-        exe = target_str,
-        wd = workdir,
-    );
-
-    run_powershell(&ps_script)
+    let mut sl = ShellLink::new(target_exe)
         .map_err(|e| format!("创建快捷方式失败: {}", e))?;
+    sl.set_working_dir(Some(workdir.to_string_lossy().to_string()));
+    sl.create_lnk(&shortcut_path)
+        .map_err(|e| format!("保存快捷方式失败: {}", e))?;
+
     Ok(())
 }
 
+/// Get system folder paths without spawning PowerShell.
+/// Uses dirs crate for Desktop, SHGetFolderPathW for Common Programs.
 fn get_special_folder_path(folder: &str) -> Option<String> {
-    let ps_cmd = if folder == "Desktop" {
-        "[Environment]::GetFolderPath('Desktop')"
+    if folder == "Desktop" {
+        dirs::desktop_dir().map(|p| p.to_string_lossy().to_string())
     } else {
-        "[Environment]::GetFolderPath('CommonStartMenu') + '\\Programs'"
-    };
+        get_common_programs_path()
+    }
+}
 
-    run_powershell(ps_cmd).ok()
+#[cfg(target_os = "windows")]
+fn get_common_programs_path() -> Option<String> {
+    use std::os::windows::ffi::OsStringExt;
+
+    extern "system" {
+        fn SHGetFolderPathW(
+            hwnd: *mut std::ffi::c_void,
+            csidl: i32,
+            h_token: *mut std::ffi::c_void,
+            dw_flags: u32,
+            psz_path: *mut u16,
+        ) -> i32;
+    }
+
+    const CSIDL_COMMON_PROGRAMS: i32 = 0x0017;
+    let mut buf = vec![0u16; 260]; // MAX_PATH
+
+    unsafe {
+        let result = SHGetFolderPathW(
+            std::ptr::null_mut(),
+            CSIDL_COMMON_PROGRAMS,
+            std::ptr::null_mut(),
+            0,
+            buf.as_mut_ptr(),
+        );
+        if result == 0 {
+            let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+            return Some(std::ffi::OsString::from_wide(&buf[..len]).to_string_lossy().to_string());
+        }
+    }
+    None
 }
 
 // === Registry operations ===
@@ -300,11 +318,55 @@ fn register_uninstall(install_dir: &str, version: &str) -> Result<(), String> {
 // === Disk space check ===
 
 /// Remove old Inno Setup uninstaller files (unins000.exe / unins000.dat)
+/// and clean up leftover Inno Setup registry entries from the old installer
 fn cleanup_old_innosetup(target: &Path) {
+    // 1. Delete old Inno uninstaller files
     for name in &["unins000.exe", "unins000.dat"] {
         let path = target.join(name);
         if path.exists() {
             let _ = fs::remove_file(&path);
+        }
+    }
+
+    // 2. Delete old Inno Setup registry entries
+    cleanup_old_innosetup_registry();
+}
+
+/// Scan and remove old Inno Setup uninstall registry entries.
+/// Inno Setup convention: {AppId}_is1 under HKLM\...\Uninstall
+/// These leftover entries cause "ghost" entries in Apps & Features.
+fn cleanup_old_innosetup_registry() {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+
+    // Check both 64-bit and 32-bit (WOW6432Node) registry views
+    let hive_paths = [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    ];
+
+    for hive in &hive_paths {
+        if let Ok(uninstall_key) = hklm.open_subkey_with_flags(hive, KEY_ALL_ACCESS) {
+            // Collect INNO _is1 keys whose DisplayName matches NexBox
+            let to_delete: Vec<String> = uninstall_key
+                .enum_keys()
+                .filter_map(|k| k.ok())
+                .filter(|k| k.ends_with("_is1"))
+                .filter(|key_name| {
+                    if let Ok(subkey) =
+                        uninstall_key.open_subkey_with_flags(key_name, KEY_READ)
+                    {
+                        if let Ok(name) = subkey.get_value::<String, _>("DisplayName") {
+                            return name.contains("新境盒")
+                                || name.to_lowercase().contains("nexbox");
+                        }
+                    }
+                    false
+                })
+                .collect();
+
+            for key_name in &to_delete {
+                let _ = uninstall_key.delete_subkey_all(key_name);
+            }
         }
     }
 }

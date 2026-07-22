@@ -153,7 +153,7 @@ export default function GameLauncher() {
       const saved = localStorage.getItem(SIZE_KEY);
       if (saved) return JSON.parse(saved);
     } catch {}
-    return { width: 180, height: 240 };
+    return { width: 180, height: MIN_HEIGHT };
   });
   const resizeRef = useRef<{
     edge: "left" | "top" | "corner";
@@ -337,7 +337,7 @@ export default function GameLauncher() {
     <LiquidGlassCard
       p={3}
       w={`${cardSize.width}px`}
-      {...(games.length === 0 ? { minH: `${MIN_HEIGHT}px` } : { h: `${cardSize.height}px` })}
+      h={`${cardSize.height}px`}
       position="relative"
       overflow="hidden"
       display="flex"
@@ -411,7 +411,7 @@ export default function GameLauncher() {
         />
       </Flex>
 
-      <Box flex={1} overflowY="auto" minH={0}>
+      <Box flex={1} overflowY="auto" overflowX="hidden" minH={0}>
         {isLoading ? (
           <Flex justify="center" py={4}>
             <Spinner size="sm" color={descColor} />

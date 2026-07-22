@@ -11,6 +11,8 @@ import i18n from "./lib/i18n";
 import { BackgroundProvider } from "./contexts/background-context";
 import { ThemeColorProvider } from "./contexts/theme-color-context";
 import { AppStartupProvider } from "./contexts/app-startup-context";
+import { FontProvider } from "./contexts/font-context";
+import { LiquidGlassSvgFilter } from "./components/special/liquid-glass-svg-filter";
 import theme from "./lib/theme";
 
 const emotionCache = createCache({
@@ -47,7 +49,10 @@ function Root() {
               <AppStartupProvider>
                 <BackgroundProvider>
                   <ThemeColorProvider>
-                    <App />
+                    <FontProvider>
+                      <LiquidGlassSvgFilter />
+                      <App />
+                    </FontProvider>
                   </ThemeColorProvider>
                 </BackgroundProvider>
               </AppStartupProvider>
