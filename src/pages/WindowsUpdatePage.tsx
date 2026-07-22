@@ -19,7 +19,7 @@ import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, Wrench, FileText, Clock, BarChart3 } from "lucide-react";
+import { ArrowLeft, Wrench, FileText, Clock, BarChart3, PauseCircle, PlayCircle, Ban, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface UpdateState {
@@ -54,6 +54,9 @@ export default function WindowsUpdatePage() {
   const [state, setState] = useState<UpdateState | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [isOperating, setIsOperating] = useState(false);
+  const [pauseEnabled, setPauseEnabled] = useState<boolean | null>(null);
+  const [isPauseChecking, setIsPauseChecking] = useState(true);
+  const [isPauseOperating, setIsPauseOperating] = useState(false);
 
   const checkState = useCallback(async () => {
     setIsChecking(true);
@@ -76,6 +79,70 @@ export default function WindowsUpdatePage() {
   useEffect(() => {
     checkState();
   }, [checkState]);
+
+  const checkPauseState = useCallback(async () => {
+    setIsPauseChecking(true);
+    try {
+      const result = await invoke<boolean>("check_pause_update_state");
+      setPauseEnabled(result);
+    } catch (error) {
+      console.error("Failed to check pause state:", error);
+      setPauseEnabled(false);
+    }
+    setIsPauseChecking(false);
+  }, []);
+
+  useEffect(() => {
+    checkPauseState();
+  }, [checkPauseState]);
+
+  const handlePause = async () => {
+    setIsPauseOperating(true);
+    try {
+      await invoke("apply_registry_tweak", { name: "暂停Windows更新" });
+      await checkPauseState();
+      toast({
+        title: t("windowsUpdate.pauseCard.applySuccess"),
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to pause update:", error);
+      toast({
+        title: t("windowsUpdate.pauseCard.applyError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setIsPauseOperating(false);
+  };
+
+  const handleRestorePause = async () => {
+    setIsPauseOperating(true);
+    try {
+      await invoke("restore_registry_tweak", { name: "暂停Windows更新" });
+      await checkPauseState();
+      toast({
+        title: t("windowsUpdate.pauseCard.restoreSuccess"),
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to restore update:", error);
+      toast({
+        title: t("windowsUpdate.pauseCard.restoreError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setIsPauseOperating(false);
+  };
 
   const handleDisable = async () => {
     setIsOperating(true);
@@ -254,7 +321,7 @@ export default function WindowsUpdatePage() {
           <HStack spacing={4} justify="center" wrap="wrap">
             <LiquidGlassButton
               leftIcon={
-                isOperating ? <Spinner size="sm" /> : undefined
+                isOperating ? <Spinner size="sm" /> : <Ban size={18} />
               }
               onClick={handleDisable}
               isLoading={isOperating}
@@ -266,11 +333,11 @@ export default function WindowsUpdatePage() {
               fontSize="md"
               fontWeight="bold"
             >
-              {"🚫 "}{t("windowsUpdate.disableBtn")}
+              {t("windowsUpdate.disableBtn")}
             </LiquidGlassButton>
             <LiquidGlassButton
               leftIcon={
-                isOperating ? <Spinner size="sm" /> : undefined
+                isOperating ? <Spinner size="sm" /> : <RotateCcw size={18} />
               }
               onClick={handleEnable}
               isLoading={isOperating}
@@ -282,9 +349,95 @@ export default function WindowsUpdatePage() {
               fontSize="md"
               fontWeight="bold"
             >
-              {"✅ "}{t("windowsUpdate.enableBtn")}
+              {t("windowsUpdate.enableBtn")}
             </LiquidGlassButton>
-          </HStack>
+           </HStack>
+
+          {/* Pause Update Card */}
+          <LiquidGlassCard w="full">
+            <VStack align="start" spacing={4} p={4}>
+              <HStack spacing={3}>
+                <PauseCircle size={22} color="#DD6B20" />
+                <Text fontSize="md" fontWeight="bold" color={headingColor}>
+                  {t("windowsUpdate.pauseCard.title")}
+                </Text>
+              </HStack>
+              <Text fontSize="sm" color={descColor}>
+                {t("windowsUpdate.pauseCard.desc")}
+              </Text>
+              {isPauseChecking && pauseEnabled === null ? (
+                <HStack spacing={2}>
+                  <Spinner size="xs" />
+                  <Text fontSize="xs" color={subTextColor}>
+                    {t("windowsUpdate.pauseCard.checking")}
+                  </Text>
+                </HStack>
+              ) : (
+                <Badge
+                  variant="subtle"
+                  colorScheme={pauseEnabled ? "orange" : "gray"}
+                  borderRadius="full"
+                  px={3}
+                  py={1}
+                  fontSize="xs"
+                  fontWeight="medium"
+                >
+                  {pauseEnabled
+                    ? t("windowsUpdate.pauseCard.paused")
+                    : t("windowsUpdate.pauseCard.notPaused")}
+                </Badge>
+              )}
+              <HStack spacing={3}>
+                <LiquidGlassButton
+                  leftIcon={
+                    isPauseOperating ? <Spinner size="sm" /> : <PauseCircle size={16} />
+                  }
+                  onClick={handlePause}
+                  isLoading={isPauseOperating}
+                  disabled={isPauseOperating || isChecking}
+                  colorScheme="orange"
+                  size="sm"
+                  px={5}
+                  py={4}
+                  fontSize="sm"
+                  fontWeight="bold"
+                >
+                  {t("windowsUpdate.pauseCard.applyBtn")}
+                </LiquidGlassButton>
+                <LiquidGlassButton
+                  leftIcon={
+                    isPauseOperating ? <Spinner size="sm" /> : <PlayCircle size={16} />
+                  }
+                  onClick={handleRestorePause}
+                  isLoading={isPauseOperating}
+                  disabled={isPauseOperating || isChecking}
+                  colorScheme="green"
+                  size="sm"
+                  px={5}
+                  py={4}
+                  fontSize="sm"
+                  fontWeight="bold"
+                >
+                  {t("windowsUpdate.pauseCard.restoreBtn")}
+                </LiquidGlassButton>
+              </HStack>
+              <Box
+                p={3}
+                borderRadius="lg"
+                bg={warningBg}
+                border="1px solid"
+                borderColor={warningBorder}
+                w="full"
+              >
+                <Text fontSize="xs" fontWeight="bold" color={warningTitleColor} mb={1}>
+                  {t("windowsUpdate.pauseCard.manualHintTitle")}
+                </Text>
+                <Text fontSize="xs" color={warningTextColor} lineHeight="tall">
+                  {t("windowsUpdate.pauseCard.manualHint")}
+                </Text>
+              </Box>
+            </VStack>
+          </LiquidGlassCard>
         </>
       )}
 

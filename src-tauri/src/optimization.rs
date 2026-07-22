@@ -2896,6 +2896,18 @@ fn resolve_reg_path(name: &str, is_restore: bool) -> Result<PathBuf, String> {
         }
     }
 
+    // 开发模式后备：通过编译时 CARGO_MANIFEST_DIR 定位项目根目录
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let manifest_candidates = [
+        Path::new(manifest_dir).join(dir).join(format!("{}{}", name, suffix)),
+        Path::new(manifest_dir).join("..").join(dir).join(format!("{}{}", name, suffix)),
+    ];
+    for path in &manifest_candidates {
+        if path.exists() {
+            return Ok(path.clone());
+        }
+    }
+
     // 打包模式下从 exe 同级目录查找
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(parent) = exe_path.parent() {
@@ -3149,4 +3161,25 @@ pub fn restart_graphics_driver() -> Result<PerfTweakResult, String> {
         success: true,
         message: "已发送重启显卡驱动指令，屏幕可能会短暂闪烁".to_string(),
     })
+}
+
+/// 检查 Windows 更新暂停状态
+#[tauri::command]
+pub fn check_pause_update_state() -> Result<bool, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let key = hklm
+        .open_subkey(r"SOFTWARE\Microsoft\WindowsUpdate\UX\Settings")
+        .map_err(|e| format!("无法打开注册表键: {}", e))?;
+
+    // 检查 PauseUpdatesExpiryTime 值是否存在
+    let paused: bool = key
+        .get_value::<String, _>("PauseUpdatesExpiryTime")
+        .map(|_| true)
+        .unwrap_or(false);
+
+    Ok(paused)
 }

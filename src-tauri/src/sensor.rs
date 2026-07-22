@@ -204,16 +204,16 @@ pub async fn get_lhm_gpu_status() -> Result<Vec<(Option<f64>, Option<u32>)>, Str
                 types
             };
 
-            // 判断是否存在独显类型（NVIDIA/AMD 独显）
-            let has_dgpu = gpu_hardware_types.iter().any(|t| {
-                t.eq_ignore_ascii_case("GpuNvidia") || t.eq_ignore_ascii_case("GpuAmd")
+            // 判断是否存在 NVIDIA 独显（仅 NVIDIA 明确是独显，AMD 可能是 APU 核显）
+            let has_nvidia = gpu_hardware_types.iter().any(|t| {
+                t.eq_ignore_ascii_case("GpuNvidia")
             });
 
             let mut results = Vec::new();
             for hw_type in &gpu_hardware_types {
-                // 当存在独显时跳过核显（避免重复），否则保留核显（纯核显电脑）
-                if has_dgpu && hw_type.eq_ignore_ascii_case("GpuIntel") {
-                    log::info!("跳过核显(LHML): 存在独显，忽略 GpuIntel");
+                // NVIDIA 独显存在时跳过 Intel 核显，AMD 核显保留显示
+                if has_nvidia && hw_type.eq_ignore_ascii_case("GpuIntel") {
+                    log::info!("跳过核显(LHML): 存在 NVIDIA 独显，忽略 GpuIntel");
                     continue;
                 }
                 let temp = response.sensors.iter()

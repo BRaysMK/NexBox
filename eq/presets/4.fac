@@ -1,14 +1,14 @@
 CLASS1 : Effect Type
 9: Version
-Volume Boost
+低音轰炸
 0: Double Params Flag
 1: Total number of elements
-32: Main 0
+50: Main 0
 20: Main 1
 0: Main 2
 0: Main 3
-103: Main 4
-35: Main 5
+60: Main 4
+60: Main 5
 0: Element Number
    0: Param 0
    0: Param 1
@@ -22,7 +22,7 @@ Volume Boost
 0: Number of Application Dependent Strings
 1: Integer[0]
 1: Integer[1]
-1: Integer[2]
+0: Integer[2]
 1: Integer[3]
 1: Integer[4]
 0: Integer[5]
@@ -30,32 +30,32 @@ Volume Boost
 10: Number of EQ Bands
 1: On/Off Flag
 Band 1
-   62.5: CF
-   0: Boost/Cut
+   31: CF
+   7: Boost/Cut
 Band 2
-   101: CF
-   3: Boost/Cut
+   62: CF
+   6: Boost/Cut
 Band 3
-   240: CF
-   2: Boost/Cut
+   125: CF
+   4: Boost/Cut
 Band 4
-   396.85: CF
+   250: CF
    2: Boost/Cut
 Band 5
-   734.867: CF
+   500: CF
    0: Boost/Cut
 Band 6
-   1360.79: CF
-   0: Boost/Cut
+   1000: CF
+   -1: Boost/Cut
 Band 7
-   2519.84: CF
-   1: Boost/Cut
+   2000: CF
+   0: Boost/Cut
 Band 8
-   4670: CF
+   4000: CF
    1: Boost/Cut
 Band 9
-   11760: CF
+   8000: CF
    2: Boost/Cut
 Band 10
    16000: CF
-   2: Boost/Cut
+   3: Boost/Cut

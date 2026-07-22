@@ -447,215 +447,155 @@ fn get_nvidia_gpus_with_smi() -> Vec<GpuInfo> {
     gpus
 }
 
-fn video_architecture_name(code: Option<u16>) -> Option<String> {
-    match code {
-        Some(1) => Some("VGA".into()),
-        Some(2) => Some("XGA".into()),
-        Some(3) => Some("Other".into()),
-        Some(4) => Some("S-Video".into()),
-        Some(5) => Some("Composite".into()),
-        Some(6) => Some("Component".into()),
-        Some(7) => Some("DVI".into()),
-        Some(8) => Some("HDMI".into()),
-        Some(9) => Some("LVDS".into()),
-        Some(10) => Some("D-Jpn".into()),
-        Some(11) => Some("SDI".into()),
-        Some(12) => Some("DisplayPort (External)".into()),
-        Some(13) => Some("DisplayPort (Embedded)".into()),
-        Some(14) => Some("UDI (External)".into()),
-        Some(15) => Some("UDI (Embedded)".into()),
-        Some(16) => Some("SDTV-Dongle".into()),
-        Some(17) => Some("Miracast".into()),
-        Some(18) => Some("Internal".into()),
-        _ => None,
+/// 从 LHML (NexBoxMonitor) 管道获取 GPU 信息，支持所有厂商
+fn get_gpus_from_lhml() -> Vec<GpuInfo> {
+    let response = match crate::sensor::read_lhm_sensors() {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("LHML GPU 查询失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    // 按 (hardware_name, hardware_type) 分组，区分不同 GPU
+    let mut gpu_groups: Vec<(String, String, Vec<&crate::sensor::SensorReading>)> = Vec::new();
+    for sensor in &response.sensors {
+        let hw_type = sensor.hardware_type.clone();
+        if !hw_type.to_lowercase().starts_with("gpu") {
+            continue;
+        }
+        let key = sensor.hardware.clone();
+        if let Some(group) = gpu_groups.iter_mut().find(|(k, _, _)| k == &key) {
+            group.2.push(sensor);
+        } else {
+            gpu_groups.push((key, hw_type, vec![sensor]));
+        }
     }
-}
 
-fn video_memory_type_name(code: Option<u16>) -> Option<String> {
-    match code {
-        Some(1) => Some("Other".into()),
-        Some(2) => Some("Unknown".into()),
-        Some(3) => Some("VRAM".into()),
-        Some(4) => Some("DRAM".into()),
-        Some(5) => Some("SRAM".into()),
-        Some(6) => Some("WRAM".into()),
-        Some(7) => Some("EDO RAM".into()),
-        Some(8) => Some("Burst Synchronous DRAM".into()),
-        Some(9) => Some("Pipelined Burst SRAM".into()),
-        Some(10) => Some("CDRAM".into()),
-        Some(11) => Some("3DRAM".into()),
-        Some(12) => Some("SDRAM".into()),
-        Some(13) => Some("SGRAM".into()),
-        Some(14) => Some("GDDR3".into()),
-        Some(15) => Some("GDDR4".into()),
-        Some(16) => Some("GDDR5".into()),
-        Some(17) => Some("HBM".into()),
-        Some(18) => Some("HBM2".into()),
-        Some(19) => Some("GDDR5X".into()),
-        Some(20) => Some("GDDR6".into()),
-        Some(21) => Some("GDDR6X".into()),
-        Some(22) => Some("GDDR7".into()),
-        Some(23) => Some("HBM3".into()),
-        _ => None,
+    if gpu_groups.is_empty() {
+        return Vec::new();
     }
-}
 
-fn get_gpus_from_wmi() -> Vec<GpuInfo> {
-    // GPU entry: (name, vendor, is_integrated, memory_gb, raw fields map)
-    let mut all_gpus: Vec<(String, GpuVendor, bool, f64, std::collections::HashMap<String, wmi::Variant>)> = Vec::new();
+    // 判断各 GPU 是否为核显（LHML 无法区分 AMD 核显/独显，仅通过硬件名辅助判断）
+    let has_nvidia = gpu_groups.iter().any(|(_, t, _)| t.eq_ignore_ascii_case("GpuNvidia"));
 
-    if let Ok(gpu_results) = wmi_query::wmi_query("SELECT Name, DriverVersion, AdapterRAM, VideoProcessor, AdapterCompatibility, DriverDate, InstalledDisplayDrivers, VideoModeDescription, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate, DeviceID, PNPDeviceID, Status, InfFilename, VideoArchitecture, VideoMemoryType FROM Win32_VideoController") {
-        for row in gpu_results {
-            let name = row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string());
-            let name_lower = name.to_lowercase();
-            let vendor = detect_gpu_vendor(&name);
-            let memory_gb = row.get("AdapterRAM")
-                .and_then(|v| wmi_query::v_u64(v))
-                .map(|ram| ram as f64 / (1024.0 * 1024.0 * 1024.0))
-                .unwrap_or(0.0);
-
-            let is_integrated = match vendor {
-                GpuVendor::Intel => !name_lower.contains("arc"),
-                GpuVendor::AMD => {
-                    name_lower.contains("radeon") && name_lower.contains("graphics")
-                        && !name_lower.contains("rx ")
-                }
-                _ => false,
-            };
-
-            all_gpus.push((name, vendor, is_integrated, memory_gb, row));
+    let mut gpus = Vec::new();
+    for (name, hw_type, sensors) in &gpu_groups {
+        // NVIDIA 独显存在时跳过 Intel 核显，但 AMD 核显保留显示
+        // （LHML 统一标记为 GpuAmd，无法区分 APU 核显和独显）
+        if has_nvidia && hw_type.eq_ignore_ascii_case("GpuIntel") {
+            log::info!("跳过核显(LHML): 存在 NVIDIA 独显，忽略 GpuIntel");
+            continue;
         }
 
-        let has_dgpu = all_gpus.iter().any(|(_, _, is_igpu, _, _)| !is_igpu);
+        let vendor = if hw_type.eq_ignore_ascii_case("GpuNvidia") {
+            GpuVendor::NVIDIA
+        } else if hw_type.eq_ignore_ascii_case("GpuAmd") {
+            GpuVendor::AMD
+        } else if hw_type.eq_ignore_ascii_case("GpuIntel") {
+            GpuVendor::Intel
+        } else {
+            detect_gpu_vendor(name)
+        };
 
-        let mut gpus = Vec::new();
-        for (name, vendor, is_integrated, memory_gb, row) in all_gpus {
-            if is_integrated && has_dgpu {
-                log::info!("跳过核显(WMI): {}, 厂商: {:?}, 显存: {:.1}GB (存在独显)", name, vendor, memory_gb);
-                continue;
-            }
-            if is_integrated {
-                log::info!("核显(WMI)(唯一): {}, 厂商: {:?}, 显存: {:.1}GB", name, vendor, memory_gb);
-            } else {
-                log::info!("显卡(WMI): {}, 厂商: {:?}, 显存: {:.1}GB", name, vendor, memory_gb);
-            }
+        // 显存总量 (SmallData "GPU Memory Total"，单位为 MB → GB)
+        let memory_gb = sensors
+            .iter()
+            .find(|s| s.sensor_type == "SmallData" && s.name == "GPU Memory Total")
+            .map(|s| s.value / 1024.0)
+            .unwrap_or(0.0);
 
-            gpus.push(GpuInfo {
-                name,
-                vendor,
-                memory_gb,
-                driver_version: row.get("DriverVersion").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                temperature: None,
-                usage: None,
-                video_processor: row.get("VideoProcessor").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                adapter_compatibility: row.get("AdapterCompatibility").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                driver_date: row.get("DriverDate").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                installed_drivers: row.get("InstalledDisplayDrivers").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                video_mode: row.get("VideoModeDescription").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                resolution_width: row.get("CurrentHorizontalResolution").and_then(|v| wmi_query::v_u32(v)),
-                resolution_height: row.get("CurrentVerticalResolution").and_then(|v| wmi_query::v_u32(v)),
-                refresh_rate: row.get("CurrentRefreshRate").and_then(|v| wmi_query::v_u32(v)),
-                device_id: row.get("DeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                pnp_device_id: row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                inf_filename: row.get("InfFilename").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                video_architecture: video_architecture_name(row.get("VideoArchitecture").and_then(|v| wmi_query::v_u16(v))),
-                video_memory_type: video_memory_type_name(row.get("VideoMemoryType").and_then(|v| wmi_query::v_u16(v))),
-            });
+        let temperature = sensors
+            .iter()
+            .find(|s| s.sensor_type == "Temperature" && s.name == "GPU Core")
+            .map(|s| s.value);
+
+        let usage = sensors
+            .iter()
+            .find(|s| s.sensor_type == "Load" && s.name == "GPU Core")
+            .map(|s| s.value as u32);
+
+        let is_integrated = matches!(vendor, GpuVendor::Intel);
+        if is_integrated {
+            log::info!(
+                "核显(LHML): {}, 厂商: {:?}, 显存: {:.1}GB",
+                name, vendor, memory_gb
+            );
+        } else {
+            log::info!(
+                "显卡(LHML): {}, 厂商: {:?}, 显存: {:.1}GB, 温度: {:?}°C, 占用: {:?}%",
+                name, vendor, memory_gb, temperature, usage
+            );
         }
-        return gpus;
+
+        gpus.push(GpuInfo {
+            name: name.clone(),
+            vendor,
+            memory_gb,
+            driver_version: String::new(),
+            temperature,
+            usage,
+            video_processor: String::new(),
+            adapter_compatibility: String::new(),
+            driver_date: String::new(),
+            installed_drivers: String::new(),
+            video_mode: String::new(),
+            resolution_width: None,
+            resolution_height: None,
+            refresh_rate: None,
+            device_id: String::new(),
+            pnp_device_id: String::new(),
+            status: String::new(),
+            inf_filename: String::new(),
+            video_architecture: None,
+            video_memory_type: None,
+        });
     }
 
-    Vec::new()
+    gpus
 }
 
 fn get_gpu_info() -> Vec<GpuInfo> {
-    // WMI 和 NVML 并行获取，减少总等待时间
-    let wmi_handle = thread::spawn(|| get_gpus_from_wmi());
-    let nvml_result = get_nvidia_gpus_with_nvml();
-    let wmi_gpus = wmi_handle.join().unwrap_or_default();
-
-    // 尝试用NVML获取NVIDIA显卡（最好的方式）
-    if let Ok(mut nvml_gpus) = nvml_result {
+    // 1. 尝试用 NVML 获取 NVIDIA 显卡（最佳方案：提供完整信息包括驱动版本）
+    if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
         if !nvml_gpus.is_empty() {
-            // 合并WMI扩展字段到NVML结果
-            for gpu in nvml_gpus.iter_mut() {
-                if let Some(wmi_match) = wmi_gpus.iter().find(|w| w.vendor == GpuVendor::NVIDIA) {
-                    gpu.video_processor = wmi_match.video_processor.clone();
-                    gpu.adapter_compatibility = wmi_match.adapter_compatibility.clone();
-                    gpu.driver_date = wmi_match.driver_date.clone();
-                    gpu.installed_drivers = wmi_match.installed_drivers.clone();
-                    gpu.video_mode = wmi_match.video_mode.clone();
-                    gpu.resolution_width = wmi_match.resolution_width;
-                    gpu.resolution_height = wmi_match.resolution_height;
-                    gpu.refresh_rate = wmi_match.refresh_rate;
-                    gpu.device_id = wmi_match.device_id.clone();
-                    gpu.pnp_device_id = wmi_match.pnp_device_id.clone();
-                    gpu.status = wmi_match.status.clone();
-                    gpu.inf_filename = wmi_match.inf_filename.clone();
-                    gpu.video_architecture = wmi_match.video_architecture.clone();
-                    gpu.video_memory_type = wmi_match.video_memory_type.clone();
-                    break;
-                }
-            }
             return nvml_gpus;
         }
     }
 
-    // 然后尝试用nvidia-smi
-    let mut smi_gpus = get_nvidia_gpus_with_smi();
+    // 2. 尝试用 nvidia-smi（NVML 失败时的 NVIDIA 回退）
+    let smi_gpus = get_nvidia_gpus_with_smi();
     if !smi_gpus.is_empty() {
-        // 合并WMI扩展字段
-        for gpu in smi_gpus.iter_mut() {
-            if let Some(wmi_match) = wmi_gpus.iter().find(|w| w.vendor == GpuVendor::NVIDIA) {
-                gpu.video_processor = wmi_match.video_processor.clone();
-                gpu.adapter_compatibility = wmi_match.adapter_compatibility.clone();
-                gpu.driver_date = wmi_match.driver_date.clone();
-                gpu.installed_drivers = wmi_match.installed_drivers.clone();
-                gpu.video_mode = wmi_match.video_mode.clone();
-                gpu.resolution_width = wmi_match.resolution_width;
-                gpu.resolution_height = wmi_match.resolution_height;
-                gpu.refresh_rate = wmi_match.refresh_rate;
-                gpu.device_id = wmi_match.device_id.clone();
-                gpu.pnp_device_id = wmi_match.pnp_device_id.clone();
-                gpu.status = wmi_match.status.clone();
-                gpu.inf_filename = wmi_match.inf_filename.clone();
-                gpu.video_architecture = wmi_match.video_architecture.clone();
-                gpu.video_memory_type = wmi_match.video_memory_type.clone();
-                break;
-            }
-        }
         return smi_gpus;
     }
 
-    // 最后用WMI（已包含扩展字段）
-    wmi_gpus
+    // 3. 通用 LHML 兜底（支持所有厂商：AMD / Intel / NVIDIA）
+    get_gpus_from_lhml()
 }
 
 // 只获取GPU的动态数据（温度、占用）
 fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<f64>, Option<u32>)> {
-    let mut dynamic_info = Vec::new();
-
-    // 尝试用NVML
+    // 1. 尝试用 NVML
     if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
-        for gpu in nvml_gpus {
-            dynamic_info.push((gpu.temperature, gpu.usage));
+        if !nvml_gpus.is_empty() {
+            return nvml_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
         }
-        return dynamic_info;
     }
 
-    // 尝试用nvidia-smi
+    // 2. 尝试用 nvidia-smi
     let smi_gpus = get_nvidia_gpus_with_smi();
-    for gpu in smi_gpus {
-        dynamic_info.push((gpu.temperature, gpu.usage));
+    if !smi_gpus.is_empty() {
+        return smi_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
     }
 
-    // 如果没有实时数据，填充None
-    while dynamic_info.len() < gpu_static.len() {
-        dynamic_info.push((None, None));
+    // 3. LHML 通用兜底
+    let lhml_gpus = get_gpus_from_lhml();
+    if !lhml_gpus.is_empty() {
+        return lhml_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
     }
 
-    dynamic_info
+    // 所有方案均失败，填充 None
+    vec![(None, None); gpu_static.len()]
 }
 
 // 获取CPU的动态数据（占用）- 使用 sysinfo 库
@@ -1365,6 +1305,7 @@ pub struct GpuStatus {
 #[tauri::command]
 pub async fn get_gpu_status(index: usize) -> Result<GpuStatus, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
+        // 1. NVML（NVIDIA 最佳方案）
         if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
             if let Some(gpu) = nvml_gpus.get(index) {
                 return GpuStatus {
@@ -1373,54 +1314,73 @@ pub async fn get_gpu_status(index: usize) -> Result<GpuStatus, String> {
                 };
             }
         }
-        
-        let smi_gpus = get_nvidia_gpus_with_smi();
-        if let Some(gpu) = smi_gpus.get(index) {
-            return GpuStatus {
-                temperature: gpu.temperature,
-                usage: gpu.usage,
-            };
-        }
 
-        // NVML/nvidia-smi 失败时（如纯核显系统），回退到 LHML 传感器
+        // 2. LHML 通用兜底（支持所有厂商），按硬件名分组以支持多 GPU 索引
         if let Ok(response) = crate::sensor::read_lhm_sensors() {
-            let gpu_hardware_types: Vec<_> = response.sensors.iter()
-                .filter(|s| s.hardware_type.to_lowercase().starts_with("gpu"))
-                .map(|s| s.hardware_type.clone())
-                .collect::<std::collections::HashSet<_>>()
-                .into_iter()
-                .collect();
-
-            let has_dgpu = gpu_hardware_types.iter().any(|t| {
-                t.eq_ignore_ascii_case("GpuNvidia") || t.eq_ignore_ascii_case("GpuAmd")
-            });
-
-            for hw_type in &gpu_hardware_types {
-                if has_dgpu && hw_type.eq_ignore_ascii_case("GpuIntel") {
+            let mut gpu_names: Vec<String> = Vec::new();
+            for s in &response.sensors {
+                let ht = s.hardware_type.to_lowercase();
+                if !ht.starts_with("gpu") {
                     continue;
                 }
-                let temp = response.sensors.iter()
-                    .filter(|s| s.hardware_type == *hw_type
-                        && s.sensor_type == "Temperature"
-                        && s.name == "GPU Core")
+                let key = s.hardware.clone();
+                if !gpu_names.contains(&key) {
+                    gpu_names.push(key);
+                }
+            }
+
+            // 仅 NVIDIA 独显存在时过滤 Intel 核显，AMD 核显保留显示
+            let has_nvidia = gpu_names.iter().any(|name| {
+                response.sensors.iter().any(|s| {
+                    s.hardware == *name
+                        && s.hardware_type.eq_ignore_ascii_case("GpuNvidia")
+                })
+            });
+            let visible: Vec<&String> = gpu_names
+                .iter()
+                .filter(|name| {
+                    if !has_nvidia {
+                        return true;
+                    }
+                    !response.sensors.iter().any(|s| {
+                        s.hardware == **name
+                            && s.hardware_type.eq_ignore_ascii_case("GpuIntel")
+                    })
+                })
+                .collect();
+
+            if let Some(gpu_name) = visible.get(index) {
+                let temp = response
+                    .sensors
+                    .iter()
+                    .filter(|s| {
+                        s.hardware == **gpu_name
+                            && s.sensor_type == "Temperature"
+                            && s.name == "GPU Core"
+                    })
                     .map(|s| s.value)
                     .next();
-                let usage = response.sensors.iter()
-                    .filter(|s| s.hardware_type == *hw_type
-                        && s.sensor_type == "Load"
-                        && s.name == "GPU Core")
+                let usage = response
+                    .sensors
+                    .iter()
+                    .filter(|s| {
+                        s.hardware == **gpu_name
+                            && s.sensor_type == "Load"
+                            && s.name == "GPU Core"
+                    })
                     .map(|s| s.value as u32)
                     .next();
                 return GpuStatus { temperature: temp, usage };
             }
         }
-        
+
         GpuStatus {
             temperature: None,
             usage: None,
         }
-    }).await;
-    
+    })
+    .await;
+
     match result {
         Ok(status) => Ok(status),
         Err(e) => Err(e.to_string()),

@@ -1,14 +1,14 @@
 CLASS1 : Effect Type
 9: Version
-Gaming
+人声清晰
 0: Double Params Flag
 1: Total number of elements
-35: Main 0
-0: Main 1
+50: Main 0
+20: Main 1
 0: Main 2
 0: Main 3
-85: Main 4
-35: Main 5
+60: Main 4
+60: Main 5
 0: Element Number
    0: Param 0
    0: Param 1
@@ -21,7 +21,7 @@ Gaming
 0: Number of Application Dependent Reals
 0: Number of Application Dependent Strings
 1: Integer[0]
-0: Integer[1]
+1: Integer[1]
 0: Integer[2]
 1: Integer[3]
 1: Integer[4]
@@ -30,32 +30,32 @@ Gaming
 10: Number of EQ Bands
 1: On/Off Flag
 Band 1
-   62.5: CF
-   0: Boost/Cut
+   31: CF
+   -2: Boost/Cut
 Band 2
-   128.75: CF
-   0: Boost/Cut
+   62: CF
+   -2: Boost/Cut
 Band 3
-   238.311: CF
-   2: Boost/Cut
+   125: CF
+   0: Boost/Cut
 Band 4
-   444.0: CF
+   250: CF
    2: Boost/Cut
 Band 5
-   805.0: CF
-   2: Boost/Cut
+   500: CF
+   4: Boost/Cut
 Band 6
-   1360.79: CF
-   0: Boost/Cut
+   1000: CF
+   4: Boost/Cut
 Band 7
-   2519.84: CF
-   -1: Boost/Cut
+   2000: CF
+   4: Boost/Cut
 Band 8
-   4400.12: CF
-   -1: Boost/Cut
+   4000: CF
+   2: Boost/Cut
 Band 9
-   7930.48: CF
-   2: Boost/Cut
+   8000: CF
+   0: Boost/Cut
 Band 10
-   12570: CF
-   2: Boost/Cut
+   16000: CF
+   -1: Boost/Cut

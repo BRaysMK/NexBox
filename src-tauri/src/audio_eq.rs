@@ -6,7 +6,13 @@ use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Manager};
 
-use crate::audio_engine::{AudioEngine, BandParam};
+use crate::audio_engine::{AudioEngine, BandParam, SoundEffectParams, get_device_name, get_device_id};
+use windows::core::{GUID, HRESULT, PCWSTR, HSTRING, IUnknown, Interface};
+use windows::Win32::Media::Audio as wa;
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoInitializeEx, CoUninitialize,
+    CLSCTX_ALL, COINIT_MULTITHREADED,
+};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const FXVAD_SERVICE: &str = "FXVAD";
@@ -49,6 +55,34 @@ static EQ_ENGINE: OnceLock<Mutex<Option<AudioEngine>>> = OnceLock::new();
 
 fn eq_engine() -> &'static Mutex<Option<AudioEngine>> {
     EQ_ENGINE.get_or_init(|| Mutex::new(None))
+}
+
+/// 全局音效参数
+static FX_PARAMS: OnceLock<Mutex<SoundEffectParams>> = OnceLock::new();
+
+pub fn fx_params() -> &'static Mutex<SoundEffectParams> {
+    FX_PARAMS.get_or_init(|| Mutex::new(SoundEffectParams::default()))
+}
+
+/// 更新音效参数
+#[tauri::command]
+pub fn update_eq_effects(clarity: f64, ambience: f64, width: f64, dynamics: f64, bass: f64) -> Result<(), String> {
+    let mut params = fx_params().lock().map_err(|e| format!("锁错误: {}", e))?;
+    params.clarity = clarity.max(0.0).min(1.0);
+    params.ambience = ambience.max(0.0).min(1.0);
+    params.width = width.max(0.0).min(1.0);
+    params.dynamics = dynamics.max(0.0).min(1.0);
+    params.bass = bass.max(0.0).min(1.0);
+    params.version = params.version.wrapping_add(1);
+    log::info!("[eq] Effects updated: clarity={:.2} ambience={:.2} width={:.2} dynamics={:.2} bass={:.2}", params.clarity, params.ambience, params.width, params.dynamics, params.bass);
+    Ok(())
+}
+
+/// 获取当前音效参数
+#[tauri::command]
+pub fn get_eq_effects() -> Result<SoundEffectParams, String> {
+    let params = fx_params().lock().map_err(|e| format!("锁错误: {}", e))?;
+    Ok(params.clone())
 }
 
 /// 获取 fxvad 资源目录
@@ -100,11 +134,20 @@ fn get_fxvad_resource_dir(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
-/// 获取 wujieq 工作目录（%LOCALAPPDATA%/NexBox/EQEngine）
-fn get_eq_work_dir() -> PathBuf {
+/// FXVAD 实例 ID 存档路径
+fn fxvad_instance_id_file() -> PathBuf {
+    let mut p = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
+    p.push("NexBox");
+    p.push("fxvad_instance_id.txt");
+    p
+}
+
+/// 获取导入预设存储目录（%LOCALAPPDATA%/NexBox/EQEngine/presets）
+fn get_user_presets_dir() -> PathBuf {
     let mut path = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("NexBox");
     path.push("EQEngine");
+    path.push("presets");
     if !path.exists() {
         let _ = fs::create_dir_all(&path);
     }
@@ -217,27 +260,16 @@ pub fn check_virtual_audio_driver() -> Result<DriverStatus, String> {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if stdout.contains("DISABLED") || stdout.contains("禁用") {
                 needs_reboot = true;
+                service_exists = false; // 已禁用视为不存在
             }
         }
     }
 
-    // 使用 pnputil 检查驱动是否已安装
-    let mut driver_installed = service_exists;
-    if !driver_installed {
-        if let Ok(output) = Command::new("pnputil")
-            .args(["/enum-drivers"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-        {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if stdout.to_lowercase().contains("fxsound") || stdout.to_lowercase().contains("fxvad") {
-                driver_installed = true;
-            }
-        }
-    }
+    // 驱动是否已安装：仅看服务记录是否存在（服务不在 = 已卸载）
+    // DriverStore 残留不影响判定，不需要额外检查 pnputil
 
     Ok(DriverStatus {
-        installed: driver_installed,
+        installed: service_exists,
         service_exists,
         service_running,
         device_name: "FxSound Audio Enhancer".to_string(),
@@ -245,307 +277,390 @@ pub fn check_virtual_audio_driver() -> Result<DriverStatus, String> {
     })
 }
 
-/// 安装虚拟声卡驱动（需要管理员权限）
+/// 安装虚拟声卡驱动（零 PowerShell，原生 SetupAPI）
 #[tauri::command]
 pub async fn install_virtual_audio_driver(app: AppHandle) -> Result<String, String> {
+    if !is_admin() {
+        return Err("需要管理员权限才能安装驱动。请以管理员身份运行 NexBox".to_string());
+    }
+
     let fxvad_dir = get_fxvad_resource_dir(&app)
         .ok_or_else(|| "无法找到驱动资源目录".to_string())?;
 
     let inf_path = fxvad_dir.join("fxvad.inf");
-    let devcon_path = fxvad_dir.join("fxdevcon64.exe");
-    let sys_path = fxvad_dir.join("fxvad.sys");
-
     if !inf_path.exists() {
         return Err("驱动 INF 文件不存在".to_string());
     }
-    if !devcon_path.exists() {
-        return Err("devcon 工具不存在".to_string());
-    }
 
-    let inf_str = inf_path.to_string_lossy().replace('\'', "''");
-    let devcon_str = devcon_path.to_string_lossy().replace('\'', "''");
-    let sys_str = sys_path.to_string_lossy().replace('\'', "''");
-
-    // 构建 PowerShell 安装脚本（以管理员权限运行）
-    let ps_script = format!(
-        r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$logFile = Join-Path $env:TEMP 'nexbox_eq_install.log'
-"=== Install Start ===" | Out-File $logFile -Encoding UTF8
-
-# Step 1: 复制驱动文件到 system32\drivers
-"Step 1: Copying fxvad.sys" | Out-File $logFile -Append -Encoding UTF8
-$srcSys = '{sys_str}'
-$dstSys = 'C:\Windows\System32\drivers\fxvad.sys'
-if (-not (Test-Path $dstSys)) {{
-    Copy-Item $srcSys $dstSys -Force 2>&1 | Out-File $logFile -Append -Encoding UTF8
-    "Copied fxvad.sys" | Out-File $logFile -Append -Encoding UTF8
-}} else {{
-    "fxvad.sys already exists" | Out-File $logFile -Append -Encoding UTF8
-}}
-
-# Step 2: 使用 pnputil 安装驱动包
-"Step 2: pnputil /add-driver" | Out-File $logFile -Append -Encoding UTF8
-$infPath = '{inf_str}'
-$pnputilResult = pnputil /add-driver $infPath /install 2>&1
-"pnputil output: $pnputilResult" | Out-File $logFile -Append -Encoding UTF8
-
-# Step 3: 使用 devcon 创建设备实例
-"Step 3: devcon install" | Out-File $logFile -Append -Encoding UTF8
-$devconExe = '{devcon_str}'
-$devconResult = & $devconExe install $infPath 'Root\FXVAD' 2>&1
-"devcon output: $devconResult" | Out-File $logFile -Append -Encoding UTF8
-
-Start-Sleep -Seconds 3
-
-# 验证
-"Step 4: Verification" | Out-File $logFile -Append -Encoding UTF8
-$scQuery = sc.exe query FXVAD 2>&1
-"sc query: $scQuery" | Out-File $logFile -Append -Encoding UTF8
-
-if ($scQuery -match 'FXVAD|FxSound') {{
-    "RESULT:SUCCESS" | Out-File $logFile -Append -Encoding UTF8
-    Write-Output 'SUCCESS'
-}} else {{
-    # 检查 pnputil 中是否有驱动
-    $enumCheck = pnputil /enum-drivers 2>&1
-    $found = $enumCheck | Where-Object {{ $_ -match 'fxsound|fxvad' }}
-    if ($found) {{
-        "RESULT:SUCCESS" | Out-File $logFile -Append -Encoding UTF8
-        Write-Output 'SUCCESS'
-    }} else {{
-        "RESULT:FAILED" | Out-File $logFile -Append -Encoding UTF8
-        Write-Output 'FAILED'
-    }}
-}}
-"#,
-        sys_str = sys_str,
-        inf_str = inf_str,
-        devcon_str = devcon_str
-    );
-
-    // 写入临时脚本文件
-    let temp_dir = std::env::temp_dir();
-    let script_path = temp_dir.join("nexbox_eq_install.ps1");
-    fs::write(&script_path, &ps_script)
-        .map_err(|e| format!("写入安装脚本失败: {}", e))?;
-
-    let script_str = script_path.to_string_lossy().replace('\'', "''");
-
-    log::info!("[install] Script written to {:?}", script_path);
-
-    // 以管理员权限执行脚本
-    let ps_command = format!(
-        "Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{}\"' -Verb RunAs -Wait -WindowStyle Hidden",
-        script_str
-    );
-
-    let output = Command::new("powershell")
-        .args(["-WindowStyle", "Hidden", "-NoProfile", "-Command", &ps_command])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行安装脚本失败: {}", e))?;
-
-    // 读取日志
-    let log_path = temp_dir.join("nexbox_eq_install.log");
-    if let Ok(log_content) = fs::read_to_string(&log_path) {
-        log::info!("[install] Log:\n{}", log_content);
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    log::info!("[install] PowerShell stdout: {}", stdout);
-    if !stderr.is_empty() {
-        log::warn!("[install] PowerShell stderr: {}", stderr);
-    }
-
-    // 清理临时脚本
-    let _ = fs::remove_file(&script_path);
-
-    // 检查用户是否取消了 UAC
-    if !output.status.success() {
-        let stderr_lower = stderr.to_lowercase();
-        if stderr_lower.contains("cancel") || stderr_lower.contains("denied") || stderr_lower.contains("取消") {
-            return Err("管理员授权被取消，安装未执行".to_string());
+    // 安装前记录当前默认音频设备
+    let prev_device = run_com_thread(|| {
+        unsafe {
+            let enumerator: wa::IMMDeviceEnumerator = CoCreateInstance(
+                &wa::MMDeviceEnumerator,
+                None,
+                CLSCTX_ALL,
+            ).map_err(|e| format!("CoCreateInstance MMDeviceEnumerator failed: {}", e))?;
+            native_get_default_name(&enumerator)
+                .ok_or_else(|| "无法获取当前默认设备".to_string())
         }
+    }).unwrap_or_default();
+
+    // 使用原生 SetupAPI 安装
+    let inf_str = inf_path.to_string_lossy().to_string();
+    let installed = native_install_root_device(&inf_str, "Root\\FXVAD")?;
+
+    if !installed {
+        return Err("驱动安装失败，请检查驱动文件是否完整".to_string());
     }
 
-    // 验证安装结果
-    std::thread::sleep(std::time::Duration::from_secs(1));
+    // 等待驱动注册完成
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // 如果系统自动切换到了 FxSound 虚拟声卡，恢复为之前的物理设备
+    if !prev_device.is_empty() && !prev_device.to_lowercase().contains("fxsound") {
+        log::info!("[install] Restoring default audio device to: {}", prev_device);
+        restore_default_audio_device(&prev_device);
+    }
+
+    // 验证
     let status = check_virtual_audio_driver()?;
     if status.installed {
-        let _ = fs::remove_file(&log_path);
         Ok("虚拟声卡驱动安装成功".to_string())
     } else {
-        // 读取日志中的详细信息
-        let log_detail = fs::read_to_string(&log_path).unwrap_or_default();
-        let log_summary = log_detail
-            .lines()
-            .filter(|l| l.contains("output:") || l.contains("RESULT:") || l.contains("Failed"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        Err(format!(
-            "驱动安装失败。可能需要重启电脑后重试。\n日志摘要:\n{}",
-            log_summary
-        ))
+        Err("驱动已安装但服务未启动，可能需要重启电脑".to_string())
     }
 }
 
-/// 卸载虚拟声卡驱动（需要管理员权限）
-#[tauri::command]
-pub async fn uninstall_virtual_audio_driver(app: AppHandle) -> Result<String, String> {
-    // 先停止 EQ 引擎
-    let _ = stop_eq_engine();
+/// 原生 SetupAPI 安装 Root 设备并匹配驱动（等价于 devcon install）
+fn native_install_root_device(inf_path: &str, hardware_id: &str) -> Result<bool, String> {
+    use windows::core::{PCWSTR, HSTRING, GUID};
+    use windows::Win32::Devices::DeviceAndDriverInstallation::{
+        SetupDiGetINFClassW, SetupDiCreateDeviceInfoList, SetupDiCreateDeviceInfoW,
+        SetupDiSetDeviceRegistryPropertyW, SetupDiCallClassInstaller,
+        SetupDiDestroyDeviceInfoList, SetupDiGetDeviceInstanceIdW,
+        UpdateDriverForPlugAndPlayDevicesW,
+        SP_DEVINFO_DATA, DICD_GENERATE_ID, DIF_REGISTERDEVICE, SPDRP_HARDWAREID,
+        INSTALLFLAG_FORCE,
+    };
 
-    let fxvad_dir = get_fxvad_resource_dir(&app)
-        .ok_or_else(|| "无法找到驱动资源目录".to_string())?;
+    unsafe {
+        let inf = HSTRING::from(inf_path);
+        let hwid = HSTRING::from(hardware_id);
 
-    let devcon_path = fxvad_dir.join("fxdevcon64.exe");
-    let devcon_str = devcon_path.to_string_lossy().replace('\'', "''");
+        // 1. 从 INF [Version] 节读取 ClassGUID
+        let mut class_guid = GUID::zeroed();
+        let mut class_name = [0u16; 32];
+        SetupDiGetINFClassW(&inf, &mut class_guid, &mut class_name, None)
+            .map_err(|e| format!("读取 INF 类 GUID 失败: {}", e))?;
 
-    // 构建精简 PowerShell 卸载脚本（极简：核心就是一条正则找 oem.inf → pnputil 删除）
-    let ps_script = format!(
-        r#"
-$ErrorActionPreference = 'Continue'
-$log = "$env:TEMP\nexbox_eq_uninstall.log"
-'START' | Out-File $log
+        // 2. 创建空设备信息集合
+        let dev_info_set = SetupDiCreateDeviceInfoList(Some(&class_guid), None)
+            .map_err(|e| format!("创建设备列表失败: {}", e))?;
 
-# 1. 禁用服务
-sc.exe config FXVAD start= disabled *>> $log
-# 2. 尝试停止（NOT_STOPPABLE 会失败，忽略）
-sc.exe stop FXVAD *>> $log
-# 3. devcon 移除设备
-$d = '{devcon_str}'
-if (Test-Path $d) {{
-    & $d remove '@ROOT\FXVAD\*' *>> $log
-    & $d remove '=MEDIA' 'ROOT\FXVAD*' *>> $log
-}}
-# 4. 标记服务删除
-$delOut = sc.exe delete FXVAD 2>&1
-"SC_DELETE: $delOut" | Out-File $log -Append
-$isMarked = $delOut -match '1072|marked|标记'
-"MARKED: $isMarked" | Out-File $log -Append
+        // 3. 创建设备信息元素
+        let mut dev_info_data = SP_DEVINFO_DATA {
+            cbSize: std::mem::size_of::<SP_DEVINFO_DATA>() as u32,
+            ..Default::default()
+        };
+        SetupDiCreateDeviceInfoW(
+            dev_info_set,
+            PCWSTR(class_name.as_ptr()),
+            &class_guid,
+            None,
+            None,
+            DICD_GENERATE_ID,
+            Some(&mut dev_info_data),
+        ).map_err(|e| format!("创建设备信息失败: {}", e))?;
 
-# 5. 删除驱动包 —— 核心：一条正则找 oemXX.inf 的 Published Name
-$raw = pnputil /enum-drivers 2>&1 | Out-String
-# 匹配 "发布名称: oem6.inf ... 原始名称: fxvad.inf"（中英文均兼容）
-$re = '(?:Published Name|发布名称):\s+(oem\d+\.inf).*?\n.*?(?:Original Name|原始名称):\s+fxvad\.inf'
-if ($raw -match $re) {{
-    $oem = $Matches[1]
-    "DELETE_DRIVER: $oem" | Out-File $log -Append
-    pnputil /delete-driver $oem /uninstall /force *>> $log
-}} else {{
-    "NO_FXVAD_OEM" | Out-File $log -Append
-}}
+        // 4. 写硬件 ID (REG_MULTI_SZ，双 null 结尾)
+        let mut hwid_multi: Vec<u16> = hwid.as_wide().to_vec();
+        hwid_multi.push(0);
+        hwid_multi.push(0);
+        let bytes = std::slice::from_raw_parts(
+            hwid_multi.as_ptr() as *const u8,
+            hwid_multi.len() * 2,
+        );
+        SetupDiSetDeviceRegistryPropertyW(
+            dev_info_set,
+            &mut dev_info_data,
+            SPDRP_HARDWAREID,
+            Some(bytes),
+        ).map_err(|e| format!("设置硬件 ID 失败: {}", e))?;
 
-# 6. 安排重启后删除 fxvad.sys
-$sys = 'C:\Windows\System32\drivers\fxvad.sys'
-if (Test-Path $sys) {{
-    try {{ Remove-Item $sys -Force -ErrorAction Stop; "FILE_DELETED" | Out-File $log -Append }}
-    catch {{
-        "FILE_REBOOT" | Out-File $log -Append
-        Add-Type -Name MF -Namespace W -EA SilentlyContinue -MemberDef '[DllImport("kernel32.dll")]public static extern bool MoveFileEx(string a,string b,int f);'
-        [W.MF]::MoveFileEx($sys, $null, 4) | Out-Null
-    }}
-}}
+        // 5. 注册进 PnP 设备树
+        SetupDiCallClassInstaller(DIF_REGISTERDEVICE, dev_info_set, Some(&dev_info_data))
+            .map_err(|e| format!("注册 PnP 设备失败: {}", e))?;
 
-# 7. 验证 + 报告
-$ck = sc.exe query FXVAD 2>&1
-"CHECK: $ck" | Out-File $log -Append
-$gone = $ck -match '1060|不存在|未安装'
+        // 5b. 读取系统分配的精确实例 ID 并保存（用于卸载时精确定位）
+        let mut id_buf = [0u16; 512];
+        let mut required = 0u32;
+        if SetupDiGetDeviceInstanceIdW(dev_info_set, &dev_info_data, Some(&mut id_buf), Some(&mut required)).is_ok() {
+            if required > 1 {
+                let instance_id = String::from_utf16_lossy(&id_buf[..required as usize - 1]);
+                log::info!("[install] FXVAD instance id: {}", instance_id);
+                if let Some(parent) = fxvad_instance_id_file().parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let _ = fs::write(fxvad_instance_id_file(), &instance_id);
+            }
+        }
 
-# 再次检查 pnputil 是否还有残留
-$check2 = pnputil /enum-drivers 2>&1 | Out-String
-$pnpLeft = $check2 -match 'fxvad|fxsound'
-"PNP_LEFT: $pnpLeft" | Out-File $log -Append
+        let _ = SetupDiDestroyDeviceInfoList(dev_info_set);
 
-if ($gone -and -not $pnpLeft) {{ Write-Output 'SUCCESS' }}
-elseif ($pnpLeft -and ($gone -or $isMarked)) {{
-    # 驱动包还在，再试一次删除
-    if ($check2 -match '(?:Published Name|发布名称):\s+(oem\d+\.inf)[\s\S]*?fxvad') {{
-        $oem2 = $Matches[1]
-        pnputil /delete-driver $oem2 /uninstall /force *>> $log
-        $finalCheck = pnputil /enum-drivers 2>&1 | Out-String
-        if ($finalCheck -match 'fxvad|fxsound') {{
-            Write-Output 'REBOOT_REQUIRED'
-        }} else {{
-            Write-Output 'SUCCESS'
-        }}
-    }} else {{
-        Write-Output 'REBOOT_REQUIRED'
-    }}
-}}
-elseif ($isMarked -and ($ck -match 'FXVAD')) {{ Write-Output 'REBOOT_REQUIRED' }}
-else {{ Write-Output 'PARTIAL' }}
-"#,
-        devcon_str = devcon_str
-    );
+        // 6. 给设备匹配并安装驱动（INF 暂存、文件拷贝等都在这一步内部完成）
+        let mut reboot_required = windows::Win32::Foundation::BOOL(0);
+        UpdateDriverForPlugAndPlayDevicesW(
+            None,
+            &hwid,
+            &inf,
+            INSTALLFLAG_FORCE,
+            Some(&mut reboot_required),
+        ).map_err(|e| format!("安装驱动失败: {}", e))?;
 
-    let temp_dir = std::env::temp_dir();
-    let script_path = temp_dir.join("nexbox_eq_uninstall.ps1");
-    fs::write(&script_path, &ps_script)
-        .map_err(|e| format!("写入卸载脚本失败: {}", e))?;
-
-    let script_str = script_path.to_string_lossy().replace('\'', "''");
-    log::info!("[uninstall] Script written to {:?}", script_path);
-
-    // 以管理员权限执行
-    let ps_command = format!(
-        "Start-Process -FilePath 'powershell' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{}\"' -Verb RunAs -Wait -WindowStyle Hidden",
-        script_str
-    );
-
-    let output = Command::new("powershell")
-        .args(["-WindowStyle", "Hidden", "-NoProfile", "-Command", &ps_command])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行卸载脚本失败: {}", e))?;
-
-    let log_path = temp_dir.join("nexbox_eq_uninstall.log");
-    if let Ok(log_content) = fs::read_to_string(&log_path) {
-        log::info!("[uninstall] Log:\n{}", log_content);
+        Ok(true)
     }
+}
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    log::info!("[uninstall] stdout: {}", stdout);
-    if !stderr.is_empty() {
-        log::warn!("[uninstall] stderr: {}", stderr);
-    }
+/// 原生移除 FXVAD 设备节点（精确匹配实例 ID，不回退猜测 pattern）
+fn native_remove_fxvad_devnode() -> Result<bool, String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Devices::DeviceAndDriverInstallation::{
+        CM_Locate_DevNodeW, CM_Uninstall_DevNode, CM_LOCATE_DEVNODE_NORMAL, CONFIGRET,
+    };
 
-    let _ = fs::remove_file(&script_path);
+    let cr_success = CONFIGRET(0);
 
-    // UAC 取消检测
-    if !output.status.success() {
-        let se = stderr.to_lowercase();
-        if se.contains("cancel") || se.contains("denied") || se.contains("取消") {
-            return Err("管理员授权被取消，卸载未执行".to_string());
+    // 优先用安装时保存的精确实例 ID
+    if let Ok(saved) = fs::read_to_string(fxvad_instance_id_file()) {
+        let id = saved.trim().to_string();
+        if !id.is_empty() {
+            let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
+            unsafe {
+                let mut devinst = 0u32;
+                let cr = CM_Locate_DevNodeW(
+                    &mut devinst,
+                    PCWSTR(wide.as_ptr()),
+                    CM_LOCATE_DEVNODE_NORMAL,
+                );
+                if cr == cr_success {
+                    let cr2 = CM_Uninstall_DevNode(devinst, 0);
+                    log::info!("[uninstall] CM_Uninstall_DevNode({}) -> {:?}", id, cr2);
+                    if cr2 == cr_success {
+                        let _ = fs::remove_file(fxvad_instance_id_file());
+                        return Ok(true);
+                    }
+                }
+                log::warn!("[uninstall] Saved instance id '{}' not found (CR={:?}), falling back to enum", id, cr);
+            }
         }
     }
 
-    // 解析结果
-    let out = stdout.trim();
-    std::thread::sleep(std::time::Duration::from_secs(1));
+    // 回退：枚举 ROOT 下所有设备，按硬件 ID 匹配 FXVAD 后移除
+    native_find_and_remove_by_hwid("FXVAD")
+}
 
-    if out.contains("SUCCESS") {
-        log::info!("[uninstall] Fully removed");
-        let _ = fs::remove_file(&log_path);
-        Ok("虚拟声卡驱动已卸载".to_string())
-    } else if out.contains("REBOOT_REQUIRED") {
-        log::info!("[uninstall] Pending reboot");
-        let _ = fs::remove_file(&log_path);
-        Ok("驱动已标记卸载，需要重启电脑完成卸载".to_string())
-    } else {
-        let detail = fs::read_to_string(&log_path).unwrap_or_default();
-        let summary: Vec<&str> = detail
-            .lines()
-            .filter(|l| l.contains("DELETE_DRIVER:") || l.contains("NO_FXVAD_OEM") || l.contains("SC_DELETE:") || l.contains("MARKED:") || l.contains("FILE_") || l.contains("CHECK:"))
-            .collect();
-        log::error!("[uninstall] Incomplete.\n{}", summary.join("\n"));
-        Err(format!(
-            "驱动卸载不完整。可能需要重启电脑后重试。\n{}",
-            summary.join("\n")
-        ))
+/// 回退方案：枚举 ROOT 枚举器下所有设备，按硬件 ID 关键词匹配后 DIF_REMOVE
+fn native_find_and_remove_by_hwid(hwid_keyword: &str) -> Result<bool, String> {
+    use windows::core::w;
+    use windows::Win32::Devices::DeviceAndDriverInstallation::{
+        SetupDiGetClassDevsW, SetupDiEnumDeviceInfo, SetupDiGetDeviceRegistryPropertyW,
+        SetupDiCallClassInstaller, SetupDiDestroyDeviceInfoList,
+        SP_DEVINFO_DATA, DIGCF_PRESENT, DIGCF_ALLCLASSES, SPDRP_HARDWAREID, DIF_REMOVE,
+    };
+
+    unsafe {
+        let dev_info_set = SetupDiGetClassDevsW(None, w!("ROOT"), None, DIGCF_PRESENT | DIGCF_ALLCLASSES)
+            .map_err(|e| format!("SetupDiGetClassDevsW failed: {}", e))?;
+
+        let mut index = 0u32;
+        loop {
+            let mut data = SP_DEVINFO_DATA {
+                cbSize: std::mem::size_of::<SP_DEVINFO_DATA>() as u32,
+                ..Default::default()
+            };
+            if SetupDiEnumDeviceInfo(dev_info_set, index, &mut data).is_err() {
+                break;
+            }
+
+            let mut buf = [0u16; 512];
+            let mut required = 0u32;
+            let bytes = std::slice::from_raw_parts_mut(
+                buf.as_mut_ptr() as *mut u8,
+                buf.len() * 2,
+            );
+            let got = SetupDiGetDeviceRegistryPropertyW(
+                dev_info_set,
+                &data,
+                SPDRP_HARDWAREID,
+                None,
+                Some(bytes),
+                Some(&mut required),
+            ).is_ok();
+
+            if got && String::from_utf16_lossy(&buf).to_lowercase().contains(&hwid_keyword.to_lowercase()) {
+                let ok = SetupDiCallClassInstaller(DIF_REMOVE, dev_info_set, Some(&data)).is_ok();
+                log::info!("[uninstall] DIF_REMOVE by HWID match -> {}", ok);
+                let _ = SetupDiDestroyDeviceInfoList(dev_info_set);
+                let _ = fs::remove_file(fxvad_instance_id_file());
+                return Ok(ok);
+            }
+            index += 1;
+        }
+        let _ = SetupDiDestroyDeviceInfoList(dev_info_set);
+    }
+    log::info!("[uninstall] No FXVAD devnode found via HWID enum, may already be gone");
+    Ok(false)
+}
+
+/// 检查是否具有管理员权限
+fn is_admin() -> bool {
+    Command::new("net")
+        .args(["session"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// 卸载虚拟声卡驱动（原生移除设备节点 → 清理驱动包，无 PowerShell/devcon）
+#[tauri::command]
+pub async fn uninstall_virtual_audio_driver(_app: AppHandle) -> Result<String, String> {
+    if !is_admin() {
+        return Err("需要管理员权限才能卸载驱动。请以管理员身份运行 NexBox".to_string());
+    }
+
+    let _ = stop_eq_engine();
+
+    // 1. 【关键】先原生移除设备节点——原子操作，内部正确停止驱动实例
+    //    不需要也不能提前 sc config disabled，否则制造 Code 32 孤儿节点
+    match native_remove_fxvad_devnode() {
+        Ok(true) => log::info!("[uninstall] Devnode removed via native API"),
+        Ok(false) => log::info!("[uninstall] Devnode not found, may already be gone"),
+        Err(e) => log::error!("[uninstall] Devnode removal error: {}", e),
+    }
+
+    // 2. 设备节点已摘除，现在安全删除驱动包
+    let pnp_output = run_hidden_output("pnputil", &["/enum-drivers"]);
+    let oem_list = find_all_oem_infs(&pnp_output, "fxvad");
+    log::info!("[uninstall] Found {} FXVAD OEM INF(s): {:?}", oem_list.len(), oem_list);
+    for oem in &oem_list {
+        let del_out = run_hidden_output("pnputil", &["/delete-driver", oem, "/uninstall", "/force"]);
+        log::info!("[uninstall] pnputil /delete-driver {}: {}", oem, del_out.trim());
+    }
+
+    // 3. 保险清理：删除服务项、.sys 文件
+    run_hidden_command("sc", &["delete", "FXVAD"]);
+    let sys_path = std::path::Path::new(r"C:\Windows\System32\drivers\fxvad.sys");
+    if sys_path.exists() {
+        if fs::remove_file(sys_path).is_err() {
+            schedule_reboot_delete(sys_path);
+        }
+    }
+
+    // 4. 清理实例 ID 存档
+    let _ = fs::remove_file(fxvad_instance_id_file());
+
+    // 5. 验证
+    let sc_check = run_hidden_output("sc", &["query", "FXVAD"]);
+    let check_pnp = run_hidden_output("pnputil", &["/enum-drivers"]);
+    log::info!(
+        "[uninstall] Verify: service_1060={}, pnp_fxvad={}",
+        sc_check.contains("1060"),
+        check_pnp.to_lowercase().contains("fxvad")
+    );
+    Ok("虚拟声卡驱动已卸载".to_string())
+}
+
+/// 运行隐藏窗口命令，忽略结果
+fn run_hidden_command(cmd: &str, args: &[&str]) {
+    let _ = Command::new(cmd)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+}
+
+/// 运行隐藏窗口命令，返回 stdout 字符串
+fn run_hidden_output(cmd: &str, args: &[&str]) -> String {
+    match Command::new(cmd)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+    {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+        Err(e) => {
+            log::warn!("[uninstall] Command failed: {} {}: {}", cmd, args.join(" "), e);
+            String::new()
+        }
+    }
+}
+
+/// 从 pnputil /enum-drivers 输出中找到所有 fxvad/fxsound 对应的 OEM 文件名
+fn find_all_oem_infs(pnp_output: &str, keyword: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    // 方法1: 搜索包含关键词的 OEM INF
+    let re = match regex::bytes::Regex::new(r"(?m)^(?:Published Name|发布名称):\s+(oem\d+\.inf)\s*$") {
+        Ok(r) => r,
+        Err(_) => return results,
+    };
+    for caps in re.captures_iter(pnp_output.as_bytes()) {
+        let oem = String::from_utf8_lossy(&caps[1]).to_string();
+        // 在找到的 oem.inf 行后面搜索关键词
+        let start = caps.get(0).unwrap().end();
+        let end = (start + 500).min(pnp_output.len());
+        let tail = &pnp_output[start..end];
+        if tail.to_lowercase().contains(&keyword.to_lowercase()) {
+            if !results.contains(&oem) {
+                results.push(oem);
+            }
+        }
+    }
+    // 方法2（兜底）: 直接搜索整个输出中的 oemNN.inf 及其所在区块
+    if results.is_empty() {
+        let re2 = match regex::bytes::Regex::new(r"(?m)^(?:Published Name|发布名称):\s+(oem\d+\.inf)\s*$") {
+            Ok(r) => r,
+            Err(_) => return results,
+        };
+        let bytes = pnp_output.as_bytes();
+        let mut all_oems: Vec<(usize, String)> = Vec::new();
+        for caps in re2.captures_iter(bytes) {
+            let oem = String::from_utf8_lossy(&caps[1]).to_string();
+            let pos = caps.get(0).unwrap().end();
+            all_oems.push((pos, oem));
+        }
+        // 为每个 oem 检查其 500 字节范围内是否含有关键词
+        for i in 0..all_oems.len() {
+            let (start, ref oem) = all_oems[i];
+            let end_block = if i + 1 < all_oems.len() {
+                all_oems[i + 1].0 - 50
+            } else {
+                (start + 500).min(pnp_output.len())
+            };
+            let chunk = &pnp_output[start..end_block.min(pnp_output.len())];
+            if chunk.to_lowercase().contains(&keyword.to_lowercase()) && !results.contains(oem) {
+                results.push(oem.clone());
+            }
+        }
+    }
+    results
+}
+
+/// 安排文件在重启后删除 (MoveFileEx with MOVEFILE_DELAY_UNTIL_REBOOT)
+fn schedule_reboot_delete(path: &std::path::Path) {
+    use windows::core::PCWSTR;
+    use windows::Win32::Storage::FileSystem::MoveFileExW;
+    use windows::Win32::Storage::FileSystem::MOVEFILE_DELAY_UNTIL_REBOOT;
+
+    let wide: Vec<u16> = path
+        .to_string_lossy()
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        let _ = MoveFileExW(
+            PCWSTR::from_raw(wide.as_ptr()),
+            None,
+            MOVEFILE_DELAY_UNTIL_REBOOT,
+        );
     }
 }
 
@@ -568,18 +683,10 @@ pub async fn start_eq_engine(_app: AppHandle) -> Result<String, String> {
         return Err("请先安装虚拟声卡驱动".to_string());
     }
 
-    // 保存当前默认设备，切换到 FxSound 虚拟声卡
-    let prev_device = switch_default_audio_to_fxsound()
-        .unwrap_or_else(|e| { log::warn!("[eq] Audio switch warning: {}", e); String::new() });
+    // 保存当前默认设备，切换到 FxSound 虚拟声卡（原生 COM，无 PowerShell）
+    let prev_device = switch_default_audio_to_fxsound()?;
     let physical_device_name = if prev_device.starts_with("PREV:") {
-        // Read device name from file written by PowerShell (correct UTF-8 encoding)
-        // instead of using stdout which may have GBK/CP936 encoding issues on Chinese Windows
-        let prev_file = std::env::temp_dir().join("nexbox_eq_prev_device.txt");
-        let name = fs::read_to_string(&prev_file)
-            .ok()
-            .map(|s| s.trim_start_matches('\u{FEFF}').trim().to_string()) // strip BOM + whitespace
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| prev_device[5..].trim().to_string()); // fallback to stdout
+        let name = prev_device[5..].to_string();
         log::info!("[eq] Previous device name: '{}'", name);
         name
     } else {
@@ -590,7 +697,19 @@ pub async fn start_eq_engine(_app: AppHandle) -> Result<String, String> {
     std::thread::sleep(std::time::Duration::from_millis(200));
 
     // 启动原生音频引擎
-    let engine = AudioEngine::start(physical_device_name.clone())?;
+    let engine = match AudioEngine::start(physical_device_name.clone()) {
+        Ok(e) => e,
+        Err(e) => {
+            // 引擎启动失败，恢复原始默认设备
+            log::error!("[eq] Audio engine failed to start: {}", e);
+            if !physical_device_name.is_empty() {
+                log::info!("[eq] Restoring audio device to: {}", physical_device_name);
+                restore_default_audio_device(&physical_device_name);
+            }
+            let _ = fs::remove_file(std::env::temp_dir().join("nexbox_eq_prev_device.txt"));
+            return Err(e);
+        }
+    };
 
     // Store the engine
     {
@@ -601,268 +720,202 @@ pub async fn start_eq_engine(_app: AppHandle) -> Result<String, String> {
     // 等待引擎初始化
     std::thread::sleep(std::time::Duration::from_millis(300));
 
-    if prev_device.starts_with("PREV:") {
-        Ok(format!("PREV:{}", &prev_device[5..]))
-    } else {
-        Ok("SWITCHED".to_string())
+    Ok(prev_device)
+}
+
+// ===== 音频设备切换功能（原生 COM，无 PowerShell） =====
+// 直接使用 Windows IPolicyConfig COM 接口切换默认音频设备
+// 这是 SoundVolumeView、EarTrumpet、SoundSwitch 等工具背后的同一接口
+
+/// IPolicyConfig COM 接口（Windows 非公开但稳定的 API）
+/// CLSID: {870AF99C-171D-4F9E-AF0D-E63DF40C2BC9}
+/// IID:   {F8679F50-850A-41CF-9C72-430F290290C8}
+const CLSID_POLICY_CONFIG: GUID = GUID::from_u128(0x870af99c_171d_4f9e_af0d_e63df40c2bc9);
+const IID_IPOLICY_CONFIG: GUID = GUID::from_u128(0xf8679f50_850a_41cf_9c72_430f290290c8);
+
+/// IUnknown vtable（COM 接口的头 3 个方法）
+#[repr(C)]
+struct IUnknownVtbl {
+    query_interface: unsafe extern "system" fn(*mut std::ffi::c_void, *const GUID, *mut *mut std::ffi::c_void) -> HRESULT,
+    add_ref: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
+    release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
+}
+
+/// IPolicyConfig vtable（IUnknown + 12 个方法）
+#[repr(C)]
+struct IPolicyConfigVtbl {
+    // IUnknown
+    query_interface: unsafe extern "system" fn(*mut std::ffi::c_void, *const GUID, *mut *mut std::ffi::c_void) -> HRESULT,
+    add_ref: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
+    release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
+    // IPolicyConfig
+    get_mix_format: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, *mut *mut std::ffi::c_void) -> HRESULT,
+    get_device_format: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, i32, *mut *mut std::ffi::c_void) -> HRESULT,
+    reset_device_format: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR) -> HRESULT,
+    set_device_format: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, *mut std::ffi::c_void, *mut std::ffi::c_void) -> HRESULT,
+    get_processing_period: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, i32, *mut i64, *mut i64) -> HRESULT,
+    set_processing_period: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, *mut i64) -> HRESULT,
+    get_share_mode: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, *mut std::ffi::c_void) -> HRESULT,
+    set_share_mode: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, *mut std::ffi::c_void) -> HRESULT,
+    get_property_value: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, *const std::ffi::c_void, *mut std::ffi::c_void) -> HRESULT,
+    set_property_value: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, *const std::ffi::c_void, *mut std::ffi::c_void) -> HRESULT,
+    set_default_endpoint: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, i32) -> HRESULT,
+    set_endpoint_visibility: unsafe extern "system" fn(*mut std::ffi::c_void, PCWSTR, i32) -> HRESULT,
+}
+
+#[repr(C)]
+struct IPolicyConfigCom {
+    vtbl: *const IPolicyConfigVtbl,
+}
+
+/// 设置默认音频设备（三个 role 全部设置：eConsole / eMultimedia / eCommunications）
+fn native_set_default_device(device_id: &str) -> Result<(), String> {
+    unsafe {
+        // 1. 创建 IPolicyConfig COM 实例（通过 IUnknown）
+        let unknown: IUnknown = CoCreateInstance(&CLSID_POLICY_CONFIG, None, CLSCTX_ALL)
+            .map_err(|e| format!("CoCreateInstance IPolicyConfig failed: {}", e))?;
+
+        // 2. QueryInterface 获取 IPolicyConfig 接口指针
+        let raw = unknown.as_raw();
+        let unk_vtbl = *(raw as *const *const IUnknownVtbl);
+        let mut policy_ptr: *mut std::ffi::c_void = std::ptr::null_mut();
+        let hr = ((*unk_vtbl).query_interface)(raw, &IID_IPOLICY_CONFIG, &mut policy_ptr);
+        if hr.is_err() {
+            return Err(format!("QueryInterface IPolicyConfig failed: {:?}", hr));
+        }
+
+        let policy = &*(policy_ptr as *const IPolicyConfigCom);
+        let id = HSTRING::from(device_id);
+        let pcwstr = PCWSTR(id.as_ptr());
+
+        // 3. 三个 role 都要设置
+        for role in [0i32, 1, 2] {
+            let hr = ((*policy.vtbl).set_default_endpoint)(policy_ptr, pcwstr, role);
+            if hr.is_err() {
+                ((*policy.vtbl).release)(policy_ptr);
+                return Err(format!("SetDefaultEndpoint failed (role {}): {:?}", role, hr));
+            }
+        }
+
+        // 4. Release
+        ((*policy.vtbl).release)(policy_ptr);
+    }
+    Ok(())
+}
+
+/// 查找渲染设备（名称包含匹配，大小写不敏感）
+/// 返回 (device_id, device_name)
+fn native_find_device(enumerator: &wa::IMMDeviceEnumerator, name_contains: &str) -> Option<(String, String)> {
+    unsafe {
+        let collection = enumerator.EnumAudioEndpoints(wa::eRender, wa::DEVICE_STATE_ACTIVE).ok()?;
+        let count = collection.GetCount().ok()?;
+        let search = name_contains.to_lowercase();
+        for i in 0..count {
+            if let Ok(device) = collection.Item(i) {
+                let id = get_device_id(&device).unwrap_or_default();
+                let name = get_device_name(&device);
+                if name.to_lowercase().contains(&search) {
+                    return Some((id, name));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// 获取当前默认渲染设备名称
+fn native_get_default_name(enumerator: &wa::IMMDeviceEnumerator) -> Option<String> {
+    unsafe {
+        let device = enumerator.GetDefaultAudioEndpoint(wa::eRender, wa::eConsole).ok()?;
+        Some(get_device_name(&device))
     }
 }
 
-// ===== 音频设备切换功能 =====
-// 通过 PowerShell + C# 内联代码调用 Windows COM 接口
-// IPolicyConfig::SetDefaultEndpoint 切换默认音频播放设备
-
-/// COM 接口定义（C# 内联，用于 PowerShell 调用）
-const AUDIO_COM_DEFS: &str = r#"
-[ComImport,Guid("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")] public class _PC {}
-[ComImport,Guid("F8679F50-850A-41CF-9C72-430F290290C8"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IPolicyConfig {
-    [PreserveSig] int a();[PreserveSig] int b();[PreserveSig] int c();[PreserveSig] int d();[PreserveSig] int e();[PreserveSig] int f();[PreserveSig] int g();[PreserveSig] int h();[PreserveSig] int i();
-    [PreserveSig] int SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string id, int role);
-    [PreserveSig] int j();
+/// 在独立线程上运行 COM 操作（确保 COM 初始化正确）
+fn run_com_thread<T, F>(f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    let handle = std::thread::spawn(move || -> Result<T, String> {
+        unsafe {
+            let co_hr = CoInitializeEx(None, COINIT_MULTITHREADED);
+            if co_hr.is_err() {
+                return Err(format!("CoInitializeEx failed: {:?}", co_hr));
+            }
+            let result = f();
+            CoUninitialize();
+            result
+        }
+    });
+    handle.join().map_err(|_| "COM thread panicked".to_string())?
 }
-[ComImport,Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] public class _MMDE {}
-[ComImport,Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IMMDeviceEnumerator {
-    int EnumAudioEndpoints(int df, int sm, out IntPtr p);
-    int GetDefaultAudioEndpoint(int df, int r, out IntPtr p);
-}
-[ComImport,Guid("D666063F-1587-4E43-81F1-B948E807363F"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IMMDevice {
-    int a(); int OpenPropertyStore(int s, out IntPtr p);
-    int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
-}
-[ComImport,Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IPropertyStore {
-    int a(); int b(); int GetValue(ref PROPERTYKEY k, out PROPVARIANT v);
-}
-[ComImport,Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-public interface IMMDeviceCollection { int GetCount(out uint c); int Item(uint i, out IntPtr p); }
-[StructLayout(LayoutKind.Sequential)] public struct PROPERTYKEY { public Guid fmtid; public uint pid; }
-[StructLayout(LayoutKind.Explicit)] public struct PROPVARIANT { [FieldOffset(0)] public ushort vt; [FieldOffset(8)] public IntPtr ptrVal; }
-"#;
 
 /// 切换 Windows 默认音频播放设备到 FxSound Audio Enhancer
 /// 返回格式 "PREV:设备名"，包含切换前的默认设备名
+/// 同时将前一个设备名写入临时文件（供 stop_eq_engine 恢复用）
 fn switch_default_audio_to_fxsound() -> Result<String, String> {
-    // C# 代码：GetCur() 获取当前默认设备名，SetDef(name) 按名称匹配并切换
-    let cs_code = r#"
-public static string GetCur() {
-    IMMDeviceEnumerator imm = (IMMDeviceEnumerator)new _MMDE();
-    IntPtr pD; imm.GetDefaultAudioEndpoint(0,0,out pD);
-    IMMDevice dev = (IMMDevice)Marshal.GetObjectForIUnknown(pD);
-    IntPtr pS; dev.OpenPropertyStore(0,out pS);
-    IPropertyStore s = (IPropertyStore)Marshal.GetObjectForIUnknown(pS);
-    PROPERTYKEY k = new PROPERTYKEY();
-    k.fmtid = Guid.Parse("{A45C254E-DF1C-4EFD-8020-67D146A850E0}");
-    k.pid = 14;
-    PROPVARIANT v; s.GetValue(ref k, out v);
-    return Marshal.PtrToStringUni(v.ptrVal) ?? "";
-}
-public static string SetDef(string name) {
-    IMMDeviceEnumerator imm = (IMMDeviceEnumerator)new _MMDE();
-    IntPtr pC; imm.EnumAudioEndpoints(0,1,out pC);
-    IMMDeviceCollection col = (IMMDeviceCollection)Marshal.GetObjectForIUnknown(pC);
-    uint n; col.GetCount(out n);
-    for (uint i=0;i<n;i++) {
-        IntPtr pD; col.Item(i,out pD);
-        IMMDevice dev = (IMMDevice)Marshal.GetObjectForIUnknown(pD);
-        IntPtr pS; dev.OpenPropertyStore(0,out pS);
-        IPropertyStore s = (IPropertyStore)Marshal.GetObjectForIUnknown(pS);
-        PROPERTYKEY k = new PROPERTYKEY();
-        k.fmtid = Guid.Parse("{A45C254E-DF1C-4EFD-8020-67D146A850E0}");
-        k.pid = 14;
-        PROPVARIANT v; s.GetValue(ref k, out v);
-        string nm = Marshal.PtrToStringUni(v.ptrVal) ?? "";
-        if (nm.IndexOf(name,StringComparison.OrdinalIgnoreCase)>=0) {
-            string did; dev.GetId(out did);
-            object cfg = Activator.CreateInstance(Type.GetTypeFromCLSID(Guid.Parse("{870AF99C-171D-4F9E-AF0D-E63DF40C2BC9}")));
-            ((IPolicyConfig)cfg).SetDefaultEndpoint(did,0);
-            return nm;
-        }
-    }
-    return null;
-}
-"#;
+    run_com_thread(|| {
+        let enumerator: wa::IMMDeviceEnumerator = unsafe {
+            CoCreateInstance(&wa::MMDeviceEnumerator, None, CLSCTX_ALL)
+        }.map_err(|e| format!("CoCreateInstance MMDeviceEnumerator failed: {}", e))?;
 
-    // 构建 PowerShell 脚本
-    let ps_script = format!(
-        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\
-        $ErrorActionPreference = 'Stop'\r\
-        $src = @'\r\
-        using System;\r\
-        using System.Runtime.InteropServices;\r\
-        {com_defs}\r\
-        public static class AudioSwitch {{\r\
-        {cs_code}\r\
-        }}\r\
-        '@\r\
-        \r\
-        $type = Add-Type -TypeDefinition $src -PassThru -ErrorAction Stop\r\
-        $prev = [AudioSwitch]::GetCur()\r\
-        $prevFile = Join-Path $env:TEMP 'nexbox_eq_prev_device.txt'\r\
-        [System.IO.File]::WriteAllText($prevFile, $prev, [System.Text.UTF8Encoding]::new($false))\r\
-        $ok = [AudioSwitch]::SetDef('FxSound')\r\
-        Start-Sleep -Milliseconds 300\r\
-        if ($ok) {{ Write-Output \"PREV:$prev\" }} else {{ Write-Output \"NOT_FOUND\" }}\r",
-        com_defs = AUDIO_COM_DEFS,
-        cs_code = cs_code,
-    );
+        // 获取当前默认设备名（保存供恢复用）
+        let prev_name = native_get_default_name(&enumerator).unwrap_or_default();
+        log::info!("[audio_switch] Previous default device: '{}'", prev_name);
 
-    let temp_dir = std::env::temp_dir();
-    let script_path = temp_dir.join("nexbox_audio_switch.ps1");
-    // 写入 UTF-8 with BOM（PowerShell 需要 BOM 才能正确识别 UTF-8）
-    let mut bom = vec![0xEF, 0xBB, 0xBF];
-    bom.extend_from_slice(ps_script.as_bytes());
-    fs::write(&script_path, &bom).map_err(|e| format!("写入脚本失败: {}", e))?;
+        // 查找 FxSound 设备
+        let (fxsound_id, fxsound_name) = native_find_device(&enumerator, "fxsound")
+            .ok_or_else(|| "找不到 FxSound Audio Enhancer 设备，请确认驱动已安装并在声音设置中可见".to_string())?;
+        log::info!("[audio_switch] Found FxSound: '{}' (id={})", fxsound_name, fxsound_id);
 
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(&script_path)
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行失败: {}", e))?;
+        // 切换到 FxSound
+        native_set_default_device(&fxsound_id)?;
+        log::info!("[audio_switch] Switched default device to FxSound");
 
-    let _ = fs::remove_file(&script_path);
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    log::info!("[audio_switch] stdout: {}", stdout);
-    if !stderr.is_empty() {
-        log::warn!("[audio_switch] stderr: {}", stderr);
-    }
+        // 保存前一个设备名到文件（Rust 原生写入，UTF-8 无 BOM）
+        let prev_file = std::env::temp_dir().join("nexbox_eq_prev_device.txt");
+        let _ = fs::write(&prev_file, &prev_name);
 
-    if stdout.starts_with("PREV:") {
-        Ok(stdout)
-    } else {
-        Err(format!(
-            "找不到 FxSound Audio Enhancer 设备，请确认驱动已安装并在声音设置中可见。\nstderr: {}",
-            stderr
-        ))
-    }
+        Ok(format!("PREV:{}", prev_name))
+    })
 }
 
 /// 恢复 Windows 默认音频设备
 fn restore_default_audio_device(device_name: &str) {
-    let escaped = device_name.replace('\'', "''");
-    let cs_code = r#"
-public static string Restore(string name) {
-    IMMDeviceEnumerator imm = (IMMDeviceEnumerator)new _MMDE();
-    IntPtr pC; imm.EnumAudioEndpoints(0,1,out pC);
-    IMMDeviceCollection col = (IMMDeviceCollection)Marshal.GetObjectForIUnknown(pC);
-    uint n; col.GetCount(out n);
-    for (uint i=0;i<n;i++) {
-        IntPtr pD; col.Item(i,out pD);
-        IMMDevice dev = (IMMDevice)Marshal.GetObjectForIUnknown(pD);
-        IntPtr pS; dev.OpenPropertyStore(0,out pS);
-        IPropertyStore s = (IPropertyStore)Marshal.GetObjectForIUnknown(pS);
-        PROPERTYKEY k = new PROPERTYKEY();
-        k.fmtid = Guid.Parse("{A45C254E-DF1C-4EFD-8020-67D146A850E0}");
-        k.pid = 14;
-        PROPVARIANT v; s.GetValue(ref k, out v);
-        string nm = Marshal.PtrToStringUni(v.ptrVal) ?? "";
-        if (nm.IndexOf(name,StringComparison.OrdinalIgnoreCase)>=0) {
-            string did; dev.GetId(out did);
-            object cfg = Activator.CreateInstance(Type.GetTypeFromCLSID(Guid.Parse("{870AF99C-171D-4F9E-AF0D-E63DF40C2BC9}")));
-            ((IPolicyConfig)cfg).SetDefaultEndpoint(did,0);
-            return "OK";
+    let name = device_name.to_string();
+    let result = run_com_thread(move || {
+        let enumerator: wa::IMMDeviceEnumerator = unsafe {
+            CoCreateInstance(&wa::MMDeviceEnumerator, None, CLSCTX_ALL)
+        }.map_err(|e| format!("CoCreateInstance failed: {}", e))?;
+
+        // 按名称查找设备
+        if let Some((device_id, found_name)) = native_find_device(&enumerator, &name) {
+            log::info!("[audio_restore] Found device '{}' (id={}), switching...", found_name, device_id);
+            native_set_default_device(&device_id)?;
+            log::info!("[audio_restore] Restored to: {}", found_name);
+        } else {
+            log::warn!("[audio_restore] Device '{}' not found", name);
         }
-    }
-    return null;
-}
-"#;
+        Ok(())
+    });
 
-    let ps_script = format!(
-        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\
-        $ErrorActionPreference = 'Stop'\r\
-        $src = @'\r\
-        using System;\r\
-        using System.Runtime.InteropServices;\r\
-        {com_defs}\r\
-        public static class AudioRestore {{\r\
-        {cs_code}\r\
-        }}\r\
-        '@\r\
-        Add-Type -TypeDefinition $src -ErrorAction SilentlyContinue | Out-Null\r\
-        if ([AudioRestore]::Restore('{escaped}')) {{ }} else {{ }}\r",
-        com_defs = AUDIO_COM_DEFS,
-        cs_code = cs_code,
-        escaped = escaped,
-    );
-
-    let temp_dir = std::env::temp_dir();
-    let script_path = temp_dir.join("nexbox_audio_restore.ps1");
-    let mut bom = vec![0xEF, 0xBB, 0xBF];
-    bom.extend_from_slice(ps_script.as_bytes());
-    let _ = fs::write(&script_path, &bom);
-
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(&script_path)
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    let _ = fs::remove_file(&script_path);
-    match output {
-        Ok(o) => {
-            let s = String::from_utf8_lossy(&o.stdout);
-            if !s.trim().is_empty() {
-                log::info!("[audio_restore] stdout: {}", s.trim());
-            }
-        }
-        Err(e) => log::warn!("[audio_restore] failed: {}", e),
+    if let Err(e) = result {
+        log::warn!("[audio_restore] Failed: {}", e);
     }
 }
 
 /// 获取当前默认音频输出设备名称
 #[tauri::command]
 pub fn get_default_audio_device() -> Result<String, String> {
-    let cs_code = r#"
-public static string Get() {
-    IMMDeviceEnumerator imm = (IMMDeviceEnumerator)new _MMDE();
-    IntPtr pD; imm.GetDefaultAudioEndpoint(0,0,out pD);
-    IMMDevice dev = (IMMDevice)Marshal.GetObjectForIUnknown(pD);
-    IntPtr pS; dev.OpenPropertyStore(0,out pS);
-    IPropertyStore s = (IPropertyStore)Marshal.GetObjectForIUnknown(pS);
-    PROPERTYKEY k = new PROPERTYKEY();
-    k.fmtid = Guid.Parse("{A45C254E-DF1C-4EFD-8020-67D146A850E0}");
-    k.pid = 14;
-    PROPVARIANT v; s.GetValue(ref k, out v);
-    return Marshal.PtrToStringUni(v.ptrVal) ?? "";
-}
-"#;
+    run_com_thread(|| {
+        let enumerator: wa::IMMDeviceEnumerator = unsafe {
+            CoCreateInstance(&wa::MMDeviceEnumerator, None, CLSCTX_ALL)
+        }.map_err(|e| format!("CoCreateInstance failed: {}", e))?;
 
-    let ps_script = format!(
-        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\
-        $ErrorActionPreference = 'Stop'\r\
-        $src = @'\r\
-        using System;\r\
-        using System.Runtime.InteropServices;\r\
-        {com_defs}\r\
-        public static class AudioQ {{\r\
-        {cs_code}\r\
-        }}\r\
-        '@\r\
-        Add-Type -TypeDefinition $src -ErrorAction Stop | Out-Null\r\
-        Write-Output ([AudioQ]::Get())\r",
-        com_defs = AUDIO_COM_DEFS,
-        cs_code = cs_code,
-    );
-
-    let temp_dir = std::env::temp_dir();
-    let script_path = temp_dir.join("nexbox_audio_query.ps1");
-    let mut bom = vec![0xEF, 0xBB, 0xBF];
-    bom.extend_from_slice(ps_script.as_bytes());
-    fs::write(&script_path, &bom).map_err(|e| format!("{}", e))?;
-
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(&script_path)
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("{}", e))?;
-
-    let _ = fs::remove_file(&script_path);
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        native_get_default_name(&enumerator)
+            .ok_or_else(|| "No default audio device found".to_string())
+    })
 }
 
 /// 停止 EQ 引擎
@@ -879,13 +932,20 @@ pub fn stop_eq_engine() -> Result<(), String> {
 
     // 恢复原始默认音频设备
     let prev_file = std::env::temp_dir().join("nexbox_eq_prev_device.txt");
-    if let Ok(prev_name) = fs::read_to_string(&prev_file) {
-        let prev_name = prev_name.trim().to_string();
-        if !prev_name.is_empty() && !prev_name.to_lowercase().contains("fxsound") {
-            log::info!("[eq] Restoring audio device to: {}", prev_name);
-            restore_default_audio_device(&prev_name);
+    match fs::read_to_string(&prev_file) {
+        Ok(raw) => {
+            let prev_name = raw.trim_start_matches('\u{FEFF}').trim().to_string();
+            if !prev_name.is_empty() && !prev_name.to_lowercase().contains("fxsound") {
+                log::info!("[eq] Restoring audio device to: {}", prev_name);
+                restore_default_audio_device(&prev_name);
+            } else if prev_name.to_lowercase().contains("fxsound") {
+                log::info!("[eq] Previous device was FxSound, skipping restore");
+            }
+            let _ = fs::remove_file(&prev_file);
         }
-        let _ = fs::remove_file(&prev_file);
+        Err(_) => {
+            log::info!("[eq] No previous device file found, skipping restore");
+        }
     }
 
     Ok(())
@@ -925,72 +985,98 @@ pub fn update_eq_bands(bands: Vec<(f64, f64)>) -> Result<(), String> {
     Ok(())
 }
 
-/// 获取所有内置 EQ 预设
+/// 设置总增益 (-12..+12 dB)
+#[tauri::command]
+pub fn update_eq_preamp(gain: f64) -> Result<(), String> {
+    let guard = eq_engine().lock().map_err(|e| format!("锁错误: {}", e))?;
+    if let Some(ref engine) = *guard {
+        engine.set_preamp(gain);
+        log::info!("[eq] Preamp set to {} dB", gain);
+    }
+    Ok(())
+}
+
+/// 获取所有 EQ 预设（内置 + 用户导入）
 #[tauri::command]
 pub fn get_eq_presets(app: AppHandle) -> Result<Vec<EqPreset>, String> {
-    let fxvad_dir = get_fxvad_resource_dir(&app)
-        .ok_or_else(|| "无法找到资源目录".to_string())?;
-
-    let presets_dir = fxvad_dir.join("presets");
-    if !presets_dir.exists() {
-        return Ok(Vec::new());
-    }
-
     let mut presets: Vec<EqPreset> = Vec::new();
 
-    let mut entries: Vec<_> = fs::read_dir(&presets_dir)
-        .map_err(|e| format!("读取预设目录失败: {}", e))?
-        .filter_map(|e| e.ok())
-        .collect();
+    // 1. 加载内置预设
+    if let Some(fxvad_dir) = get_fxvad_resource_dir(&app) {
+        let builtin_dir = fxvad_dir.join("presets");
+        load_presets_from_dir(&builtin_dir, &mut presets);
+    }
 
-    // 按文件名排序
-    entries.sort_by_key(|e| {
+    // 2. 加载用户导入的预设
+    let user_dir = get_user_presets_dir();
+    load_presets_from_dir(&user_dir, &mut presets);
+
+    // 按 ID 排序
+    presets.sort_by_key(|p| p.id.parse::<i32>().unwrap_or(999));
+
+    Ok(presets)
+}
+
+fn load_presets_from_dir(dir: &PathBuf, presets: &mut Vec<EqPreset>) {
+    if !dir.exists() {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    let mut files: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+    files.sort_by_key(|e| {
         e.file_name()
             .to_string_lossy()
             .trim_end_matches(".fac")
             .parse::<i32>()
             .unwrap_or(999)
     });
-
-    for entry in entries {
+    for entry in files {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("fac") {
             continue;
         }
-
         let file_id = path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown")
             .to_string();
-
+        // 跳过已存在的同名 ID（内置优先）
+        if presets.iter().any(|p| p.id == file_id) {
+            continue;
+        }
         if let Ok(content) = fs::read_to_string(&path) {
             if let Some(preset) = parse_fac_file(&content, &file_id) {
                 presets.push(preset);
             }
         }
     }
-
-    Ok(presets)
 }
 
-/// 应用 EQ 预设（更新引擎中的频段参数）
+/// 应用 EQ 预设（更新引擎中的频段参数），搜索内置和用户两个目录
 #[tauri::command]
 pub fn apply_eq_preset(app: AppHandle, preset_id: String) -> Result<(), String> {
-    let fxvad_dir = get_fxvad_resource_dir(&app)
-        .ok_or_else(|| "无法找到资源目录".to_string())?;
+    let mut content: Option<String> = None;
 
-    let preset_file = fxvad_dir.join("presets").join(format!("{}.fac", preset_id));
-    if !preset_file.exists() {
-        return Err(format!("预设 {} 不存在", preset_id));
+    // 先查内置目录
+    if let Some(fxvad_dir) = get_fxvad_resource_dir(&app) {
+        let f = fxvad_dir.join("presets").join(format!("{}.fac", preset_id));
+        if f.exists() {
+            content = Some(fs::read_to_string(&f).map_err(|e| format!("读取预设失败: {}", e))?);
+        }
     }
 
-    let content = fs::read_to_string(&preset_file)
-        .map_err(|e| format!("读取预设失败: {}", e))?;
+    // 再查用户目录
+    if content.is_none() {
+        let f = get_user_presets_dir().join(format!("{}.fac", preset_id));
+        if f.exists() {
+            content = Some(fs::read_to_string(&f).map_err(|e| format!("读取预设失败: {}", e))?);
+        }
+    }
+
+    let content = content.ok_or_else(|| format!("预设 {} 不存在", preset_id))?;
     let preset = parse_fac_file(&content, &preset_id);
 
     if let Some(p) = &preset {
-        // 更新引擎中的频段
         let guard = eq_engine().lock().map_err(|e| format!("锁错误: {}", e))?;
         if let Some(ref engine) = *guard {
             let band_params: Vec<BandParam> = p.bands
@@ -1002,6 +1088,54 @@ pub fn apply_eq_preset(app: AppHandle, preset_id: String) -> Result<(), String> 
         }
     }
 
+    Ok(())
+}
+
+/// 导入 FAC 预设文件，返回解析后的预设（保存到 %LOCALAPPDATA%/NexBox/EQEngine/presets/）
+#[tauri::command]
+pub fn import_eq_preset(app: AppHandle, content: String) -> Result<EqPreset, String> {
+    let presets_dir = get_user_presets_dir();
+
+    // 找到最大 ID + 1，同时扫描内置和用户两个目录，确保 ID 不冲突
+    let mut max_id = 0;
+    let mut scan_ids = |dir: &PathBuf| {
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                if let Some(stem) = entry.path().file_stem() {
+                    if let Some(s) = stem.to_str() {
+                        if let Ok(id) = s.parse::<u32>() {
+                            max_id = max_id.max(id);
+                        }
+                    }
+                }
+            }
+        }
+    };
+    scan_ids(&presets_dir);
+    if let Some(fxvad_dir) = get_fxvad_resource_dir(&app) {
+        scan_ids(&fxvad_dir.join("presets"));
+    }
+    let new_id = (max_id + 1).to_string();
+
+    // 写入 .fac 文件
+    let new_path = presets_dir.join(format!("{}.fac", new_id));
+    fs::write(&new_path, &content)
+        .map_err(|e| format!("写入预设文件失败: {}", e))?;
+
+    // 解析并返回
+    parse_fac_file(&content, &new_id)
+        .ok_or_else(|| "解析预设文件失败".to_string())
+}
+
+/// 删除导入的 FAC 预设文件（从用户目录）
+#[tauri::command]
+pub fn delete_eq_preset(preset_id: String) -> Result<(), String> {
+    let preset_file = get_user_presets_dir().join(format!("{}.fac", preset_id));
+    if preset_file.exists() {
+        fs::remove_file(&preset_file)
+            .map_err(|e| format!("删除预设失败: {}", e))?;
+        log::info!("[eq] Deleted user preset file: {:?}", preset_file);
+    }
     Ok(())
 }
 

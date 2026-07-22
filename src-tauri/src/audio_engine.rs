@@ -15,15 +15,17 @@ use windows::Win32::System::Com::{
     COINIT_MULTITHREADED, CLSCTX_ALL,
 };
 use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, PROPERTYKEY};
-use windows::core::{Interface, GUID, PCWSTR};
+use windows::core::{GUID, PCWSTR};
 
 // ── Constants ──────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 const WAVE_FORMAT_PCM: u16 = 1;
 const WAVE_FORMAT_IEEE_FLOAT: u16 = 3;
 const WAVE_FORMAT_EXTENSIBLE: u16 = 0xFFFE;
 
 /// {00000001-0000-0010-8000-00aa00389b71} = KSDATAFORMAT_SUBTYPE_PCM
+#[allow(dead_code)]
 const KSDATAFORMAT_SUBTYPE_PCM: GUID = GUID::from_values(
     0x00000001, 0x0000, 0x0010,
     [0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71],
@@ -36,7 +38,7 @@ const KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: GUID = GUID::from_values(
 );
 
 /// 10-band EQ standard frequencies
-const EQ_FREQS: [f64; 10] = [32.0, 64.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0];
+const EQ_FREQS: [f64; 10] = [31.0, 62.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0];
 
 // ── Public Types ──────────────────────────────────────────────────────
 
@@ -45,12 +47,31 @@ pub struct EqParams {
     pub bands: Vec<BandParam>,
     pub enabled: bool,
     pub version: u64,
+    pub preamp: f64, // 总增益 -12..+12 dB
 }
 
 #[derive(Debug, Clone)]
 pub struct BandParam {
+    #[allow(dead_code)]
     pub freq: f64,
     pub gain: f64,
+}
+
+/// 音效参数：保真/环境/环绕/动态/低音
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SoundEffectParams {
+    pub clarity: f64,   // 保真 0.0-1.0
+    pub ambience: f64,  // 环境 0.0-1.0
+    pub width: f64,     // 环绕 0.0-1.0
+    pub dynamics: f64,  // 动态 0.0-1.0
+    pub bass: f64,      // 低音 0.0-1.0
+    pub version: u64,
+}
+
+impl Default for SoundEffectParams {
+    fn default() -> Self {
+        Self { clarity: 0.0, ambience: 0.0, width: 0.0, dynamics: 0.0, bass: 0.0, version: 0 }
+    }
 }
 
 impl Default for EqParams {
@@ -59,6 +80,7 @@ impl Default for EqParams {
             bands: EQ_FREQS.iter().map(|&f| BandParam { freq: f, gain: 0.0 }).collect(),
             enabled: true,
             version: 0,
+            preamp: 0.0,
         }
     }
 }
@@ -132,6 +154,35 @@ impl BiquadFilter {
         self.coeffs = BiquadCoeffs { b0: b0/a0, b1: b1/a0, b2: b2/a0, a1: a1/a0, a2: a2/a0 };
     }
 
+    fn set_highpass(&mut self, sample_rate: f64, freq: f64, q: f64) {
+        let w0 = 2.0 * std::f64::consts::PI * freq / sample_rate;
+        let cos_w0 = w0.cos();
+        let sin_w0 = w0.sin();
+        let alpha = sin_w0 / (2.0 * q);
+        let b0 = (1.0 + cos_w0) / 2.0;
+        let b1 = -(1.0 + cos_w0);
+        let b2 = b0;
+        let a0 = 1.0 + alpha;
+        let a1 = -2.0 * cos_w0;
+        let a2 = 1.0 - alpha;
+        self.coeffs = BiquadCoeffs { b0: b0/a0, b1: b1/a0, b2: b2/a0, a1: a1/a0, a2: a2/a0 };
+    }
+
+    fn set_lowpass(&mut self, sample_rate: f64, freq: f64, q: f64) {
+        let w0 = 2.0 * std::f64::consts::PI * freq / sample_rate;
+        let cos_w0 = w0.cos();
+        let sin_w0 = w0.sin();
+        let alpha = sin_w0 / (2.0 * q);
+        let b0 = (1.0 - cos_w0) / 2.0;
+        let b1 = 1.0 - cos_w0;
+        let b2 = b0;
+        let a0 = 1.0 + alpha;
+        let a1 = -2.0 * cos_w0;
+        let a2 = 1.0 - alpha;
+        self.coeffs = BiquadCoeffs { b0: b0/a0, b1: b1/a0, b2: b2/a0, a1: a1/a0, a2: a2/a0 };
+    }
+
+
     #[inline(always)]
     fn process(&mut self, x: f64) -> f64 {
         let c = &self.coeffs;
@@ -153,32 +204,34 @@ struct EqChain {
 
 impl EqChain {
     fn new(sample_rate: f64, num_channels: usize) -> Self {
-        let filters = (0..(10 * num_channels)).map(|_| BiquadFilter::new()).collect();
+        let filters = (0..(EQ_FREQS.len() * num_channels)).map(|_| BiquadFilter::new()).collect();
         Self { filters, sample_rate }
     }
 
     fn update(&mut self, bands: &[BandParam], num_channels: usize) {
         let q = 1.41;
+        let num_bands = EQ_FREQS.len();
         for ch in 0..num_channels {
             for (i, &freq) in EQ_FREQS.iter().enumerate() {
-                let idx = ch * 10 + i;
+                let idx = ch * num_bands + i;
                 if idx >= self.filters.len() { break; }
                 let gain = bands.get(i).map(|b| b.gain).unwrap_or(0.0);
                 if i == 0 { self.filters[idx].set_low_shelf(self.sample_rate, freq, gain, q); }
-                else if i == 9 { self.filters[idx].set_high_shelf(self.sample_rate, freq, gain, q); }
+                else if i == num_bands - 1 { self.filters[idx].set_high_shelf(self.sample_rate, freq, gain, q); }
                 else { self.filters[idx].set_peaking(self.sample_rate, freq, gain, q); }
             }
         }
     }
 
     fn process_interleaved(&mut self, samples: &mut [f64], num_channels: usize) {
+        let num_bands = EQ_FREQS.len();
         let num_frames = samples.len() / num_channels;
         for frame in 0..num_frames {
             for ch in 0..num_channels {
                 let idx = frame * num_channels + ch;
                 let mut s = samples[idx];
-                for band in 0..10 {
-                    let fidx = ch * 10 + band;
+                for band in 0..num_bands {
+                    let fidx = ch * num_bands + band;
                     if fidx < self.filters.len() { s = self.filters[fidx].process(s); }
                 }
                 samples[idx] = s;
@@ -314,7 +367,7 @@ const PKEY_DEVICE_FRIENDLY_NAME: PROPERTYKEY = PROPERTYKEY {
 };
 
 /// Get device ID string
-fn get_device_id(device: &wa::IMMDevice) -> Result<String, String> {
+pub(crate) fn get_device_id(device: &wa::IMMDevice) -> Result<String, String> {
     let pwstr = unsafe { device.GetId() }.map_err(|e| format!("GetId failed: {}", e))?;
     let id = unsafe { PCWSTR(pwstr.as_ptr()).to_string() }.map_err(|e| format!("to_string failed: {}", e))?;
     unsafe { CoTaskMemFree(Some(pwstr.as_ptr() as *const _)) };
@@ -322,7 +375,7 @@ fn get_device_id(device: &wa::IMMDevice) -> Result<String, String> {
 }
 
 /// Get device friendly name via IPropertyStore
-fn get_device_name(device: &wa::IMMDevice) -> String {
+pub(crate) fn get_device_name(device: &wa::IMMDevice) -> String {
     unsafe {
         let store: IPropertyStore = match device.OpenPropertyStore(windows::Win32::System::Com::STGM(0)) {
             Ok(s) => s,
@@ -598,6 +651,7 @@ fn audio_thread(
     physical_device_name: String,
     params: Arc<RwLock<EqParams>>,
     stop_flag: Arc<AtomicBool>,
+    effects: Arc<std::sync::Mutex<Option<SoundEffects>>>,
 ) {
     info!("[audio_engine] Thread starting");
 
@@ -659,11 +713,17 @@ fn audio_thread(
     let mut eq_chain = EqChain::new(capture_fmt.sample_rate as f64, channels);
     let mut last_version = u64::MAX;
 
+    // 初始化音效处理器
+    {
+        let mut fx = effects.lock().unwrap();
+        *fx = Some(SoundEffects::new(capture_fmt.sample_rate as f64));
+    }
+
     // Pre-fill render buffer with silence before starting to prevent initial underrun
     let render_bpf = render_fmt.block_align as usize;
     let pre_fill_frames = render_buf_size;
     let pre_fill_bytes = pre_fill_frames as usize * render_bpf;
-    if let Ok(render_ptr) = (unsafe { render_client.GetBuffer(pre_fill_frames) }) {
+    if let Ok(render_ptr) = unsafe { render_client.GetBuffer(pre_fill_frames) } {
         unsafe { std::ptr::write_bytes(render_ptr, 0, pre_fill_bytes); }
         let _ = unsafe { render_client.ReleaseBuffer(pre_fill_frames, 0) };
         info!("[audio_engine] Pre-filled render buffer with {} frames of silence", pre_fill_frames);
@@ -812,6 +872,34 @@ fn audio_thread(
             let p = params.read().unwrap();
             if p.enabled {
                 eq_chain.process_interleaved(&mut process_buf, channels);
+                // 总增益 (-12..+12 dB)
+                if p.preamp.abs() > 0.01 {
+                    let gain = 10.0_f64.powf(p.preamp / 20.0);
+                    for s in &mut process_buf { *s *= gain; }
+                }
+            }
+        }
+
+        // Apply Sound Effects
+        let fx = crate::audio_eq::fx_params().lock().unwrap().clone();
+        if fx.clarity > 0.001 || fx.ambience > 0.001 || fx.width > 0.001 || fx.dynamics > 0.001 || fx.bass > 0.001 {
+            let mut fx_guard = effects.lock().unwrap();
+            let fx_proc = fx_guard.as_mut().unwrap();
+            if channels >= 2 {
+                // 立体声
+                let frame_count = process_buf.len() / channels;
+                for f in 0..frame_count {
+                    let l = process_buf[f * channels];
+                    let r = process_buf[f * channels + 1];
+                    let (pl, pr) = fx_proc.process_stereo(l, r, &fx);
+                    process_buf[f * channels] = pl;
+                    process_buf[f * channels + 1] = pr;
+                }
+            } else {
+                // 单声道
+                for s in &mut process_buf {
+                    *s = fx_proc.process(*s, &fx);
+                }
             }
         }
 
@@ -876,12 +964,149 @@ fn audio_thread(
     unsafe { CoUninitialize(); }
 }
 
+// ── 音效 DSP 处理器 ──────────────────────────────────────────────────
+
+pub struct SoundEffects {
+    // 保真：高频谐波激励器
+    clarity_hp: BiquadFilter,
+    // 环境：简易混响
+    reverb_buf_l: Vec<f64>,
+    reverb_buf_r: Vec<f64>,
+    reverb_idx: usize,
+    // 动态：RMS 压缩器
+    comp_rms: f64,
+    // 低音：低频谐波增强
+    bass_lp: BiquadFilter,
+}
+
+impl SoundEffects {
+    pub fn new(sample_rate: f64) -> Self {
+        let mut clarity_hp = BiquadFilter::new();
+        clarity_hp.set_highpass(sample_rate, 3000.0, 0.71);
+        let mut bass_lp = BiquadFilter::new();
+        bass_lp.set_lowpass(sample_rate, 120.0, 0.71);
+        let reverb_len = (sample_rate * 0.6) as usize; // 600ms reverb buffer
+        Self {
+            clarity_hp,
+            reverb_buf_l: vec![0.0; reverb_len],
+            reverb_buf_r: vec![0.0; reverb_len],
+            reverb_idx: 0,
+            comp_rms: 0.0,
+            bass_lp,
+        }
+    }
+
+    /// 保真：高频谐波激励器
+    fn process_clarity(&mut self, sample: f64, amount: f64) -> f64 {
+        if amount < 0.001 { return sample; }
+        let high = self.clarity_hp.process(sample);
+        let saturated = (high * 3.0).tanh() * 0.6;
+        sample + saturated * amount
+    }
+
+    /// 环境：简易 comb+allpass 混响
+    fn process_reverb(&mut self, sample: f64, amount: f64) -> f64 {
+        if amount < 0.001 { return sample; }
+        let len = self.reverb_buf_l.len();
+        // 读取多个反馈点
+        let d1 = self.reverb_buf_l[(self.reverb_idx + len - 97) % len];
+        let d2 = self.reverb_buf_l[(self.reverb_idx + len - 163) % len];
+        let d3 = self.reverb_buf_l[(self.reverb_idx + len - 229) % len];
+        let d4 = self.reverb_buf_l[(self.reverb_idx + len - 307) % len];
+        let rev = (d1 + d2 + d3 + d4) * 0.25;
+        let wet = sample * 0.7 + rev * 0.5;
+        self.reverb_buf_l[self.reverb_idx] = wet;
+        sample + rev * amount * 0.6
+    }
+
+    fn process_reverb_stereo(&mut self, l: f64, r: f64, amount: f64) -> (f64, f64) {
+        if amount < 0.001 { return (l, r); }
+        let len = self.reverb_buf_l.len();
+        let dl1 = self.reverb_buf_l[(self.reverb_idx + len - 97) % len];
+        let dl2 = self.reverb_buf_l[(self.reverb_idx + len - 163) % len];
+        let dr1 = self.reverb_buf_r[(self.reverb_idx + len - 113) % len];
+        let dr2 = self.reverb_buf_r[(self.reverb_idx + len - 181) % len];
+        let rev_l = (dl1 + dl2 + dr1) * 0.22;
+        let rev_r = (dr1 + dr2 + dl1) * 0.22;
+        self.reverb_buf_l[self.reverb_idx] = l * 0.7 + rev_l * 0.5;
+        self.reverb_buf_r[self.reverb_idx] = r * 0.7 + rev_r * 0.5;
+        self.reverb_idx = (self.reverb_idx + 1) % len;
+        (l + rev_l * amount * 0.6, r + rev_r * amount * 0.6)
+    }
+
+    /// 环绕：M/S 立体声展宽
+    fn process_width(&self, l: f64, r: f64, amount: f64) -> (f64, f64) {
+        if amount < 0.001 { return (l, r); }
+        let mid = (l + r) * 0.5;
+        let side = (l - r) * 0.5;
+        let side_boost = side * (1.0 + amount * 3.0);
+        (mid + side_boost, mid - side_boost)
+    }
+
+    /// 动态：简易 RMS 压缩器
+    fn process_compressor(&mut self, sample: f64, amount: f64) -> f64 {
+        if amount < 0.001 { return sample; }
+        let abs = sample.abs();
+        let attack = 0.005;  // 快启动
+        let release = 0.2;   // 慢释放
+        let coeff = if abs > self.comp_rms { attack } else { release };
+        self.comp_rms += (abs - self.comp_rms) * coeff;
+        let threshold = 0.3 * (1.0 - amount * 0.6);
+        let ratio = 3.0 + amount * 6.0;
+        let mut gain: f64;
+        if self.comp_rms > threshold {
+            let over = self.comp_rms - threshold;
+            gain = threshold + over / ratio;
+            if self.comp_rms > 0.0 { gain /= self.comp_rms; }
+        } else {
+            gain = 1.0;
+        }
+        let makeup = 1.0 + amount * 1.5;
+        sample * gain * makeup
+    }
+
+    /// 低音：低频谐波增强
+    fn process_bass(&mut self, sample: f64, amount: f64) -> f64 {
+        if amount < 0.001 { return sample; }
+        let low = self.bass_lp.process(sample);
+        // 半波整流产生偶次谐波
+        let harmonic = low.max(0.0) * 2.0 - low;
+        sample + harmonic * amount * 0.8
+    }
+
+    /// 单声道处理全部效果
+    pub fn process(&mut self, sample: f64, params: &SoundEffectParams) -> f64 {
+        let mut s = sample;
+        s = self.process_bass(s, params.bass);
+        s = self.process_clarity(s, params.clarity);
+        s = self.process_compressor(s, params.dynamics);
+        s = self.process_reverb(s, params.ambience);
+        s = s.clamp(-4.0, 4.0);
+        s
+    }
+
+    /// 立体声处理（环绕需要立体声）
+    pub fn process_stereo(&mut self, l: f64, r: f64, params: &SoundEffectParams) -> (f64, f64) {
+        let mut sl = self.process_bass(l, params.bass);
+        let mut sr = self.process_bass(r, params.bass);
+        sl = self.process_clarity(sl, params.clarity);
+        sr = self.process_clarity(sr, params.clarity);
+        sl = self.process_compressor(sl, params.dynamics);
+        sr = self.process_compressor(sr, params.dynamics);
+        (sl, sr) = self.process_width(sl, sr, params.width);
+        (sl, sr) = self.process_reverb_stereo(sl, sr, params.ambience);
+        (sl.clamp(-4.0, 4.0), sr.clamp(-4.0, 4.0))
+    }
+}
+
 // ── AudioEngine (public API) ──────────────────────────────────────────
+
 
 pub struct AudioEngine {
     stop_flag: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     params: Arc<RwLock<EqParams>>,
+    effects: Arc<std::sync::Mutex<Option<SoundEffects>>>,
 }
 
 impl AudioEngine {
@@ -891,14 +1116,16 @@ impl AudioEngine {
         let p_clone = params.clone();
         let sf_clone = stop_flag.clone();
         let dev_name = physical_device_name;
+        let fx = Arc::new(std::sync::Mutex::new(None));
+        let fx_clone = fx.clone();
 
         let thread = thread::Builder::new()
             .name("eq-audio-engine".to_string())
-            .spawn(move || { audio_thread(dev_name, p_clone, sf_clone); })
+            .spawn(move || { audio_thread(dev_name, p_clone, sf_clone, fx_clone); })
             .map_err(|e| format!("Failed to spawn audio thread: {}", e))?;
 
         thread::sleep(Duration::from_millis(100));
-        Ok(Self { stop_flag, thread: Some(thread), params })
+        Ok(Self { stop_flag, thread: Some(thread), params, effects: fx })
     }
 
     pub fn stop(&mut self) {
@@ -924,6 +1151,14 @@ impl AudioEngine {
         }
     }
 
+    pub fn set_preamp(&self, gain: f64) {
+        if let Ok(mut p) = self.params.write() {
+            p.preamp = gain;
+            p.version = p.version.wrapping_add(1);
+        }
+    }
+
+    #[allow(dead_code)]
     pub fn set_enabled(&self, enabled: bool) {
         if let Ok(mut p) = self.params.write() {
             p.enabled = enabled;

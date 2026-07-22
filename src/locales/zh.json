@@ -1304,7 +1304,22 @@
     "enableError": "恢复失败",
     "checking": "正在检查状态...",
     "warningTitle": "⚠️ 请注意",
-    "warningDesc": "关闭 Windows 更新后将不再接收安全补丁和功能更新。建议定期手动检查更新，或在需要时再开启。"
+    "warningDesc": "关闭 Windows 更新后将不再接收安全补丁和功能更新。建议定期手动检查更新，或在需要时再开启。",
+    "pauseCard": {
+      "title": "暂停 Windows 更新（1000 周）",
+      "desc": "将 Windows 更新暂停约 1000 周（约 19 年），写入注册表后需手动到 Windows 更新设置中修改暂停时间。",
+      "checking": "正在检查暂停状态...",
+      "paused": "已暂停",
+      "notPaused": "未暂停",
+      "applyBtn": "暂停更新 1000 周",
+      "restoreBtn": "恢复更新",
+      "applySuccess": "已成功写入暂停更新注册表",
+      "restoreSuccess": "已成功恢复更新注册表",
+      "applyError": "写入暂停更新失败",
+      "restoreError": "恢复更新失败",
+      "manualHintTitle": "💡 重要提示",
+      "manualHint": "写入成功后，请打开「设置 → Windows 更新 → 暂停更新」手动调整暂停周数为最大值，否则注册表时间无法生效。"
+    }
   },
   "gpuDriverRestart": {
     "pageTitle": "重启显卡驱动",
@@ -1658,10 +1673,20 @@
     "reset": "重置",
     "presetApplied": "预设已应用",
     "usageGuide": "使用指南",
-    "step1": "点击“安装声卡”按钮安装 FxSound 虚拟音频驱动（需要管理员权限）",
-    "step2": "安装成功后，点击“启动引擎”按钮启动 EQ 音频处理引擎",
+    "step1": "点击\u201C安装声卡\u201D按钮安装 FxSound 虚拟音频驱动（需要管理员权限）",
+    "step2": "安装成功后，点击\u201C启动引擎\u201D按钮启动 EQ 音频处理引擎",
     "step3": "选择预设或拖动频段滑块调整 EQ 参数，频率响应曲线将实时更新",
-    "step4": "使用完毕后，点击“停止引擎”关闭音频处理，可随时卸载声卡驱动"
+    "step4": "使用完毕后，点击\u201C停止引擎\u201D关闭音频处理，可随时卸载声卡驱动",
+    "import": "导入",
+    "importDesc": "导入 .fac 预设文件，将显示在导入列表中。",
+    "chooseFacFile": "选择 .fac 文件",
+    "importSuccess": "导入成功",
+    "importFailed": "导入失败",
+    "deletePreset": "删除",
+    "deleteSuccess": "已删除",
+    "deleteFailed": "删除失败",
+    "deleteConfirm": "确定要删除预设「{name}」吗？",
+    "noImported": "暂无导入的预设"
   }
 }
 

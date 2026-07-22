@@ -1402,7 +1402,22 @@
     "enableError": "Restore failed",
     "checking": "Checking status...",
     "warningTitle": "\u26a0\ufe0f Warning",
-    "warningDesc": "After disabling Windows Update, you will no longer receive security patches and feature updates. It is recommended to manually check for updates periodically or re-enable when needed."
+    "warningDesc": "After disabling Windows Update, you will no longer receive security patches and feature updates. It is recommended to manually check for updates periodically or re-enable when needed.",
+    "pauseCard": {
+      "title": "Pause Windows Update (1000 Weeks)",
+      "desc": "Pause Windows Update for about 1000 weeks (~19 years). After writing to the registry, you need to manually adjust the pause duration in Windows Update settings.",
+      "checking": "Checking pause status...",
+      "paused": "Paused",
+      "notPaused": "Not Paused",
+      "applyBtn": "Pause Updates for 1000 Weeks",
+      "restoreBtn": "Restore Updates",
+      "applySuccess": "Successfully wrote pause update registry",
+      "restoreSuccess": "Successfully restored update registry",
+      "applyError": "Failed to write pause update",
+      "restoreError": "Failed to restore update",
+      "manualHintTitle": "💡 Important Note",
+      "manualHint": "After writing successfully, open Settings → Windows Update → Pause Updates and manually adjust the pause duration to the maximum value, otherwise the registry time will not take effect."
+    }
   },
   "gpuDriverRestart": {
     "pageTitle": "Restart Graphics Driver",
@@ -1608,7 +1623,17 @@
     "step1": "Click \"Install Driver\" to install the FxSound virtual audio driver (requires admin privileges)",
     "step2": "After installation, click \"Start Engine\" to launch the EQ audio processing engine",
     "step3": "Select a preset or drag the band sliders to adjust EQ parameters. The frequency response curve updates in real-time.",
-    "step4": "When done, click \"Stop Engine\" to stop audio processing. You can uninstall the driver at any time."
+    "step4": "When done, click \"Stop Engine\" to stop audio processing. You can uninstall the driver at any time.",
+    "import": "Import",
+    "importDesc": "Import a .fac preset file. It will appear in the import list.",
+    "chooseFacFile": "Choose .fac file",
+    "importSuccess": "Import successful",
+    "importFailed": "Import failed",
+    "deletePreset": "Delete",
+    "deleteSuccess": "Deleted",
+    "deleteFailed": "Delete failed",
+    "deleteConfirm": "Are you sure you want to delete \"{name}\"?",
+    "noImported": "No imported presets"
   }
 }
 

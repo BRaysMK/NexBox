@@ -1,6 +1,6 @@
 CLASS1 : Effect Type
 9: Version
-General
+脚步增强
 0: Double Params Flag
 1: Total number of elements
 50: Main 0
@@ -30,32 +30,32 @@ General
 10: Number of EQ Bands
 1: On/Off Flag
 Band 1
-   62.5: CF
-   0: Boost/Cut
+   31: CF
+   -4: Boost/Cut
 Band 2
-   115: CF
-   0: Boost/Cut
+   62: CF
+   -4: Boost/Cut
 Band 3
-   250: CF
-   1: Boost/Cut
-Band 4
-   450: CF
-   2: Boost/Cut
-Band 5
-   630: CF
-   0: Boost/Cut
-Band 6
-   1250: CF
-   -1: Boost/Cut
-Band 7
-   2700: CF
-   0: Boost/Cut
-Band 8
-   5300: CF
-   -1: Boost/Cut
-Band 9
-   7500: CF
+   125: CF
    -2: Boost/Cut
+Band 4
+   250: CF
+   0: Boost/Cut
+Band 5
+   500: CF
+   1: Boost/Cut
+Band 6
+   1000: CF
+   4: Boost/Cut
+Band 7
+   2000: CF
+   6: Boost/Cut
+Band 8
+   4000: CF
+   5: Boost/Cut
+Band 9
+   8000: CF
+   2: Boost/Cut
 Band 10
-   13000: CF
+   16000: CF
    0: Boost/Cut
