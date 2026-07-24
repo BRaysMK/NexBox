@@ -1,0 +1,136 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "NexBox",
+  "version": "5.9.8",
+  "identifier": "NexBox",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://127.0.0.1:3000",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "NexBox",
+        "width": 1230,
+        "height": 771,
+        "minWidth": 1230,
+        "minHeight": 771,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "devtools": true
+      },
+      {
+        "title": "NexBox Widget",
+        "width": 260,
+        "height": 42,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "widget",
+        "url": "/widget"
+      },
+      {
+        "title": "NexBox Tray Menu",
+        "width": 190,
+        "height": 140,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "tray-menu",
+        "url": "/tray-menu"
+      },
+      {
+        "title": "NexBox Desktop Lyrics",
+        "width": 800,
+        "height": 200,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "desktop-lyrics",
+        "url": "/desktop-lyrics"
+      },
+      {
+        "title": "NexBox Vertical Overlay",
+        "width": 220,
+        "height": 400,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "vertical-overlay",
+        "url": "/vertical-overlay"
+      },
+      {
+        "title": "Lyrics Unlock",
+        "width": 48,
+        "height": 48,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "maximized": false,
+        "maximizable": false,
+        "skipTaskbar": true,
+        "shadow": false,
+        "label": "lyrics-unlock-btn",
+        "url": "/lyrics-unlock-btn"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "resources": [
+      "../nvidiaProfileInspector.exe",
+      "../nvidiaProfileInspector.exe.config",
+      "../Reference.xml",
+      "../power-plans/*",
+      "../monitor/bin/Release/net48/*",
+      "../aq_registry/*",
+      "../aq_registry_restore/*",
+      "resources/binaries/fxvad/*",
+      "resources/binaries/fxvad/presets/*",
+      "resources/binaries/PresentMon-2.5.1-x64.exe"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

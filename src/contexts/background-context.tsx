@@ -1,0 +1,387 @@
+"use client";
+
+import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback, useMemo } from "react";
+import { store } from "@/lib/store";
+
+type BackgroundMode = "none" | "preset" | "image" | "dynamic";
+
+interface PresetBackground {
+  id: number;
+  name: string;
+  path: string;
+}
+
+const PRESET_BACKGROUNDS: PresetBackground[] = [
+  { id: 1, name: "预设1", path: "/backgrounds/preset1.jpg" },
+  { id: 2, name: "预设2", path: "/backgrounds/preset2.jpg" },
+  { id: 3, name: "预设3", path: "/backgrounds/preset3.png" },
+  { id: 4, name: "预设4", path: "/backgrounds/preset4.png" },
+];
+
+type LiquidGlassMode = "normal" | "real";
+
+interface BackgroundContextType {
+  backgroundMode: BackgroundMode;
+  customBgImages: string[];
+  activeBgIndex: number;
+  dynamicBgVideo: string | null;
+  liquidGlassEnabled: boolean;
+  liquidGlassBlur: number;
+  liquidGlassMode: LiquidGlassMode;
+  backgroundBlur: number;
+  activePresetIndex: number;
+  presetBackgrounds: PresetBackground[];
+  carouselEnabled: boolean;
+  jellyBounceEnabled: boolean;
+  setBackgroundMode: (mode: BackgroundMode) => void;
+  setCustomBgImages: (images: string[]) => void;
+  addCustomBgImage: (image: string) => boolean;
+  removeCustomBgImage: (index: number) => void;
+  setActiveBgIndex: (index: number) => void;
+  setDynamicBgVideo: (video: string | null) => void;
+  setLiquidGlassEnabled: (enabled: boolean) => void;
+  setLiquidGlassBlur: (blur: number) => void;
+  setLiquidGlassMode: (mode: LiquidGlassMode) => void;
+  setBackgroundBlur: (blur: number) => void;
+  setActivePresetIndex: (index: number) => void;
+  setCarouselEnabled: (enabled: boolean) => void;
+  setJellyBounceEnabled: (enabled: boolean) => void;
+}
+
+const BackgroundContext = createContext<BackgroundContextType>({
+  backgroundMode: "none",
+  customBgImages: [],
+  activeBgIndex: 0,
+  dynamicBgVideo: null,
+  liquidGlassEnabled: false,
+  liquidGlassBlur: 1,
+  liquidGlassMode: "normal",
+  backgroundBlur: 0,
+  activePresetIndex: 0,
+  presetBackgrounds: PRESET_BACKGROUNDS,
+  carouselEnabled: false,
+  jellyBounceEnabled: false,
+  setBackgroundMode: () => {},
+  setCustomBgImages: () => {},
+  addCustomBgImage: () => false,
+  removeCustomBgImage: () => {},
+  setActiveBgIndex: () => {},
+  setDynamicBgVideo: () => {},
+  setLiquidGlassEnabled: () => {},
+  setLiquidGlassBlur: () => {},
+  setLiquidGlassMode: () => {},
+  setBackgroundBlur: () => {},
+  setActivePresetIndex: () => {},
+  setCarouselEnabled: () => {},
+  setJellyBounceEnabled: () => {},
+});
+
+export function useBackground() {
+  return useContext(BackgroundContext);
+}
+
+
+const MAX_BG_IMAGES = 3;
+
+export function BackgroundProvider({ children }: { children: ReactNode }) {
+  const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("none");
+  const [customBgImages, setCustomBgImages] = useState<string[]>([]);
+  const [activeBgIndex, setActiveBgIndex] = useState(0);
+  const [dynamicBgVideo, setDynamicBgVideo] = useState<string | null>(null);
+  const [liquidGlassEnabled, setLiquidGlassEnabled] = useState(false);
+  const [liquidGlassBlur, setLiquidGlassBlur] = useState(1);
+  const [liquidGlassMode, setLiquidGlassMode] = useState<LiquidGlassMode>("normal");
+  const [backgroundBlur, setBackgroundBlur] = useState(0);
+  const [activePresetIndex, setActivePresetIndex] = useState(0);
+  const [carouselEnabled, setCarouselEnabled] = useState(false);
+  const [jellyBounceEnabled, setJellyBounceEnabled] = useState(false);
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        // 批量读取所有设置，减少 store IO 调用次数
+        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedLiquidGlassMode, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, hasLaunched] =
+          await Promise.all([
+            store.get<string>("background-mode"),
+            store.get<string[]>("custom-bg-images"),
+            store.get<number>("active-bg-index"),
+            store.get<string>("dynamic-bg-video"),
+            store.get<boolean>("liquid-glass-enabled"),
+            store.get<number>("liquid-glass-blur"),
+            store.get<string>("liquid-glass-mode"),
+            store.get<number>("background-blur"),
+            store.get<number>("active-preset-index"),
+            store.get<boolean>("carousel-enabled"),
+            store.get<boolean>("jelly-bounce-enabled"),
+            store.get<boolean>("has-launched"),
+          ]);
+
+        // 兼容旧版 liquid-glass-enhanced 设置
+        const savedLiquidGlassEnhanced = await store.get<boolean>("liquid-glass-enhanced");
+        if (savedLiquidGlassEnhanced === true && !savedLiquidGlassMode) {
+          setLiquidGlassMode("real");
+          persist("liquid-glass-mode", "real");
+          persistDelete("liquid-glass-enhanced");
+        }
+
+        // 检测是否首次启动
+        if (!hasLaunched) {
+          // 首次启动默认启用预设背景和自动轮播，并直接持久化
+          const defaultMode: BackgroundMode = "preset";
+          const defaultPresetIndex = 0;
+          const defaultCarousel = true;
+          setBackgroundMode(defaultMode);
+          setActivePresetIndex(defaultPresetIndex);
+          setCarouselEnabled(defaultCarousel);
+          await store.set("background-mode", defaultMode);
+          await store.set("active-preset-index", defaultPresetIndex);
+          await store.set("carousel-enabled", defaultCarousel);
+          await store.set("has-launched", true);
+          await store.save();
+        } else {
+          // 非首次启动，加载保存的设置
+          if (savedMode && ["none", "preset", "image", "dynamic"].includes(savedMode)) {
+            setBackgroundMode(savedMode as BackgroundMode);
+          }
+          if (savedActivePreset !== null && savedActivePreset !== undefined) {
+            setActivePresetIndex(savedActivePreset);
+          }
+          if (savedCarousel !== null && savedCarousel !== undefined) {
+            setCarouselEnabled(savedCarousel);
+          }
+        }
+
+        if (savedImages && Array.isArray(savedImages)) {
+          setCustomBgImages(savedImages);
+        }
+        if (savedActiveIndex !== null && savedActiveIndex !== undefined) {
+          setActiveBgIndex(savedActiveIndex);
+        }
+        if (savedDynamicVideo) {
+          setDynamicBgVideo(savedDynamicVideo);
+        }
+        if (savedLiquidGlass !== null && savedLiquidGlass !== undefined) {
+          setLiquidGlassEnabled(savedLiquidGlass);
+        }
+        if (savedLiquidGlassBlur !== null && savedLiquidGlassBlur !== undefined) {
+          setLiquidGlassBlur(savedLiquidGlassBlur);
+        }
+        if (savedLiquidGlassMode === "normal" || savedLiquidGlassMode === "real") {
+          setLiquidGlassMode(savedLiquidGlassMode);
+        }
+        if (savedBgBlur !== null && savedBgBlur !== undefined) {
+          setBackgroundBlur(savedBgBlur);
+        }
+        if (savedJellyBounce !== null && savedJellyBounce !== undefined) {
+          setJellyBounceEnabled(savedJellyBounce);
+        }
+      } catch (error) {
+        console.error("Failed to load background settings:", error);
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  // ─── 显式持久化 helper ───────────────────────────────────────────────
+  // 和"能保存的"项使用完全相同的方式：store.set / store.delete + store.save。
+  // 不再依赖 useEffect 批量保存，彻底消除闭包过期 / 竞态导致丢值的问题。
+  //
+  // 优化：按 key 合并 + 短延迟批量 flush。
+  //   - 同一个 key 在 250ms 内连续修改只保留最新值（滑块拖动不会积压上百次 IPC）。
+  //   - 多个不同 key 的修改会合并到同一次 store.save() 写盘。
+  //   - flush 用串行链保证不会并发写盘互相覆盖。
+  const pendingValuesRef = useRef<Record<string, unknown>>({});
+  const pendingDeleteKeysRef = useRef<Set<string>>(new Set());
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushChainRef = useRef<Promise<void>>(Promise.resolve());
+
+  const flush = useCallback(() => {
+    const values = pendingValuesRef.current;
+    const deletes = pendingDeleteKeysRef.current;
+    pendingValuesRef.current = {};
+    pendingDeleteKeysRef.current = new Set();
+    flushChainRef.current = flushChainRef.current.then(async () => {
+      try {
+        for (const [key, value] of Object.entries(values)) {
+          await store.set(key, value);
+        }
+        for (const key of deletes) {
+          await store.delete(key);
+        }
+        await store.save();
+      } catch (e) {
+        console.error("[Persist] flush failed:", e);
+      }
+    });
+  }, []);
+
+  const scheduleFlush = useCallback(() => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(() => {
+      flushTimerRef.current = null;
+      flush();
+    }, 250);
+  }, [flush]);
+
+  const persist = useCallback((key: string, value: unknown) => {
+    pendingValuesRef.current[key] = value;
+    pendingDeleteKeysRef.current.delete(key);
+    scheduleFlush();
+  }, [scheduleFlush]);
+
+  const persistDelete = useCallback((key: string) => {
+    pendingDeleteKeysRef.current.add(key);
+    delete pendingValuesRef.current[key];
+    scheduleFlush();
+  }, [scheduleFlush]);
+
+  // ─── 对外暴露的 setter：更新 state + 立即持久化 ──────────────────────
+  const setBackgroundModePersist = useCallback((mode: BackgroundMode) => {
+    setBackgroundMode(mode);
+    persist("background-mode", mode);
+  }, [persist]);
+
+  const setCustomBgImagesPersist = useCallback((images: string[]) => {
+    setCustomBgImages(images);
+    if (images.length > 0) {
+      persist("custom-bg-images", images);
+    } else {
+      persistDelete("custom-bg-images");
+    }
+  }, [persist, persistDelete]);
+
+  const setActiveBgIndexPersist = useCallback((index: number) => {
+    setActiveBgIndex(index);
+    persist("active-bg-index", index);
+  }, [persist]);
+
+  const setDynamicBgVideoPersist = useCallback((video: string | null) => {
+    setDynamicBgVideo(video);
+    if (video) {
+      persist("dynamic-bg-video", video);
+    } else {
+      persistDelete("dynamic-bg-video");
+    }
+  }, [persist, persistDelete]);
+
+  const setLiquidGlassEnabledPersist = useCallback((enabled: boolean) => {
+    setLiquidGlassEnabled(enabled);
+    persist("liquid-glass-enabled", enabled);
+  }, [persist]);
+
+  const setLiquidGlassBlurPersist = useCallback((blur: number) => {
+    setLiquidGlassBlur(blur);
+    persist("liquid-glass-blur", blur);
+  }, [persist]);
+
+  const setLiquidGlassModePersist = useCallback((mode: LiquidGlassMode) => {
+    setLiquidGlassMode(mode);
+    persist("liquid-glass-mode", mode);
+  }, [persist]);
+
+  const setBackgroundBlurPersist = useCallback((blur: number) => {
+    setBackgroundBlur(blur);
+    persist("background-blur", blur);
+  }, [persist]);
+
+  const setActivePresetIndexPersist = useCallback((index: number) => {
+    setActivePresetIndex(index);
+    persist("active-preset-index", index);
+  }, [persist]);
+
+  const setCarouselEnabledPersist = useCallback((enabled: boolean) => {
+    setCarouselEnabled(enabled);
+    persist("carousel-enabled", enabled);
+  }, [persist]);
+
+  const setJellyBounceEnabledPersist = useCallback((enabled: boolean) => {
+    setJellyBounceEnabled(enabled);
+    persist("jelly-bounce-enabled", enabled);
+  }, [persist]);
+
+  // 预设壁纸轮播定时器
+  // 轮播是临时展示，用内部 setActivePresetIndex（不持久化），
+  // 避免每 10 秒写一次磁盘；用户手动切换预设时才走 setActivePresetIndexPersist 持久化。
+  const carouselTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (backgroundMode === "preset" && carouselEnabled) {
+      carouselTimerRef.current = setInterval(() => {
+        setActivePresetIndex((prev) => (prev + 1) % PRESET_BACKGROUNDS.length);
+      }, 10000);
+    } else {
+      if (carouselTimerRef.current) {
+        clearInterval(carouselTimerRef.current);
+        carouselTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (carouselTimerRef.current) {
+        clearInterval(carouselTimerRef.current);
+        carouselTimerRef.current = null;
+      }
+    };
+  }, [backgroundMode, carouselEnabled]);
+
+  const addCustomBgImage = useCallback((image: string): boolean => {
+    if (customBgImages.length >= MAX_BG_IMAGES) {
+      return false;
+    }
+    const newImages = [...customBgImages, image];
+    setCustomBgImages(newImages);
+    persist("custom-bg-images", newImages);
+    return true;
+  }, [customBgImages, persist]);
+
+  const removeCustomBgImage = useCallback((index: number) => {
+    const newImages = customBgImages.filter((_, i) => i !== index);
+    setCustomBgImages(newImages);
+    if (newImages.length > 0) {
+      persist("custom-bg-images", newImages);
+    } else {
+      persistDelete("custom-bg-images");
+    }
+    if (activeBgIndex >= newImages.length) {
+      const newIdx = Math.max(0, newImages.length - 1);
+      setActiveBgIndex(newIdx);
+      persist("active-bg-index", newIdx);
+    }
+  }, [customBgImages, activeBgIndex, persist, persistDelete]);
+
+  // useMemo 稳定 context value，避免每次渲染创建新对象导致所有消费者重渲染
+  const value = useMemo(() => ({
+    backgroundMode,
+    customBgImages,
+    activeBgIndex,
+    dynamicBgVideo,
+    liquidGlassEnabled,
+    liquidGlassBlur,
+    liquidGlassMode,
+    backgroundBlur,
+    activePresetIndex,
+    presetBackgrounds: PRESET_BACKGROUNDS,
+    carouselEnabled,
+    jellyBounceEnabled,
+    setBackgroundMode: setBackgroundModePersist,
+    setCustomBgImages: setCustomBgImagesPersist,
+    addCustomBgImage,
+    removeCustomBgImage,
+    setActiveBgIndex: setActiveBgIndexPersist,
+    setDynamicBgVideo: setDynamicBgVideoPersist,
+    setLiquidGlassEnabled: setLiquidGlassEnabledPersist,
+    setLiquidGlassBlur: setLiquidGlassBlurPersist,
+    setLiquidGlassMode: setLiquidGlassModePersist,
+    setBackgroundBlur: setBackgroundBlurPersist,
+    setActivePresetIndex: setActivePresetIndexPersist,
+    setCarouselEnabled: setCarouselEnabledPersist,
+    setJellyBounceEnabled: setJellyBounceEnabledPersist,
+  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setLiquidGlassModePersist, setBackgroundBlurPersist, setActivePresetIndexPersist, setCarouselEnabledPersist, setJellyBounceEnabledPersist]);
+
+  return (
+    <BackgroundContext.Provider value={value}>
+      {children}
+    </BackgroundContext.Provider>
+  );
+}

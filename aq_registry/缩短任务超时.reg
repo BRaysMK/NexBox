@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+; 缩短系统超时值，加快关机和应用响应
+
+[HKEY_CURRENT_USER\Control Panel\Desktop]
+"HungAppTimeout"="1000"
+"WaitToKillAppTimeout"="2000"
+"LowLevelHooksTimeout"="1000"

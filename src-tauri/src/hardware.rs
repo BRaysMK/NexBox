@@ -1,0 +1,1772 @@
+use serde::{Deserialize, Serialize};
+use std::process::Command;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use thiserror::Error;
+use sysinfo::System;
+
+use crate::wmi_query;
+
+#[derive(Error, Debug)]
+pub enum HardwareError {
+    #[error("PowerShell执行失败: {0}")]
+    PowerShellError(String),
+    #[error("JSON解析失败: {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("NVML错误: {0}")]
+    NvmlError(String),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CpuInfo {
+    pub name: String,
+    pub manufacturer: String,
+    pub cores: u32,
+    pub threads: u32,
+    pub max_clock_speed: u32,
+    pub l2_cache_size: u32,
+    pub l3_cache_size: u32,
+    pub load_percentage: Option<u16>,
+    pub architecture: String,
+    pub socket: String,
+    pub l2_cache_speed: Option<u32>,
+    pub l3_cache_speed: Option<u32>,
+    pub current_clock_speed: Option<u32>,
+    pub ext_clock: Option<u32>,
+    pub processor_id: String,
+    pub family: u32,
+    pub stepping: String,
+    pub revision: String,
+    pub enabled_cores: Option<u32>,
+    pub voltage_caps: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum GpuVendor {
+    NVIDIA,
+    AMD,
+    Intel,
+    Unknown,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GpuInfo {
+    pub name: String,
+    pub vendor: GpuVendor,
+    pub memory_gb: f64,
+    pub driver_version: String,
+    pub temperature: Option<f64>,
+    pub usage: Option<u32>,
+    pub video_processor: String,
+    pub adapter_compatibility: String,
+    pub driver_date: String,
+    pub installed_drivers: String,
+    pub video_mode: String,
+    pub resolution_width: Option<u32>,
+    pub resolution_height: Option<u32>,
+    pub refresh_rate: Option<u32>,
+    pub device_id: String,
+    pub pnp_device_id: String,
+    pub status: String,
+    pub inf_filename: String,
+    pub video_architecture: Option<String>,
+    pub video_memory_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MemoryInfo {
+    pub manufacturer: String,
+    pub part_number: String,
+    pub capacity_gb: f64,
+    pub speed_mhz: u32,
+    pub bank_label: String,
+    pub form_factor: String,
+    pub memory_type: String,
+    pub configured_clock_speed: Option<u32>,
+    pub configured_voltage: Option<u32>,
+    pub data_width: Option<u32>,
+    pub total_width: Option<u32>,
+    pub serial_number: String,
+    pub type_detail: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SoundCardInfo {
+    pub name: String,
+    pub manufacturer: String,
+    pub status: String,
+    pub device_id: String,
+    pub pnp_device_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct NetworkCardInfo {
+    pub name: String,
+    pub manufacturer: String,
+    pub adapter_type: String,
+    pub mac_address: String,
+    pub speed_mbps: u64,
+    pub connection_name: String,
+    pub service_name: String,
+    pub index: u32,
+    pub max_speed: Option<u64>,
+    pub guid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MotherboardInfo {
+    pub product: String,
+    pub manufacturer: String,
+    pub serial_number: String,
+    pub version: String,
+    pub bios_vendor: String,
+    pub bios_version: String,
+    pub bios_release_date: String,
+    pub system_manufacturer: String,
+    pub system_model: String,
+    pub system_type: String,
+    pub chassis_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiskDetailInfo {
+    pub model: String,
+    pub size_gb: f64,
+    pub interface_type: String,
+    pub serial_number: String,
+    pub firmware_revision: String,
+    pub media_type: String,
+    pub bytes_per_sector: Option<u32>,
+    pub partitions: u32,
+    pub status: String,
+    pub is_ssd: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MonitorInfo {
+    pub name: String,
+    pub manufacturer: String,
+    pub screen_width: Option<u32>,
+    pub screen_height: Option<u32>,
+    pub refresh_rate: Option<u32>,
+    pub pnp_device_id: String,
+    pub status: String,
+    pub availability: Option<u16>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HardwareInfo {
+    pub cpu: CpuInfo,
+    pub gpu: Vec<GpuInfo>,
+    pub memory: Vec<MemoryInfo>,
+    pub motherboard: MotherboardInfo,
+    pub disk: Vec<DiskDetailInfo>,
+    pub sound_card: Vec<SoundCardInfo>,
+    pub network_card: Vec<NetworkCardInfo>,
+    pub monitor: Vec<MonitorInfo>,
+}
+
+
+
+/// Check if a monitor name is a generic/placeholder (any language variant)
+fn is_generic_monitor_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.contains("generic")
+        || lower.contains("即插即用")
+        || lower.contains("通用")
+        || lower.contains("pnp")
+        || lower.contains("standard monitor")
+        || lower.contains("digital display")
+        || lower.contains("analog display")
+}
+
+/// Query real monitor model names from EDID via registry (shared cache, no PowerShell)
+fn query_edid_monitor_names() -> Vec<String> {
+    crate::display_cache::get_edid_monitor_names()
+}
+
+/// 当 WMI 查询不到显示器时，使用 EnumDisplaySettingsW 枚举显示器作为回退。
+/// 注：Win32_DesktopMonitor 在现代 Windows 上已废弃，经常返回空。
+fn fallback_enumerate_monitors() -> Vec<MonitorInfo> {
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplaySettingsW, DEVMODEW, ENUM_CURRENT_SETTINGS};
+
+    let edid_names = crate::display_cache::get_edid_monitor_names();
+    let mut monitors = Vec::new();
+
+    for i in 0..8 {
+        let name = format!("\\\\.\\DISPLAY{}", i + 1);
+        let tries = [name.as_str(), &format!("DISPLAY{}", i + 1)];
+        let mut found = false;
+        for dev_name in &tries {
+            unsafe {
+                let wide: Vec<u16> = dev_name.encode_utf16().chain(std::iter::once(0)).collect();
+                let mut dm: DEVMODEW = std::mem::zeroed();
+                dm.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
+                if EnumDisplaySettingsW(wide.as_ptr(), ENUM_CURRENT_SETTINGS, &mut dm) != 0 {
+                    let w = dm.dmPelsWidth;
+                    let h = dm.dmPelsHeight;
+                    if w > 0 && h > 0 {
+                        let mon_name = edid_names.get(i).cloned()
+                            .filter(|n| !n.is_empty())
+                            .unwrap_or_else(|| format!("DISPLAY{}", i + 1));
+                        let manufacturer = if edid_names.get(i).map_or(false, |n| !n.is_empty()) {
+                            "".to_string()
+                        } else {
+                            "未知".to_string()
+                        };
+                        monitors.push(MonitorInfo {
+                            name: mon_name,
+                            manufacturer,
+                            screen_width: Some(w),
+                            screen_height: Some(h),
+                            refresh_rate: Some(dm.dmDisplayFrequency),
+                            pnp_device_id: format!("DISPLAY{}", i + 1),
+                            status: "OK".to_string(),
+                            availability: Some(3),
+                        });
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if !found { break; }
+    }
+
+    log::info!("fallback_enumerate_monitors: 通过 EnumDisplaySettingsW 发现 {} 个显示器", monitors.len());
+    monitors
+}
+
+// 静态硬件信息缓存（不会变化的部分）
+#[derive(Debug, Clone)]
+struct StaticHardwareInfo {
+    cpu: CpuInfo,
+    gpu_static: Vec<GpuStaticInfo>,
+    motherboard: MotherboardInfo,
+    memory: Vec<MemoryInfo>,
+    disk: Vec<DiskDetailInfo>,
+    sound_card: Vec<SoundCardInfo>,
+    network_card: Vec<NetworkCardInfo>,
+    monitor: Vec<MonitorInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GpuStaticInfo {
+    name: String,
+    vendor: GpuVendor,
+    memory_gb: f64,
+    driver_version: String,
+    video_processor: String,
+    adapter_compatibility: String,
+    driver_date: String,
+    installed_drivers: String,
+    video_mode: String,
+    resolution_width: Option<u32>,
+    resolution_height: Option<u32>,
+    refresh_rate: Option<u32>,
+    device_id: String,
+    pnp_device_id: String,
+    status: String,
+    inf_filename: String,
+    video_architecture: Option<String>,
+    video_memory_type: Option<String>,
+}
+
+static STATIC_HARDWARE_CACHE: Mutex<Option<StaticHardwareInfo>> = Mutex::new(None);
+static HARDWARE_INIT_LOCK: Mutex<()> = Mutex::new(());
+static CPU_SYSTEM: Mutex<Option<System>> = Mutex::new(None);
+
+fn detect_gpu_vendor(name: &str) -> GpuVendor {
+    let name_lower = name.to_lowercase();
+    if name_lower.contains("nvidia") || name_lower.contains("geforce") || 
+       name_lower.contains("gtx") || name_lower.contains("rtx") {
+        GpuVendor::NVIDIA
+    } else if name_lower.contains("amd") || name_lower.contains("radeon") || 
+              name_lower.contains("rx ") {
+        GpuVendor::AMD
+    } else if name_lower.contains("intel") {
+        GpuVendor::Intel
+    } else {
+        GpuVendor::Unknown
+    }
+}
+
+fn run_powershell<T: for<'de> Deserialize<'de>>(command: &str) -> Result<Vec<T>, HardwareError> {
+    // 强制所有 PowerShell 输出使用 UTF-8 编码，防止中文乱码
+    let full_cmd = format!(
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; {}",
+        command
+    );
+    let mut cmd = Command::new("powershell");
+    cmd.args(&["-Command", &full_cmd]);
+    
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    
+    let output = cmd.output()
+        .map_err(|e| HardwareError::PowerShellError(e.to_string()))?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(HardwareError::PowerShellError(error.to_string()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout_trimmed = stdout.trim();
+
+    // 尝试解析为数组，如果失败则尝试解析为单个对象并包装到数组中
+    match serde_json::from_str::<Vec<T>>(&stdout_trimmed) {
+        Ok(results) => Ok(results),
+        Err(e_vec) => {
+            match serde_json::from_str::<T>(&stdout_trimmed) {
+                Ok(single) => Ok(vec![single]),
+                Err(e_single) => {
+                    let preview: String = if stdout_trimmed.len() > 300 {
+                        format!("{}...", &stdout_trimmed[..300])
+                    } else {
+                        stdout_trimmed.to_string()
+                    };
+                    log::warn!(
+                        "PowerShell JSON 解析失败 (type={}): vec_err={:?} single_err={:?}\n  原始输出: {}",
+                        std::any::type_name::<T>(),
+                        e_vec,
+                        e_single,
+                        preview
+                    );
+                    Ok(vec![])
+                }
+            }
+        }
+    }
+}
+
+fn get_nvidia_gpus_with_nvml() -> Result<Vec<GpuInfo>, HardwareError> {
+    use nvml_wrapper::Nvml;
+
+    let nvml = Nvml::init().map_err(|e| HardwareError::NvmlError(e.to_string()))?;
+    let device_count = nvml
+        .device_count()
+        .map_err(|e| HardwareError::NvmlError(e.to_string()))?;
+
+    let mut gpus = Vec::new();
+
+    for i in 0..device_count {
+        let device = nvml
+            .device_by_index(i)
+            .map_err(|e| HardwareError::NvmlError(e.to_string()))?;
+
+        let name = device
+            .name()
+            .map_err(|e| HardwareError::NvmlError(e.to_string()))?;
+        let memory_info = device
+            .memory_info()
+            .map_err(|e| HardwareError::NvmlError(e.to_string()))?;
+        let memory_gb = memory_info.total as f64 / (1024.0 * 1024.0 * 1024.0);
+
+        let temperature = device
+            .temperature(nvml_wrapper::enum_wrappers::device::TemperatureSensor::Gpu)
+            .ok()
+            .map(|t| if t > 200 { t as f64 / 10.0 } else { t as f64 });
+        let utilization = device.utilization_rates().ok();
+        let usage = utilization.map(|u| u.gpu);
+
+        let driver_version = nvml
+            .sys_driver_version()
+            .map_err(|e| HardwareError::NvmlError(e.to_string()))?;
+
+        log::debug!(
+            "NVIDIA GPU (NVML): {}, 显存: {:.1}GB, 温度: {:?}°C, 占用: {:?}%",
+            name,
+            memory_gb,
+            temperature,
+            usage
+        );
+
+        gpus.push(GpuInfo {
+            name,
+            vendor: GpuVendor::NVIDIA,
+            memory_gb,
+            driver_version,
+            temperature,
+            usage,
+            video_processor: String::new(),
+            adapter_compatibility: "NVIDIA".to_string(),
+            driver_date: String::new(),
+            installed_drivers: String::new(),
+            video_mode: String::new(),
+            resolution_width: None,
+            resolution_height: None,
+            refresh_rate: None,
+            device_id: String::new(),
+            pnp_device_id: String::new(),
+            status: String::new(),
+            inf_filename: String::new(),
+            video_architecture: None,
+            video_memory_type: None,
+        });
+    }
+
+    Ok(gpus)
+}
+
+fn get_nvidia_gpus_with_smi() -> Vec<GpuInfo> {
+    let mut gpus = Vec::new();
+
+    let mut cmd = Command::new("nvidia-smi");
+    cmd.args(&[
+        "--query-gpu=name,memory.total,temperature.gpu,utilization.gpu,driver_version",
+        "--format=csv,noheader,nounits",
+    ]);
+    
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    if let Ok(output) = cmd.output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
+                if parts.len() >= 5 {
+                    let name = parts[0].to_string();
+                    let memory_mb: f64 = parts[1].parse().unwrap_or(0.0);
+                    let memory_gb = memory_mb / 1024.0;
+                    let temperature: Option<f64> = parts[2].parse().ok().map(|v: u32| v as f64);
+                    let usage: Option<u32> = parts[3].parse().ok();
+                    let driver_version = parts[4].to_string();
+
+                    log::info!(
+                        "NVIDIA GPU (nvidia-smi): {}, 显存: {:.1}GB, 温度: {:?}°C, 占用: {:?}%",
+                        name,
+                        memory_gb,
+                        temperature,
+                        usage
+                    );
+                    gpus.push(GpuInfo {
+                        name,
+                        vendor: GpuVendor::NVIDIA,
+                        memory_gb,
+                        driver_version,
+                        temperature,
+                        usage,
+                        video_processor: String::new(),
+                        adapter_compatibility: "NVIDIA".to_string(),
+                        driver_date: String::new(),
+                        installed_drivers: String::new(),
+                        video_mode: String::new(),
+                        resolution_width: None,
+                        resolution_height: None,
+                        refresh_rate: None,
+                        device_id: String::new(),
+                        pnp_device_id: String::new(),
+                        status: String::new(),
+                        inf_filename: String::new(),
+                        video_architecture: None,
+                        video_memory_type: None,
+                    });
+                }
+            }
+        }
+    }
+
+    gpus
+}
+
+/// 从 LHML (NexBoxMonitor) 管道获取 GPU 信息，支持所有厂商
+fn get_gpus_from_lhml() -> Vec<GpuInfo> {
+    let response = match crate::sensor::read_lhm_sensors() {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("LHML GPU 查询失败: {}", e);
+            return Vec::new();
+        }
+    };
+
+    // 按 (hardware_name, hardware_type) 分组，区分不同 GPU
+    let mut gpu_groups: Vec<(String, String, Vec<&crate::sensor::SensorReading>)> = Vec::new();
+    for sensor in &response.sensors {
+        let hw_type = sensor.hardware_type.clone();
+        if !hw_type.to_lowercase().starts_with("gpu") {
+            continue;
+        }
+        let key = sensor.hardware.clone();
+        if let Some(group) = gpu_groups.iter_mut().find(|(k, _, _)| k == &key) {
+            group.2.push(sensor);
+        } else {
+            gpu_groups.push((key, hw_type, vec![sensor]));
+        }
+    }
+
+    if gpu_groups.is_empty() {
+        return Vec::new();
+    }
+
+    // 判断各 GPU 是否为核显（LHML 无法区分 AMD 核显/独显，仅通过硬件名辅助判断）
+    let has_nvidia = gpu_groups.iter().any(|(_, t, _)| t.eq_ignore_ascii_case("GpuNvidia"));
+
+    let mut gpus = Vec::new();
+    for (name, hw_type, sensors) in &gpu_groups {
+        // NVIDIA 独显存在时跳过 Intel 核显，但 AMD 核显保留显示
+        // （LHML 统一标记为 GpuAmd，无法区分 APU 核显和独显）
+        if has_nvidia && hw_type.eq_ignore_ascii_case("GpuIntel") {
+            log::info!("跳过核显(LHML): 存在 NVIDIA 独显，忽略 GpuIntel");
+            continue;
+        }
+
+        let vendor = if hw_type.eq_ignore_ascii_case("GpuNvidia") {
+            GpuVendor::NVIDIA
+        } else if hw_type.eq_ignore_ascii_case("GpuAmd") {
+            GpuVendor::AMD
+        } else if hw_type.eq_ignore_ascii_case("GpuIntel") {
+            GpuVendor::Intel
+        } else {
+            detect_gpu_vendor(name)
+        };
+
+        // 显存总量 (SmallData "GPU Memory Total"，单位为 MB → GB)
+        let memory_gb = sensors
+            .iter()
+            .find(|s| s.sensor_type == "SmallData" && s.name == "GPU Memory Total")
+            .map(|s| s.value / 1024.0)
+            .unwrap_or(0.0);
+
+        let temperature = sensors
+            .iter()
+            .find(|s| s.sensor_type == "Temperature" && s.name == "GPU Core")
+            .map(|s| s.value);
+
+        let usage = sensors
+            .iter()
+            .find(|s| s.sensor_type == "Load" && s.name == "GPU Core")
+            .map(|s| s.value as u32);
+
+        let is_integrated = matches!(vendor, GpuVendor::Intel);
+        if is_integrated {
+            log::info!(
+                "核显(LHML): {}, 厂商: {:?}, 显存: {:.1}GB",
+                name, vendor, memory_gb
+            );
+        } else {
+            log::info!(
+                "显卡(LHML): {}, 厂商: {:?}, 显存: {:.1}GB, 温度: {:?}°C, 占用: {:?}%",
+                name, vendor, memory_gb, temperature, usage
+            );
+        }
+
+        gpus.push(GpuInfo {
+            name: name.clone(),
+            vendor,
+            memory_gb,
+            driver_version: String::new(),
+            temperature,
+            usage,
+            video_processor: String::new(),
+            adapter_compatibility: String::new(),
+            driver_date: String::new(),
+            installed_drivers: String::new(),
+            video_mode: String::new(),
+            resolution_width: None,
+            resolution_height: None,
+            refresh_rate: None,
+            device_id: String::new(),
+            pnp_device_id: String::new(),
+            status: String::new(),
+            inf_filename: String::new(),
+            video_architecture: None,
+            video_memory_type: None,
+        });
+    }
+
+    gpus
+}
+
+fn get_gpu_info() -> Vec<GpuInfo> {
+    // 1. 尝试用 NVML 获取 NVIDIA 显卡（最佳方案：提供完整信息包括驱动版本）
+    if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
+        if !nvml_gpus.is_empty() {
+            return nvml_gpus;
+        }
+    }
+
+    // 2. 尝试用 nvidia-smi（NVML 失败时的 NVIDIA 回退）
+    let smi_gpus = get_nvidia_gpus_with_smi();
+    if !smi_gpus.is_empty() {
+        return smi_gpus;
+    }
+
+    // 3. 通用 LHML 兜底（支持所有厂商：AMD / Intel / NVIDIA）
+    get_gpus_from_lhml()
+}
+
+// 只获取GPU的动态数据（温度、占用）
+fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<f64>, Option<u32>)> {
+    // 1. 尝试用 NVML
+    if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
+        if !nvml_gpus.is_empty() {
+            return nvml_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
+        }
+    }
+
+    // 2. 尝试用 nvidia-smi
+    let smi_gpus = get_nvidia_gpus_with_smi();
+    if !smi_gpus.is_empty() {
+        return smi_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
+    }
+
+    // 3. LHML 通用兜底
+    let lhml_gpus = get_gpus_from_lhml();
+    if !lhml_gpus.is_empty() {
+        return lhml_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
+    }
+
+    // 所有方案均失败，填充 None
+    vec![(None, None); gpu_static.len()]
+}
+
+// 获取CPU的动态数据（占用）- 使用 sysinfo 库
+fn get_cpu_dynamic_info() -> Option<u16> {
+    use sysinfo::CpuRefreshKind;
+    use std::thread;
+    use std::time::Duration;
+    
+    let mut cpu_system = CPU_SYSTEM.lock().unwrap();
+    
+    if cpu_system.is_none() {
+        let mut sys = System::new();
+        // 第一次刷新：初始化
+        sys.refresh_cpu_specifics(CpuRefreshKind::everything());
+        // 短暂等待，让 sysinfo 有时间采集第一个样本
+        thread::sleep(Duration::from_millis(50));
+        // 第二次刷新：获取准确的 CPU 使用率
+        sys.refresh_cpu_specifics(CpuRefreshKind::everything());
+        *cpu_system = Some(sys);
+    } else {
+        // 正常情况下只需要刷新一次
+        let sys = cpu_system.as_mut().unwrap();
+        sys.refresh_cpu_specifics(CpuRefreshKind::everything());
+    }
+    
+    let sys = cpu_system.as_ref().unwrap();
+    let cpus = sys.cpus();
+    if cpus.is_empty() {
+        return None;
+    }
+    
+    let total_usage: f32 = cpus.iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / cpus.len() as f32;
+    let usage = total_usage.round() as u16;
+    
+    log::debug!("CPU占用 (sysinfo): {}%", usage);
+    Some(usage)
+}
+
+fn architecture_name(code: Option<u16>) -> String {
+    match code {
+        Some(0) => "x86".into(),
+        Some(1) => "MIPS".into(),
+        Some(2) => "Alpha".into(),
+        Some(3) => "PowerPC".into(),
+        Some(5) => "ARM".into(),
+        Some(6) => "ia64".into(),
+        Some(7) => "Alpha64".into(),
+        Some(9) => "x64".into(),
+        Some(12) => "ARM64".into(),
+        _ => "未知".into(),
+    }
+}
+
+fn memory_form_factor_name(code: Option<u16>) -> String {
+    match code {
+        Some(0) => "未知".into(),
+        Some(1) => "Other".into(),
+        Some(2) => "SIP".into(),
+        Some(3) => "DIP".into(),
+        Some(4) => "ZIP".into(),
+        Some(5) => "SOJ".into(),
+        Some(6) => "Proprietary".into(),
+        Some(7) => "SIMM".into(),
+        Some(8) => "DIMM".into(),
+        Some(9) => "TSOP".into(),
+        Some(10) => "PGA".into(),
+        Some(11) => "RIMM".into(),
+        Some(12) => "SODIMM".into(),
+        Some(13) => "SRIMM".into(),
+        Some(14) => "SMD".into(),
+        Some(15) => "SSMP".into(),
+        Some(16) => "QFP".into(),
+        Some(17) => "TQFP".into(),
+        Some(18) => "SOIC".into(),
+        Some(19) => "LCC".into(),
+        Some(20) => "PLCC".into(),
+        Some(21) => "BGA".into(),
+        Some(22) => "FPBGA".into(),
+        Some(23) => "LGA".into(),
+        Some(24) => "FB-DIMM".into(),
+        _ => "未知".into(),
+    }
+}
+
+fn memory_type_name(code: Option<u16>) -> String {
+    match code {
+        Some(0) => "未知".into(),
+        Some(1) => "Other".into(),
+        Some(2) => "DRAM".into(),
+        Some(3) => "Synchronous DRAM".into(),
+        Some(4) => "Cache DRAM".into(),
+        Some(5) => "EDO".into(),
+        Some(6) => "EDRAM".into(),
+        Some(7) => "VRAM".into(),
+        Some(8) => "SRAM".into(),
+        Some(9) => "RAM".into(),
+        Some(10) => "ROM".into(),
+        Some(11) => "Flash".into(),
+        Some(12) => "EEPROM".into(),
+        Some(13) => "FEPROM".into(),
+        Some(14) => "EPROM".into(),
+        Some(15) => "CDRAM".into(),
+        Some(16) => "3DRAM".into(),
+        Some(17) => "SDRAM".into(),
+        Some(18) => "SGRAM".into(),
+        Some(19) => "RDRAM".into(),
+        Some(20) => "DDR".into(),
+        Some(21) => "DDR2".into(),
+        Some(22) => "DDR2 FB-DIMM".into(),
+        Some(24) => "DDR3".into(),
+        Some(25) => "FBD2".into(),
+        Some(26) => "DDR4".into(),
+        Some(27) => "LPDDR".into(),
+        Some(28) => "LPDDR2".into(),
+        Some(29) => "LPDDR3".into(),
+        Some(30) => "LPDDR4".into(),
+        Some(31) => "Logical non-volatile".into(),
+        Some(32) => "HBM".into(),
+        Some(33) => "HBM2".into(),
+        Some(34) => "DDR5".into(),
+        Some(35) => "LPDDR5".into(),
+        Some(36) => "HBM3".into(),
+        _ => "未知".into(),
+    }
+}
+
+fn chassis_type_name(codes: &Option<Vec<u16>>) -> String {
+    match codes.as_ref().and_then(|v| v.first()).copied() {
+        Some(1) => "Other".into(),
+        Some(2) => "Unknown".into(),
+        Some(3) => "Desktop".into(),
+        Some(4) => "Low Profile Desktop".into(),
+        Some(5) => "Pizza Box".into(),
+        Some(6) => "Mini Tower".into(),
+        Some(7) => "Tower".into(),
+        Some(8) => "Portable".into(),
+        Some(9) => "Laptop".into(),
+        Some(10) => "Notebook".into(),
+        Some(11) => "Hand Held".into(),
+        Some(12) => "Docking Station".into(),
+        Some(13) => "All in One".into(),
+        Some(14) => "Sub Notebook".into(),
+        Some(15) => "Space-Saving".into(),
+        Some(16) => "Lunch Box".into(),
+        Some(17) => "Main System Chassis".into(),
+        Some(18) => "Expansion Chassis".into(),
+        Some(19) => "Sub Chassis".into(),
+        Some(20) => "Bus Expansion Chassis".into(),
+        Some(21) => "Peripheral Chassis".into(),
+        Some(22) => "Storage Chassis".into(),
+        Some(23) => "Rack Mount Chassis".into(),
+        Some(24) => "Sealed-Case PC".into(),
+        Some(25) => "Multi-System Chassis".into(),
+        Some(26) => "Compact PCI".into(),
+        Some(27) => "Advanced TCA".into(),
+        Some(28) => "Blade".into(),
+        Some(29) => "Blade Enclosure".into(),
+        Some(30) => "Tablet".into(),
+        Some(31) => "Convertible".into(),
+        Some(32) => "Detachable".into(),
+        Some(33) => "IoT Gateway".into(),
+        Some(34) => "Embedded PC".into(),
+        Some(35) => "Mini PC".into(),
+        Some(36) => "Stick PC".into(),
+        _ => "未知".into(),
+    }
+}
+
+fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
+    // Fast path: 先检查缓存，不加初始化锁
+    {
+        let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
+        if let Some(ref info) = *cache {
+            log::debug!("从缓存获取静态硬件信息");
+            return Ok(info.clone());
+        }
+    }
+
+    // 序列化首次初始化，防止并发重复获取
+    let _init_guard = HARDWARE_INIT_LOCK.lock().unwrap();
+
+    // Double-check: 获取锁后再次检查缓存
+    {
+        let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
+        if let Some(ref info) = *cache {
+            log::debug!("从缓存获取静态硬件信息");
+            return Ok(info.clone());
+        }
+    }
+
+    log::info!("开始并行获取静态硬件信息...");
+
+    let errors: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let errors_cpu = errors.clone();
+    let cpu_handle = thread::spawn(move || {
+        let wql = "SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L2CacheSize, L2CacheSpeed, L3CacheSize, L3CacheSpeed, LoadPercentage, Manufacturer, Architecture, SocketDesignation, CurrentClockSpeed, ExtClock, ProcessorId, Family, Stepping, Revision, NumberOfEnabledCore, VoltageCaps FROM Win32_Processor";
+        match wmi_query::wmi_query(wql) {
+            Ok(results) => {
+                log::info!("获取到{}个CPU信息", results.len());
+                results.into_iter().next().map(|row| {
+                    let name = wmi_query::v_str(row.get("Name").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知CPU".to_string());
+                    log::info!("CPU型号: {}", name);
+                    CpuInfo {
+                        name,
+                        manufacturer: wmi_query::v_str(row.get("Manufacturer").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知".to_string()),
+                        cores: wmi_query::v_u32(row.get("NumberOfCores").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        threads: wmi_query::v_u32(row.get("NumberOfLogicalProcessors").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        max_clock_speed: wmi_query::v_u32(row.get("MaxClockSpeed").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        l2_cache_size: wmi_query::v_u32(row.get("L2CacheSize").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        l3_cache_size: wmi_query::v_u32(row.get("L3CacheSize").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        load_percentage: wmi_query::v_u16(row.get("LoadPercentage").unwrap_or(&wmi::Variant::Null)),
+                        architecture: architecture_name(wmi_query::v_u16(row.get("Architecture").unwrap_or(&wmi::Variant::Null))),
+                        socket: wmi_query::v_str(row.get("SocketDesignation").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知".to_string()),
+                        l2_cache_speed: wmi_query::v_u32(row.get("L2CacheSpeed").unwrap_or(&wmi::Variant::Null)),
+                        l3_cache_speed: wmi_query::v_u32(row.get("L3CacheSpeed").unwrap_or(&wmi::Variant::Null)),
+                        current_clock_speed: wmi_query::v_u32(row.get("CurrentClockSpeed").unwrap_or(&wmi::Variant::Null)),
+                        ext_clock: wmi_query::v_u32(row.get("ExtClock").unwrap_or(&wmi::Variant::Null)),
+                        processor_id: wmi_query::v_str(row.get("ProcessorId").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知".to_string()),
+                        family: wmi_query::v_u32(row.get("Family").unwrap_or(&wmi::Variant::Null)).unwrap_or(0),
+                        stepping: wmi_query::v_str(row.get("Stepping").unwrap_or(&wmi::Variant::Null)).unwrap_or_else(|| "未知".to_string()),
+                        revision: wmi_query::v_u16(row.get("Revision").unwrap_or(&wmi::Variant::Null)).map(|r| r.to_string()).unwrap_or_else(|| "未知".to_string()),
+                        enabled_cores: wmi_query::v_u32(row.get("NumberOfEnabledCore").unwrap_or(&wmi::Variant::Null)),
+                        voltage_caps: wmi_query::v_u16(row.get("VoltageCaps").unwrap_or(&wmi::Variant::Null)).map(|v| format!("{} mV", v)),
+                    }
+                })
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_cpu.lock() {
+                    errs.push(format!("CPU: {}", e));
+                }
+                None
+            }
+        }
+    });
+
+    let gpu_handle = thread::spawn(move || {
+        let gpu = get_gpu_info();
+        gpu.into_iter().map(|g| GpuStaticInfo {
+            name: g.name,
+            vendor: g.vendor,
+            memory_gb: g.memory_gb,
+            driver_version: g.driver_version,
+            video_processor: g.video_processor,
+            adapter_compatibility: g.adapter_compatibility,
+            driver_date: g.driver_date,
+            installed_drivers: g.installed_drivers,
+            video_mode: g.video_mode,
+            resolution_width: g.resolution_width,
+            resolution_height: g.resolution_height,
+            refresh_rate: g.refresh_rate,
+            device_id: g.device_id,
+            pnp_device_id: g.pnp_device_id,
+            status: g.status,
+            inf_filename: g.inf_filename,
+            video_architecture: g.video_architecture,
+            video_memory_type: g.video_memory_type,
+        }).collect::<Vec<GpuStaticInfo>>()
+    });
+
+    let errors_mobo = errors.clone();
+    let mobo_handle = thread::spawn(move || {
+
+        // 4 个独立的 WMI COM 查询（无需 PowerShell）
+        let mobo_rows = wmi_query::wmi_query("SELECT Manufacturer, Product, SerialNumber, Version FROM Win32_BaseBoard").unwrap_or_default();
+        let sys_rows  = wmi_query::wmi_query("SELECT Manufacturer, Model, SystemType FROM Win32_ComputerSystem").unwrap_or_default();
+        let bios_rows = wmi_query::wmi_query("SELECT Manufacturer, SMBIOSBIOSVersion, ReleaseDate FROM Win32_BIOS").unwrap_or_default();
+        let chassis_rows = wmi_query::wmi_query("SELECT ChassisTypes FROM Win32_SystemEnclosure").unwrap_or_default();
+
+        let mobo_row = mobo_rows.first();
+        let sys_row = sys_rows.first();
+        let bios_row = bios_rows.first();
+        let chassis_row = chassis_rows.first();
+
+        // 日志
+        if let Some(m) = mobo_row {
+            let manu = m.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            let prod = m.get("Product").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            log::info!("主板: {} {}", manu, prod);
+        } else if let Some(s) = sys_row {
+            let manu = s.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            let model = s.get("Model").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            log::info!("主板(Win32_BaseBoard 为空，回退 Win32_ComputerSystem): {} {}", manu, model);
+        }
+        if let Some(b) = bios_row {
+            let ver = b.get("SMBIOSBIOSVersion").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            log::info!("BIOS: {}", ver);
+        }
+
+        // 主板信息为空时上报 warning
+        if mobo_row.is_none() {
+            if let Ok(mut errs) = errors_mobo.lock() {
+                errs.push("主板: WMI查询失败 (Win32_BaseBoard 返回空，已用 Win32_ComputerSystem 回退)".to_string());
+            }
+        }
+
+        // 兜底：BaseBoard 为空时用 ComputerSystem 的 Manufacturer / Model
+        let product = mobo_row
+            .and_then(|m| m.get("Product").and_then(|v| wmi_query::v_str(v)))
+            .or_else(|| sys_row.and_then(|s| s.get("Model").and_then(|v| wmi_query::v_str(v))))
+            .unwrap_or_else(|| "未知".to_string());
+        let manufacturer = mobo_row
+            .and_then(|m| m.get("Manufacturer").and_then(|v| wmi_query::v_str(v)))
+            .or_else(|| sys_row.and_then(|s| s.get("Manufacturer").and_then(|v| wmi_query::v_str(v))))
+            .unwrap_or_else(|| "未知".to_string());
+
+        let chassis_types = chassis_row
+            .and_then(|c| c.get("ChassisTypes"))
+            .map(|v| wmi_query::v_u16_arr(v))
+            .filter(|a| !a.is_empty());
+
+        Some(MotherboardInfo {
+            product,
+            manufacturer,
+            serial_number: mobo_row.and_then(|m| m.get("SerialNumber").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            version: mobo_row.and_then(|m| m.get("Version").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            bios_vendor: bios_row.and_then(|b| b.get("Manufacturer").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            bios_version: bios_row.and_then(|b| b.get("SMBIOSBIOSVersion").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            bios_release_date: bios_row.and_then(|b| b.get("ReleaseDate").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            system_manufacturer: sys_row.and_then(|s| s.get("Manufacturer").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            system_model: sys_row.and_then(|s| s.get("Model").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            system_type: sys_row.and_then(|s| s.get("SystemType").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            chassis_type: chassis_type_name(&chassis_types),
+        })
+    });
+
+    let errors_mem = errors.clone();
+    let mem_handle = thread::spawn(move || {
+        match wmi_query::wmi_query("SELECT Manufacturer, PartNumber, Capacity, Speed, BankLabel, FormFactor, MemoryType, ConfiguredClockSpeed, ConfiguredVoltage, DataWidth, TotalWidth, SerialNumber, TypeDetail FROM Win32_PhysicalMemory") {
+            Ok(results) => {
+                log::info!("获取到{}个内存条信息", results.len());
+                results.into_iter().map(|row| {
+                    let capacity_bytes = row.get("Capacity").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0) as f64;
+                    MemoryInfo {
+                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        part_number: row.get("PartNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()).trim().to_string(),
+                        capacity_gb: capacity_bytes / (1024.0 * 1024.0 * 1024.0),
+                        // Speed: 优先使用 ConfiguredClockSpeed（实际运行频率），
+                        // 回退到 Speed（模块额定频率），因为 Speed 在某些系统（特别是 DDR5）上可能不准确
+                        speed_mhz: {
+                            let configured = row.get("ConfiguredClockSpeed").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0);
+                            if configured > 0 { configured }
+                            else { row.get("Speed").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0) }
+                        },
+                        bank_label: row.get("BankLabel").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        form_factor: memory_form_factor_name(row.get("FormFactor").and_then(|v| wmi_query::v_u16(v))),
+                        memory_type: memory_type_name(row.get("MemoryType").and_then(|v| wmi_query::v_u16(v))),
+                        configured_clock_speed: row.get("ConfiguredClockSpeed").and_then(|v| wmi_query::v_u32(v)),
+                        configured_voltage: row.get("ConfiguredVoltage").and_then(|v| wmi_query::v_u32(v)),
+                        data_width: row.get("DataWidth").and_then(|v| wmi_query::v_u32(v)),
+                        total_width: row.get("TotalWidth").and_then(|v| wmi_query::v_u32(v)),
+                        serial_number: row.get("SerialNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        type_detail: row.get("TypeDetail").and_then(|v| wmi_query::v_u16(v)).map(|d| d.to_string()).unwrap_or_else(|| "未知".to_string()),
+                    }
+                }).collect::<Vec<MemoryInfo>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_mem.lock() {
+                    errs.push(format!("内存: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
+    let errors_disk = errors.clone();
+    let disk_handle = thread::spawn(move || {
+        match wmi_query::wmi_query("SELECT Model, Size, InterfaceType, SerialNumber, FirmwareRevision, MediaType, BytesPerSector, Partitions, Status, PNPDeviceID FROM Win32_DiskDrive") {
+            Ok(results) => {
+                log::info!("获取到{}个硬盘信息", results.len());
+                results.into_iter().map(|row| {
+                    let size_gb = row.get("Size").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0) as f64 / (1024.0 * 1024.0 * 1024.0);
+                    let media_type = row.get("MediaType").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                    let is_ssd = media_type.to_lowercase().contains("ssd") || media_type.to_lowercase().contains("solid state");
+                    DiskDetailInfo {
+                        model: row.get("Model").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        size_gb,
+                        interface_type: row.get("InterfaceType").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        serial_number: row.get("SerialNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        firmware_revision: row.get("FirmwareRevision").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        media_type: if media_type.is_empty() { "未知".to_string() } else { media_type },
+                        bytes_per_sector: row.get("BytesPerSector").and_then(|v| wmi_query::v_u32(v)),
+                        partitions: row.get("Partitions").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0),
+                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        is_ssd,
+                    }
+                }).collect::<Vec<DiskDetailInfo>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_disk.lock() {
+                    errs.push(format!("硬盘: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
+    let errors_sound = errors.clone();
+    let sound_handle = thread::spawn(move || {
+        match wmi_query::wmi_query("SELECT Name, Manufacturer, Status, DeviceID, PNPDeviceID FROM Win32_SoundDevice") {
+            Ok(results) => {
+                let sound_filter_keywords = [
+                    "Virtual", "VB-Audio", "Voicemeeter", "CABLE", "Sonic Studio",
+                    "NVIDIA Virtual", "Steam Streaming", "Oculus", "Wave Link",
+                    "Elgato Sound Capture", "Nahimic", "DTS", "Dolby",
+                    "Bluetooth", "Hands-Free", "S/PDIF",
+                ];
+                let filtered: Vec<_> = results.into_iter()
+                    .filter(|row| {
+                        let status = row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let pnp = row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let name = row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        if status != "OK" { return false; }
+                        let pnp_lower = pnp.to_lowercase();
+                        if pnp_lower.starts_with("usb\\") || pnp_lower.starts_with("hid\\") || pnp_lower.starts_with("swd\\") {
+                            return false;
+                        }
+                        let name_lower = name.to_lowercase();
+                        !sound_filter_keywords.iter().any(|kw| name_lower.contains(&kw.to_lowercase()))
+                    })
+                    .collect();
+                log::info!("获取到{}个声卡信息", filtered.len());
+                filtered.into_iter().map(|row| {
+                    SoundCardInfo {
+                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        device_id: row.get("DeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        pnp_device_id: row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                    }
+                }).collect::<Vec<SoundCardInfo>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_sound.lock() {
+                    errs.push(format!("声卡: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
+    let errors_network = errors.clone();
+    let network_handle = thread::spawn(move || {
+        use wmi::Variant;
+        match wmi_query::wmi_query("SELECT Name, Manufacturer, AdapterType, MACAddress, Speed, NetConnectionID, ServiceName, Index, MaxSpeed, GUID, PhysicalAdapter, NetEnabled, PNPDeviceID FROM Win32_NetworkAdapter") {
+            Ok(results) => {
+                let net_filter_keywords = [
+                    "Hyper-V", "vEthernet", "Virtual", "VirtualBox", "VMware",
+                    "Bluetooth", "Tailscale", "ZeroTier", "WSL", "Docker",
+                    "Npcap", "WireGuard", "OpenVPN", "TAP-Windows", "WAN Miniport",
+                    "VPN", "Proton", "Nord", "Cloudflare WARP",
+                ];
+                let filtered: Vec<_> = results.into_iter()
+                    .filter(|row| {
+                        let physical = matches!(row.get("PhysicalAdapter"), Some(Variant::Bool(true)));
+                        let enabled = matches!(row.get("NetEnabled"), Some(Variant::Bool(true)));
+                        if !physical || !enabled { return false; }
+                        let pnp = row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        if pnp.to_lowercase().starts_with("swd\\") { return false; }
+                        let name = row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let adapter = row.get("AdapterType").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let name_lower = name.to_lowercase();
+                        !net_filter_keywords.iter().any(|kw| name_lower.contains(&kw.to_lowercase()))
+                            && !adapter.to_lowercase().contains("loopback")
+                    })
+                    .collect();
+                log::info!("获取到{}个网卡信息", filtered.len());
+                filtered.into_iter().map(|row| {
+                    let speed_bps = row.get("Speed").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0);
+                    let max_bps = row.get("MaxSpeed").and_then(|v| wmi_query::v_u64(v));
+                    NetworkCardInfo {
+                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        adapter_type: row.get("AdapterType").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        mac_address: row.get("MACAddress").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        speed_mbps: speed_bps / 1_000_000,
+                        connection_name: row.get("NetConnectionID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        service_name: row.get("ServiceName").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        index: row.get("Index").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0),
+                        max_speed: max_bps.map(|s| s / 1_000_000),
+                        guid: row.get("GUID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                    }
+                }).collect::<Vec<NetworkCardInfo>>()
+            }
+            Err(e) => {
+                if let Ok(mut errs) = errors_network.lock() {
+                    errs.push(format!("网卡: {}", e));
+                }
+                Vec::new()
+            }
+        }
+    });
+
+    let monitor_handle = thread::spawn(move || {
+        // Win32_DesktopMonitor 在现代 Windows 上已废弃，经常返回空，
+        // 所以 WMI 失败或为空时会自动回退到 EnumDisplaySettingsW + 注册表 EDID 方案。
+        let wmi_results = wmi_query::wmi_query("SELECT Name, MonitorManufacturerName, ScreenWidth, ScreenHeight, DisplayFrequency, PNPDeviceID, Status, Availability FROM Win32_DesktopMonitor");
+
+        match wmi_results {
+            Ok(results) if !results.is_empty() => {
+                let filtered: Vec<_> = results.into_iter()
+                    .filter(|row| {
+                        let name_ok = row.get("Name").map_or(false, |v| wmi_query::v_nonempty(v));
+                        let pnp_ok = row.get("PNPDeviceID").map_or(false, |v| wmi_query::v_nonempty(v));
+                        name_ok && pnp_ok
+                    })
+                    .collect();
+                log::info!("获取到{}个显示器信息", filtered.len());
+
+                if filtered.is_empty() {
+                    log::debug!("WMI 结果经筛选后为空，回退到 EnumDisplaySettingsW");
+                    return fallback_enumerate_monitors();
+                }
+
+                let mut monitors: Vec<MonitorInfo> = filtered.into_iter().map(|row| {
+                    MonitorInfo {
+                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("MonitorManufacturerName").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        screen_width: row.get("ScreenWidth").and_then(|v| wmi_query::v_u32(v)),
+                        screen_height: row.get("ScreenHeight").and_then(|v| wmi_query::v_u32(v)),
+                        refresh_rate: row.get("DisplayFrequency").and_then(|v| wmi_query::v_u32(v)),
+                        pnp_device_id: row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        availability: row.get("Availability").and_then(|v| wmi_query::v_u16(v)),
+                    }
+                }).collect::<Vec<MonitorInfo>>();
+
+                // EDID 回退（通过注册表读取，无 PowerShell）：如果名称是通用的，替换为真实型号
+                let has_generic = monitors.iter().any(|m| is_generic_monitor_name(&m.name));
+                if has_generic {
+                    log::info!("检测到通用显示器名称，从注册表 EDID 获取真实型号...");
+                    let edid_names = query_edid_monitor_names();
+                    if !edid_names.is_empty() {
+                        for (i, m) in monitors.iter_mut().enumerate() {
+                            if is_generic_monitor_name(&m.name) {
+                                if let Some(edid_name) = edid_names.get(i) {
+                                    if !edid_name.is_empty() {
+                                        log::info!("显示器[{}]: EDID 替换 '{}' -> '{}'", i, m.name, edid_name);
+                                        m.name = edid_name.clone();
+                                    }
+                                } else if edid_names.len() == 1 && !edid_names[0].is_empty() {
+                                    log::info!("显示器[{}]: EDID 替换(单结果) '{}' -> '{}'", i, m.name, edid_names[0]);
+                                    m.name = edid_names[0].clone();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                monitors
+            }
+            _ => {
+                log::debug!("WMI Win32_DesktopMonitor 不可用或为空，回退到 EnumDisplaySettingsW 枚举显示器");
+                fallback_enumerate_monitors()
+            }
+        }
+    });
+
+    let cpu = cpu_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| CpuInfo {
+        name: "未知CPU".to_string(),
+        manufacturer: "未知".to_string(),
+        cores: 0,
+        threads: 0,
+        max_clock_speed: 0,
+        l2_cache_size: 0,
+        l3_cache_size: 0,
+        load_percentage: None,
+        architecture: "未知".to_string(),
+        socket: "未知".to_string(),
+        l2_cache_speed: None,
+        l3_cache_speed: None,
+        current_clock_speed: None,
+        ext_clock: None,
+        processor_id: "未知".to_string(),
+        family: 0,
+        stepping: "未知".to_string(),
+        revision: "未知".to_string(),
+        enabled_cores: None,
+        voltage_caps: None,
+    });
+
+    let gpu_static = gpu_handle.join().unwrap_or_else(|_| Vec::new());
+    let motherboard = mobo_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| MotherboardInfo {
+        product: "未知".to_string(),
+        manufacturer: "未知".to_string(),
+        serial_number: "未知".to_string(),
+        version: "未知".to_string(),
+        bios_vendor: "未知".to_string(),
+        bios_version: "未知".to_string(),
+        bios_release_date: "未知".to_string(),
+        system_manufacturer: "未知".to_string(),
+        system_model: "未知".to_string(),
+        system_type: "未知".to_string(),
+        chassis_type: "未知".to_string(),
+    });
+    let memory = mem_handle.join().unwrap_or_else(|_| Vec::new());
+    let disk = disk_handle.join().unwrap_or_else(|_| Vec::new());
+    let sound_card = sound_handle.join().unwrap_or_else(|_| Vec::new());
+    let network_card = network_handle.join().unwrap_or_else(|_| Vec::new());
+    let mut monitor = monitor_handle.join().unwrap_or_else(|_| Vec::new());
+    // Fallback: fill monitor resolution/refresh from GPU output if WMI didn't provide it
+    if !gpu_static.is_empty() && !monitor.is_empty() {
+        let gpu = &gpu_static[0];
+        for m in monitor.iter_mut() {
+            if m.screen_width.is_none() { m.screen_width = gpu.resolution_width; }
+            if m.screen_height.is_none() { m.screen_height = gpu.resolution_height; }
+            if m.refresh_rate.is_none() { m.refresh_rate = gpu.refresh_rate; }
+        }
+    }
+
+    if let Ok(errs) = errors.lock() {
+        for e in errs.iter() {
+            log::warn!("硬件获取警告: {}", e);
+        }
+    }
+
+    let static_info = StaticHardwareInfo {
+        cpu,
+        gpu_static,
+        motherboard,
+        memory,
+        disk,
+        sound_card,
+        network_card,
+        monitor,
+    };
+
+    {
+        let mut cache = STATIC_HARDWARE_CACHE.lock().unwrap();
+        *cache = Some(static_info.clone());
+    }
+
+    log::info!("静态硬件信息并行获取完成");
+    Ok(static_info)
+}
+
+pub fn get_hardware_info() -> Result<HardwareInfo, HardwareError> {
+    let static_info = get_static_hardware_info()?;
+
+    // 获取动态数据
+    let cpu_load = get_cpu_dynamic_info();
+    let gpu_dynamic = get_gpu_dynamic_info(&static_info.gpu_static);
+
+    // 组合完整信息
+    let mut cpu = static_info.cpu;
+    // 仅在成功读取到动态 CPU 占用时覆盖静态值，避免在失败时将已有值清空
+    if let Some(load) = cpu_load {
+        cpu.load_percentage = Some(load);
+    }
+
+    let gpu: Vec<GpuInfo> = static_info
+        .gpu_static
+        .iter()
+        .enumerate()
+        .map(|(i, gs)| {
+            let (temp, usage) = gpu_dynamic.get(i).copied().unwrap_or((None, None));
+            GpuInfo {
+                name: gs.name.clone(),
+                vendor: gs.vendor.clone(),
+                memory_gb: gs.memory_gb,
+                driver_version: gs.driver_version.clone(),
+                temperature: temp,
+                usage,
+                video_processor: gs.video_processor.clone(),
+                adapter_compatibility: gs.adapter_compatibility.clone(),
+                driver_date: gs.driver_date.clone(),
+                installed_drivers: gs.installed_drivers.clone(),
+                video_mode: gs.video_mode.clone(),
+                resolution_width: gs.resolution_width,
+                resolution_height: gs.resolution_height,
+                refresh_rate: gs.refresh_rate,
+                device_id: gs.device_id.clone(),
+                pnp_device_id: gs.pnp_device_id.clone(),
+                status: gs.status.clone(),
+                inf_filename: gs.inf_filename.clone(),
+                video_architecture: gs.video_architecture.clone(),
+                video_memory_type: gs.video_memory_type.clone(),
+            }
+        })
+        .collect();
+
+    Ok(HardwareInfo {
+        cpu,
+        gpu,
+        motherboard: static_info.motherboard,
+        memory: static_info.memory,
+        disk: static_info.disk,
+        sound_card: static_info.sound_card,
+        network_card: static_info.network_card,
+        monitor: static_info.monitor,
+    })
+}
+
+#[tauri::command]
+pub async fn get_hardware() -> Result<HardwareInfo, String> {
+    match tauri::async_runtime::spawn_blocking(|| get_hardware_info()).await {
+        Ok(Ok(info)) => Ok(info),
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn get_cpu_load() -> Result<Option<u16>, String> {
+    match tauri::async_runtime::spawn_blocking(|| get_cpu_dynamic_info()).await {
+        Ok(load) => Ok(load),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GpuStatus {
+    pub temperature: Option<f64>,
+    pub usage: Option<u32>,
+}
+
+#[tauri::command]
+pub async fn get_gpu_status(index: usize) -> Result<GpuStatus, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        // 1. NVML（NVIDIA 最佳方案）
+        if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
+            if let Some(gpu) = nvml_gpus.get(index) {
+                return GpuStatus {
+                    temperature: gpu.temperature,
+                    usage: gpu.usage,
+                };
+            }
+        }
+
+        // 2. LHML 通用兜底（支持所有厂商），按硬件名分组以支持多 GPU 索引
+        if let Ok(response) = crate::sensor::read_lhm_sensors() {
+            let mut gpu_names: Vec<String> = Vec::new();
+            for s in &response.sensors {
+                let ht = s.hardware_type.to_lowercase();
+                if !ht.starts_with("gpu") {
+                    continue;
+                }
+                let key = s.hardware.clone();
+                if !gpu_names.contains(&key) {
+                    gpu_names.push(key);
+                }
+            }
+
+            // 仅 NVIDIA 独显存在时过滤 Intel 核显，AMD 核显保留显示
+            let has_nvidia = gpu_names.iter().any(|name| {
+                response.sensors.iter().any(|s| {
+                    s.hardware == *name
+                        && s.hardware_type.eq_ignore_ascii_case("GpuNvidia")
+                })
+            });
+            let visible: Vec<&String> = gpu_names
+                .iter()
+                .filter(|name| {
+                    if !has_nvidia {
+                        return true;
+                    }
+                    !response.sensors.iter().any(|s| {
+                        s.hardware == **name
+                            && s.hardware_type.eq_ignore_ascii_case("GpuIntel")
+                    })
+                })
+                .collect();
+
+            if let Some(gpu_name) = visible.get(index) {
+                let temp = response
+                    .sensors
+                    .iter()
+                    .filter(|s| {
+                        s.hardware == **gpu_name
+                            && s.sensor_type == "Temperature"
+                            && s.name == "GPU Core"
+                    })
+                    .map(|s| s.value)
+                    .next();
+                let usage = response
+                    .sensors
+                    .iter()
+                    .filter(|s| {
+                        s.hardware == **gpu_name
+                            && s.sensor_type == "Load"
+                            && s.name == "GPU Core"
+                    })
+                    .map(|s| s.value as u32)
+                    .next();
+                return GpuStatus { temperature: temp, usage };
+            }
+        }
+
+        GpuStatus {
+            temperature: None,
+            usage: None,
+        }
+    })
+    .await;
+
+    match result {
+        Ok(status) => Ok(status),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiskInfo {
+    pub name: String,
+    pub total_gb: f64,
+    pub available_gb: f64,
+    pub used_gb: f64,
+    pub usage_percent: f64,
+}
+
+#[tauri::command]
+pub async fn get_disk_status() -> Result<DiskInfo, String> {
+    let result = tauri::async_runtime::spawn_blocking(|| {
+        use sysinfo::Disks;
+        
+        let disks = Disks::new_with_refreshed_list();
+        
+        let mut total_space: u64 = 0;
+        let mut available_space: u64 = 0;
+        
+        for disk in disks.iter() {
+            let mount_point = disk.mount_point().to_string_lossy();
+            if mount_point.is_empty() {
+                continue;
+            }
+            total_space = total_space.saturating_add(disk.total_space());
+            available_space = available_space.saturating_add(disk.available_space());
+        }
+        
+        let used_space = total_space.saturating_sub(available_space);
+        let usage_percent = if total_space > 0 {
+            (used_space as f64 / total_space as f64) * 100.0
+        } else {
+            0.0
+        };
+        
+        let total_gb = total_space as f64 / (1024.0 * 1024.0 * 1024.0);
+        let available_gb = available_space as f64 / (1024.0 * 1024.0 * 1024.0);
+        let used_gb = used_space as f64 / (1024.0 * 1024.0 * 1024.0);
+        
+        DiskInfo {
+            name: String::from("All Disks"),
+            total_gb,
+            available_gb,
+            used_gb,
+            usage_percent,
+        }
+    }).await;
+    
+    match result {
+        Ok(info) => Ok(info),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn is_nvidia_gpu() -> bool {
+    let cache = STATIC_HARDWARE_CACHE.lock().unwrap();
+    cache
+        .as_ref()
+        .and_then(|c| c.gpu_static.first())
+        .map(|g| g.vendor == GpuVendor::NVIDIA)
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn get_os_version() -> Result<String, String> {
+    sysinfo::System::long_os_version().ok_or_else(|| "无法获取操作系统版本".to_string())
+}
+
+// ─── Disk Health ───
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PartitionInfo {
+    pub drive_letter: String,
+    pub total_gb: f64,
+    pub available_gb: f64,
+    pub used_gb: f64,
+    pub usage_percent: f64,
+    pub filesystem: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiskHealthInfo {
+    pub index: u32,
+    pub model: String,
+    pub media_type: String,
+    pub size_gb: f64,
+    pub interface_type: String,
+    pub health_status: String,
+    pub operational_status: String,
+    pub temperature_c: Option<f64>,
+    pub wear_percentage: Option<f64>,
+    pub power_on_hours: Option<u64>,
+    pub read_errors: Option<u64>,
+    pub write_errors: Option<u64>,
+    pub status: String,
+    pub partition_count: u32,
+    pub serial_number: String,
+    pub partition_style: String,
+    pub is_boot_disk: bool,
+    pub partitions: Vec<PartitionInfo>,
+    pub total_usage_gb: f64,
+    pub total_capacity_gb: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DiskHealthResponse {
+    pub disks: Vec<DiskHealthInfo>,
+    pub total_count: u32,
+    pub healthy_count: u32,
+    pub warning_count: u32,
+    pub unhealthy_count: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case, dead_code)]
+struct PsDiskHealthRaw {
+    DeviceId: String,
+    FriendlyName: String,
+    Model: String,
+    MediaType: Option<String>,
+    Size: Option<u64>,
+    BusType: String,
+    HealthStatus: String,
+    OperationalStatus: String,
+    SerialNumber: Option<String>,
+    NumberOfPartitions: Option<u32>,
+    Temperature: Option<f64>,
+    WearPercentage: Option<f64>,
+    PowerOnHours: Option<u64>,
+    ReadErrorsTotal: Option<u64>,
+    WriteErrorsTotal: Option<u64>,
+    WmiStatus: Option<String>,
+    WmiInterfaceType: Option<String>,
+    PartitionStyle: Option<String>,
+    IsBoot: Option<bool>,
+    Partitions: Option<Vec<PsPartitionRaw>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+struct PsPartitionRaw {
+    DriveLetter: Option<String>,
+    SizeRemaining: Option<u64>,
+    Size: Option<u64>,
+    FileSystem: Option<String>,
+}
+
+fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
+    let ps_script = r#"
+$disks = Get-PhysicalDisk -ErrorAction SilentlyContinue
+$wmiDisks = Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue
+$diskLayout = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -Class MSFT_Disk -ErrorAction SilentlyContinue
+
+# Try multiple methods to get reliability/SMART data
+$reliabilityMap = @{}
+# Method 1: Standard PowerShell pipeline
+try {
+    $relData = Get-PhysicalDisk -ErrorAction SilentlyContinue | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+    if ($relData) {
+        foreach ($r in $relData) {
+            $reliabilityMap[$r.DeviceId] = $r
+        }
+    }
+} catch {}
+# Method 2: WMI MSFT_StorageReliabilityCounter
+if ($reliabilityMap.Count -eq 0) {
+    try {
+        $relWmi = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -Class MSFT_StorageReliabilityCounter -ErrorAction SilentlyContinue
+        if ($relWmi) {
+            foreach ($r in $relWmi) {
+                $did = if ($r.DeviceId) { $r.DeviceId } else { "PhysicalDrive$($r.PSComputerName)" }
+                $reliabilityMap[$did] = $r
+            }
+        }
+    } catch {}
+}
+# Method 3: CIM MSFT_StorageReliabilityCounter
+if ($reliabilityMap.Count -eq 0) {
+    try {
+        $relCim = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -ClassName MSFT_StorageReliabilityCounter -ErrorAction SilentlyContinue
+        if ($relCim) {
+            foreach ($r in $relCim) {
+                $reliabilityMap[$r.DeviceId] = $r
+            }
+        }
+    } catch {}
+}
+
+$result = $disks | ForEach-Object {
+    $d = $_
+    $rel = $reliabilityMap[$d.DeviceId]
+    $diskNum = [int]($d.DeviceId -replace '.*?(\d+)$', '$1')
+
+    $wmiMatch = $wmiDisks | Where-Object { $_.Model -eq $d.Model -or $_.Model -eq $d.FriendlyName } | Select-Object -First 1
+
+    $layout = $diskLayout | Where-Object { $_.Number -eq $diskNum } | Select-Object -First 1
+
+    $parts = Get-Partition -DiskNumber $diskNum -ErrorAction SilentlyContinue | Where-Object { $_.DriveLetter } | ForEach-Object {
+        $vol = Get-Volume -DriveLetter $_.DriveLetter -ErrorAction SilentlyContinue
+        [PSCustomObject]@{
+            DriveLetter = if ($vol) { $_.DriveLetter.ToString() } else { $null }
+            SizeRemaining = if ($vol) { [long]$vol.SizeRemaining } else { $null }
+            Size = if ($vol) { [long]$vol.Size } else { $null }
+            FileSystem = if ($vol -and $vol.FileSystemType) { $vol.FileSystemType.ToString() } else { $null }
+        }
+    }
+
+    [PSCustomObject]@{
+        DeviceId = $d.DeviceId
+        FriendlyName = $d.FriendlyName
+        Model = if ($d.Model) { $d.Model } else { $d.FriendlyName }
+        MediaType = if ($d.MediaType) { $d.MediaType.ToString() } else { $null }
+        Size = if ($d.Size) { [long]$d.Size } else { $null }
+        BusType = $d.BusType.ToString()
+        HealthStatus = $d.HealthStatus.ToString()
+        OperationalStatus = $d.OperationalStatus.ToString()
+        SerialNumber = $d.SerialNumber
+        NumberOfPartitions = if ($d.NumberOfPartitions -ne $null) { [int]$d.NumberOfPartitions } else { $null }
+        Temperature = if ($rel -and $rel.Temperature -ne $null) { [double]$rel.Temperature } else { $null }
+        WearPercentage = if ($rel -and $rel.WearPercentage -ne $null) { [double]$rel.WearPercentage } else { $null }
+        PowerOnHours = if ($rel -and $rel.PowerOnHours -ne $null) { [long]$rel.PowerOnHours } else { $null }
+        ReadErrorsTotal = if ($rel -and $rel.ReadErrorsTotal -ne $null) { [long]$rel.ReadErrorsTotal } else { $null }
+        WriteErrorsTotal = if ($rel -and $rel.WriteErrorsTotal -ne $null) { [long]$rel.WriteErrorsTotal } else { $null }
+        WmiStatus = if ($wmiMatch) { $wmiMatch.Status } else { $null }
+        WmiInterfaceType = if ($wmiMatch) { $wmiMatch.InterfaceType } else { $null }
+        PartitionStyle = if ($layout) { if ($layout.PartitionStyle -eq 1) { "MBR" } elseif ($layout.PartitionStyle -eq 2) { "GPT" } elseif ($layout.PartitionStyle -eq 3) { "RAW" } else { "Unknown" } } else { $null }
+        IsBoot = if ($layout) { [bool]$layout.IsBoot } else { $false }
+        Partitions = @($parts)
+    }
+}
+
+if ($result) { $result | ConvertTo-Json -Depth 3 -Compress } else { '[]' }
+"#;
+
+    let raw_disks = run_powershell::<PsDiskHealthRaw>(ps_script)
+        .map_err(|e| format!("获取磁盘信息失败: {}", e))?;
+
+    if raw_disks.is_empty() {
+        return Ok(DiskHealthResponse {
+            disks: vec![],
+            total_count: 0,
+            healthy_count: 0,
+            warning_count: 0,
+            unhealthy_count: 0,
+        });
+    }
+
+    let mut disk_infos = Vec::new();
+    let mut healthy = 0u32;
+    let mut warning = 0u32;
+    let mut unhealthy = 0u32;
+
+    for (i, d) in raw_disks.iter().enumerate() {
+        let media_type = d.MediaType.as_deref().unwrap_or("Unknown").to_string();
+        let size_gb = d.Size.map(|s| s as f64 / 1_000_000_000.0).unwrap_or(0.0);
+        let health_status = d.HealthStatus.clone();
+        let partition_count = d.NumberOfPartitions.unwrap_or(0);
+        let serial = d.SerialNumber.as_deref().unwrap_or("").to_string();
+        let interface_type = d.WmiInterfaceType.as_deref().unwrap_or(&d.BusType).to_string();
+
+        match health_status.to_lowercase().as_str() {
+            "healthy" => healthy += 1,
+            "warning" => warning += 1,
+            _ => unhealthy += 1,
+        }
+
+        let partitions: Vec<PartitionInfo> = d.Partitions.as_ref().map(|parts| {
+            parts.iter().filter_map(|p| {
+                let letter = p.DriveLetter.as_deref()?;
+                let total = p.Size.unwrap_or(0) as f64;
+                let available = p.SizeRemaining.unwrap_or(0) as f64;
+                let used = total - available;
+                let usage_pct = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
+                let fs = p.FileSystem.as_deref().unwrap_or("").to_string();
+                Some(PartitionInfo {
+                    drive_letter: letter.to_string(),
+                    total_gb: total / 1_000_000_000.0,
+                    available_gb: available / 1_000_000_000.0,
+                    used_gb: used / 1_000_000_000.0,
+                    usage_percent: usage_pct,
+                    filesystem: fs,
+                })
+            }).collect()
+        }).unwrap_or_default();
+
+        let total_capacity_gb: f64 = partitions.iter().map(|p| p.total_gb).sum();
+        let total_usage_gb: f64 = partitions.iter().map(|p| p.used_gb).sum();
+
+        disk_infos.push(DiskHealthInfo {
+            index: i as u32,
+            model: d.FriendlyName.clone(),
+            media_type,
+            size_gb,
+            interface_type,
+            health_status,
+            operational_status: d.OperationalStatus.clone(),
+            temperature_c: d.Temperature,
+            wear_percentage: d.WearPercentage,
+            power_on_hours: d.PowerOnHours,
+            read_errors: d.ReadErrorsTotal,
+            write_errors: d.WriteErrorsTotal,
+            status: d.WmiStatus.as_deref().unwrap_or("").to_string(),
+            partition_count,
+            serial_number: serial,
+            partition_style: d.PartitionStyle.as_deref().unwrap_or("").to_string(),
+            is_boot_disk: d.IsBoot.unwrap_or(false),
+            partitions,
+            total_usage_gb,
+            total_capacity_gb,
+        });
+    }
+
+    Ok(DiskHealthResponse {
+        disks: disk_infos,
+        total_count: raw_disks.len() as u32,
+        healthy_count: healthy,
+        warning_count: warning,
+        unhealthy_count: unhealthy,
+    })
+}
+
+#[tauri::command]
+pub async fn get_disk_health_info() -> Result<DiskHealthResponse, String> {
+    match tauri::async_runtime::spawn_blocking(|| get_disk_health_info_inner()).await {
+        Ok(Ok(info)) => Ok(info),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(format!("异步任务失败: {}", e)),
+    }
+}
+
+pub fn cleanup_hardware_cache() {
+    let mut cache = STATIC_HARDWARE_CACHE.lock().unwrap();
+    *cache = None;
+
+    let mut cpu_system = CPU_SYSTEM.lock().unwrap();
+    *cpu_system = None;
+    
+    log::info!("硬件信息缓存已清理");
+}
