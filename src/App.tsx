@@ -67,7 +67,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "6.0.4";
+const CURRENT_VERSION = "6.0.5";
 
 function App() {
   const { t } = useTranslation();

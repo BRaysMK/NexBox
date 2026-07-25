@@ -995,16 +995,17 @@ fn audio_thread(
 
 // ── 音效 DSP 处理器（完全适配 FxSound）──────────────────────────────
 
-pub struct SoundEffects {
-    sample_rate: f64,
-
+/// 单声道效果链——每个声道持独立的有状态滤波器实例，
+/// 避免 L/R 交替使用同一滤波器导致相位/包络串扰（声道反转 Bug）。
+struct MonoFxChain {
     // ── FxSound Aural Activator（清晰度：Butterworth HP → drive → sin 谐波）──
     clarity_hp: BiquadFilter,
     last_clarity: f64,
     clarity_drive: f64,  // 0..3.393
 
-    // ── FxSound Dattorro LexReverb（环境）─────────────────────────────────
-    reverb: crate::dattorro::DattorroReverb,
+    // ── FxSound Bass Boost（低音：90Hz peaking EQ, Q=2.5, max 15dB）─────
+    bass_peq: BiquadFilter,
+    last_bass: f64,
 
     // ── FxSound Maximizer（动态：look-ahead 峰值限制器）────────────────────
     maxi_buf: Vec<f64>,
@@ -1015,18 +1016,10 @@ pub struct SoundEffects {
     maxi_env: f64,      // 峰值包络
     maxi_ramp: usize,   // ramp 计数
     maxi_release_beta: f64,
-
-    // ── FxSound Bass Boost（低音：90Hz peaking EQ, Q=2.5, max 15dB）─────
-    bass_peq: BiquadFilter,
-    last_bass: f64,
-
-    // ── FxSound Spectrum Analyzer（10段频谱可视化）───────────────────────
-    spectrum: crate::spectrum::SpectrumAnalyzer,
-    spectrum_tick: u32,
 }
 
-impl SoundEffects {
-    pub fn new(sample_rate: f64) -> Self {
+impl MonoFxChain {
+    fn new(sample_rate: f64) -> Self {
         let mut clarity_hp = BiquadFilter::new();
         clarity_hp.set_highpass(sample_rate, 4000.0, 0.7071); // Butterworth HP
 
@@ -1039,11 +1032,11 @@ impl SoundEffects {
         let maxi_release_beta = 1.0 - 1.0 / (sample_rate * 0.010);
 
         Self {
-            sample_rate,
             clarity_hp,
             last_clarity: 0.0,
             clarity_drive: 0.0,
-            reverb: crate::dattorro::DattorroReverb::new(sample_rate),
+            bass_peq,
+            last_bass: 0.0,
             maxi_buf: vec![0.0; maxi_len],
             maxi_pos: 0,
             maxi_len,
@@ -1052,10 +1045,6 @@ impl SoundEffects {
             maxi_env: 0.0001,
             maxi_ramp: 0,
             maxi_release_beta,
-            bass_peq,
-            last_bass: 0.0,
-            spectrum: crate::spectrum::SpectrumAnalyzer::new(sample_rate),
-            spectrum_tick: 0,
         }
     }
 
@@ -1077,18 +1066,16 @@ impl SoundEffects {
         sample * dry + odd * 1.5 * wet
     }
 
-    // ═══════════════ 环绕：FxSound M/S 立体声展宽 ═════════════════════════
-    /// M = (L+R)/2, S = L-M; S *= (1+3I), M *= (1-0.3I)
-    /// FxSound 最大 intensity = 0.7
-    fn process_width(&self, l: f64, r: f64, amount: f64) -> (f64, f64) {
-        if amount < 0.001 { return (l, r); }
-        let intensity = amount * 0.7; // FxSound max slider
-        let side_gain = 1.0 + 3.0 * intensity;
-        let mid_comp = 1.0 - 0.3 * intensity;
-        let mid = (l + r) * 0.5 * mid_comp;
-        let side_l = l - (l + r) * 0.5;
-        let side_r = r - (l + r) * 0.5;
-        (mid + side_l * side_gain, mid + side_r * side_gain)
+    // ═══════════════ 低音：FxSound 90Hz peaking EQ ════════════════════════
+    /// 90Hz, Q=2.5, 0..15dB boost（线性映射）
+    fn process_bass(&mut self, sample: f64, amount: f64, sample_rate: f64) -> f64 {
+        if amount < 0.001 { return sample; }
+        if amount != self.last_bass {
+            let boost_db = amount * 15.0; // FxSound: 0..15dB
+            self.bass_peq.set_peaking(sample_rate, 90.0, boost_db, 2.5);
+            self.last_bass = amount;
+        }
+        self.bass_peq.process(sample)
     }
 
     // ═══════════════ 动态：FxSound Maximizer（look-ahead 限制器）══════════
@@ -1102,25 +1089,23 @@ impl SoundEffects {
             self.last_dynamics = amount;
         }
         let max_out: f64 = 0.966; // FxSound: -0.3 dB 防止削波
-        let buf = &mut self.maxi_buf;
         let len = self.maxi_len;
         let pos = self.maxi_pos;
-        let maxi_len = self.maxi_len;
 
         // 写入增强信号到延迟缓冲区
-        buf[pos] = sample * self.maxi_gain;
+        self.maxi_buf[pos] = sample * self.maxi_gain;
         self.maxi_pos = (pos + 1) % len;
 
         // 读取 look-ahead 延迟后的信号
-        let dly = buf[self.maxi_pos]; // pos 已递增，当前是缓冲区最旧样本
+        let dly = self.maxi_buf[self.maxi_pos]; // pos 已递增，当前是缓冲区最旧样本
 
         // 峰值包络检测（双模式：ramp 瞬态 / release 稳态）
         let abs_dly = dly.abs();
         if abs_dly > self.maxi_env {
             // Ramp 模式：线性跟随到新峰值（在 look-ahead 窗口内）
-            let delta = (abs_dly - self.maxi_env) / maxi_len as f64;
+            let delta = (abs_dly - self.maxi_env) / len as f64;
             self.maxi_env += delta;
-            self.maxi_ramp = maxi_len;
+            self.maxi_ramp = len;
         } else {
             // Release 模式
             if self.maxi_ramp > 0 {
@@ -1138,24 +1123,69 @@ impl SoundEffects {
         }
     }
 
-    // ═══════════════ 低音：FxSound 90Hz peaking EQ ════════════════════════
-    /// 90Hz, Q=2.5, 0..15dB boost（线性映射）
-    fn process_bass(&mut self, sample: f64, amount: f64) -> f64 {
-        if amount < 0.001 { return sample; }
-        if amount != self.last_bass {
-            let boost_db = amount * 15.0; // FxSound: 0..15dB
-            self.bass_peq.set_peaking(self.sample_rate, 90.0, boost_db, 2.5);
-            self.last_bass = amount;
+    #[allow(dead_code)]
+    fn reset(&mut self) {
+        self.clarity_hp.reset();
+        self.bass_peq.reset();
+        self.maxi_buf.iter_mut().for_each(|v| *v = 0.0);
+        self.maxi_pos = 0;
+        self.maxi_env = 0.0001;
+        self.maxi_ramp = 0;
+        self.last_clarity = 0.0;
+        self.clarity_drive = 0.0;
+        self.last_bass = 0.0;
+        self.last_dynamics = 0.0;
+        self.maxi_gain = 1.0;
+    }
+}
+
+pub struct SoundEffects {
+    sample_rate: f64,
+
+    // ── 左/右声道各自独立的效果链（修复声道反转 Bug）──
+    chain_l: MonoFxChain,
+    chain_r: MonoFxChain,
+
+    // ── FxSound Dattorro LexReverb（环境，立体声处理，无需拆分）──────────
+    reverb: crate::dattorro::DattorroReverb,
+
+    // ── FxSound Spectrum Analyzer（10段频谱可视化）───────────────────────
+    spectrum: crate::spectrum::SpectrumAnalyzer,
+    spectrum_tick: u32,
+}
+
+impl SoundEffects {
+    pub fn new(sample_rate: f64) -> Self {
+        Self {
+            sample_rate,
+            chain_l: MonoFxChain::new(sample_rate),
+            chain_r: MonoFxChain::new(sample_rate),
+            reverb: crate::dattorro::DattorroReverb::new(sample_rate),
+            spectrum: crate::spectrum::SpectrumAnalyzer::new(sample_rate),
+            spectrum_tick: 0,
         }
-        self.bass_peq.process(sample)
+    }
+
+    // ═══════════════ 环绕：FxSound M/S 立体声展宽 ═════════════════════════
+    /// M = (L+R)/2, S = (L-R)/2; S *= (1+3I), M *= (1-0.3I)
+    /// FxSound 最大 intensity = 0.7
+    fn process_width(&self, l: f64, r: f64, amount: f64) -> (f64, f64) {
+        if amount < 0.001 { return (l, r); }
+        let intensity = amount * 0.7; // FxSound max slider
+        let side_gain = 1.0 + 3.0 * intensity;
+        let mid_comp = 1.0 - 0.3 * intensity;
+        let half = (l + r) * 0.5;
+        let mid = half * mid_comp;
+        let side = (l - r) * 0.5; // = S
+        (mid + side * side_gain, mid - side * side_gain)
     }
 
     // ═══════════════ 处理入口 ═════════════════════════════════════════════
-    /// 单声道处理全部效果
+    /// 单声道处理全部效果（使用左声道链）
     pub fn process(&mut self, sample: f64, params: &SoundEffectParams) -> f64 {
-        let mut s = self.process_bass(sample, params.bass);
-        s = self.process_clarity(s, params.clarity);
-        s = self.process_compressor(s, params.dynamics);
+        let mut s = self.chain_l.process_bass(sample, params.bass, self.sample_rate);
+        s = self.chain_l.process_clarity(s, params.clarity);
+        s = self.chain_l.process_compressor(s, params.dynamics);
         if params.ambience > 0.001 {
             let (rev_l, _) = self.reverb.process(s, params.ambience);
             s = s + rev_l * params.ambience * 0.5;
@@ -1163,13 +1193,17 @@ impl SoundEffects {
         s.clamp(-4.0, 4.0)
     }
 
-    /// 立体声处理（按 FxSound 顺序：Fidelity → Ambience → Width → Bass → Maximizer）
+    /// 立体声处理（按 FxSound 顺序：Bass → Clarity → Ambience → Width → Maximizer）
+    ///
+    /// 关键修复：左右声道各自使用独立的滤波器实例（chain_l / chain_r），
+    /// 不再共享 BiquadFilter / maxi_buf 状态，消除 L/R 相位串扰。
     pub fn process_stereo(&mut self, l: f64, r: f64, params: &SoundEffectParams) -> (f64, f64) {
-        let mut sl = self.process_bass(l, params.bass);
-        let mut sr = self.process_bass(r, params.bass);
-        sl = self.process_clarity(sl, params.clarity);
-        sr = self.process_clarity(sr, params.clarity);
-        // 环境混响
+        // 每个声道用自己的滤波器链
+        let mut sl = self.chain_l.process_bass(l, params.bass, self.sample_rate);
+        let mut sr = self.chain_r.process_bass(r, params.bass, self.sample_rate);
+        sl = self.chain_l.process_clarity(sl, params.clarity);
+        sr = self.chain_r.process_clarity(sr, params.clarity);
+        // 环境混响（reverb 本身是立体声的，无需拆分）
         if params.ambience > 0.001 {
             let mono_in = (sl + sr) * 0.5;
             let (rev_l, rev_r) = self.reverb.process(mono_in, params.ambience);
@@ -1178,8 +1212,8 @@ impl SoundEffects {
             sr = sr + rev_r * wet;
         }
         (sl, sr) = self.process_width(sl, sr, params.width);
-        sl = self.process_compressor(sl, params.dynamics);
-        sr = self.process_compressor(sr, params.dynamics);
+        sl = self.chain_l.process_compressor(sl, params.dynamics);
+        sr = self.chain_r.process_compressor(sr, params.dynamics);
         // 喂入频谱分析器
         self.spectrum_tick = self.spectrum_tick.wrapping_add(1);
         if self.spectrum_tick % 4 == 0 { // 降采样，每 4 帧处理一次（48kHz→12kHz 内部速率，匹配 FxSound）
