@@ -521,6 +521,21 @@ export default function AudioEqPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // 注入主题色滚动条
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.id = "eq-scrollbar-theme";
+    style.textContent = `.eq-preset-scroll::-webkit-scrollbar{width:4px}
+.eq-preset-scroll::-webkit-scrollbar-track{background:transparent}
+.eq-preset-scroll::-webkit-scrollbar-thumb{background:${activeColor}88;border-radius:2px}
+.eq-preset-scroll::-webkit-scrollbar-thumb:hover{background:${activeColor}}`;
+    document.head.appendChild(style);
+    return () => {
+      const el = document.getElementById("eq-scrollbar-theme");
+      if (el) el.remove();
+    };
+  }, [activeColor]);
+
   // 处理安装驱动
   const handleInstall = async () => {
     setInstalling(true);
@@ -1144,10 +1159,10 @@ ${bandsStr}`;
           </HStack>
         </LiquidGlassCard>
 
-        {/* 均衡器 + 预设 双栏布局 */}
-        <HStack spacing={4} align="start">
-          {/* 左侧：均衡器 */}
-          <Box flex="1" minW={0}>
+        {/* 均衡器 + 预设 双栏布局（绝对定位限制卡片高度） */}
+        <HStack spacing={4} align="stretch" position="relative">
+          {/* 左侧：均衡器 + 音效处理 */}
+          <Box flex="1" minW={0} display="flex" flexDirection="column">
             <LiquidGlassCard p={4}>
               <VStack align="stretch" spacing={4}>
                 <HStack justify="space-between">
@@ -1155,265 +1170,166 @@ ${bandsStr}`;
                     {t("audioEq.equalizer")}
                   </Text>
                   <HStack spacing={1}>
-                    <Button
-                      leftIcon={<RefreshCw size={14} />}
-                      size="xs"
-                      variant="ghost"
-                      onClick={handleResetBands}
-                    >
+                    <Button leftIcon={<RefreshCw size={14} />} size="xs" variant="ghost" onClick={handleResetBands}>
                       {t("audioEq.reset")}
                     </Button>
                   </HStack>
                 </HStack>
-
-                {/* 频段滑块 + 覆盖折线 */}
                 <Box position="relative">
-                  {/* 折线覆盖在滑块上（不阻挡交互） */}
                   <Box position="absolute" inset={0} zIndex={1} pointerEvents="none">
                     <FrequencyResponseCurve bands={bands} />
                   </Box>
                   <HStack justify="space-between" align="stretch" spacing={1} px={1}>
                     {bands.map((band, index) => (
-                      <EqBandSlider
-                        key={index}
-                        band={band}
-                        onChange={(gain) => handleBandChange(index, gain)}
-                      />
+                      <EqBandSlider key={index} band={band} onChange={(gain) => handleBandChange(index, gain)} />
                     ))}
                   </HStack>
                 </Box>
-
-                {/* 频率旋钮 + 范围标签 */}
                 <HStack spacing={1} justify="space-between" px={1}>
                   {bands.map((band, index) => {
                     const [minF, maxF] = BAND_FREQ_RANGES[index];
                     return (
                       <VStack key={index} spacing={0.5} w="full" align="center">
-                        <Text fontSize="2xs" color={descColor} lineHeight="1.2">
-                          {formatFreq(minF)}-{formatFreq(maxF)}
-                        </Text>
-                        <FreqKnob
-                          freq={band.freq}
-                          minFreq={minF}
-                          maxFreq={maxF}
-                          onChange={(f) => handleFreqChange(index, f)}
-                        />
+                        <FreqKnob freq={band.freq} minFreq={minF} maxFreq={maxF} onChange={(f) => handleFreqChange(index, f)} />
                       </VStack>
                     );
                   })}
                 </HStack>
               </VStack>
             </LiquidGlassCard>
-
-            {/* 音效处理 */}
-            <LiquidGlassCard p={4} mt={4}>
-              <Text fontWeight="bold" fontSize="md" color={headingColor} mb={3}>
-                音效处理
-              </Text>
-              <VStack spacing={3} align="stretch">
-                {([
-                  { key: "clarity", label: "清晰度", desc: "提升声音清晰度" },
-                  { key: "ambience", label: "环境", desc: "模拟空间混响" },
-                  { key: "width", label: "环绕", desc: "拓宽声场" },
-                  { key: "dynamics", label: "动态", desc: "提升响度" },
-                  { key: "bass", label: "低音", desc: "增强低频谐波" },
-                ] as const).map(({ key, label, desc }) => (
-                  <Box key={key}>
-                    <HStack justify="space-between" mb={1}>
-                      <HStack spacing={2}>
-                        <Text fontSize="sm" fontWeight="medium" color={labelColor}>{label}</Text>
-                        <Text fontSize="xs" color={descColor}>{desc}</Text>
+            <Box mt={4}>
+              <LiquidGlassCard p={4}>
+                <Text fontWeight="bold" fontSize="md" color={headingColor} mb={3}>音效处理</Text>
+                <VStack spacing={3} align="stretch">
+                  {([
+                    { key: "clarity", label: "清晰度", desc: "提升声音清晰度" },
+                    { key: "ambience", label: "环境", desc: "模拟空间混响" },
+                    { key: "width", label: "环绕", desc: "拓宽声场" },
+                    { key: "dynamics", label: "动态", desc: "提升响度" },
+                    { key: "bass", label: "低音", desc: "增强低频谐波" },
+                  ] as const).map(({ key, label, desc }) => (
+                    <Box key={key}>
+                      <HStack justify="space-between" mb={1}>
+                        <HStack spacing={2}>
+                          <Text fontSize="sm" fontWeight="medium" color={labelColor}>{label}</Text>
+                          <Text fontSize="xs" color={descColor}>{desc}</Text>
+                        </HStack>
+                        <Text fontSize="sm" fontWeight="bold" color={fx[key] > 0 ? activeColor : descColor} minW="28px" textAlign="right">
+                          {Math.round(fx[key] * 10)}
+                        </Text>
                       </HStack>
-                      <Text fontSize="sm" fontWeight="bold" color={fx[key] > 0 ? activeColor : descColor} minW="28px" textAlign="right">
-                        {Math.round(fx[key] * 10)}
-                      </Text>
-                    </HStack>
-                    <input
-                      type="range"
-                      min={0}
-                      max={10}
-                      step={1}
-                      value={Math.round(fx[key] * 10)}
-                      onChange={(e) => {
-                        const v = parseInt(e.target.value) / 10;
-                        setFx((prev) => {
-                          const newFx = { ...prev, [key]: v };
-                          invoke("update_eq_effects", { ...newFx }).catch(() => {});
-                          // Promise.all 确保两个 key 都写入再保存
-                          Promise.all([
-                            store.set(EQ_STORE_FX, newFx),
-                            store.set(EQ_STORE_SELECTED, selectedPresetIdRef.current),
-                          ]).then(() => store.save()).catch(() => {});
-                          return newFx;
-                        });
-                      }}
-                      style={{
-                        width: "100%",
-                        height: "6px",
-                        appearance: "none",
-                        background: `linear-gradient(to right, ${activeColor} ${fx[key] * 100}%, #8884 ${fx[key] * 100}%, #8884 100%)`,
-                        borderRadius: "3px",
-                        outline: "none",
-                        cursor: "pointer",
-                        accentColor: activeColor,
-                      }}
-                    />
-                  </Box>
-                ))}
-              </VStack>
-            </LiquidGlassCard>
+                      <Box position="relative" h="20px" display="flex" alignItems="center">
+                        <Box w="full" h="6px" borderRadius="3px" bg="#8884" position="relative" overflow="visible">
+                          <Box h="full" borderRadius="3px" bg={activeColor} w={`${fx[key] * 100}%`} transition="width 0.12s ease-out" />
+                          <Box position="absolute" top="50%" left={`${fx[key] * 100}%`} transform="translate(-50%, -50%)"
+                            w="16px" h="16px" borderRadius="full" bg={activeColor}
+                            border="2px solid" borderColor={useColorModeValue("white", "#222")}
+                            boxShadow="0 1px 4px rgba(0,0,0,0.3)" pointerEvents="none" transition="left 0.12s ease-out" />
+                        </Box>
+                        <input type="range" min={0} max={10} step={1} value={Math.round(fx[key] * 10)}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value) / 10;
+                            setFx((prev) => {
+                              const newFx = { ...prev, [key]: v };
+                              invoke("update_eq_effects", { ...newFx }).catch(() => {});
+                              Promise.all([store.set(EQ_STORE_FX, newFx), store.set(EQ_STORE_SELECTED, selectedPresetIdRef.current)])
+                                .then(() => store.save()).catch(() => {});
+                              return newFx;
+                            });
+                          }}
+                          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "20px",
+                            margin: 0, padding: 0, opacity: 0, cursor: "pointer",
+                            appearance: "none", WebkitAppearance: "none", MozAppearance: "none" }}
+                        />
+                      </Box>
+                    </Box>
+                  ))}
+                </VStack>
+              </LiquidGlassCard>
+            </Box>
           </Box>
 
-          {/* 右侧：预设 / 导入 */}
-          <Box w="230px" flexShrink={0}>
-            <LiquidGlassCard p={4}>
-              <Tabs index={tabIndex} onChange={setTabIndex} variant="soft-rounded" size="sm" isFitted>
-                <TabList mb={3}>
+          {/* 右侧占位（保持宽度） */}
+          <Box w="230px" flexShrink={0} />
+
+          {/* 预设卡片：绝对定位，top=0 bottom=0 强制限高 */}
+          <Box position="absolute" right={0} top={0} bottom={0} w="230px" display="flex" flexDirection="column" overflow="hidden">
+            <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" minH={0} overflow="hidden">
+              <Tabs index={tabIndex} onChange={setTabIndex} variant="soft-rounded" size="sm" isFitted
+                display="flex" flexDirection="column" flex={1} minH={0}>
+                <TabList mb={3} flexShrink={0}>
                   <Tab fontSize="xs" py={1} _selected={{ color: activeColor }}>{t("audioEq.presets")}</Tab>
                   <Tab fontSize="xs" py={1} _selected={{ color: activeColor }}>{t("audioEq.import") ?? "导入"}</Tab>
                 </TabList>
-
-                <TabPanels>
-                  {/* 预设列表 */}
-                  <TabPanel p={0}>
+                <TabPanels display="flex" flexDirection="column" flex={1} minH={0}>
+                  <TabPanel p={0} flex={1} overflowY="auto" minH={0} className="eq-preset-scroll">
                     <VStack spacing={1} align="stretch">
                       {builtInPresets.map((preset) => {
                         const Icon = getPresetIcon(preset.name);
                         const isSelected = selectedPresetId === preset.id;
                         return (
-                          <Box
-                            key={preset.id}
-                            onClick={() => handleSelectPreset(preset)}
-                            cursor="pointer"
-                            px={3}
-                            py={2.5}
-                            borderRadius="lg"
-                            border="1px solid"
+                          <Box key={preset.id} onClick={() => handleSelectPreset(preset)} cursor="pointer"
+                            px={3} py={2.5} borderRadius="lg" border="1px solid"
                             borderColor={isSelected ? activeColor : `${activeColor}18`}
                             bg={isSelected ? `${activeColor}12` : `${activeColor}04`}
-                            _hover={{
-                              bg: `${activeColor}10`,
-                              borderColor: isSelected ? activeColor : `${activeColor}40`,
-                            }}
-                            transition="all 0.2s"
-                          >
+                            _hover={{ bg: `${activeColor}10`, borderColor: isSelected ? activeColor : `${activeColor}40` }}
+                            transition="all 0.2s">
                             <HStack spacing={2}>
                               <Icon size={16} color={isSelected ? activeColor : presetIconColor} />
-                              <Text
-                                fontSize="sm"
-                                fontWeight={isSelected ? "bold" : "medium"}
-                                color={isSelected ? activeColor : labelColor}
-                                isTruncated
-                              >
-                                {preset.name}
-                              </Text>
+                              <Text fontSize="sm" fontWeight={isSelected ? "bold" : "medium"}
+                                color={isSelected ? activeColor : labelColor} isTruncated>{preset.name}</Text>
                             </HStack>
                           </Box>
                         );
                       })}
-                      {/* 用户保存的预设 */}
                       {savedPresets.map((preset) => {
                         const Icon = getPresetIcon(preset.name);
                         const isSelected = selectedPresetId === preset.id;
                         return (
                           <HStack key={preset.id} spacing={0}>
-                            <Box
-                              flex={1}
-                              onClick={() => handleSelectPreset(preset)}
-                              cursor="pointer"
-                              px={3}
-                              py={2}
-                              borderRadius="lg"
-                              border="1px solid"
+                            <Box flex={1} onClick={() => handleSelectPreset(preset)} cursor="pointer"
+                              px={3} py={2} borderRadius="lg" border="1px solid"
                               borderColor={isSelected ? activeColor : `${activeColor}18`}
                               bg={isSelected ? `${activeColor}12` : `${activeColor}04`}
-                              _hover={{
-                                bg: `${activeColor}10`,
-                                borderColor: isSelected ? activeColor : `${activeColor}40`,
-                              }}
-                              transition="all 0.2s"
-                            >
+                              _hover={{ bg: `${activeColor}10`, borderColor: isSelected ? activeColor : `${activeColor}40` }}
+                              transition="all 0.2s">
                               <HStack spacing={2}>
                                 <Icon size={14} color={isSelected ? activeColor : presetIconColor} />
-                                <Text fontSize="xs" fontWeight={isSelected ? "bold" : "medium"} color={isSelected ? activeColor : labelColor} isTruncated>
-                                  {preset.name}
-                                </Text>
+                                <Text fontSize="xs" fontWeight={isSelected ? "bold" : "medium"}
+                                  color={isSelected ? activeColor : labelColor} isTruncated>{preset.name}</Text>
                               </HStack>
                             </Box>
-                            <IconButton
-                              aria-label={t("audioEq.deletePreset") ?? "删除"}
-                              icon={<Trash2 size={12} />}
-                              size="xs"
-                              variant="ghost"
-                              color={descColor}
+                            <IconButton aria-label={t("audioEq.deletePreset") ?? "删除"}
+                              icon={<Trash2 size={12} />} size="xs" variant="ghost" color={descColor}
                               _hover={{ color: "red.400", bg: "transparent" }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteSavedPreset(preset.id, preset.name);
-                              }}
-                              ml={1}
-                            />
+                              onClick={(e) => { e.stopPropagation(); handleDeleteSavedPreset(preset.id, preset.name); }} ml={1} />
                           </HStack>
                         );
                       })}
-                      {/* 自定义 */}
-                      <Box
-                        onClick={handleCustomPreset}
-                        cursor="pointer"
-                        px={3}
-                        py={2.5}
-                        borderRadius="lg"
+                      <Box onClick={handleCustomPreset} cursor="pointer" px={3} py={2.5} borderRadius="lg"
                         border="1px solid"
                         borderColor={selectedPresetId === CUSTOM_PRESET_ID ? activeColor : `${activeColor}18`}
                         bg={selectedPresetId === CUSTOM_PRESET_ID ? `${activeColor}12` : `${activeColor}04`}
-                        _hover={{
-                          bg: `${activeColor}10`,
-                          borderColor: selectedPresetId === CUSTOM_PRESET_ID ? activeColor : `${activeColor}40`,
-                        }}
-                        transition="all 0.2s"
-                      >
+                        _hover={{ bg: `${activeColor}10`, borderColor: selectedPresetId === CUSTOM_PRESET_ID ? activeColor : `${activeColor}40` }}
+                        transition="all 0.2s">
                         <HStack spacing={2}>
                           <Music size={16} color={selectedPresetId === CUSTOM_PRESET_ID ? activeColor : presetIconColor} />
-                          <Text fontSize="sm" fontWeight={selectedPresetId === CUSTOM_PRESET_ID ? "bold" : "medium"} color={selectedPresetId === CUSTOM_PRESET_ID ? activeColor : labelColor}>
-                            自定义
-                          </Text>
+                          <Text fontSize="sm" fontWeight={selectedPresetId === CUSTOM_PRESET_ID ? "bold" : "medium"}
+                            color={selectedPresetId === CUSTOM_PRESET_ID ? activeColor : labelColor}>自定义</Text>
                         </HStack>
                       </Box>
                     </VStack>
                   </TabPanel>
-
-                  {/* 导入 */}
                   <TabPanel p={0}>
                     <VStack spacing={3} align="stretch" pt={2}>
-                      {/* 导入按钮 */}
-                      <Input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".fac"
-                        onChange={handleImportFile}
-                        display="none"
-                        id="fac-file-input"
-                      />
-                      <Button
-                        as="label"
-                        htmlFor="fac-file-input"
-                        leftIcon={<Upload size={14} />}
-                        size="sm"
-                        w="full"
-                        variant="outline"
-                        isLoading={importing}
-                        cursor="pointer"
-                        borderColor={`${activeColor}40`}
-                        color={activeColor}
-                        _hover={{ bg: `${activeColor}10`, borderColor: activeColor }}
-                      >
+                      <Input ref={fileInputRef} type="file" accept=".fac" onChange={handleImportFile} display="none" id="fac-file-input" />
+                      <Button as="label" htmlFor="fac-file-input" leftIcon={<Upload size={14} />}
+                        size="sm" w="full" variant="outline" isLoading={importing} cursor="pointer"
+                        borderColor={`${activeColor}40`} color={activeColor}
+                        _hover={{ bg: `${activeColor}10`, borderColor: activeColor }}>
                         {t("audioEq.chooseFacFile") ?? "选择 .fac 文件"}
                       </Button>
-                      <Text fontSize="xs" color={descColor}>
-                        {t("audioEq.importDesc") ?? "导入 .fac 预设文件。"}
-                      </Text>
-
-                      {/* 导入的预设列表 */}
+                      <Text fontSize="xs" color={descColor}>{t("audioEq.importDesc") ?? "导入 .fac 预设文件。"}</Text>
                       {importedPresets.length === 0 ? (
                         <Text fontSize="xs" color={descColor} textAlign="center" py={2}>
                           {t("audioEq.noImported") ?? "暂无导入的预设"}
@@ -1425,47 +1341,22 @@ ${bandsStr}`;
                             const isSelected = selectedPresetId === preset.id;
                             return (
                               <HStack key={preset.id} spacing={0}>
-                                <Box
-                                  flex={1}
-                                  onClick={() => handleSelectPreset(preset)}
-                                  cursor="pointer"
-                                  px={3}
-                                  py={2}
-                                  borderRadius="lg"
-                                  border="1px solid"
+                                <Box flex={1} onClick={() => handleSelectPreset(preset)} cursor="pointer"
+                                  px={3} py={2} borderRadius="lg" border="1px solid"
                                   borderColor={isSelected ? activeColor : `${activeColor}18`}
                                   bg={isSelected ? `${activeColor}12` : `${activeColor}04`}
-                                  _hover={{
-                                    bg: `${activeColor}10`,
-                                    borderColor: isSelected ? activeColor : `${activeColor}40`,
-                                  }}
-                                  transition="all 0.2s"
-                                >
+                                  _hover={{ bg: `${activeColor}10`, borderColor: isSelected ? activeColor : `${activeColor}40` }}
+                                  transition="all 0.2s">
                                   <HStack spacing={2}>
                                     <Icon size={14} color={isSelected ? activeColor : presetIconColor} />
-                                    <Text
-                                      fontSize="xs"
-                                      fontWeight={isSelected ? "bold" : "medium"}
-                                      color={isSelected ? activeColor : labelColor}
-                                      isTruncated
-                                    >
-                                      {preset.name}
-                                    </Text>
+                                    <Text fontSize="xs" fontWeight={isSelected ? "bold" : "medium"}
+                                      color={isSelected ? activeColor : labelColor} isTruncated>{preset.name}</Text>
                                   </HStack>
                                 </Box>
-                                <IconButton
-                                  aria-label={t("audioEq.deletePreset") ?? "删除"}
-                                  icon={<Trash2 size={12} />}
-                                  size="xs"
-                                  variant="ghost"
-                                  color={descColor}
+                                <IconButton aria-label={t("audioEq.deletePreset") ?? "删除"}
+                                  icon={<Trash2 size={12} />} size="xs" variant="ghost" color={descColor}
                                   _hover={{ color: "red.400", bg: "transparent" }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeletePreset(preset.id, preset.name);
-                                  }}
-                                  ml={1}
-                                />
+                                  onClick={(e) => { e.stopPropagation(); handleDeletePreset(preset.id, preset.name); }} ml={1} />
                               </HStack>
                             );
                           })}
@@ -1475,18 +1366,11 @@ ${bandsStr}`;
                   </TabPanel>
                 </TabPanels>
               </Tabs>
-              {/* 预设操作按钮区 — 所有预设类型可见，"保存为预设"或"更新"+"导出" */}
               {selectedPresetId && (
-                <VStack spacing={2} mt={2}>
-                  {/* 保存为预设 / 更新预设 */}
+                <VStack spacing={2} mt={2} flexShrink={0}>
                   {importedPresets.some((p) => p.id === selectedPresetId) ? (
-                    <Button
-                      size="sm"
-                      w="full"
-                      bg={activeColor}
-                      color="white"
-                      _hover={{ opacity: 0.85, bg: activeColor }}
-                      _active={{ opacity: 0.7, bg: activeColor }}
+                    <Button size="sm" w="full" bg={activeColor} color="white"
+                      _hover={{ opacity: 0.85, bg: activeColor }} _active={{ opacity: 0.7, bg: activeColor }}
                       leftIcon={<Save size={14} />}
                       onClick={async () => {
                         const preset = importedPresets.find((p) => p.id === selectedPresetId);
@@ -1499,55 +1383,28 @@ ${bandsStr}`;
                         } catch (e) {
                           toast({ title: "保存失败", description: String(e), status: "error", duration: 3000, isClosable: true });
                         }
-                      }}
-                    >
-                      保存更改
-                    </Button>
+                      }}>保存更改</Button>
                   ) : (
-                    <Button
-                      size="sm"
-                      w="full"
-                      bg={activeColor}
-                      color="white"
-                      _hover={{ opacity: 0.85, bg: activeColor }}
-                      _active={{ opacity: 0.7, bg: activeColor }}
+                    <Button size="sm" w="full" bg={activeColor} color="white"
+                      _hover={{ opacity: 0.85, bg: activeColor }} _active={{ opacity: 0.7, bg: activeColor }}
                       leftIcon={<Save size={14} />}
-                      onClick={() => {
-                        setPresetName("");
-                        onSaveModalOpen();
-                      }}
-                    >
-                      保存为预设
-                    </Button>
+                      onClick={() => { setPresetName(""); onSaveModalOpen(); }}>保存为预设</Button>
                   )}
-                  {/* 导出为 .fac */}
-                  <Button
-                    size="sm"
-                    w="full"
-                    variant="outline"
-                    borderColor={`${activeColor}40`}
-                    color={activeColor}
-                    _hover={{ bg: `${activeColor}10`, borderColor: activeColor }}
-                    leftIcon={<Download size={14} />}
+                  <Button size="sm" w="full" variant="outline" borderColor={`${activeColor}40`} color={activeColor}
+                    _hover={{ bg: `${activeColor}10`, borderColor: activeColor }} leftIcon={<Download size={14} />}
                     onClick={async () => {
                       try {
                         const exportName = "新境盒-EQ调音";
                         const content = buildFacContent(exportName);
                         const { save } = await import("@tauri-apps/plugin-dialog");
-                        const path = await save({
-                          defaultPath: `${exportName}.fac`,
-                          filters: [{ name: "FxSound 预设", extensions: ["fac"] }],
-                        });
+                        const path = await save({ defaultPath: `${exportName}.fac`, filters: [{ name: "FxSound 预设", extensions: ["fac"] }] });
                         if (!path) return;
                         await invoke("export_fac_file", { path, content });
                         toast({ title: "导出成功", description: path, status: "success", duration: 3000, isClosable: true });
                       } catch (e) {
                         toast({ title: "导出失败", description: String(e), status: "error", duration: 3000, isClosable: true });
                       }
-                    }}
-                  >
-                    导出 .fac
-                  </Button>
+                    }}>导出 .fac</Button>
                 </VStack>
               )}
             </LiquidGlassCard>

@@ -352,8 +352,17 @@ pub async fn install_virtual_audio_driver(app: AppHandle) -> Result<String, Stri
         .ok_or_else(|| "无法找到驱动资源目录".to_string())?;
 
     let inf_path = fxvad_dir.join("fxvad.inf");
+    let sys_path = fxvad_dir.join("fxvad.sys");
+    let devcon_path = fxvad_dir.join("fxdevcon64.exe");
+
     if !inf_path.exists() {
         return Err("驱动 INF 文件不存在".to_string());
+    }
+    if !sys_path.exists() {
+        return Err("驱动 SYS 文件不存在".to_string());
+    }
+    if !devcon_path.exists() {
+        return Err("fxdevcon64.exe 不存在，请重新安装 NexBox".to_string());
     }
 
     // 安装前记录当前默认音频设备
@@ -369,16 +378,48 @@ pub async fn install_virtual_audio_driver(app: AppHandle) -> Result<String, Stri
         }
     }).unwrap_or_default();
 
-    // 使用原生 SetupAPI 安装
-    let inf_str = inf_path.to_string_lossy().to_string();
-    let installed = native_install_root_device(&inf_str, "Root\\FXVAD")?;
+    // Step 1: 复制驱动文件到 system32\drivers
+    let sys_dst = "C:\\Windows\\System32\\drivers\\fxvad.sys";
+    if std::path::Path::new(sys_dst).exists() {
+        log::info!("[install] fxvad.sys already exists in system32\\drivers");
+    } else {
+        fs::copy(&sys_path, sys_dst)
+            .map_err(|e| format!("复制 fxvad.sys 失败: {}", e))?;
+        log::info!("[install] Copied fxvad.sys to system32\\drivers");
+    }
 
-    if !installed {
-        return Err("驱动安装失败，请检查驱动文件是否完整".to_string());
+    // Step 2: pnputil 注册到 Driver Store
+    log::info!("[install] Running pnputil /add-driver ...");
+    let pnputil_output = Command::new("pnputil")
+        .args(["/add-driver", inf_path.to_string_lossy().as_ref(), "/install"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("启动 pnputil 失败: {}", e))?;
+
+    if !pnputil_output.status.success() {
+        let msg = String::from_utf8_lossy(&pnputil_output.stdout);
+        log::warn!("[install] pnputil 输出: {}", msg);
+        // pnputil 可能因为驱动已存在而失败，不中断流程
+    }
+
+    // Step 3: fxdevcon64.exe 创建设备并安装驱动
+    log::info!("[install] Running fxdevcon64.exe install ...");
+    let devcon_output = Command::new(devcon_path.to_string_lossy().as_ref())
+        .args(["install", inf_path.to_string_lossy().as_ref(), "Root\\FXVAD"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("启动 fxdevcon64.exe 失败: {}", e))?;
+
+    if !devcon_output.status.success() {
+        let stdout = String::from_utf8_lossy(&devcon_output.stdout).trim().to_string();
+        log::warn!("[install] fxdevcon64.exe 退出码非零: code={}, output={}",
+            devcon_output.status.code().unwrap_or(-1), stdout);
+        // fxdevcon64 可能因需要重启而返回 -1，但驱动可能已装好
+        // 以实际驱动状态为准，不中断流程
     }
 
     // 等待驱动注册完成
-    std::thread::sleep(std::time::Duration::from_secs(2));
+    std::thread::sleep(std::time::Duration::from_secs(3));
 
     // 如果系统自动切换到了 FxSound 虚拟声卡，恢复为之前的物理设备
     if !prev_device.is_empty() && !prev_device.to_lowercase().contains("fxsound") {
@@ -395,97 +436,7 @@ pub async fn install_virtual_audio_driver(app: AppHandle) -> Result<String, Stri
     }
 }
 
-/// 原生 SetupAPI 安装 Root 设备并匹配驱动（等价于 devcon install）
-fn native_install_root_device(inf_path: &str, hardware_id: &str) -> Result<bool, String> {
-    use windows::core::{PCWSTR, HSTRING, GUID};
-    use windows::Win32::Devices::DeviceAndDriverInstallation::{
-        SetupDiGetINFClassW, SetupDiCreateDeviceInfoList, SetupDiCreateDeviceInfoW,
-        SetupDiSetDeviceRegistryPropertyW, SetupDiCallClassInstaller,
-        SetupDiDestroyDeviceInfoList, SetupDiGetDeviceInstanceIdW,
-        UpdateDriverForPlugAndPlayDevicesW,
-        SP_DEVINFO_DATA, DICD_GENERATE_ID, DIF_REGISTERDEVICE, SPDRP_HARDWAREID,
-        INSTALLFLAG_FORCE,
-    };
-
-    unsafe {
-        let inf = HSTRING::from(inf_path);
-        let hwid = HSTRING::from(hardware_id);
-
-        // 1. 从 INF [Version] 节读取 ClassGUID
-        let mut class_guid = GUID::zeroed();
-        let mut class_name = [0u16; 32];
-        SetupDiGetINFClassW(&inf, &mut class_guid, &mut class_name, None)
-            .map_err(|e| format!("读取 INF 类 GUID 失败: {}", e))?;
-
-        // 2. 创建空设备信息集合
-        let dev_info_set = SetupDiCreateDeviceInfoList(Some(&class_guid), None)
-            .map_err(|e| format!("创建设备列表失败: {}", e))?;
-
-        // 3. 创建设备信息元素
-        let mut dev_info_data = SP_DEVINFO_DATA {
-            cbSize: std::mem::size_of::<SP_DEVINFO_DATA>() as u32,
-            ..Default::default()
-        };
-        SetupDiCreateDeviceInfoW(
-            dev_info_set,
-            PCWSTR(class_name.as_ptr()),
-            &class_guid,
-            None,
-            None,
-            DICD_GENERATE_ID,
-            Some(&mut dev_info_data),
-        ).map_err(|e| format!("创建设备信息失败: {}", e))?;
-
-        // 4. 写硬件 ID (REG_MULTI_SZ，双 null 结尾)
-        let mut hwid_multi: Vec<u16> = hwid.as_wide().to_vec();
-        hwid_multi.push(0);
-        hwid_multi.push(0);
-        let bytes = std::slice::from_raw_parts(
-            hwid_multi.as_ptr() as *const u8,
-            hwid_multi.len() * 2,
-        );
-        SetupDiSetDeviceRegistryPropertyW(
-            dev_info_set,
-            &mut dev_info_data,
-            SPDRP_HARDWAREID,
-            Some(bytes),
-        ).map_err(|e| format!("设置硬件 ID 失败: {}", e))?;
-
-        // 5. 注册进 PnP 设备树
-        SetupDiCallClassInstaller(DIF_REGISTERDEVICE, dev_info_set, Some(&dev_info_data))
-            .map_err(|e| format!("注册 PnP 设备失败: {}", e))?;
-
-        // 5b. 读取系统分配的精确实例 ID 并保存（用于卸载时精确定位）
-        let mut id_buf = [0u16; 512];
-        let mut required = 0u32;
-        if SetupDiGetDeviceInstanceIdW(dev_info_set, &dev_info_data, Some(&mut id_buf), Some(&mut required)).is_ok() {
-            if required > 1 {
-                let instance_id = String::from_utf16_lossy(&id_buf[..required as usize - 1]);
-                log::info!("[install] FXVAD instance id: {}", instance_id);
-                if let Some(parent) = fxvad_instance_id_file().parent() {
-                    let _ = fs::create_dir_all(parent);
-                }
-                let _ = fs::write(fxvad_instance_id_file(), &instance_id);
-            }
-        }
-
-        let _ = SetupDiDestroyDeviceInfoList(dev_info_set);
-
-        // 6. 给设备匹配并安装驱动（INF 暂存、文件拷贝等都在这一步内部完成）
-        let mut reboot_required = windows::Win32::Foundation::BOOL(0);
-        UpdateDriverForPlugAndPlayDevicesW(
-            None,
-            &hwid,
-            &inf,
-            INSTALLFLAG_FORCE,
-            Some(&mut reboot_required),
-        ).map_err(|e| format!("安装驱动失败: {}", e))?;
-
-        Ok(true)
-    }
-}
-
-/// 原生移除 FXVAD 设备节点（精确匹配实例 ID，不回退猜测 pattern）
+/// 原生移除 FXVAD 设备节点（被 fxdevcon64.exe 替代，保留为备用）
 fn native_remove_fxvad_devnode() -> Result<bool, String> {
     use windows::core::PCWSTR;
     use windows::Win32::Devices::DeviceAndDriverInstallation::{
@@ -576,14 +527,42 @@ fn native_find_and_remove_by_hwid(hwid_keyword: &str) -> Result<bool, String> {
     Ok(false)
 }
 
-/// 检查是否具有管理员权限
+/// 检查当前进程是否具有管理员权限（通过 UAC 令牌提升状态判断）
 fn is_admin() -> bool {
-    Command::new("net")
-        .args(["session"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::Security::{
+        GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+    };
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    unsafe {
+        let mut token = windows::Win32::Foundation::HANDLE::default();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).is_err() {
+            log::warn!("[is_admin] OpenProcessToken failed");
+            return false;
+        }
+
+        let mut elevation = TOKEN_ELEVATION::default();
+        let mut return_length = 0u32;
+
+        let result = GetTokenInformation(
+            token,
+            TokenElevation,
+            Some(&mut elevation as *mut _ as *mut std::ffi::c_void),
+            std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+            &mut return_length,
+        );
+
+        let _ = CloseHandle(token);
+
+        if result.is_err() {
+            log::warn!("[is_admin] GetTokenInformation failed: {:?}", result);
+            return false;
+        }
+
+        log::info!("[is_admin] TokenElevation: {}", elevation.TokenIsElevated != 0);
+        elevation.TokenIsElevated != 0
+    }
 }
 
 /// 卸载虚拟声卡驱动（原生移除设备节点 → 清理驱动包，无 PowerShell/devcon）
@@ -1066,21 +1045,15 @@ pub fn get_eq_presets(app: AppHandle) -> Result<Vec<EqPreset>, String> {
     let mut presets: Vec<EqPreset> = Vec::new();
 
     // 1. 加载内置预设
-    let mut builtin_count = 0;
     if let Some(fxvad_dir) = get_fxvad_resource_dir(&app) {
         let builtin_dir = fxvad_dir.join("presets");
         load_presets_from_dir(&builtin_dir, &mut presets);
-        builtin_count = presets.len();
     }
 
     // 2. 加载用户导入的预设
     let user_dir = get_user_presets_dir();
     load_presets_from_dir(&user_dir, &mut presets);
 
-    // 内置预设不应保留音效参数（仅导入的 .fac 才生效）
-    for p in presets.iter_mut().take(builtin_count) {
-        p.effects = None;
-    }
 
     // 按 ID 排序
     presets.sort_by_key(|p| p.id.parse::<i32>().unwrap_or(999));
