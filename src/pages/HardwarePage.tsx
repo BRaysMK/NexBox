@@ -7,6 +7,10 @@ import {
   useColorModeValue,
   Grid,
   Button,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
   useToast,
   useDisclosure,
 } from "@chakra-ui/react";
@@ -26,6 +30,7 @@ import {
   Wifi,
   Download,
   Trash2,
+  ChevronDown,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -50,6 +55,71 @@ interface DiskInfo {
   available_gb: number;
   used_gb: number;
   usage_percent: number;
+}
+
+/** 文字过长时自动轮播 */
+function MarqueeText({ text, color }: { text: string; color?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [shouldScroll, setShouldScroll] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      if (ref.current && innerRef.current) {
+        setShouldScroll(innerRef.current.scrollWidth > ref.current.clientWidth + 4);
+      }
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    if (ref.current) ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [text]);
+
+  return (
+    <Box ref={ref} flex={1} overflow="hidden" position="relative" display="flex" justifyContent="flex-end">
+      <style>{`
+        @keyframes hw-marquee {
+          0%   { transform: translateX(0%); }
+          10%  { transform: translateX(0%); }
+          80%  { transform: translateX(-50%); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
+      {shouldScroll ? (
+        <Box
+          ref={innerRef}
+          display="flex"
+          whiteSpace="nowrap"
+          w="max-content"
+          animation="hw-marquee 10s linear infinite"
+        >
+          <Text fontSize="sm" color={color}>{text}</Text>
+          <Box w="32px" flexShrink={0} />
+          <Text fontSize="sm" color={color}>{text}</Text>
+          <Box w="32px" flexShrink={0} />
+          <Text fontSize="sm" color={color}>{text}</Text>
+        </Box>
+      ) : (
+        <Text ref={innerRef} fontSize="sm" color={color} noOfLines={1}>
+          {text}
+        </Text>
+      )}
+    </Box>
+  );
+}
+
+interface GpuSensorData {
+  name: string;
+  hardware_type: string;
+  temperature: number | null;
+  usage: number | null;
+  fan_speed: number | null;
+  power: number | null;
+  clock: number | null;
+  memory_clock: number | null;
+  vram_used: number | null;
+  vram_total: number | null;
+  voltage: number | null;
 }
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
@@ -94,6 +164,7 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 
 function StatCard({
   title,
+  titleContent,
   value,
   subValue,
   color,
@@ -104,7 +175,8 @@ function StatCard({
   subTextColor,
   liquidGlassEnabled,
 }: {
-  title: string;
+  title?: string;
+  titleContent?: React.ReactNode;
   value: string;
   subValue?: string;
   color: string;
@@ -120,9 +192,11 @@ function StatCard({
       <VStack align="start" spacing={2} position="relative" zIndex={2}>
         <HStack spacing={2}>
           <IconComponent size={16} color={color} />
-          <Text fontSize="sm" color={subTextColor} fontWeight="medium">
-            {title}
-          </Text>
+          {titleContent || (
+            <Text fontSize="sm" color={subTextColor} fontWeight="medium">
+              {title}
+            </Text>
+          )}
         </HStack>
         <HStack spacing={2} align="baseline">
           <Text fontSize="3xl" fontWeight="bold" color={textColor}>
@@ -164,66 +238,6 @@ function StatCard({
       position="relative"
     >
       {cardContent}
-    </Box>
-  );
-}
-
-const MARQUEE_STYLE_ID = "nexbox-marquee-keyframes";
-
-function MarqueeText({ text, color }: { text: string; color: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLSpanElement>(null);
-  const [needsScroll, setNeedsScroll] = useState(false);
-
-  // Measure overflow after render
-  useEffect(() => {
-    const el = containerRef.current;
-    const txt = textRef.current;
-    if (!el || !txt) return;
-    const timer = setTimeout(() => {
-      setNeedsScroll(txt.scrollWidth > el.clientWidth);
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [text]);
-
-  // Inject keyframes once
-  useEffect(() => {
-    if (needsScroll && !document.getElementById(MARQUEE_STYLE_ID)) {
-      const style = document.createElement("style");
-      style.id = MARQUEE_STYLE_ID;
-      style.textContent = `
-        @keyframes nexbox-marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }, [needsScroll]);
-
-  const animationStyle = needsScroll
-    ? { animation: "nexbox-marquee 12s linear infinite" }
-    : undefined;
-
-  return (
-    <Box ref={containerRef} flex={1} overflow="hidden" textAlign="right" whiteSpace="nowrap">
-      <Box
-        as="span"
-        ref={textRef}
-        display="inline-block"
-        whiteSpace="nowrap"
-        fontSize="sm"
-        fontWeight="medium"
-        color={color}
-        sx={animationStyle}
-      >
-        {text}
-        {needsScroll && (
-          <Box as="span" ml={6}>
-            {text}
-          </Box>
-        )}
-      </Box>
     </Box>
   );
 }
@@ -338,8 +352,8 @@ export default function HardwarePage() {
 
   const [cpuLoad, setCpuLoad] = useState<number | null>(null);
   const [cpuTemp, setCpuTemp] = useState<number | null>(null);
-  const [gpuTemps, setGpuTemps] = useState<number[]>([]);
-  const [gpuUsages, setGpuUsages] = useState<number[]>([]);
+  const [gpuSensors, setGpuSensors] = useState<GpuSensorData[]>([]);
+  const [activeGpuIndex, setActiveGpuIndex] = useState(0);
   const [memoryStatus, setMemoryStatus] = useState<MemoryStatus | null>(null);
   const [diskStatus, setDiskStatus] = useState<DiskInfo | null>(null);
 
@@ -362,6 +376,17 @@ export default function HardwarePage() {
     onDetailOpen();
   };
 
+  // GPU 切换处理
+  const handleGpuSwitch = async (index: number) => {
+    setActiveGpuIndex(index);
+    setGpuSparkline(Array(20).fill(0)); // 切换 GPU 时重置 sparkline
+    try {
+      await invoke("set_active_gpu_index", { index });
+    } catch (e) {
+      console.error("Failed to switch GPU:", e);
+    }
+  };
+
   const isMounted = useRef(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -379,13 +404,13 @@ export default function HardwarePage() {
           gpu_temp: number | null;
           gpu_usage: number | null;
           memory_usage: number | null;
+          gpu_sensors: GpuSensorData[];
+          active_gpu_index: number;
         }>("get_overlay_hardware_data");
         if (!isMounted.current) return;
 
         const cpuLoadVal = overlay.cpu_usage ?? null;
         const cpuTempVal = overlay.cpu_temp ?? null;
-        const gpuTempVal = overlay.gpu_temp ?? null;
-        const gpuUsageVal = overlay.gpu_usage ?? null;
         const memPercent = overlay.memory_usage ?? null;
 
         if (cpuLoadVal !== null) {
@@ -395,15 +420,32 @@ export default function HardwarePage() {
         if (cpuTempVal !== null) {
           setCpuTemp(Math.round(cpuTempVal));
         }
-        if (gpuTempVal !== null) {
-          setGpuTemps([gpuTempVal]);
-        }
-        if (gpuUsageVal !== null) {
-          setGpuUsages([gpuUsageVal]);
-          setGpuSparkline((prev) => [...prev.slice(1), gpuUsageVal]);
-        }
         if (memPercent !== null) {
           setMemSparkline((prev) => [...prev.slice(1), Math.round(memPercent)]);
+        }
+
+        // 多 GPU 数据处理
+        if (overlay.gpu_sensors && overlay.gpu_sensors.length > 0) {
+          setGpuSensors((prev) => {
+            // 只在 GPU 列表发生变化时更新（避免不必要的重渲染）
+            const prevNames = prev.map(g => g.hardware_type).sort().join(",");
+            const newNames = overlay.gpu_sensors.map(g => g.hardware_type).sort().join(",");
+            if (prevNames !== newNames) {
+              return overlay.gpu_sensors;
+            }
+            return prev;
+          });
+          // 同步后端活跃 GPU 索引
+          setActiveGpuIndex((prev) => {
+            const idx = overlay.active_gpu_index;
+            if (idx < overlay.gpu_sensors.length) return idx;
+            return prev;
+          });
+          // 更新当前活跃 GPU 的 sparkline
+          const activeGpu = overlay.gpu_sensors[overlay.active_gpu_index] ?? overlay.gpu_sensors[0];
+          if (activeGpu?.usage !== null && activeGpu.usage !== undefined) {
+            setGpuSparkline((prev) => [...prev.slice(1), activeGpu.usage as number]);
+          }
         }
 
         // 内存和磁盘的详情（非百分比信息）仍需单独查询
@@ -441,8 +483,10 @@ export default function HardwarePage() {
     };
   }, []); // 不依赖 hardwareInfo，立即开始轮询
 
-  const gpuTemp = gpuTemps[0] ?? null;
-  const gpuUsage = gpuUsages[0] ?? null;
+  // 从多 GPU 列表中取当前活跃 GPU 的数据
+  const activeGpuData = gpuSensors.length > 0 ? (gpuSensors[activeGpuIndex] ?? gpuSensors[0]) : null;
+  const gpuTemp = activeGpuData?.temperature ?? null;
+  const gpuUsage = activeGpuData?.usage ?? null;
   const memUsage = memoryStatus ? Math.round(memoryStatus.usage_percent) : null;
   const memUsed = memoryStatus ? (memoryStatus.used / 1024).toFixed(1) : "--";
   const memTotal = memoryStatus ? (memoryStatus.total / 1024).toFixed(1) : "--";
@@ -745,7 +789,44 @@ export default function HardwarePage() {
             liquidGlassEnabled={liquidGlassEnabled}
           />
           <StatCard
-            title="GPU"
+            titleContent={gpuSensors.length >= 1 ? (
+              <Menu>
+                <MenuButton
+                  cursor="pointer"
+                  color={subTextColor}
+                  _hover={{ color: textColor }}
+                  transition="color 0.15s"
+                  bg="transparent"
+                  border="none"
+                  p={0}
+                  minW="0"
+                  flex={1}
+                >
+                  <HStack spacing={1}>
+                    <Box flex={1} overflow="hidden">
+                      <MarqueeText text={activeGpuData?.name || activeGpuData?.hardware_type || "GPU"} />
+                    </Box>
+                    <ChevronDown size={12} flexShrink={0} />
+                  </HStack>
+                </MenuButton>
+                <MenuList bg={cardBg} borderColor={btnBorderColor} minW="180px" zIndex={9999}>
+                  {gpuSensors.map((gpu, i) => (
+                    <MenuItem
+                      key={i}
+                      onClick={() => handleGpuSwitch(i)}
+                      bg={i === activeGpuIndex ? "whiteAlpha.200" : "transparent"}
+                      color={i === activeGpuIndex ? textColor : subTextColor}
+                      fontSize="sm"
+                      _hover={{ bg: "whiteAlpha.100" }}
+                    >
+                      {gpu.name || gpu.hardware_type}
+                    </MenuItem>
+                  ))}
+                </MenuList>
+              </Menu>
+            ) : (
+              <Text fontSize="sm" color={subTextColor} fontWeight="medium">GPU</Text>
+            )}
             value={`${gpuUsage ?? "--"}%`}
             subValue={gpuTemp !== null ? `${t("hardware.temperature")} ${Math.round(gpuTemp)}${t("hardware.temperatureUnit")}` : undefined}
             color="#22c55e"

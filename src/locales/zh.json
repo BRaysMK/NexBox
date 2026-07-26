@@ -591,6 +591,20 @@
     "procedural": "预设准心",
     "customImage": "自定义图片",
     "selectImage": "选择图片",
+    "offset": "偏移",
+    "presetImages": "预设准星图片",
+    "presetImagesTitle": "预设准星",
+    "presetHint": "点击选择预设准星，仅可调整大小、透明度、XY偏移",
+    "presetImagesNames": {
+      "cat": "猫咪",
+      "donk": "Donk",
+      "s1mple": "S1mple",
+      "ropz": "Ropz",
+      "mmw20": "MMW2.0",
+      "sscj": "SSCJ",
+
+      "tShape": "T字形"
+    },
     "styles": {
       "cross": "十字",
       "dot": "点",

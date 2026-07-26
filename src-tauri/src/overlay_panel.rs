@@ -108,6 +108,22 @@ pub struct OverlayResult {
     pub message: String,
 }
 
+/// 单个 GPU 的传感器数据
+#[derive(Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct GpuSensorData {
+    pub name: String,
+    pub hardware_type: String,
+    pub temperature: Option<f64>,
+    pub usage: Option<u32>,
+    pub fan_speed: Option<u32>,
+    pub power: Option<u32>,
+    pub clock: Option<u32>,
+    pub memory_clock: Option<u32>,
+    pub vram_used: Option<u32>,
+    pub vram_total: Option<u32>,
+    pub voltage: Option<f64>,
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct OverlayHardwareData {
     fps: Option<u32>,
@@ -130,6 +146,10 @@ pub struct OverlayHardwareData {
     gpu_voltage: Option<f64>,
     cpu_power: Option<f64>,
     ssd_temp: Option<f64>,
+    /// 所有 GPU 的传感器数据（支持多 GPU 切换）
+    pub gpu_sensors: Vec<GpuSensorData>,
+    /// 当前选中的 GPU 索引
+    pub active_gpu_index: usize,
 }
 
 impl Default for OverlayHardwareData {
@@ -155,6 +175,8 @@ impl Default for OverlayHardwareData {
             gpu_voltage: None,
             cpu_power: None,
             ssd_temp: None,
+            gpu_sensors: Vec::new(),
+            active_gpu_index: 0,
         }
     }
 }
@@ -215,6 +237,125 @@ fn extract_all_avg(
 }
 
 static LAST_LHML_UPDATE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static ACTIVE_GPU_INDEX: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// 从 LHML 传感器列表中收集所有 GPU 的传感器数据（支持多 GPU）
+fn collect_all_gpu_sensors(
+    sensors: &[crate::sensor::SensorReading],
+) -> Vec<GpuSensorData> {
+    // 找到所有唯一的 GPU 硬件类型
+    let gpu_hw_types: Vec<String> = {
+        let mut types: Vec<String> = sensors
+            .iter()
+            .filter(|s| {
+                let t = s.hardware_type.to_lowercase();
+                t.starts_with("gpu")
+            })
+            .map(|s| s.hardware_type.clone())
+            .collect();
+        types.sort();
+        types.dedup();
+        types
+    };
+
+    if gpu_hw_types.is_empty() {
+        return Vec::new();
+    }
+
+    // NVIDIA 独显存在时跳过 Intel 核显（AMD 核显保留，老 AMD A 系列 APU 需要显示）
+    let has_nvidia = gpu_hw_types
+        .iter()
+        .any(|t| t.eq_ignore_ascii_case("GpuNvidia"));
+
+    let mut gpus = Vec::new();
+    for hw_type in &gpu_hw_types {
+        if has_nvidia && hw_type.eq_ignore_ascii_case("GpuIntel") {
+            log::debug!("跳过 Intel 核显: 存在 NVIDIA 独显");
+            continue;
+        }
+
+        // GPU 名称：从第一个匹配的传感器中获取 Hardware 名称
+        let name = sensors
+            .iter()
+            .find(|s| s.hardware_type == *hw_type)
+            .map(|s| s.hardware.clone())
+            .unwrap_or_else(|| hw_type.clone());
+
+        let temperature = extract_sensor(
+            sensors, "Temperature", hw_type,
+            &["GPU Core", "GPU", "Core", "GPU Temperature"],
+            false,
+        ).map(|(v, _)| v);
+
+        let usage = extract_sensor(
+            sensors, "Load", hw_type,
+            &["GPU Core", "GPU", "D3D Usage", "Core"],
+            false,
+        ).map(|(v, _)| v as u32);
+
+        let fan_speed = extract_all_avg(sensors, "Fan", hw_type, &["GPU Fan", "GPU", "Fans"])
+            .map(|v| v as u32);
+
+        let power = extract_sensor(
+            sensors, "Power", hw_type,
+            &["GPU Power", "GPU Package", "GPU Chip Power", "Power", "Package"],
+            false,
+        ).map(|(v, _)| v as u32);
+
+        let clock = extract_sensor(
+            sensors, "Clock", hw_type,
+            &["GPU Core", "GPU", "Core"],
+            false,
+        ).map(|(v, _)| v as u32);
+
+        let vram_used = extract_sensor(
+            sensors, "SmallData", hw_type,
+            &["GPU Memory Used", "D3D Shared Memory Used", "GPU Memory"],
+            false,
+        ).map(|(v, _)| v as u32);
+
+        let vram_total = extract_sensor(
+            sensors, "SmallData", hw_type,
+            &["GPU Memory Total", "GPU Memory"],
+            false,
+        ).map(|(v, _)| v as u32);
+
+        let memory_clock = extract_sensor(
+            sensors, "Clock", hw_type,
+            &["GPU Memory", "Memory"],
+            false,
+        ).map(|(v, _)| v as u32);
+
+        let voltage = extract_sensor(
+            sensors, "Voltage", hw_type,
+            &["GPU Core Voltage", "GPU Core", "GPU Voltage", "GPU", "Core"],
+            false,
+        ).map(|(v, _)| v);
+
+        gpus.push(GpuSensorData {
+            name,
+            hardware_type: hw_type.clone(),
+            temperature,
+            usage,
+            fan_speed,
+            power,
+            clock,
+            memory_clock,
+            vram_used,
+            vram_total,
+            voltage,
+        });
+    }
+
+    // 排序：独显（NVIDIA/AMD）优先，Intel 核显放在最后
+    gpus.sort_by(|a, b| {
+        let a_priority = if a.hardware_type.eq_ignore_ascii_case("GpuIntel") { 1 } else { 0 };
+        let b_priority = if b.hardware_type.eq_ignore_ascii_case("GpuIntel") { 1 } else { 0 };
+        a_priority.cmp(&b_priority)
+    });
+
+    gpus
+}
 
 pub fn collect_hardware_data() -> OverlayHardwareData {
     let fps = crate::game_fps::get_cached_fps();
@@ -242,11 +383,11 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
     };
 
     // 从 LHML (NexBoxMonitor) 获取硬件传感器数据
-    let (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, cpu_fan_speed, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage) =
+    let (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, cpu_fan_speed, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage, gpu_sensors, active_gpu_index) =
         if use_cached_lhml {
             let prev = CURRENT_HARDWARE_DATA.lock().unwrap().clone().unwrap_or_default();
             (
-                prev.cpu_usage, prev.cpu_temp, prev.cpu_clock, prev.cpu_voltage, prev.cpu_power, prev.cpu_fan_speed, prev.ssd_temp, prev.memory_usage, prev.gpu_temp, prev.gpu_usage, prev.gpu_fan_speed, prev.gpu_power, prev.gpu_clock, prev.gpu_vram_used, prev.gpu_vram_total, prev.gpu_memory_clock, prev.gpu_voltage
+                prev.cpu_usage, prev.cpu_temp, prev.cpu_clock, prev.cpu_voltage, prev.cpu_power, prev.cpu_fan_speed, prev.ssd_temp, prev.memory_usage, prev.gpu_temp, prev.gpu_usage, prev.gpu_fan_speed, prev.gpu_power, prev.gpu_clock, prev.gpu_vram_used, prev.gpu_vram_total, prev.gpu_memory_clock, prev.gpu_voltage, prev.gpu_sensors, prev.active_gpu_index
             )
         } else {
         match crate::sensor::read_lhm_sensors() {
@@ -260,31 +401,37 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
                     false,
                 ).unzip();
                 let cpu_usage = cpu_usage.map(|v| v as u16);
-                // CPU 温度 (AMD: Core (Tctl/Tdie), Intel: CPU Package)
+                // CPU 温度 (AMD Ryzen: Core (Tctl/Tdie), Intel: CPU Package, 老AMD(A系列): SuperIO/Motherboard)
                 let (cpu_temp, cpu_name) = extract_sensor(
                     &response.sensors,
                     "Temperature",
                     "CPU",
                     &["Core (Tctl/Tdie)", "CPU Package", "Tctl", "Core"],
                     false,
-                ).unzip();
-                // CPU 频率
+                )
+                    .or_else(|| extract_sensor(&response.sensors, "Temperature", "SuperIO", &["CPU", "CPU Core", "CPU Temperature", "Core"], false))
+                    .or_else(|| extract_sensor(&response.sensors, "Temperature", "Motherboard", &["CPU", "CPU Core", "CPU Temperature", "Core"], false))
+                    .unzip();
+                // CPU 频率 (老AMD可能通过SuperIO报告总线频率)
                 let (cpu_clock, cpu_clock_name) = extract_sensor(
                     &response.sensors,
                     "Clock",
                     "CPU",
                     &["Cores (Average)", "Core #1", "Bus Speed"],
                     true,
-                ).unzip();
+                )
+                    .or_else(|| extract_sensor(&response.sensors, "Clock", "SuperIO", &["Bus Speed", "CPU Clock"], true))
+                    .unzip();
                 let cpu_clock = cpu_clock.map(|v| v as u32);
-                // CPU 电压
+                // CPU 电压 (老AMD也可能通过SuperIO报告)
                 let cpu_voltage_result = extract_sensor(
                     &response.sensors,
                     "Voltage",
                     "CPU",
                     &["CPU Core", "Vcore", "Core", "CPU VCore"],
                     false,
-                );
+                )
+                    .or_else(|| extract_sensor(&response.sensors, "Voltage", "SuperIO", &["CPU Core", "Vcore", "CPU VCore", "CPU"], false));
                 let cpu_voltage = cpu_voltage_result.as_ref().map(|(v, _)| *v);
                 // CPU 功耗
                 let cpu_power_result = extract_sensor(
@@ -336,6 +483,16 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
                     .collect();
                 log::debug!("LHML other sensors: {:?}", other_types);
 
+                // 调试：打印 SuperIO/Motherboard 传感器（用于排查老AMD CPU温压数据）
+                let superio_sensors: Vec<_> = response.sensors.iter()
+                    .filter(|s| s.hardware_type.eq_ignore_ascii_case("SuperIO")
+                        || s.hardware_type.eq_ignore_ascii_case("Motherboard"))
+                    .map(|s| format!("{}|{}|{}={}", s.hardware_type, s.sensor_type, s.name, s.value))
+                    .collect();
+                if !superio_sensors.is_empty() {
+                    log::debug!("LHML SuperIO/Motherboard sensors: {:?}", superio_sensors);
+                }
+
                 // 调试：打印所有 GPU 传感器
                 let gpu_sensors: Vec<_> = response.sensors.iter()
                     .filter(|s| s.hardware_type.to_lowercase().starts_with("gpu"))
@@ -343,31 +500,40 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
                     .collect();
                 log::debug!("LHML GPU sensors: {:?}", gpu_sensors);
 
-                // GPU 温度
-                let gpu_temp_result = extract_sensor(
-                    &response.sensors,
-                    "Temperature",
-                    "GpuNvidia",
-                    &["GPU Core"],
-                    false,
-                )
-                    .or_else(|| extract_sensor(&response.sensors, "Temperature", "GpuAmd", &["GPU Core"], false))
-                    .or_else(|| extract_sensor(&response.sensors, "Temperature", "GpuIntel", &["GPU Core"], false));
-                let gpu_temp = gpu_temp_result.as_ref().map(|(v, _)| *v);
-                let gpu_temp_name = gpu_temp_result.as_ref().map(|(_, n)| n.clone());
+                // ─── 收集所有 GPU 传感器数据（支持多 GPU 切换）───
+                let gpu_sensors = collect_all_gpu_sensors(&response.sensors);
 
-                // GPU 占用
-                let gpu_usage_result = extract_sensor(
-                    &response.sensors,
-                    "Load",
-                    "GpuNvidia",
-                    &["GPU Core"],
-                    false,
-                )
-                    .or_else(|| extract_sensor(&response.sensors, "Load", "GpuAmd", &["GPU Core"], false))
-                    .or_else(|| extract_sensor(&response.sensors, "Load", "GpuIntel", &["GPU Core"], false));
-                let gpu_usage = gpu_usage_result.as_ref().map(|(v, _)| *v as u32);
-                let gpu_usage_name = gpu_usage_result.as_ref().map(|(_, n)| n.clone());
+                // 确定当前活跃 GPU 索引（保留之前的选择，若仍有效）
+                let prev_active = ACTIVE_GPU_INDEX.load(std::sync::atomic::Ordering::Relaxed);
+                let active_gpu_index = if prev_active < gpu_sensors.len() {
+                    prev_active
+                } else {
+                    0 // 回退到第一个 GPU（独显优先）
+                };
+
+                // 从活跃 GPU 提取单个字段（向后兼容旧的 overlay 页面）
+                let active_gpu = gpu_sensors.get(active_gpu_index);
+                let gpu_temp = active_gpu.and_then(|g| g.temperature);
+                let gpu_usage = active_gpu.and_then(|g| g.usage);
+                let gpu_fan_speed = active_gpu.and_then(|g| g.fan_speed);
+                let gpu_power = active_gpu.and_then(|g| g.power);
+                let gpu_clock = active_gpu.and_then(|g| g.clock);
+                let gpu_vram_used = active_gpu.and_then(|g| g.vram_used);
+                let gpu_vram_total = active_gpu.and_then(|g| g.vram_total);
+                let gpu_memory_clock = active_gpu.and_then(|g| g.memory_clock);
+                let gpu_voltage = active_gpu.and_then(|g| g.voltage);
+                let gpu_temp_name = active_gpu.and_then(|g| {
+                    if g.temperature.is_some() { Some(g.name.clone()) } else { None }
+                });
+                let gpu_usage_name = active_gpu.and_then(|g| {
+                    if g.usage.is_some() { Some(g.name.clone()) } else { None }
+                });
+                let gpu_power_name = active_gpu.and_then(|g| {
+                    if g.power.is_some() { Some(g.name.clone()) } else { None }
+                });
+                let gpu_clock_name = active_gpu.and_then(|g| {
+                    if g.clock.is_some() { Some(g.name.clone()) } else { None }
+                });
 
                 // CPU 风扇
                 // LHML 中 CPU 风扇传感器出现在 SuperIO（Nuvoton 等）或 Motherboard 硬件类型下
@@ -402,102 +568,8 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
                     fan.map(|(v, _)| v as u32)
                 };
 
-                // GPU 风扇（所有风扇平均，RPM）
-                // 尝试多种前缀：NVIDIA 常见 "GPU Fan #0", "GPU"，AMD 常见 "Fans"
-                let gpu_fan_speed = extract_all_avg(&response.sensors, "Fan", "GpuNvidia", &["GPU Fan", "GPU"])
-                    .or_else(|| extract_all_avg(&response.sensors, "Fan", "GpuAmd", &["GPU Fan", "GPU", "Fans"]))
-                    .map(|v| v as u32);
-
-                // GPU 功耗
-                let gpu_power_result = extract_sensor(
-                    &response.sensors,
-                    "Power",
-                    "GpuNvidia",
-                    &["GPU Power", "GPU Package", "GPU Chip Power", "Power"],
-                    false,
-                )
-                    .or_else(|| {
-                        extract_sensor(
-                            &response.sensors,
-                            "Power",
-                            "GpuAmd",
-                            &["GPU Power", "GPU Package", "Power"],
-                            false,
-                        )
-                    })
-                    .or_else(|| {
-                        extract_sensor(
-                            &response.sensors,
-                            "Power",
-                            "GpuIntel",
-                            &["GPU Power", "GPU Package", "Power"],
-                            false,
-                        )
-                    });
-                let gpu_power = gpu_power_result.as_ref().map(|(v, _)| *v as u32);
-                let gpu_power_name = gpu_power_result.as_ref().map(|(_, n)| n.clone());
-
-                // GPU 频率
-                let gpu_clock_result = extract_sensor(
-                    &response.sensors,
-                    "Clock",
-                    "GpuNvidia",
-                    &["GPU Core"],
-                    false,
-                )
-                    .or_else(|| extract_sensor(&response.sensors, "Clock", "GpuAmd", &["GPU Core"], false))
-                    .or_else(|| extract_sensor(&response.sensors, "Clock", "GpuIntel", &["GPU Core"], false));
-                let gpu_clock = gpu_clock_result.as_ref().map(|(v, _)| *v as u32);
-                let gpu_clock_name = gpu_clock_result.as_ref().map(|(_, n)| n.clone());
-
-                // 显存占用 (MB)
-                let gpu_vram_used_result = extract_sensor(
-                    &response.sensors,
-                    "SmallData",
-                    "GpuNvidia",
-                    &["GPU Memory Used", "D3D Shared Memory Used"],
-                    false,
-                )
-                    .or_else(|| extract_sensor(&response.sensors, "SmallData", "GpuAmd", &["GPU Memory Used"], false))
-                    .or_else(|| extract_sensor(&response.sensors, "SmallData", "GpuIntel", &["GPU Memory Used"], false));
-                let gpu_vram_used = gpu_vram_used_result.as_ref().map(|(v, _)| *v as u32);
-
-                // 显存总量 (MB)
-                let gpu_vram_total_result = extract_sensor(
-                    &response.sensors,
-                    "SmallData",
-                    "GpuNvidia",
-                    &["GPU Memory Total"],
-                    false,
-                )
-                    .or_else(|| extract_sensor(&response.sensors, "SmallData", "GpuAmd", &["GPU Memory Total"], false))
-                    .or_else(|| extract_sensor(&response.sensors, "SmallData", "GpuIntel", &["GPU Memory Total"], false));
-                let gpu_vram_total = gpu_vram_total_result.as_ref().map(|(v, _)| *v as u32);
-
-                // 显存频率
-                let gpu_memory_clock_result = extract_sensor(
-                    &response.sensors,
-                    "Clock",
-                    "GpuNvidia",
-                    &["GPU Memory"],
-                    false,
-                )
-                    .or_else(|| extract_sensor(&response.sensors, "Clock", "GpuAmd", &["GPU Memory"], false))
-                    .or_else(|| extract_sensor(&response.sensors, "Clock", "GpuIntel", &["GPU Memory"], false));
-                let gpu_memory_clock = gpu_memory_clock_result.as_ref().map(|(v, _)| *v as u32);
-
-                // GPU 电压
-                let gpu_voltage_result = extract_sensor(
-                    &response.sensors, "Voltage", "GpuNvidia",
-                    &["GPU Core Voltage", "GPU Core"],
-                    false,
-                )
-                    .or_else(|| extract_sensor(&response.sensors, "Voltage", "GpuAmd", &["GPU Core Voltage", "GPU Core"], false))
-                    .or_else(|| extract_sensor(&response.sensors, "Voltage", "GpuIntel", &["GPU Core Voltage", "GPU Core"], false));
-                let gpu_voltage = gpu_voltage_result.as_ref().map(|(v, _)| *v);
-
                 log::debug!(
-                    "LHML: CPU占用={:?}({}) CPU温度={:?}({}) CPU频率={:?}({}) CPU电压={:?}V CPU功耗={:?}W SSD温度={:?}({}) 内存占用={:?}% GPU温度={:?}({}) GPU占用={:?}({}) GPU风扇={:?}RPM GPU功耗={:?}({}) GPU频率={:?}({}) 显存={:?}/{:?}MB 显存频率={:?}MHz GPU电压={:?}V",
+                    "LHML: CPU占用={:?}({}) CPU温度={:?}({}) CPU频率={:?}({}) CPU电压={:?}V CPU功耗={:?}W SSD温度={:?}({}) 内存占用={:?}% GPU温度={:?}({}) GPU占用={:?}({}) GPU风扇={:?}RPM GPU功耗={:?}({}) GPU频率={:?}({}) 显存={:?}/{:?}MB 显存频率={:?}MHz GPU电压={:?}V GPUs={}",
                     cpu_usage,
                     cpu_usage_name.as_deref().unwrap_or("N/A"),
                     cpu_temp,
@@ -522,13 +594,14 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
                     gpu_vram_total,
                     gpu_memory_clock,
                     gpu_voltage,
+                    gpu_sensors.len(),
                 );
 
-                (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, cpu_fan_speed, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage)
+                (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, cpu_fan_speed, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage, gpu_sensors, active_gpu_index)
             }
             Err(e) => {
                 log::warn!("LHML 传感器读取失败: {e}");
-                (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
+                (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Vec::new(), 0)
             }
         }
     };
@@ -554,10 +627,13 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
         gpu_voltage,
         cpu_power,
         ssd_temp,
+        gpu_sensors,
+        active_gpu_index,
     };
 
     let prev_data = CURRENT_HARDWARE_DATA.lock().unwrap().clone();
     let result = if let Some(prev) = prev_data {
+        let has_new_gpu_data = !new_data.gpu_sensors.is_empty();
         OverlayHardwareData {
             fps: new_data.fps.or(prev.fps),
             cpu_usage: new_data.cpu_usage.or(prev.cpu_usage),
@@ -579,6 +655,8 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
             gpu_voltage: new_data.gpu_voltage.or(prev.gpu_voltage),
             cpu_power: new_data.cpu_power.or(prev.cpu_power),
             ssd_temp: new_data.ssd_temp.or(prev.ssd_temp),
+            gpu_sensors: if has_new_gpu_data { new_data.gpu_sensors } else { prev.gpu_sensors },
+            active_gpu_index: if has_new_gpu_data { new_data.active_gpu_index } else { prev.active_gpu_index },
         }
     } else {
         new_data
@@ -1804,6 +1882,13 @@ pub async fn toggle_overlay_panel(app_handle: tauri::AppHandle) -> Result<Overla
 #[tauri::command]
 pub async fn get_overlay_panel_status() -> Result<bool, String> {
     Ok(OVERLAY_ACTIVE.load(Ordering::SeqCst) || crate::vertical_overlay::is_vertical_overlay_active())
+}
+
+#[tauri::command]
+pub async fn set_active_gpu_index(index: usize) -> Result<(), String> {
+    ACTIVE_GPU_INDEX.store(index, std::sync::atomic::Ordering::Relaxed);
+    log::info!("GPU 切换至索引: {}", index);
+    Ok(())
 }
 
 #[tauri::command]

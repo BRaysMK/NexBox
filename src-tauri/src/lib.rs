@@ -376,6 +376,7 @@ pub fn run() {
         overlay_panel::start_overlay_panel,
         overlay_panel::stop_overlay_panel,
         overlay_panel::get_overlay_panel_status,
+        overlay_panel::set_active_gpu_index,
         overlay_panel::get_overlay_hardware_data,
         overlay_panel::update_overlay_settings,
         overlay_panel::toggle_overlay_panel,
@@ -412,6 +413,8 @@ pub fn run() {
         crosshair::update_crosshair_settings,
         crosshair::get_crosshair_displays,
         crosshair::pick_crosshair_image,
+        crosshair::get_preset_crosshair_path,
+        crosshair::get_crosshair_presets,
 
         delta_force::get_delta_passwords,
         delta_force::get_weapon_codes,

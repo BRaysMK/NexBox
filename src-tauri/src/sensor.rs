@@ -175,9 +175,18 @@ pub async fn get_lhm_cpu_status() -> Result<(Option<u16>, Option<f64>), String> 
                     if s.sensor_type == "Load" && (s.name == "CPU Total" || s.name == "Total") {
                         load = Some(s.value as u16);
                     }
-                    if s.sensor_type == "Temperature"
-                        && (s.name == "Core (Tctl/Tdie)" || s.name == "CPU Package" || s.name == "Tctl" || s.name == "Core")
-                    {
+                }
+                // 温度可能来自 CPU/SuperIO/Motherboard 硬件类型（老AMD A系列通过SuperIO报告）
+                if s.sensor_type == "Temperature"
+                    && (s.hardware_type.eq_ignore_ascii_case("CPU")
+                        || s.hardware_type.eq_ignore_ascii_case("SuperIO")
+                        || s.hardware_type.eq_ignore_ascii_case("Motherboard"))
+                    && (s.name == "Core (Tctl/Tdie)" || s.name == "CPU Package"
+                        || s.name == "Tctl" || s.name == "Core"
+                        || s.name == "CPU" || s.name == "CPU Core"
+                        || s.name == "CPU Temperature")
+                {
+                    if temp.is_none() {
                         temp = Some(s.value);
                     }
                 }
@@ -217,11 +226,13 @@ pub async fn get_lhm_gpu_status() -> Result<Vec<(Option<f64>, Option<u32>)>, Str
                     continue;
                 }
                 let temp = response.sensors.iter()
-                    .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Temperature" && s.name == "GPU Core")
+                    .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Temperature"
+                        && (s.name == "GPU Core" || s.name == "GPU" || s.name == "Core" || s.name == "GPU Temperature"))
                     .map(|s| s.value)
                     .next();
                 let usage = response.sensors.iter()
-                    .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Load" && s.name == "GPU Core")
+                    .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Load"
+                        && (s.name == "GPU Core" || s.name == "GPU" || s.name == "D3D Usage" || s.name == "Core"))
                     .map(|s| s.value as u32)
                     .next();
                 results.push((temp, usage));

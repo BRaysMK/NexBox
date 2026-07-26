@@ -1,8 +1,10 @@
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 use tauri::Emitter;
+use tauri::Manager;
 
 static CROSSHAIR_ACTIVE: AtomicBool = AtomicBool::new(false);
 static CROSSHAIR_HANDLE: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
@@ -20,6 +22,10 @@ pub struct CrosshairSettings {
     pub monitor_index: i32,
     pub use_custom_image: bool,
     pub custom_image_path: Option<String>,
+    pub offset_x: i32,
+    pub offset_y: i32,
+    pub screen_width: i32,
+    pub screen_height: i32,
 }
 
 impl Default for CrosshairSettings {
@@ -36,6 +42,10 @@ impl Default for CrosshairSettings {
             monitor_index: -1,
             use_custom_image: false,
             custom_image_path: None,
+            offset_x: 0,
+            offset_y: 0,
+            screen_width: 0,
+            screen_height: 0,
         }
     }
 }
@@ -48,6 +58,12 @@ pub struct DisplayInfo {
     pub is_primary: bool,
     pub width: i32,
     pub height: i32,
+}
+
+#[derive(serde::Serialize, Debug)]
+pub struct CrosshairPreset {
+    pub name: String,
+    pub path: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -473,7 +489,7 @@ mod win32 {
         }
     }
 
-    unsafe fn get_monitor_bounds(monitor_index: i32) -> (i32, i32, i32, i32) {
+    pub unsafe fn get_monitor_bounds(monitor_index: i32) -> (i32, i32, i32, i32) {
         if monitor_index < 0 {
             return (
                 0,
@@ -628,8 +644,8 @@ mod win32 {
             }
         }
 
-        let win_x = mon_left + (screen_width - dib_size) / 2;
-        let win_y = mon_top + (screen_height - dib_size) / 2;
+        let win_x = mon_left + (screen_width - dib_size) / 2 + settings.offset_x;
+        let win_y = mon_top + (screen_height - dib_size) / 2 + settings.offset_y;
 
         let ppt_dst = POINT { x: win_x, y: win_y };
         let psize = SIZE {
@@ -911,6 +927,14 @@ pub fn toggle_crosshair_sync(app_handle: &tauri::AppHandle) -> Result<CrosshairR
 pub async fn get_crosshair_status() -> Result<CrosshairSettings, String> {
     let mut settings = get_settings();
     settings.enabled = CROSSHAIR_ACTIVE.load(Ordering::SeqCst);
+
+    #[cfg(target_os = "windows")]
+    {
+        let (left, top, right, bottom) = unsafe { win32::get_monitor_bounds(settings.monitor_index) };
+        settings.screen_width = right - left;
+        settings.screen_height = bottom - top;
+    }
+
     Ok(settings)
 }
 
@@ -973,6 +997,105 @@ pub async fn pick_crosshair_image() -> Result<Option<String>, String> {
         )
         .pick_file();
     Ok(file.map(|f| f.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+pub async fn get_preset_crosshair_path(
+    app_handle: tauri::AppHandle,
+    filename: String,
+) -> Result<String, String> {
+    let presets_dir = find_crosshair_presets_dir(&app_handle)
+        .ok_or_else(|| "找不到准心预设资源目录".to_string())?;
+
+    let img_path = presets_dir.join(&filename);
+    if img_path.exists() {
+        return Ok(img_path.to_string_lossy().to_string());
+    }
+
+    Err(format!("找不到预设准心图片: {}", filename))
+}
+
+/// 获取内置准心预设图片列表
+#[tauri::command]
+pub async fn get_crosshair_presets(app: tauri::AppHandle) -> Result<Vec<CrosshairPreset>, String> {
+    // 尝试查找 crosshair-presets 资源目录
+    let presets_dir = find_crosshair_presets_dir(&app)
+        .ok_or_else(|| "找不到准心预设资源目录".to_string())?;
+
+    let mut presets = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&presets_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(ext) = path.extension() {
+                    let ext_lower = ext.to_string_lossy().to_lowercase();
+                    if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg"
+                        || ext_lower == "bmp" || ext_lower == "gif" || ext_lower == "webp"
+                    {
+                        let name = path.file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+                        presets.push(CrosshairPreset {
+                            name,
+                            path: path.to_string_lossy().to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // 按文件名排序，保持一致性
+    presets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(presets)
+}
+
+fn find_crosshair_presets_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+
+    // 1. 通过 Tauri resource_dir 查找
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let candidates = [
+            resource_dir.join("crosshair-presets"),
+            resource_dir.join("resources").join("crosshair-presets"),
+            resource_dir.join("_up_").join("resources").join("crosshair-presets"),
+            resource_dir.join("_up_").join("_up_").join("src-tauri").join("resources").join("crosshair-presets"),
+        ];
+        for path in &candidates {
+            if path.exists() {
+                return Some(path.clone());
+            }
+        }
+    }
+
+    // 2. 通过 exe 路径查找（开发环境）
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            let candidates = [
+                parent.join("crosshair-presets"),
+                parent.join("resources").join("crosshair-presets"),
+                parent.join("..").join("..").join("resources").join("crosshair-presets"),
+                parent.join("..").join("..").join("..").join("src-tauri").join("resources").join("crosshair-presets"),
+            ];
+            for path in &candidates {
+                if path.exists() {
+                    if let Ok(canon) = path.canonicalize() {
+                        return Some(canon);
+                    }
+                    return Some(path.clone());
+                }
+            }
+        }
+    }
+
+    // 3. 编译时路径（开发环境）
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dev_path = manifest_dir.join("resources").join("crosshair-presets");
+    if dev_path.exists() {
+        return Some(dev_path);
+    }
+
+    None
 }
 
 pub fn cleanup() {

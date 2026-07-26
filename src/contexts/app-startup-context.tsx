@@ -34,6 +34,8 @@ interface CrosshairSettings {
   dot_size: number;
   opacity: number;
   monitor_index: number;
+  offset_x: number;
+  offset_y: number;
 }
 
 interface OverlaySettings {

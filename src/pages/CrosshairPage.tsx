@@ -10,6 +10,7 @@ import {
   SliderTrack,
   SliderFilledTrack,
   SliderThumb,
+  Input,
   useColorModeValue,
   useColorMode,
   useToast,
@@ -23,12 +24,12 @@ import {
   MenuItem,
   Portal,
 } from "@chakra-ui/react";
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, ArrowLeft, RotateCcw, Monitor, ChevronDown, Check, Image } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, RotateCcw, Monitor, ChevronDown, Check, Image, Plus, Minus } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
@@ -49,6 +50,10 @@ interface CrosshairSettings {
   monitor_index: number;
   use_custom_image: boolean;
   custom_image_path: string | null;
+  offset_x: number;
+  offset_y: number;
+  screen_width?: number;
+  screen_height?: number;
 }
 
 interface DisplayInfo {
@@ -59,6 +64,17 @@ interface DisplayInfo {
   width: number;
   height: number;
 }
+
+const PRESET_IMAGE_STYLES = [
+  { id: "Preset_cat", file: "cat.png", labelKey: "crosshair.presetImagesNames.cat" },
+  { id: "Preset_donk", file: "donk.png", labelKey: "crosshair.presetImagesNames.donk" },
+  { id: "Preset_s1mple", file: "s1mple.png", labelKey: "crosshair.presetImagesNames.s1mple" },
+  { id: "Preset_ropz", file: "ropz.png", labelKey: "crosshair.presetImagesNames.ropz" },
+  { id: "Preset_MMW2.0", file: "MMW2.0.png", labelKey: "crosshair.presetImagesNames.mmw20" },
+  { id: "Preset_SSCJ", file: "SSCJ.png", labelKey: "crosshair.presetImagesNames.sscj" },
+
+  { id: "Preset_T字准星", file: "T字准星.png", labelKey: "crosshair.presetImagesNames.tShape" },
+];
 
 const CROSSHAIR_STORE_KEY = "crosshair-settings";
 
@@ -74,6 +90,10 @@ const DEFAULT_SETTINGS: CrosshairSettings = {
   monitor_index: -1,
   use_custom_image: false,
   custom_image_path: null,
+  offset_x: 0,
+  offset_y: 0,
+  screen_width: 0,
+  screen_height: 0,
 };
 
 const STYLE_OPTIONS = [
@@ -140,6 +160,10 @@ export default function CrosshairPage() {
   const [settings, setSettings] = useState<CrosshairSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
+  const [editingAxis, setEditingAxis] = useState<'x' | 'y' | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const editRef = useRef<HTMLInputElement>(null);
+  const lastProceduralStyle = useRef<string>("Cross");
 
   const headingColor = useColorModeValue("black", "#ffffff");
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
@@ -149,6 +173,10 @@ export default function CrosshairPage() {
   const hoverBg = useColorModeValue("gray.100", "#252525");
   const menuListBg = useColorModeValue("white", "#1a1a1a");
   const inputBg = useColorModeValue("white", "#1a1a1a");
+
+  // 根据显示器分辨率自动适配偏移范围，最小 ±500 保证小屏幕也有足够空间
+  const maxOffsetX = Math.max(500, Math.ceil((settings.screen_width || 1920) / 2));
+  const maxOffsetY = Math.max(500, Math.ceil((settings.screen_height || 1080) / 2));
 
   useEffect(() => {
     loadSettings();
@@ -207,6 +235,31 @@ export default function CrosshairPage() {
       }
     } catch (error) {
       console.error("Failed to pick image:", error);
+    }
+  };
+
+  const getPresetCrosshairPath = async (filename: string): Promise<string> => {
+    try {
+      return await invoke<string>("get_preset_crosshair_path", { filename });
+    } catch (error) {
+      console.error("Failed to get preset path:", error);
+      return "";
+    }
+  };
+
+  const selectPresetImage = async (preset: { id: string; file: string; labelKey: string }) => {
+    const path = await getPresetCrosshairPath(preset.file);
+    if (path) {
+      setSettings(prev => {
+        const newSettings = {
+          ...prev,
+          style: preset.id,
+          use_custom_image: true,
+          custom_image_path: path,
+        };
+        updateSettings(newSettings);
+        return newSettings;
+      });
     }
   };
 
@@ -270,6 +323,24 @@ export default function CrosshairPage() {
     updateSettings(newSettings);
   };
 
+  const startEdit = (axis: 'x' | 'y') => {
+    setEditValue(String(axis === 'x' ? settings.offset_x : settings.offset_y));
+    setEditingAxis(axis);
+    requestAnimationFrame(() => editRef.current?.focus());
+  };
+
+  const commitEdit = useCallback(() => {
+    if (editingAxis === null) return;
+    const raw = parseInt(editValue, 10);
+    const key = editingAxis === 'x' ? 'offset_x' : 'offset_y';
+    const max = editingAxis === 'x' ? maxOffsetX : maxOffsetY;
+    if (!isNaN(raw)) {
+      updateSetting(key as 'offset_x' | 'offset_y', Math.max(-max, Math.min(max, raw)));
+    }
+    setEditingAxis(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingAxis, editValue, maxOffsetX, maxOffsetY]);
+
   return (
     <Box pt={8} pb={8}>
       <HStack justify="space-between" mb={6}>
@@ -326,32 +397,61 @@ export default function CrosshairPage() {
           </SettingCard>
 
           <SettingCard title={t("crosshair.renderMode")}>
-            <HStack spacing={3}>
+            <HStack spacing={2}>
               <LiquidGlassCard
                 py={2.5}
-                px={4}
+                px={3}
                 textAlign="center"
                 cursor="pointer"
                 flex={1}
-                onClick={() => updateSetting("use_custom_image", false)}
-                opacity={settings.use_custom_image ? 0.5 : 1}
-                border={settings.use_custom_image ? "1px solid transparent" : `1px solid ${getActiveColor()}`}
+                onClick={() => {
+                  if (!settings.use_custom_image) return;
+                  updateSettings({ ...settings, use_custom_image: false, style: lastProceduralStyle.current, custom_image_path: null });
+                }}
+                opacity={!settings.use_custom_image ? 1 : 0.5}
+                border={!settings.use_custom_image ? `1px solid ${getActiveColor()}` : "1px solid transparent"}
               >
-                <Text fontSize="sm" fontWeight="medium" color={settings.use_custom_image ? textColor : getActiveColor()}>
+                <Text fontSize="xs" fontWeight="medium" color={!settings.use_custom_image ? getActiveColor() : textColor}>
                   {t("crosshair.procedural")}
                 </Text>
               </LiquidGlassCard>
               <LiquidGlassCard
                 py={2.5}
-                px={4}
+                px={3}
                 textAlign="center"
                 cursor="pointer"
                 flex={1}
-                onClick={() => updateSetting("use_custom_image", true)}
-                opacity={settings.use_custom_image ? 1 : 0.5}
-                border={settings.use_custom_image ? `1px solid ${getActiveColor()}` : "1px solid transparent"}
+                onClick={() => {
+                  if (settings.use_custom_image && settings.style.startsWith("Preset_")) return;
+                  if (!settings.use_custom_image) {
+                    lastProceduralStyle.current = settings.style;
+                  }
+                  selectPresetImage(PRESET_IMAGE_STYLES[0]);
+                }}
+                opacity={settings.use_custom_image && settings.style.startsWith("Preset_") ? 1 : 0.5}
+                border={settings.use_custom_image && settings.style.startsWith("Preset_") ? `1px solid ${getActiveColor()}` : "1px solid transparent"}
               >
-                <Text fontSize="sm" fontWeight="medium" color={settings.use_custom_image ? getActiveColor() : textColor}>
+                <Text fontSize="xs" fontWeight="medium" color={settings.use_custom_image && settings.style.startsWith("Preset_") ? getActiveColor() : textColor}>
+                  {t("crosshair.presetImages")}
+                </Text>
+              </LiquidGlassCard>
+              <LiquidGlassCard
+                py={2.5}
+                px={3}
+                textAlign="center"
+                cursor="pointer"
+                flex={1}
+                onClick={() => {
+                  if (settings.use_custom_image && !settings.style.startsWith("Preset_")) return;
+                  if (!settings.use_custom_image) {
+                    lastProceduralStyle.current = settings.style;
+                  }
+                  updateSettings({ ...settings, use_custom_image: true, style: "Custom", custom_image_path: null });
+                }}
+                opacity={settings.use_custom_image && !settings.style.startsWith("Preset_") ? 1 : 0.5}
+                border={settings.use_custom_image && !settings.style.startsWith("Preset_") ? `1px solid ${getActiveColor()}` : "1px solid transparent"}
+              >
+                <Text fontSize="xs" fontWeight="medium" color={settings.use_custom_image && !settings.style.startsWith("Preset_") ? getActiveColor() : textColor}>
                   {t("crosshair.customImage")}
                 </Text>
               </LiquidGlassCard>
@@ -461,6 +561,43 @@ export default function CrosshairPage() {
             </VStack>
           </SettingCard>
           )}
+
+          {settings.use_custom_image && settings.style.startsWith("Preset_") && (
+            <SettingCard title={t("crosshair.presetImagesTitle")}>
+              <SimpleGrid columns={5} spacing={2}>
+                {PRESET_IMAGE_STYLES.map((preset) => {
+                  const isActive = settings.style === preset.id;
+                  return (
+                    <LiquidGlassCard
+                      key={preset.id}
+                      py={2}
+                      textAlign="center"
+                      cursor="pointer"
+                      onClick={() => selectPresetImage(preset)}
+                    >
+                      <Box
+                        w="full"
+                        h="36px"
+                        mb={1}
+                        borderRadius="md"
+                        overflow="hidden"
+                        bg="black"
+                      >
+                        <img
+                          src={`/crosshair-presets/${preset.file}`}
+                          alt={t(preset.labelKey)}
+                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        />
+                      </Box>
+                      <Text fontSize="xs" fontWeight="medium" color={isActive ? getActiveColor() : textColor}>
+                        {t(preset.labelKey)}
+                      </Text>
+                    </LiquidGlassCard>
+                  );
+                })}
+              </SimpleGrid>
+            </SettingCard>
+          )}
         </VStack>
 
         <VStack align="stretch" spacing={5}>
@@ -468,34 +605,63 @@ export default function CrosshairPage() {
             <VStack align="stretch" spacing={4}>
               {settings.use_custom_image ? (
                 <>
-                  <Box>
-                    <Button
-                      leftIcon={<Image size={16} />}
-                      w="full"
-                      variant="outline"
-                      colorScheme="gray"
-                      size="sm"
-                      onClick={selectImage}
-                      justifyContent="flex-start"
-                      h="auto"
-                      py={2.5}
-                      whiteSpace="normal"
-                      textAlign="left"
-                    >
-                      <VStack align="stretch" spacing={0.5}>
-                        <Text fontSize="sm" color={textColor}>
-                          {settings.custom_image_path
-                            ? settings.custom_image_path.split(/[\\/]/).pop()
-                            : t("crosshair.selectImage")}
-                        </Text>
-                        {settings.custom_image_path && (
-                          <Text fontSize="2xs" color={subTextColor} noOfLines={1}>
-                            {settings.custom_image_path}
+                  {settings.style.startsWith("Preset_") ? (
+                    <Box>
+                      <HStack spacing={2} mb={1}>
+                        <Box
+                          w={10} h={10}
+                          borderRadius="md"
+                          overflow="hidden"
+                          bg="black"
+                          flexShrink={0}
+                        >
+                          <img
+                            src={`/crosshair-presets/${PRESET_IMAGE_STYLES.find(p => p.id === settings.style)?.file || ""}`}
+                            alt=""
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                          />
+                        </Box>
+                        <VStack align="flex-start" spacing={0}>
+                          <Text fontSize="sm" fontWeight="medium" color={textColor}>
+                            {(() => {
+                              const found = PRESET_IMAGE_STYLES.find(p => p.id === settings.style);
+                              return found ? t(found.labelKey) : t("crosshair.presetImages");
+                            })()}
                           </Text>
-                        )}
-                      </VStack>
-                    </Button>
-                  </Box>
+                          <Text fontSize="2xs" color={subTextColor}>{t("crosshair.presetHint")}</Text>
+                        </VStack>
+                      </HStack>
+                    </Box>
+                  ) : (
+                    <Box>
+                      <Button
+                        leftIcon={<Image size={16} />}
+                        w="full"
+                        variant="outline"
+                        colorScheme="gray"
+                        size="sm"
+                        onClick={selectImage}
+                        justifyContent="flex-start"
+                        h="auto"
+                        py={2.5}
+                        whiteSpace="normal"
+                        textAlign="left"
+                      >
+                        <VStack align="stretch" spacing={0.5}>
+                          <Text fontSize="sm" color={textColor}>
+                            {settings.custom_image_path
+                              ? settings.custom_image_path.split(/[\\/]/).pop()
+                              : t("crosshair.selectImage")}
+                          </Text>
+                          {settings.custom_image_path && (
+                            <Text fontSize="2xs" color={subTextColor} noOfLines={1}>
+                              {settings.custom_image_path}
+                            </Text>
+                          )}
+                        </VStack>
+                      </Button>
+                    </Box>
+                  )}
 
                   <Box>
                     <HStack justify="space-between" mb={1}>
@@ -521,6 +687,158 @@ export default function CrosshairPage() {
                     </Slider>
                   </Box>
 
+                  <Box>
+                    <HStack justify="space-between" mb={1}>
+                      <Text color={textColor} fontSize="sm">X {t("crosshair.offset")}</Text>
+                      <HStack spacing={1}>
+                        <IconButton
+                          aria-label="X-"
+                          icon={<Minus size={12} />}
+                          size="xs"
+                          variant="outline"
+                          borderColor={cardBorder}
+                          _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
+                          onClick={() => updateSetting("offset_x", settings.offset_x - 1)}
+                          isDisabled={settings.offset_x <= -maxOffsetX}
+                        />
+                        {editingAxis === 'x' ? (
+                          <Input
+                            ref={editRef}
+                            value={editValue}
+                            size="xs"
+                            w="48px"
+                            textAlign="center"
+                            fontSize="xs"
+                            bg={inputBg}
+                            color={textColor}
+                            borderColor={getActiveColor()}
+                            _focus={{ borderColor: getActiveColor(), boxShadow: `0 0 0 1px ${getActiveColor()}` }}
+                            px={2.5}
+                            py={1}
+                            borderRadius="md"
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitEdit();
+                              if (e.key === 'Escape') setEditingAxis(null);
+                            }}
+                          />
+                        ) : (
+                          <Box
+                            onClick={() => startEdit('x')}
+                            px={2.5}
+                            py={1}
+                            minW="48px"
+                            textAlign="center"
+                            bg={inputBg}
+                            borderRadius="md"
+                            border="1px solid"
+                            borderColor={cardBorder}
+                            fontSize="xs"
+                            color={textColor}
+                            fontWeight="medium"
+                            fontFamily="mono"
+                            cursor="text"
+                            _hover={{ borderColor: getActiveColor() }}
+                            transition="border-color 0.15s"
+                          >
+                            {settings.offset_x}
+                          </Box>
+                        )}
+                        <IconButton
+                          aria-label="X+"
+                          icon={<Plus size={12} />}
+                          size="xs"
+                          variant="outline"
+                          borderColor={cardBorder}
+                          _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
+                          onClick={() => updateSetting("offset_x", settings.offset_x + 1)}
+                          isDisabled={settings.offset_x >= maxOffsetX}
+                        />
+                      </HStack>
+                    </HStack>
+                    <Slider value={settings.offset_x} min={-maxOffsetX} max={maxOffsetX} step={1} onChange={(val) => updateSetting("offset_x", val)}>
+                      <SliderTrack bg={sliderBg}><SliderFilledTrack bg={getActiveColor()} /></SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </Box>
+
+                  <Box>
+                    <HStack justify="space-between" mb={1}>
+                      <Text color={textColor} fontSize="sm">Y {t("crosshair.offset")}</Text>
+                      <HStack spacing={1}>
+                        <IconButton
+                          aria-label="Y-"
+                          icon={<Minus size={12} />}
+                          size="xs"
+                          variant="outline"
+                          borderColor={cardBorder}
+                          _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
+                          onClick={() => updateSetting("offset_y", settings.offset_y - 1)}
+                          isDisabled={settings.offset_y <= -maxOffsetY}
+                        />
+                        {editingAxis === 'y' ? (
+                          <Input
+                            ref={editRef}
+                            value={editValue}
+                            size="xs"
+                            w="48px"
+                            textAlign="center"
+                            fontSize="xs"
+                            bg={inputBg}
+                            color={textColor}
+                            borderColor={getActiveColor()}
+                            _focus={{ borderColor: getActiveColor(), boxShadow: `0 0 0 1px ${getActiveColor()}` }}
+                            px={2.5}
+                            py={1}
+                            borderRadius="md"
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitEdit();
+                              if (e.key === 'Escape') setEditingAxis(null);
+                            }}
+                          />
+                        ) : (
+                          <Box
+                            onClick={() => startEdit('y')}
+                            px={2.5}
+                            py={1}
+                            minW="48px"
+                            textAlign="center"
+                            bg={inputBg}
+                            borderRadius="md"
+                            border="1px solid"
+                            borderColor={cardBorder}
+                            fontSize="xs"
+                            color={textColor}
+                            fontWeight="medium"
+                            fontFamily="mono"
+                            cursor="text"
+                            _hover={{ borderColor: getActiveColor() }}
+                            transition="border-color 0.15s"
+                          >
+                            {settings.offset_y}
+                          </Box>
+                        )}
+                        <IconButton
+                          aria-label="Y+"
+                          icon={<Plus size={12} />}
+                          size="xs"
+                          variant="outline"
+                          borderColor={cardBorder}
+                          _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
+                          onClick={() => updateSetting("offset_y", settings.offset_y + 1)}
+                          isDisabled={settings.offset_y >= maxOffsetY}
+                        />
+                      </HStack>
+                    </HStack>
+                    <Slider value={settings.offset_y} min={-maxOffsetY} max={maxOffsetY} step={1} onChange={(val) => updateSetting("offset_y", val)}>
+                      <SliderTrack bg={sliderBg}><SliderFilledTrack bg={getActiveColor()} /></SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </Box>
+
                   <HStack justify="space-between" pt={1}>
                     <HStack spacing={2}>
                       <Box
@@ -531,12 +849,34 @@ export default function CrosshairPage() {
                         alignItems="center"
                         justifyContent="center"
                         opacity={settings.opacity / 255}
+                        overflow="hidden"
                       >
-                        <Image size={20} color="white" />
+                        {settings.style.startsWith("Preset_") ? (
+                          <img
+                            src={`/crosshair-presets/${PRESET_IMAGE_STYLES.find(p => p.id === settings.style)?.file || ""}`}
+                            alt=""
+                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                          />
+                        ) : settings.custom_image_path ? (
+                          <img
+                            src={convertFileSrc(settings.custom_image_path)}
+                            alt="preview"
+                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                          />
+                        ) : (
+                          <Image size={20} color="white" />
+                        )}
                       </Box>
                       <VStack align="flex-start" spacing={0}>
                         <Text fontSize="xs" color={subTextColor} fontWeight="medium">{t("crosshair.preview")}</Text>
-                        <Text fontSize="2xs" color={subTextColor}>{t("crosshair.customImage")}</Text>
+                        <Text fontSize="2xs" color={subTextColor}>
+                          {settings.style.startsWith("Preset_")
+                            ? (() => {
+                                const found = PRESET_IMAGE_STYLES.find(p => p.id === settings.style);
+                                return found ? t(found.labelKey) : t("crosshair.presetImages");
+                              })()
+                            : t("crosshair.customImage")}
+                        </Text>
                       </VStack>
                     </HStack>
                     <Button
@@ -604,6 +944,158 @@ export default function CrosshairPage() {
                       </Text>
                     </HStack>
                     <Slider value={settings.opacity} min={50} max={255} step={5} onChange={(val) => updateSetting("opacity", val)}>
+                      <SliderTrack bg={sliderBg}><SliderFilledTrack bg={getActiveColor()} /></SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </Box>
+
+                  <Box>
+                    <HStack justify="space-between" mb={1}>
+                      <Text color={textColor} fontSize="sm">X {t("crosshair.offset")}</Text>
+                      <HStack spacing={1}>
+                        <IconButton
+                          aria-label="X-"
+                          icon={<Minus size={12} />}
+                          size="xs"
+                          variant="outline"
+                          borderColor={cardBorder}
+                          _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
+                          onClick={() => updateSetting("offset_x", settings.offset_x - 1)}
+                          isDisabled={settings.offset_x <= -maxOffsetX}
+                        />
+                        {editingAxis === 'x' ? (
+                          <Input
+                            ref={editRef}
+                            value={editValue}
+                            size="xs"
+                            w="48px"
+                            textAlign="center"
+                            fontSize="xs"
+                            bg={inputBg}
+                            color={textColor}
+                            borderColor={getActiveColor()}
+                            _focus={{ borderColor: getActiveColor(), boxShadow: `0 0 0 1px ${getActiveColor()}` }}
+                            px={2.5}
+                            py={1}
+                            borderRadius="md"
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitEdit();
+                              if (e.key === 'Escape') setEditingAxis(null);
+                            }}
+                          />
+                        ) : (
+                          <Box
+                            onClick={() => startEdit('x')}
+                            px={2.5}
+                            py={1}
+                            minW="48px"
+                            textAlign="center"
+                            bg={inputBg}
+                            borderRadius="md"
+                            border="1px solid"
+                            borderColor={cardBorder}
+                            fontSize="xs"
+                            color={textColor}
+                            fontWeight="medium"
+                            fontFamily="mono"
+                            cursor="text"
+                            _hover={{ borderColor: getActiveColor() }}
+                            transition="border-color 0.15s"
+                          >
+                            {settings.offset_x}
+                          </Box>
+                        )}
+                        <IconButton
+                          aria-label="X+"
+                          icon={<Plus size={12} />}
+                          size="xs"
+                          variant="outline"
+                          borderColor={cardBorder}
+                          _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
+                          onClick={() => updateSetting("offset_x", settings.offset_x + 1)}
+                          isDisabled={settings.offset_x >= maxOffsetX}
+                        />
+                      </HStack>
+                    </HStack>
+                    <Slider value={settings.offset_x} min={-maxOffsetX} max={maxOffsetX} step={1} onChange={(val) => updateSetting("offset_x", val)}>
+                      <SliderTrack bg={sliderBg}><SliderFilledTrack bg={getActiveColor()} /></SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </Box>
+
+                  <Box>
+                    <HStack justify="space-between" mb={1}>
+                      <Text color={textColor} fontSize="sm">Y {t("crosshair.offset")}</Text>
+                      <HStack spacing={1}>
+                        <IconButton
+                          aria-label="Y-"
+                          icon={<Minus size={12} />}
+                          size="xs"
+                          variant="outline"
+                          borderColor={cardBorder}
+                          _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
+                          onClick={() => updateSetting("offset_y", settings.offset_y - 1)}
+                          isDisabled={settings.offset_y <= -maxOffsetY}
+                        />
+                        {editingAxis === 'y' ? (
+                          <Input
+                            ref={editRef}
+                            value={editValue}
+                            size="xs"
+                            w="48px"
+                            textAlign="center"
+                            fontSize="xs"
+                            bg={inputBg}
+                            color={textColor}
+                            borderColor={getActiveColor()}
+                            _focus={{ borderColor: getActiveColor(), boxShadow: `0 0 0 1px ${getActiveColor()}` }}
+                            px={2.5}
+                            py={1}
+                            borderRadius="md"
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitEdit();
+                              if (e.key === 'Escape') setEditingAxis(null);
+                            }}
+                          />
+                        ) : (
+                          <Box
+                            onClick={() => startEdit('y')}
+                            px={2.5}
+                            py={1}
+                            minW="48px"
+                            textAlign="center"
+                            bg={inputBg}
+                            borderRadius="md"
+                            border="1px solid"
+                            borderColor={cardBorder}
+                            fontSize="xs"
+                            color={textColor}
+                            fontWeight="medium"
+                            fontFamily="mono"
+                            cursor="text"
+                            _hover={{ borderColor: getActiveColor() }}
+                            transition="border-color 0.15s"
+                          >
+                            {settings.offset_y}
+                          </Box>
+                        )}
+                        <IconButton
+                          aria-label="Y+"
+                          icon={<Plus size={12} />}
+                          size="xs"
+                          variant="outline"
+                          borderColor={cardBorder}
+                          _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
+                          onClick={() => updateSetting("offset_y", settings.offset_y + 1)}
+                          isDisabled={settings.offset_y >= maxOffsetY}
+                        />
+                      </HStack>
+                    </HStack>
+                    <Slider value={settings.offset_y} min={-maxOffsetY} max={maxOffsetY} step={1} onChange={(val) => updateSetting("offset_y", val)}>
                       <SliderTrack bg={sliderBg}><SliderFilledTrack bg={getActiveColor()} /></SliderTrack>
                       <SliderThumb />
                     </Slider>

@@ -729,6 +729,20 @@
     "procedural": "Preset",
     "customImage": "Custom Image",
     "selectImage": "Select Image",
+    "offset": "Offset",
+    "presetImages": "Preset Crosshair Images",
+    "presetImagesTitle": "Preset Crosshairs",
+    "presetHint": "Click to select a preset. Only size, opacity, X/Y offset are adjustable.",
+    "presetImagesNames": {
+      "cat": "Cat",
+      "donk": "Donk",
+      "s1mple": "S1mple",
+      "ropz": "Ropz",
+      "mmw20": "MMW2.0",
+      "sscj": "SSCJ",
+
+      "tShape": "T-Shape"
+    },
     "styles": {
       "cross": "Cross",
       "dot": "Dot",

@@ -459,6 +459,7 @@ fn get_monitor_model_name(device_name: &str) -> String {
 }
 // ─── Per-display state ───
 
+#[derive(Clone)]
 struct DisplayState {
     original_gamma: Option<[[u16; 256]; 3]>,
     temperature: i32,
@@ -1056,6 +1057,165 @@ fn enumerate_device_names_only() -> Vec<String> {
     data.device_names
 }
 
+/// 获取当前显示器设备名列表（不更新缓存）
+/// 用于检测显示配置是否变化（独显直连切换等场景）
+#[cfg(target_os = "windows")]
+fn get_current_display_names() -> Vec<String> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        EnumDisplayMonitors, GetMonitorInfoW,
+        HDC, HMONITOR, MONITORINFOEXW,
+    };
+
+    struct MonitorData {
+        device_names: Vec<String>,
+    }
+
+    unsafe extern "system" fn monitor_enum_proc(
+        hmonitor: HMONITOR,
+        _hdc: HDC,
+        _rect: *mut windows_sys::Win32::Foundation::RECT,
+        lparam: isize,
+    ) -> i32 {
+        let data = &mut *(lparam as *mut MonitorData);
+        let mut info: MONITORINFOEXW = std::mem::zeroed();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _) != 0 {
+            let device_name = String::from_utf16_lossy(
+                &info.szDevice[..info.szDevice.iter().position(|&c| c == 0).unwrap_or(info.szDevice.len())],
+            );
+            data.device_names.push(device_name);
+        }
+        1
+    }
+
+    let mut data = MonitorData {
+        device_names: Vec::new(),
+    };
+    unsafe {
+        EnumDisplayMonitors(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            Some(monitor_enum_proc),
+            &mut data as *mut _ as isize,
+        );
+    }
+    data.device_names
+}
+
+/// 检测显示配置是否发生变化（设备名或数量变化）
+/// 用于独显直连/Advanced Optimus 切换后自动刷新缓存
+#[cfg(target_os = "windows")]
+fn check_display_config_changed() -> bool {
+    let current_names = get_current_display_names();
+    let cached_names = {
+        let lock = DISPLAY_DEVICES.lock().unwrap();
+        lock.as_ref().cloned().unwrap_or_default()
+    };
+
+    if current_names.is_empty() && cached_names.is_empty() {
+        return false;
+    }
+
+    if current_names.len() != cached_names.len() {
+        log::info!(
+            "显示配置变化：显示器数量 {} -> {}",
+            cached_names.len(),
+            current_names.len()
+        );
+        return true;
+    }
+
+    for (a, b) in current_names.iter().zip(cached_names.iter()) {
+        if a != b {
+            log::info!("显示配置变化：设备名 '{}' -> '{}'", b, a);
+            return true;
+        }
+    }
+
+    false
+}
+
+/// 刷新显示器缓存（保留滤镜参数和 filter_active 状态）
+/// 用于独显直连/Advanced Optimus 切换后恢复滤镜功能
+#[cfg(target_os = "windows")]
+fn refresh_display_caches() {
+    log::info!("刷新显示器缓存（独显直连切换检测）");
+
+    // 1. 保存当前的滤镜参数和 filter_active 状态
+    let saved_states: Vec<DisplayState> = {
+        let lock = DISPLAY_STATES.lock().unwrap();
+        if let Some(ref states) = *lock {
+            states
+                .iter()
+                .map(|s| {
+                    let state = s.lock().unwrap();
+                    state.clone()
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    };
+
+    // 2. 清空缓存
+    {
+        let mut lock = DISPLAY_DEVICES.lock().unwrap();
+        *lock = None;
+    }
+    {
+        let mut lock = DISPLAY_STATES.lock().unwrap();
+        *lock = None;
+    }
+
+    // 3. 重新枚举显示器（更新 DISPLAY_DEVICES 缓存）
+    let _ = enumerate_displays_inner();
+
+    // 4. 重新初始化 DISPLAY_STATES
+    ensure_display_states();
+
+    // 5. 恢复保存的滤镜参数（按索引映射）
+    let new_count = {
+        let lock = DISPLAY_STATES.lock().unwrap();
+        lock.as_ref().map(|s| s.len()).unwrap_or(0)
+    };
+
+    for i in 0..new_count {
+        if let Some(ref saved) = saved_states.get(i) {
+            with_display_state(i, |state| {
+                state.temperature = saved.temperature;
+                state.brightness = saved.brightness;
+                state.contrast = saved.contrast;
+                state.saturation = saved.saturation;
+                state.r_gamma = saved.r_gamma;
+                state.g_gamma = saved.g_gamma;
+                state.b_gamma = saved.b_gamma;
+                state.mode = saved.mode;
+                state.filter_active = saved.filter_active;
+                state.icc_active = saved.icc_active;
+                state.icc_ramp = saved.icc_ramp.clone();
+                // original_gamma 需要重新获取，因为 GPU 切换后旧的 gamma ramp 已失效
+                state.original_gamma = None;
+            });
+
+            // 如果滤镜是活跃的，重新获取 original_gamma
+            if saved.filter_active {
+                with_display_state(i, |state| {
+                    if state.original_gamma.is_none() {
+                        if let Ok(ramp) = get_current_gamma_ramp_for_display(i) {
+                            state.original_gamma = Some(ramp);
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    log::info!(
+        "显示器缓存刷新完成，恢复 {} 个显示器的滤镜状态",
+        new_count
+    );
+}
+
 #[cfg(target_os = "windows")]
 fn get_display_dc(
     display_index: usize,
@@ -1091,10 +1251,31 @@ fn get_display_dc(
         vec![]
     };
 
+    // CreateDCW 参数说明（MSDN）：
+    //   lpszDriver = "DISPLAY"（显示驱动名，固定值）
+    //   lpszDevice = 设备名（如 "\\.\\DISPLAY1"，来自 EnumDisplayMonitors）
+    //
+    // 旧代码把设备名传给 lpszDriver 而 lpszDevice=NULL，在普通模式下 Windows
+    // 能容忍，但在独显直连（dGPU 直连显示器、核显禁用）模式下会创建不完整的
+    // DC，导致 SetDeviceGammaRamp 返回失败。
+    let display_driver_wide: Vec<u16> = "DISPLAY\0".encode_utf16().collect();
+
     // Attempt per-display CreateDCW with each name format
     for fmt in &name_formats {
         let device_name_wide: Vec<u16> = fmt.encode_utf16().chain(std::iter::once(0)).collect();
         unsafe {
+            // 正确格式：CreateDCW("DISPLAY", "\\.\\DISPLAY1", NULL, NULL)
+            let hdc = CreateDCW(
+                display_driver_wide.as_ptr(),
+                device_name_wide.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+            );
+            if !hdc.is_null() {
+                log::info!("get_display_dc[{}]: CreateDCW 成功 (driver=DISPLAY, device={})", display_index, fmt);
+                return Ok((hdc, false));
+            }
+            // 回退：旧格式（向后兼容，某些旧驱动可能需要）
             let hdc = CreateDCW(
                 device_name_wide.as_ptr(),
                 std::ptr::null(),
@@ -1102,19 +1283,31 @@ fn get_display_dc(
                 std::ptr::null(),
             );
             if !hdc.is_null() {
-                log::info!("get_display_dc[{}]: CreateDCW 成功 (name={})", display_index, fmt);
+                log::info!("get_display_dc[{}]: CreateDCW 成功 (legacy, name={})", display_index, fmt);
                 return Ok((hdc, false));
             }
         }
     }
 
-    // ── Fallback 1: Try "DISPLAY1", "DISPLAY2" as plain driver names ──
+    // ── Fallback 1: Try "DISPLAY1", "DISPLAY2" as device names ──
     // On some Optimus laptops, the device name from EnumDisplayMonitors may not
     // work directly with CreateDCW, but the plain "DISPLAY1" form does.
     if name_formats.is_empty() || name_formats.iter().all(|f| f.starts_with("\\\\.\\")) {
         let alt_name = format!("DISPLAY{}", display_index + 1);
         let alt_name_wide: Vec<u16> = alt_name.encode_utf16().chain(std::iter::once(0)).collect();
         unsafe {
+            // 正确格式
+            let hdc = CreateDCW(
+                display_driver_wide.as_ptr(),
+                alt_name_wide.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+            );
+            if !hdc.is_null() {
+                log::info!("get_display_dc[{}]: CreateDCW 成功 (driver=DISPLAY, device={})", display_index, alt_name);
+                return Ok((hdc, false));
+            }
+            // 旧格式回退
             let hdc = CreateDCW(
                 alt_name_wide.as_ptr(),
                 std::ptr::null(),
@@ -1122,35 +1315,19 @@ fn get_display_dc(
                 std::ptr::null(),
             );
             if !hdc.is_null() {
-                log::info!("get_display_dc[{}]: CreateDCW 成功 (alt name={})", display_index, alt_name);
+                log::info!("get_display_dc[{}]: CreateDCW 成功 (legacy alt, name={})", display_index, alt_name);
                 return Ok((hdc, false));
             }
         }
     }
 
-    // ── Fallback 2: Try plain "DISPLAY" (system-wide desktop DC via CreateDCW) ──
-    // This may behave differently than GetDC(null) on certain GPU configurations.
-    let display_wide: Vec<u16> = "DISPLAY\0".encode_utf16().collect();
-    unsafe {
-        let hdc = CreateDCW(
-            display_wide.as_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            std::ptr::null(),
-        );
-        if !hdc.is_null() {
-            log::warn!(
-                "get_display_dc[{}]: 逐显示器 CreateDCW 全部失败，使用 CreateDCW(DISPLAY) 回退",
-                display_index
-            );
-            return Ok((hdc, false)); // false → use DeleteDC
-        }
-    }
-
-    // ── Fallback 3: Desktop DC via GetDC(null) ──
+    // ── Fallback 2: Desktop DC via GetDC(null) ──
     // Works on virtually all systems including Optimus laptops.
+    // 注意：不再使用 CreateDCW("DISPLAY")，因为在独显直连/混合 GPU 场景下
+    // 它可能返回错误 GPU（iGPU）的 DC，导致 SetDeviceGammaRamp 设置到
+    // 不驱动显示器的 GPU 上，滤镜无效果。GetDC(null) 始终返回主显示器 GPU 的 DC。
     log::warn!(
-        "get_display_dc[{}]: 所有 CreateDCW 尝试失败，使用 GetDC(null) 桌面 DC 回退",
+        "get_display_dc[{}]: 逐显示器 CreateDCW 全部失败，使用 GetDC(null) 桌面 DC 回退",
         display_index
     );
     unsafe {
@@ -1166,8 +1343,11 @@ fn get_display_dc(
 
 #[cfg(target_os = "windows")]
 fn set_gamma_ramp_for_display(display_index: usize, ramp: &[[u16; 256]; 3]) -> Result<(), String> {
-    use windows_sys::Win32::Graphics::Gdi::{DeleteDC, ReleaseDC};
+    use windows_sys::Win32::Graphics::Gdi::{DeleteDC, ReleaseDC, GetDeviceCaps};
     use windows_sys::Win32::UI::ColorSystem::SetDeviceGammaRamp;
+
+    // COLORMGMTCAPS = 1219, COLORMGMTCAP_GAMMA_RAMP = 1
+    const COLORMGMTCAPS: i32 = 1219;
 
     let _guard = GAMMA_RAMP_MUTEX
         .lock()
@@ -1180,6 +1360,15 @@ fn set_gamma_ramp_for_display(display_index: usize, ramp: &[[u16; 256]; 3]) -> R
         let result = SetDeviceGammaRamp(hdc, ramp.as_ptr() as *const _);
         let dc_is_per_display = !use_release;
 
+        if result == 0 {
+            // SetDeviceGammaRamp 失败，检查 DC 是否支持 gamma ramp
+            let gamma_caps = GetDeviceCaps(hdc, COLORMGMTCAPS);
+            log::warn!(
+                "set_gamma_ramp_for_display[{}]: SetDeviceGammaRamp 失败, GetDeviceCaps(COLORMGMTCAPS)={}, gamma_ramp_supported={}",
+                display_index, gamma_caps, gamma_caps & 1 != 0
+            );
+        }
+
         if use_release {
             ReleaseDC(std::ptr::null_mut(), hdc);
         } else {
@@ -1187,13 +1376,19 @@ fn set_gamma_ramp_for_display(display_index: usize, ramp: &[[u16; 256]; 3]) -> R
         }
 
         if result != 0 {
+            // SetDeviceGammaRamp 返回成功，直接信任结果
+            // 注意：不通过 GetDeviceGammaRamp 验证，因为 NVIDIA 驱动的
+            // GetDeviceGammaRamp 返回值可能与设置值不一致（内部缓存/量化），
+            // 误判会导致进入 Strategy2 桌面 DC 回退，而桌面 DC 的
+            // SetDeviceGammaRamp 可能因驱动限制而失败，最终报"显卡不支持"。
             log::info!(
-                "set_gamma_ramp_for_display[{}]: Strategy1 逐显示器 SetDeviceGammaRamp 成功 (dc_is_per_display={})",
+                "set_gamma_ramp_for_display[{}]: Strategy1 SetDeviceGammaRamp 成功 (dc_is_per_display={})",
                 display_index, dc_is_per_display
             );
             return Ok(());
         }
 
+        // SetDeviceGammaRamp 失败
         // If per-display DC failed but we used desktop DC, no more retries
         if !dc_is_per_display {
             log::error!(
@@ -1372,6 +1567,13 @@ fn start_filter_monitor() {
         }
 
         loop {
+            // 检测显示配置变化（独显直连/Advanced Optimus 切换等）
+            // 切换后显示器可能从 iGPU 切到 dGPU，缓存的设备名和状态需要刷新
+            if check_display_config_changed() {
+                log::info!("检测到显示配置变化，刷新缓存并重新应用滤镜");
+                refresh_display_caches();
+            }
+
             // Collect active display indices (release all locks before applying)
             let active_indices: Vec<usize> = {
                 ensure_display_states();
