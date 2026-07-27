@@ -55,6 +55,8 @@ const ITEM_ICONS: Record<string, React.FC<{ size?: number }>> = {
   delta_password: Key,
   game_ping: Gauge,
   fps: Activity,
+  fps_1low: Activity,
+  fps_01low: Activity,
 };
 
 function SortableItem({

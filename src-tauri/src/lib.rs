@@ -3,6 +3,7 @@ mod audio_engine;
 mod audio_eq;
 mod auto_start;
 mod music_api;
+mod cpu_scheduler;
 mod crosshair;
 mod dattorro;
 mod delta_force;
@@ -128,6 +129,12 @@ pub fn run() {
                 let _ = optimization::init_ace_auto_detect(app_handle).await;
             });
 
+            // 启动时自动应用已保存的 CPU 调度规则
+            let app_handle_for_rules = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                cpu_scheduler::apply_all_saved_rules(&app_handle_for_rules).await;
+            });
+
             // Configure widget window (DWM clipping + close intercept)
             if let Some(widget_window) = app.get_webview_window("widget") {
                 #[cfg(target_os = "windows")]
@@ -209,6 +216,9 @@ pub fn run() {
                 Ok(_) => log::info!("Tray initialized successfully"),
                 Err(e) => log::error!("Failed to initialize tray: {}", e),
             }
+
+            // 提前从持久化存储加载悬浮框设置，确保快捷键触发时使用已保存的配置而非默认值
+            overlay_panel::try_load_persisted_settings(app.handle());
 
             // Register default hotkeys (will be overridden by frontend if user changed them)
             let _ = hotkey::init_overlay(app.handle(), "Shift+F10");
@@ -468,6 +478,17 @@ pub fn run() {
             utils::lyrics_btn::show_lyrics_unlock_btn,
             utils::lyrics_btn::hide_lyrics_unlock_btn,
                         utils::lyrics_btn::unlock_lyrics,
+
+        // === CPU 核心调度 ===
+        cpu_scheduler::get_cpu_topology,
+        cpu_scheduler::get_process_list,
+        cpu_scheduler::get_process_affinity,
+        cpu_scheduler::set_process_affinity,
+        cpu_scheduler::restore_process_affinity,
+        cpu_scheduler::get_saved_rules,
+        cpu_scheduler::save_rule,
+        cpu_scheduler::delete_rule,
+        cpu_scheduler::apply_rule_by_name,
 
     ])
         .build(tauri::generate_context!())

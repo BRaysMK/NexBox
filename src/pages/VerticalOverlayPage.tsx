@@ -58,6 +58,8 @@ interface OverlaySettings {
 
 interface HardwareData {
   fps: number | null;
+  fps_1low: number | null;
+  fps_01low: number | null;
   cpu_usage: number | null;
   cpu_temp: number | null;
   cpu_clock: number | null;
@@ -83,6 +85,8 @@ interface HardwareData {
 
 const ITEM_ICONS: Record<string, LucideIcon> = {
   fps: Gauge,
+  fps_1low: Gauge,
+  fps_01low: Gauge,
   cpu_temp: Thermometer,
   cpu_usage: Cpu,
   cpu_clock: Cpu,
@@ -107,6 +111,8 @@ const ITEM_ICONS: Record<string, LucideIcon> = {
 
 const DEFAULT_DISPLAY_ITEMS: DisplayItemConfig[] = [
   { id: "fps", label: "FPS", enabled: false },
+  { id: "fps_1low", label: "1% Low", enabled: false },
+  { id: "fps_01low", label: "0.1% Low", enabled: false },
   { id: "cpu_temp", label: "CPU温度", enabled: false },
   { id: "cpu_usage", label: "CPU占用", enabled: true },
   { id: "cpu_fan_speed", label: "CPU风扇转速", enabled: false },
@@ -144,6 +150,10 @@ function getItemValue(item: DisplayItemConfig, data: HardwareData | null): strin
   switch (item.id) {
     case "fps":
       return data.fps != null ? `${data.fps}` : "--";
+    case "fps_1low":
+      return data.fps_1low != null ? `${data.fps_1low}` : "--";
+    case "fps_01low":
+      return data.fps_01low != null ? `${data.fps_01low}` : "--";
     case "cpu_temp":
       return data.cpu_temp != null ? `${data.cpu_temp.toFixed(0)}°C` : "--";
     case "cpu_usage":

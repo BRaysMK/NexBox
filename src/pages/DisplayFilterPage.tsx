@@ -62,6 +62,11 @@ interface FilterSettings {
   b_gamma: number;
   mode: number;
   is_active: boolean;
+  icc_active: boolean;
+  active_icc_id: string | null;
+  preview_filter_icc: string | null;
+  preview_tint_color_icc: string | null;
+  preview_tint_opacity_icc: number | null;
 }
 
 interface FilterPreset {
@@ -147,6 +152,11 @@ export default function DisplayFilterPage() {
     b_gamma: 1.0,
     mode: 0,
     is_active: false,
+    icc_active: false,
+    active_icc_id: null,
+    preview_filter_icc: null,
+    preview_tint_color_icc: null,
+    preview_tint_opacity_icc: null,
   });
   const [presets, setPresets] = useState<FilterPreset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -231,6 +241,16 @@ export default function DisplayFilterPage() {
     try {
       const result: FilterSettings = await invoke("get_filter_settings", { displayIndex: activeDisplayIndexRef.current });
       setSettings(result);
+      // 恢复 ICC 激活状态
+      if (result.icc_active && result.active_icc_id) {
+        setActiveIccId(result.active_icc_id);
+        setActivePresetId("");
+        setIccPreviewFilter(result.preview_filter_icc || null);
+        setIccTintColor(result.preview_tint_color_icc || null);
+        setIccTintOpacity(result.preview_tint_opacity_icc ?? 0);
+        setManualPresetChange(true);
+        setTimeout(() => setManualPresetChange(false), 100);
+      }
     } catch (error) {
       console.error("Failed to load filter settings:", error);
     }
@@ -342,6 +362,7 @@ export default function DisplayFilterPage() {
   useEffect(() => {
     if (presets.length === 0 || savedCustom === null) return;
     if (manualPresetChange) return;
+    if (settings.icc_active) return; // ICC 激活时跳过预设匹配
     if (activePresetId === "custom") return;
     if (activePresetId === "") return; // ICC 预设选中时跳过同步
 
@@ -379,10 +400,7 @@ export default function DisplayFilterPage() {
     try {
       const result: any = await invoke("toggle_filter", { displayIndex: activeDisplayIndex });
       if (result.success) {
-        setSettings(prev => ({
-          ...prev,
-          is_active: result.settings.is_active,
-        }));
+        setSettings(result.settings as FilterSettings);
         toast({
           title: result.settings.is_active 
             ? t("displayFilter.filterEnabled") 
@@ -435,6 +453,11 @@ export default function DisplayFilterPage() {
           b_gamma: 1.0,
           mode: preset.mode,
           is_active: settings.is_active,
+          icc_active: false,
+          active_icc_id: null,
+          preview_filter_icc: null,
+          preview_tint_color_icc: null,
+          preview_tint_opacity_icc: null,
         });
         toast({
           title: `${t("displayFilter.presetAppliedPrefix")}${preset.name}${t("displayFilter.presetAppliedSuffix")}`,
@@ -507,6 +530,11 @@ export default function DisplayFilterPage() {
             b_gamma: savedCustom.b_gamma ?? 1.0,
             mode: 0,
             is_active: prev.is_active,
+            icc_active: false,
+            active_icc_id: null,
+            preview_filter_icc: null,
+            preview_tint_color_icc: null,
+            preview_tint_opacity_icc: null,
           }));
         }
       } catch (error) {
@@ -593,6 +621,11 @@ export default function DisplayFilterPage() {
           b_gamma: b_gamma,
           mode: 0,
           is_active: prev.is_active,
+          icc_active: false,
+          active_icc_id: null,
+          preview_filter_icc: null,
+          preview_tint_color_icc: null,
+          preview_tint_opacity_icc: null,
         }));
         
         await invoke("save_custom_filter_settings", {
@@ -710,6 +743,11 @@ export default function DisplayFilterPage() {
           b_gamma: preset.b_gamma,
           mode: 0,
           is_active: settings.is_active,
+          icc_active: false,
+          active_icc_id: null,
+          preview_filter_icc: null,
+          preview_tint_color_icc: null,
+          preview_tint_opacity_icc: null,
         });
         editValuesRef.current = {
           temperature: preset.temperature,
@@ -780,6 +818,11 @@ export default function DisplayFilterPage() {
           b_gamma: 1.0,
           mode: 0,
           is_active: prev.is_active,
+          icc_active: false,
+          active_icc_id: null,
+          preview_filter_icc: null,
+          preview_tint_color_icc: null,
+          preview_tint_opacity_icc: null,
         }));
         const normal = {
           temperature: 6500,
@@ -869,9 +912,9 @@ export default function DisplayFilterPage() {
         setIccPreviewFilter(result.preview_filter || null);
         setIccTintColor(result.preview_tint_color || null);
         setIccTintOpacity(result.preview_tint_opacity ?? 0);
-        setSettings((prev: FilterSettings) => ({
-          ...prev,
-        }));
+        if (result.settings) {
+          setSettings(result.settings as FilterSettings);
+        }
         toast({
           title: t("displayFilter.iccApplied"),
           description: !settings.is_active ? t("displayFilter.paramsUpdatedHint") : undefined,

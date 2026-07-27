@@ -2111,7 +2111,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "6.0.5";
+  const currentVersion = "6.3.0";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);

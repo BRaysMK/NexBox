@@ -3,6 +3,7 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
@@ -11,6 +12,9 @@ use winreg::enums::*;
 use winreg::RegKey;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// 标记是否为更新安装（非首次安装）
+static IS_UPDATE_INSTALL: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "windows")]
 extern "system" {
@@ -112,6 +116,7 @@ fn get_existing_install_path() -> Option<String> {
 pub fn get_default_install_path() -> String {
     // 更新场景：优先使用注册表中已记录的安装目录
     if let Some(existing_path) = get_existing_install_path() {
+        IS_UPDATE_INSTALL.store(true, Ordering::SeqCst);
         return existing_path;
     }
     // 全新安装：默认 Program Files\NexBox
@@ -121,6 +126,57 @@ pub fn get_default_install_path() -> String {
         .join("NexBox")
         .display()
         .to_string()
+}
+
+/// 安装完成后调度安装程序自删除（仅更新场景）
+/// 创建后台 PowerShell 脚本，完全无窗口，等待安装程序退出后删除其自身文件。
+#[tauri::command]
+pub fn schedule_installer_cleanup() -> Result<(), String> {
+    // 首次安装不删除安装程序
+    if !IS_UPDATE_INSTALL.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("无法获取安装程序路径: {}", e))?;
+
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join("nxb_cleanup.ps1");
+    let exe_str = exe_path.display().to_string();
+
+    // PowerShell 脚本：循环等待安装程序退出，删除安装程序，最后自删除
+    // 使用单引号包裹路径以处理空格/特殊字符
+    let ps_script = format!(
+        "$exe = '{}'\r\n\
+         while (Test-Path -LiteralPath $exe) {{\r\n\
+             try {{\r\n\
+                 Remove-Item -Force -LiteralPath $exe -ErrorAction Stop\r\n\
+             }} catch {{\r\n\
+                 Start-Sleep -Seconds 2\r\n\
+             }}\r\n\
+         }}\r\n\
+         Remove-Item -Force -LiteralPath $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue\r\n",
+        exe_str.replace('\'', "''") // 转义 PowerShell 单引号
+    );
+
+    fs::write(&script_path, ps_script)
+        .map_err(|e| format!("无法创建清理脚本: {}", e))?;
+
+    // 完全隐藏启动：PowerShell + WindowStyle Hidden + NoProfile + Bypass 执行策略
+    Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle", "Hidden",
+            "-ExecutionPolicy", "Bypass",
+            "-File",
+            script_path.to_str().unwrap(),
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("无法启动清理脚本: {}", e))?;
+
+    Ok(())
 }
 
 #[tauri::command]

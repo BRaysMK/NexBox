@@ -183,7 +183,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             left={0}
             right={0}
             bottom={0}
-            zIndex={-1}
+            zIndex={0}
             opacity={layer.fading ? 0 : 1}
             overflow="hidden"
             transition={layer.fading ? "opacity 0.5s ease-in-out" : undefined}
@@ -211,7 +211,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           left={0}
           right={0}
           bottom={0}
-          zIndex={-1}
+          zIndex={0}
           overflow="hidden"
           opacity={videoReady ? 1 : 0}
           transition="opacity 0.6s ease-in"
@@ -239,7 +239,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       <Sidebar />
       <Box 
         position="relative"
-        zIndex={0}
+        zIndex={1}
         ml={isNavTop ? 0 : "96px"}
         pt={isNavTop ? "120px" : "56px"}
         pb={8}

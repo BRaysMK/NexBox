@@ -18,6 +18,10 @@ export default function FinishPage({ targetDir }: FinishPageProps) {
         await invoke("launch_installed_app", { targetDir });
       } catch { }
     }
+    // 更新场景：调度安装程序自删除
+    try {
+      await invoke("schedule_installer_cleanup");
+    } catch { }
     try {
       await getCurrentWindow().close();
     } catch { }

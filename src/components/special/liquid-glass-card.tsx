@@ -41,29 +41,28 @@ export function LiquidGlassCard({
   const effectiveBlur = showBlur ? liquidGlassBlur : 0;
   const isReal = liquidGlassEnabled && liquidGlassMode === "real" && !isDashed;
 
+  // 卡片主体：零滤镜
   const backdropFilter = useMemo(() => {
     if (!liquidGlassEnabled) return "none";
-    if (isReal && svgSupported) return `url(#nexbox-liquid-glass-filter) saturate(1.4)`;
-    if (isReal) return `saturate(1.4) brightness(1.05)`;
+    if (isReal) return "none";
     return `blur(${effectiveBlur}px)`;
-  }, [liquidGlassEnabled, isReal, svgSupported, effectiveBlur]);
+  }, [liquidGlassEnabled, isReal, effectiveBlur]);
 
-  const cardStyles = useMemo(() => ({
-    bg: liquidGlassEnabled ? glassBgColor : defaultBg,
-    borderRadius: "xl" as const,
-    border: isDashed ? "1px dashed" : "1px solid",
-    borderColor: liquidGlassEnabled ? glassBorderColor : defaultBorder,
-    backdropFilter,
-    WebkitBackdropFilter: backdropFilter,
-    transition: "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)",
-    sx: {
-      transform: "translateZ(0)",
-      WebkitTransform: "translateZ(0)",
-      WebkitBackfaceVisibility: "hidden",
-      backfaceVisibility: "hidden",
-      ...(liquidGlassEnabled ? { willChange: "backdrop-filter" } : {}),
-    },
-  }), [backdropFilter, liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder, isDashed]);
+  // 边缘折射条用的 filter
+  const edgeFilter = svgSupported ? "url(#nexbox-liquid-glass-filter)" : "none";
+
+  const cardStyles = useMemo(() => {
+    const base: any = {
+      bg: isReal ? "transparent" : (liquidGlassEnabled ? glassBgColor : defaultBg),
+      borderRadius: "xl" as const,
+      border: isDashed ? "1px dashed" : "1px solid",
+      borderColor: isReal ? "rgba(255,255,255,0.06)" : (liquidGlassEnabled ? glassBorderColor : defaultBorder),
+      backdropFilter,
+      WebkitBackdropFilter: backdropFilter,
+      transition: "background 0.45s, border-color 0.45s, backdrop-filter 0.45s",
+    };
+    return base;
+  }, [backdropFilter, liquidGlassEnabled, glassBgColor, glassBorderColor, defaultBg, defaultBorder, isDashed, isReal]);
 
   const borderGlowStyle = useMemo(() => getBorderGlowStyle(glowColor), [glowColor]);
 
@@ -72,8 +71,27 @@ export function LiquidGlassCard({
       className={`jelly-bounce-card${isReal ? " real-liquid-glass" : ""}${className ? ` ${className}` : ""}`}
       {...cardStyles}
       position="relative"
+      overflow="hidden"
       {...props}
     >
+      {/* 边缘折射条 —— 独立叠加层，仅覆盖边缘 10px，卡片内部完全不受影响 */}
+      {isReal && svgSupported && (
+        <>
+          <Box position="absolute" top={0} left={0} w="100%" h="10px" zIndex={0}
+            backdropFilter={edgeFilter} sx={{ WebkitBackdropFilter: edgeFilter }}
+            bg="transparent" pointerEvents="none" />
+          <Box position="absolute" bottom={0} left={0} w="100%" h="10px" zIndex={0}
+            backdropFilter={edgeFilter} sx={{ WebkitBackdropFilter: edgeFilter }}
+            bg="transparent" pointerEvents="none" />
+          <Box position="absolute" left={0} top={0} w="10px" h="100%" zIndex={0}
+            backdropFilter={edgeFilter} sx={{ WebkitBackdropFilter: edgeFilter }}
+            bg="transparent" pointerEvents="none" />
+          <Box position="absolute" right={0} top={0} w="10px" h="100%" zIndex={0}
+            backdropFilter={edgeFilter} sx={{ WebkitBackdropFilter: edgeFilter }}
+            bg="transparent" pointerEvents="none" />
+        </>
+      )}
+
       {!isReal && (
         <Box
           style={borderGlowStyle}

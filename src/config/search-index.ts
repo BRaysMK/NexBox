@@ -284,6 +284,14 @@ export const searchIndex: SearchItem[] = [
     category: "optimization",
     keywords: ["外设", "鼠标", "键盘", "peripheral", "mouse", "keyboard", "注册表", "优化", "输入延迟", "Win32PrioritySeparation", "KeyboardDataQueueSize"],
   },
+  {
+    id: "cpu-scheduler",
+    nameKey: "optimization.cpuScheduler.title",
+    path: "/optimize/cpu-scheduler",
+    icon: Cpu,
+    category: "optimization",
+    keywords: ["CPU", "核心", "调度", "P核", "E核", "亲和性", "affinity", "core", "scheduler", "逻辑处理器", "进程分配"],
+  },
 ];
 
 export const thirdPartyToolIcons: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {

@@ -88,6 +88,8 @@ interface AppStartupContextType {
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   display_items: [
     { id: "fps", label: "FPS", enabled: true },
+    { id: "fps_1low", label: "1% Low", enabled: false },
+    { id: "fps_01low", label: "0.1% Low", enabled: false },
     { id: "cpu_temp", label: "CPU温度", enabled: false },
     { id: "cpu_usage", label: "CPU占用", enabled: true },
     { id: "cpu_fan_speed", label: "CPU风扇转速", enabled: false },
@@ -105,7 +107,7 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
     { id: "memory_usage", label: "内存占用", enabled: true },
     { id: "ssd_temp", label: "硬盘温度", enabled: false },
     { id: "game_ping", label: "游戏延迟", enabled: true },
-    { id: "delta_password", label: "三角洲密码", enabled: true },
+    { id: "delta_password", label: "三角洲密码", enabled: false },
   ],
   custom_items: [],
   opacity: 255,
@@ -185,7 +187,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         let displayItems: DisplayItems;
         if (Array.isArray(savedSettings.display_items)) {
           // 新格式数组：检查版本，过旧则重置顺序和标签，保留启用状态
-          const currentVersion = 3;
+          const currentVersion = 4;
           const savedVersion = savedSettings._version ?? 1;
           if (savedVersion < currentVersion) {
             // 版本过旧：用默认项重建，只保留启用状态
@@ -218,6 +220,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
           };
           displayItems = [
             { id: "fps", label: "FPS", enabled: oldItems.fps ?? true },
+            { id: "fps_1low", label: "1% Low", enabled: false },
+            { id: "fps_01low", label: "0.1% Low", enabled: false },
             { id: "cpu_usage", label: "CPU占用", enabled: oldItems.cpu_usage ?? true },
             { id: "gpu_temp", label: "GPU温度", enabled: oldItems.gpu_temp ?? true },
             { id: "gpu_usage", label: "GPU占用", enabled: oldItems.gpu_usage ?? true },
@@ -234,7 +238,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
           settingsToUse = {
             ...DEFAULT_OVERLAY_SETTINGS,
             ...savedSettings,
-            _version: 3,
+            _version: 4,
             display_items: displayItems,
           };
           await store.set("overlay-settings", settingsToUse);

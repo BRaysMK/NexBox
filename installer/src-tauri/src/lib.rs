@@ -15,6 +15,7 @@ pub fn run() {
             cancel_install,
             launch_installed_app,
             get_app_version,
+            schedule_installer_cleanup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

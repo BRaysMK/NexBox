@@ -36,6 +36,7 @@ import DesktopLyricsPage from "./pages/DesktopLyricsPage";
 import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
 import AudioEqPage from "./pages/AudioEqPage";
+import CpuSchedulerPage from "./pages/CpuSchedulerPage";
 import { useState, useEffect } from "react";
 
 import {
@@ -67,7 +68,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "6.0.5";
+const CURRENT_VERSION = "v6.3.0";
 
 function App() {
   const { t } = useTranslation();
@@ -289,6 +290,7 @@ function App() {
             <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
             <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
+            <Route path="/optimize/cpu-scheduler" element={<AnimatedPage><CpuSchedulerPage /></AnimatedPage>} />
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
@@ -324,6 +326,7 @@ function App() {
             <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
               <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
+            <Route path="/optimize/cpu-scheduler" element={<AnimatedPage><CpuSchedulerPage /></AnimatedPage>} />
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />

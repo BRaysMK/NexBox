@@ -472,6 +472,7 @@ struct DisplayState {
     mode: i32,
     icc_ramp: Option<[[u16; 256]; 3]>,
     icc_active: bool,
+    active_icc_id: Option<String>,
     filter_active: bool,
 }
 
@@ -489,6 +490,7 @@ impl Default for DisplayState {
             mode: 0,
             icc_ramp: None,
             icc_active: false,
+            active_icc_id: None,
             filter_active: false,
         }
     }
@@ -589,6 +591,49 @@ pub struct FilterSettings {
     pub b_gamma: f64,
     pub mode: i32,
     pub is_active: bool,
+    pub icc_active: bool,
+    pub active_icc_id: Option<String>,
+    pub preview_filter_icc: Option<String>,
+    pub preview_tint_color_icc: Option<String>,
+    pub preview_tint_opacity_icc: Option<f64>,
+}
+
+impl FilterSettings {
+    /// Build FilterSettings from DisplayState, computing ICC preview if active.
+    fn from_display_state(state: &DisplayState) -> Self {
+        let (preview_filter_icc, preview_tint_color_icc, preview_tint_opacity_icc) =
+            if state.icc_active {
+                if let Some(ref ramp) = state.icc_ramp {
+                    let (pf, ptc, pto) = compute_icc_preview(ramp);
+                    (
+                        if pf.is_empty() { None } else { Some(pf) },
+                        ptc,
+                        pto,
+                    )
+                } else {
+                    (None, None, None)
+                }
+            } else {
+                (None, None, None)
+            };
+
+        FilterSettings {
+            temperature: state.temperature,
+            brightness: state.brightness,
+            contrast: state.contrast,
+            saturation: state.saturation,
+            r_gamma: state.r_gamma,
+            g_gamma: state.g_gamma,
+            b_gamma: state.b_gamma,
+            mode: state.mode,
+            is_active: state.filter_active,
+            icc_active: state.icc_active,
+            active_icc_id: state.active_icc_id.clone(),
+            preview_filter_icc,
+            preview_tint_color_icc,
+            preview_tint_opacity_icc,
+        }
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -1615,17 +1660,7 @@ fn start_filter_monitor() {
 #[tauri::command]
 pub async fn get_filter_settings(display_index: Option<usize>) -> Result<FilterSettings, String> {
     let idx = resolve_display_index(display_index);
-    Ok(with_display_state(idx, |state| FilterSettings {
-        temperature: state.temperature,
-        brightness: state.brightness,
-        contrast: state.contrast,
-        saturation: state.saturation,
-        r_gamma: state.r_gamma,
-        g_gamma: state.g_gamma,
-        b_gamma: state.b_gamma,
-        mode: state.mode,
-        is_active: state.filter_active,
-    }))
+    Ok(with_display_state(idx, |state| FilterSettings::from_display_state(state)))
 }
 
 #[tauri::command]
@@ -1663,6 +1698,7 @@ pub async fn set_filter_settings(
             state.b_gamma = b_gamma;
             state.mode = mode;
             state.icc_active = false;
+            state.active_icc_id = None;
 
             // Only activate if is_active is true and filter is not already active
             if is_active && !state.filter_active {
@@ -1695,6 +1731,11 @@ pub async fn set_filter_settings(
                 b_gamma,
                 mode,
                 is_active: actually_active,
+                icc_active: false,
+                active_icc_id: None,
+                preview_filter_icc: None,
+                preview_tint_color_icc: None,
+                preview_tint_opacity_icc: None,
             }),
             preview_filter: None,
             preview_tint_color: None,
@@ -1732,17 +1773,7 @@ pub async fn enable_filter(display_index: Option<usize>) -> Result<FilterResult,
             return Ok(with_display_state(idx, |state| FilterResult {
                 success: true,
                 message: "滤镜已处于启用状态".to_string(),
-                settings: Some(FilterSettings {
-                    temperature: state.temperature,
-                    brightness: state.brightness,
-                    contrast: state.contrast,
-                    saturation: state.saturation,
-                    r_gamma: state.r_gamma,
-                    g_gamma: state.g_gamma,
-                    b_gamma: state.b_gamma,
-                    mode: state.mode,
-                    is_active: true,
-                }),
+                settings: Some(FilterSettings::from_display_state(state)),
                 preview_filter: None,
                 preview_tint_color: None,
                 preview_tint_opacity: None,
@@ -1755,17 +1786,7 @@ pub async fn enable_filter(display_index: Option<usize>) -> Result<FilterResult,
         Ok(with_display_state(idx, |state| FilterResult {
             success: true,
             message: "滤镜已启用".to_string(),
-            settings: Some(FilterSettings {
-                temperature: state.temperature,
-                brightness: state.brightness,
-                contrast: state.contrast,
-                saturation: state.saturation,
-                r_gamma: state.r_gamma,
-                g_gamma: state.g_gamma,
-                b_gamma: state.b_gamma,
-                mode: state.mode,
-                is_active: true,
-            }),
+            settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: None,
             preview_tint_color: None,
             preview_tint_opacity: None,
@@ -1789,7 +1810,7 @@ pub async fn disable_filter(display_index: Option<usize>) -> Result<FilterResult
                 false
             } else {
                 state.filter_active = false;
-                state.icc_active = false;
+                // 不清除 icc_active/active_icc_id，重新启用时才能正确恢复 ICC 滤镜
                 true
             }
         });
@@ -1798,17 +1819,7 @@ pub async fn disable_filter(display_index: Option<usize>) -> Result<FilterResult
             return Ok(with_display_state(idx, |state| FilterResult {
                 success: true,
                 message: "滤镜已处于禁用状态".to_string(),
-                settings: Some(FilterSettings {
-                    temperature: state.temperature,
-                    brightness: state.brightness,
-                    contrast: state.contrast,
-                    saturation: state.saturation,
-                    r_gamma: state.r_gamma,
-                    g_gamma: state.g_gamma,
-                    b_gamma: state.b_gamma,
-                    mode: state.mode,
-                    is_active: false,
-                }),
+                settings: Some(FilterSettings::from_display_state(state)),
                 preview_filter: None,
                 preview_tint_color: None,
                 preview_tint_opacity: None,
@@ -1826,17 +1837,7 @@ pub async fn disable_filter(display_index: Option<usize>) -> Result<FilterResult
         Ok(with_display_state(idx, |state| FilterResult {
             success: true,
             message: "滤镜已禁用".to_string(),
-            settings: Some(FilterSettings {
-                temperature: state.temperature,
-                brightness: state.brightness,
-                contrast: state.contrast,
-                saturation: state.saturation,
-                r_gamma: state.r_gamma,
-                g_gamma: state.g_gamma,
-                b_gamma: state.b_gamma,
-                mode: state.mode,
-                is_active: false,
-            }),
+            settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: None,
             preview_tint_color: None,
             preview_tint_opacity: None,
@@ -1907,17 +1908,7 @@ fn enable_filter_sync() -> Result<FilterResult, String> {
         return Ok(with_display_state(idx, |state| FilterResult {
             success: true,
             message: "滤镜已处于启用状态".to_string(),
-            settings: Some(FilterSettings {
-                temperature: state.temperature,
-                brightness: state.brightness,
-                contrast: state.contrast,
-                saturation: state.saturation,
-                r_gamma: state.r_gamma,
-                g_gamma: state.g_gamma,
-                b_gamma: state.b_gamma,
-                mode: state.mode,
-                is_active: true,
-            }),
+            settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: None,
             preview_tint_color: None,
             preview_tint_opacity: None,
@@ -1930,17 +1921,7 @@ fn enable_filter_sync() -> Result<FilterResult, String> {
     Ok(with_display_state(idx, |state| FilterResult {
         success: true,
         message: "滤镜已启用".to_string(),
-        settings: Some(FilterSettings {
-            temperature: state.temperature,
-            brightness: state.brightness,
-            contrast: state.contrast,
-            saturation: state.saturation,
-            r_gamma: state.r_gamma,
-            g_gamma: state.g_gamma,
-            b_gamma: state.b_gamma,
-            mode: state.mode,
-            is_active: true,
-        }),
+        settings: Some(FilterSettings::from_display_state(state)),
         preview_filter: None,
         preview_tint_color: None,
         preview_tint_opacity: None,
@@ -1956,7 +1937,7 @@ fn disable_filter_sync() -> Result<FilterResult, String> {
             false
         } else {
             state.filter_active = false;
-            state.icc_active = false;
+            // 不清除 icc_active/active_icc_id，重新启用时才能正确恢复 ICC 滤镜
             true
         }
     });
@@ -1965,17 +1946,7 @@ fn disable_filter_sync() -> Result<FilterResult, String> {
         return Ok(with_display_state(idx, |state| FilterResult {
             success: true,
             message: "滤镜已处于禁用状态".to_string(),
-            settings: Some(FilterSettings {
-                temperature: state.temperature,
-                brightness: state.brightness,
-                contrast: state.contrast,
-                saturation: state.saturation,
-                r_gamma: state.r_gamma,
-                g_gamma: state.g_gamma,
-                b_gamma: state.b_gamma,
-                mode: state.mode,
-                is_active: false,
-            }),
+            settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: None,
             preview_tint_color: None,
             preview_tint_opacity: None,
@@ -1989,17 +1960,7 @@ fn disable_filter_sync() -> Result<FilterResult, String> {
     Ok(with_display_state(idx, |state| FilterResult {
         success: true,
         message: "滤镜已禁用".to_string(),
-        settings: Some(FilterSettings {
-            temperature: state.temperature,
-            brightness: state.brightness,
-            contrast: state.contrast,
-            saturation: state.saturation,
-            r_gamma: state.r_gamma,
-            g_gamma: state.g_gamma,
-            b_gamma: state.b_gamma,
-            mode: state.mode,
-            is_active: false,
-        }),
+        settings: Some(FilterSettings::from_display_state(state)),
         preview_filter: None,
         preview_tint_color: None,
         preview_tint_opacity: None,
@@ -2140,6 +2101,7 @@ pub fn cleanup() {
                 let mut state = state_mutex.lock().unwrap();
                 state.filter_active = false;
                 state.icc_active = false;
+                state.active_icc_id = None;
             }
             states.len()
         };
@@ -3035,6 +2997,7 @@ pub async fn apply_icc_preset(
             // 始终标记 ICC 活跃，无论 is_active 是否开启
             // 这样用户后续手动开启滤镜开关时，enable_filter 会读取 icc_active 并应用 ICC ramp
             state.icc_active = true;
+            state.active_icc_id = Some(id.clone());
 
             if is_active && !state.filter_active {
                 if state.original_gamma.is_none() {
@@ -3057,17 +3020,7 @@ pub async fn apply_icc_preset(
         Ok(with_display_state(idx, |state| FilterResult {
             success: true,
             message: format!("ICC 预设 {} 已应用", preset.name),
-            settings: Some(FilterSettings {
-                temperature: state.temperature,
-                brightness: state.brightness,
-                contrast: state.contrast,
-                saturation: state.saturation,
-                r_gamma: state.r_gamma,
-                g_gamma: state.g_gamma,
-                b_gamma: state.b_gamma,
-                mode: state.mode,
-                is_active: state.filter_active,
-            }),
+            settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: if preview_filter.is_empty() { None } else { Some(preview_filter) },
             preview_tint_color,
             preview_tint_opacity,

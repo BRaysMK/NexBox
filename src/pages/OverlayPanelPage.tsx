@@ -73,6 +73,8 @@ interface OverlaySettings {
 
 interface HardwareData {
   fps: number | null;
+  fps_1low: number | null;
+  fps_01low: number | null;
   cpu_usage: number | null;
   cpu_temp: number | null;
   cpu_clock: number | null;
@@ -96,6 +98,8 @@ interface HardwareData {
 
 const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
   { id: "fps", label: "FPS", enabled: false },
+  { id: "fps_1low", label: "1% Low", enabled: false },
+  { id: "fps_01low", label: "0.1% Low", enabled: false },
   { id: "cpu_temp", label: "CPU温度", enabled: false },
   { id: "cpu_usage", label: "CPU占用", enabled: true },
   { id: "cpu_fan_speed", label: "CPU风扇转速", enabled: false },
@@ -271,6 +275,8 @@ export default function OverlayPanelPage() {
 
   const [hardwareData, setHardwareData] = useState<HardwareData>({
     fps: null,
+    fps_1low: null,
+    fps_01low: null,
     cpu_usage: null,
     cpu_temp: null,
     cpu_clock: null,
@@ -354,6 +360,8 @@ export default function OverlayPanelPage() {
       setHardwareData(prev => {
         return {
           fps: data.fps ?? prev.fps,
+          fps_1low: data.fps_1low ?? prev.fps_1low,
+          fps_01low: data.fps_01low ?? prev.fps_01low,
           cpu_usage: data.cpu_usage ?? prev.cpu_usage,
           cpu_temp: data.cpu_temp ?? prev.cpu_temp,
           cpu_clock: data.cpu_clock ?? prev.cpu_clock,

@@ -806,7 +806,7 @@ export default function HardwarePage() {
                     <Box flex={1} overflow="hidden">
                       <MarqueeText text={activeGpuData?.name || activeGpuData?.hardware_type || "GPU"} />
                     </Box>
-                    <ChevronDown size={12} flexShrink={0} />
+                    <ChevronDown size={12} />
                   </HStack>
                 </MenuButton>
                 <MenuList bg={cardBg} borderColor={btnBorderColor} minW="180px" zIndex={9999}>

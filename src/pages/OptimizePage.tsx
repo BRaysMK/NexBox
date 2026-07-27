@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   Box,
   Heading,
@@ -26,7 +26,9 @@ import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggl
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import type { ViewItem } from "@/components/special/view-types";
 
-const tools: ViewItem[] = [
+const STORAGE_KEY = "nexbox_optimize_tools_order";
+
+const defaultTools: ViewItem[] = [
   {
     id: "storage-clean",
     path: "/optimize/storage-clean",
@@ -115,11 +117,64 @@ const tools: ViewItem[] = [
     descriptionKey: "windowsUpdate.pageDesc",
     color: "#E53E3E",
   },
+  {
+    id: "cpu-scheduler",
+    path: "/optimize/cpu-scheduler",
+    icon: Cpu,
+    titleKey: "optimization.cpuScheduler.title",
+    descriptionKey: "optimization.cpuScheduler.description",
+    color: "#3182CE",
+    beta: true,
+  },
 ];
+
+function loadOrder(): string[] | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const ids: string[] = JSON.parse(raw);
+      if (Array.isArray(ids) && ids.length > 0) return ids;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveOrder(ids: string[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+  } catch { /* ignore */ }
+}
+
+function applyOrder(allTools: ViewItem[], orderIds: string[]): ViewItem[] {
+  const map = new Map(allTools.map((t) => [t.id, t]));
+  const ordered: ViewItem[] = [];
+  for (const id of orderIds) {
+    const tool = map.get(id);
+    if (tool) {
+      ordered.push(tool);
+      map.delete(id);
+    }
+  }
+  for (const tool of map.values()) {
+    ordered.push(tool);
+  }
+  return ordered;
+}
 
 export default function OptimizePage() {
   const { t } = useTranslation();
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("grid");
+
+  const [tools, setTools] = useState<ViewItem[]>(() => {
+    const saved = loadOrder();
+    if (saved) return applyOrder(defaultTools, saved);
+    return defaultTools;
+  });
+
+  const handleReorder = useCallback((newTools: ViewItem[]) => {
+    setTools(newTools);
+    saveOrder(newTools.map((t) => t.id));
+  }, []);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
 
@@ -134,9 +189,9 @@ export default function OptimizePage() {
         </LiquidGlassCard>
       </Flex>
       {layoutMode === "grid" ? (
-        <ViewGrid tools={tools} />
+        <ViewGrid tools={tools} onReorder={handleReorder} />
       ) : (
-        <ViewList tools={tools} />
+        <ViewList tools={tools} onReorder={handleReorder} />
       )}
     </VStack>
   );

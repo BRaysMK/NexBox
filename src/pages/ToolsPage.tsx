@@ -1235,10 +1235,10 @@ export default function ToolsPage() {
       <Box 
         flex={1} 
         overflowY="auto"
+        overflowX="hidden"
         sx={{
           "&::-webkit-scrollbar": {
             width: "6px",
-            height: "6px",
           },
           "&::-webkit-scrollbar-track": {
             background: "transparent",

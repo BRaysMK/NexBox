@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 static OVERLAY_ACTIVE: AtomicBool = AtomicBool::new(false);
 static OVERLAY_HANDLE: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
@@ -34,6 +34,8 @@ fn default_font_color() -> String {
 fn default_display_items() -> DisplayItems {
         vec![
             DisplayItem { id: "fps".to_string(), label: "FPS".to_string(), enabled: false },
+            DisplayItem { id: "fps_1low".to_string(), label: "1% Low".to_string(), enabled: false },
+            DisplayItem { id: "fps_01low".to_string(), label: "0.1% Low".to_string(), enabled: false },
             DisplayItem { id: "cpu_temp".to_string(), label: "CPU温度".to_string(), enabled: false },
             DisplayItem { id: "cpu_usage".to_string(), label: "CPU占用".to_string(), enabled: true },
             DisplayItem { id: "cpu_fan_speed".to_string(), label: "CPU风扇转速".to_string(), enabled: false },
@@ -51,7 +53,7 @@ fn default_display_items() -> DisplayItems {
             DisplayItem { id: "memory_usage".to_string(), label: "内存占用".to_string(), enabled: true },
             DisplayItem { id: "ssd_temp".to_string(), label: "硬盘温度".to_string(), enabled: false },
             DisplayItem { id: "game_ping".to_string(), label: "游戏延迟".to_string(), enabled: true },
-            DisplayItem { id: "delta_password".to_string(), label: "三角洲密码".to_string(), enabled: true },
+            DisplayItem { id: "delta_password".to_string(), label: "三角洲密码".to_string(), enabled: false },
         ]
 }
 
@@ -127,6 +129,8 @@ pub struct GpuSensorData {
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct OverlayHardwareData {
     fps: Option<u32>,
+    fps_1low: Option<u32>,
+    fps_01low: Option<u32>,
     cpu_usage: Option<u16>,
     cpu_temp: Option<f64>,
     cpu_clock: Option<u32>,
@@ -156,6 +160,8 @@ impl Default for OverlayHardwareData {
     fn default() -> Self {
         Self {
             fps: None,
+            fps_1low: None,
+            fps_01low: None,
             cpu_usage: None,
             cpu_temp: None,
             cpu_clock: None,
@@ -183,6 +189,42 @@ impl Default for OverlayHardwareData {
 
 pub static CURRENT_SETTINGS: Mutex<Option<OverlaySettings>> = Mutex::new(None);
 pub static CURRENT_HARDWARE_DATA: Mutex<Option<OverlayHardwareData>> = Mutex::new(None);
+pub static SETTINGS_LOADED_FROM_STORE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 从持久化存储 (settings.json) 加载悬浮框设置到内存。
+/// 仅在 CURRENT_SETTINGS 为空时尝试加载，确保快捷键触发的 toggle 使用已保存的设置而非默认值。
+pub fn try_load_persisted_settings(app_handle: &tauri::AppHandle) {
+    // 已经加载过就不再重复读取文件
+    if SETTINGS_LOADED_FROM_STORE.load(Ordering::SeqCst) {
+        return;
+    }
+    let mut lock = CURRENT_SETTINGS.lock().unwrap();
+    if lock.is_some() {
+        SETTINGS_LOADED_FROM_STORE.store(true, Ordering::SeqCst);
+        return;
+    }
+    // 尝试从 settings.json 读取已保存的设置
+    if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
+        let store_path = app_data_dir.join("settings.json");
+        if store_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&store_path) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(saved) = json.get("overlay-settings") {
+                        if let Ok(settings) = serde_json::from_value::<OverlaySettings>(saved.clone()) {
+                            log::info!("从持久化存储加载悬浮框设置成功");
+                            *lock = Some(settings);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // 如果加载失败，用默认值初始化（保持向后兼容）
+    if lock.is_none() {
+        *lock = Some(OverlaySettings::default());
+    }
+    SETTINGS_LOADED_FROM_STORE.store(true, Ordering::SeqCst);
+}
 
 pub fn get_or_init_settings() -> OverlaySettings {
     let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
@@ -358,7 +400,9 @@ fn collect_all_gpu_sensors(
 }
 
 pub fn collect_hardware_data() -> OverlayHardwareData {
-    let fps = crate::game_fps::get_cached_fps();
+let fps = crate::game_fps::get_cached_fps();
+let fps_1low = crate::game_fps::get_cached_1low_fps();
+let fps_01low = crate::game_fps::get_cached_01low_fps();
 
     let selected_maps = {
         let settings = get_or_init_settings();
@@ -608,6 +652,8 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
 
     let new_data = OverlayHardwareData {
         fps,
+        fps_1low,
+        fps_01low,
         cpu_usage,
         cpu_temp,
         cpu_clock,
@@ -636,6 +682,8 @@ pub fn collect_hardware_data() -> OverlayHardwareData {
         let has_new_gpu_data = !new_data.gpu_sensors.is_empty();
         OverlayHardwareData {
             fps: new_data.fps.or(prev.fps),
+            fps_1low: new_data.fps_1low.or(prev.fps_1low),
+            fps_01low: new_data.fps_01low.or(prev.fps_01low),
             cpu_usage: new_data.cpu_usage.or(prev.cpu_usage),
             cpu_temp: new_data.cpu_temp.or(prev.cpu_temp),
             cpu_clock: new_data.cpu_clock.or(prev.cpu_clock),
@@ -1009,6 +1057,38 @@ mod win32 {
                         None => ("--".to_string(), None),
                     };
                     items.push(DisplayItem { label: "FPS".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: color });
+                }
+                "fps_1low" => {
+                    let (val, color) = match data.fps_1low {
+                        Some(v) => {
+                            let c = if v < 30 {
+                                0x000000FFu32
+                            } else if v < 60 {
+                                0x0000FFFFu32
+                            } else {
+                                0x0000FF00u32
+                            };
+                            (format!("{}", v), Some(c))
+                        }
+                        None => ("--".to_string(), None),
+                    };
+                    items.push(DisplayItem { label: "1%".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: color });
+                }
+                "fps_01low" => {
+                    let (val, color) = match data.fps_01low {
+                        Some(v) => {
+                            let c = if v < 30 {
+                                0x000000FFu32
+                            } else if v < 60 {
+                                0x0000FFFFu32
+                            } else {
+                                0x0000FF00u32
+                            };
+                            (format!("{}", v), Some(c))
+                        }
+                        None => ("--".to_string(), None),
+                    };
+                    items.push(DisplayItem { label: "0.1%".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: color });
                 }
                 "cpu_fan_speed" => {
                     let val = data.cpu_fan_speed.map(|v| format!("{}RPM", v)).unwrap_or_else(|| "--RPM".to_string());
@@ -1799,6 +1879,9 @@ pub fn is_overlay_active() -> bool {
 
 /// Toggle overlay on/off. Used by global hotkey.
 pub fn toggle_overlay(app_handle: &tauri::AppHandle) -> Result<OverlayResult, String> {
+    // 确保设置已从持久化存储加载，避免快捷键触发时使用默认设置
+    try_load_persisted_settings(app_handle);
+
     // 如果当前样式是竖排面板，使用 Tauri 窗口方案
     let settings = get_or_init_settings();
     if settings.style == "vertical_panel" {
