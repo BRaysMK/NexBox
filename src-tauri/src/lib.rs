@@ -337,6 +337,7 @@ pub fn run() {
         startup_manager::find_startup_key_in_registry,
         display_filter::get_displays,
         display_filter::set_active_display,
+        display_filter::check_gamma_support,
         display_filter::get_filter_settings,
         display_filter::set_filter_settings,
         display_filter::enable_filter,
@@ -357,6 +358,7 @@ pub fn run() {
         display_filter::apply_icc_preset,
         display_filter::delete_icc_preset,
         display_filter::export_preset_as_icc,
+        display_filter::restore_filter_state,
         // === EQ 调音命令 ===
         audio_eq::check_virtual_audio_driver,
         audio_eq::install_virtual_audio_driver,

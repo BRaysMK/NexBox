@@ -107,8 +107,21 @@ interface DisplayInfo {
   height: number;
 }
 
+// Reverse mapping: builtin ICC id → filter preset id (for startup highlight)
+const ICC_TO_PRESET: Record<string, string> = {
+  "builtin_NexBox_去曝光Pro": "de-exposure-pro",
+  "builtin_NexBox_鲜艳": "vivid",
+  "builtin_NexBox_电影": "movie",
+  "builtin_NexBox_高亮": "highlight",
+  "builtin_NexBox_柔和": "soft",
+  "builtin_NexBox_游戏": "gaming",
+  "builtin_NexBox_阅读": "reading",
+  "builtin_NexBox_去曝光": "de-exposure",
+  "builtin_NexBox_暗部增强": "shadow-boost",
+};
+
 const presetIcons: Record<string, React.ElementType> = {
-  "normal": Monitor,
+  "de-exposure-pro": Monitor,
   "vivid": Sparkles,
   "movie": Film,
   "highlight": Sun,
@@ -119,7 +132,7 @@ const presetIcons: Record<string, React.ElementType> = {
 };
 
 const presetColors: Record<string, string> = {
-  "normal": "#98DDD0",
+  "de-exposure-pro": "#4ECDC4",
   "vivid": "#FF6B9D",
   "movie": "#9B59B6",
   "highlight": "#F1C40F",
@@ -160,7 +173,10 @@ export default function DisplayFilterPage() {
   });
   const [presets, setPresets] = useState<FilterPreset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [activePresetId, setActivePresetId] = useState<string>("normal");
+  const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(
+    localStorage.getItem("nexbox_auto_apply") === "true"
+  );
+  const [activePresetId, setActivePresetId] = useState<string>("");
   const [savedCustom, setSavedCustom] = useState<{
     temperature: number;
     brightness: number;
@@ -241,10 +257,11 @@ export default function DisplayFilterPage() {
     try {
       const result: FilterSettings = await invoke("get_filter_settings", { displayIndex: activeDisplayIndexRef.current });
       setSettings(result);
-      // 恢复 ICC 激活状态
+      // 恢复 ICC 激活状态 — 映射 active_icc_id 回预设卡片
       if (result.icc_active && result.active_icc_id) {
         setActiveIccId(result.active_icc_id);
-        setActivePresetId("");
+        const mappedId = ICC_TO_PRESET[result.active_icc_id];
+        setActivePresetId(mappedId || "");
         setIccPreviewFilter(result.preview_filter_icc || null);
         setIccTintColor(result.preview_tint_color_icc || null);
         setIccTintOpacity(result.preview_tint_opacity_icc ?? 0);
@@ -384,12 +401,12 @@ export default function DisplayFilterPage() {
 
     let nextId: string;
     if (matchesSavedCustom) {
-      nextId = exactPreset?.id === "normal" ? "normal" : "custom";
+      nextId = "custom";
     } else if (exactPreset) {
       nextId = exactPreset.id;
     } else {
       const modePreset = presets.find((p) => p.mode === settings.mode);
-      nextId = modePreset?.id ?? "normal";
+      nextId = modePreset?.id ?? "";
     }
 
     setActivePresetId((prev) => (prev === nextId ? prev : nextId));
@@ -397,13 +414,53 @@ export default function DisplayFilterPage() {
 
   const toggleFilter = async () => {
     setIsLoading(true);
+    const willEnable = !settings.is_active;
+    console.log("%c[FilterToggle] 开始操作", "color: #4CAF50; font-weight: bold", {
+      willEnable,
+      displayIndex: activeDisplayIndex,
+      currentSettings: { ...settings },
+    });
+
     try {
+      // 启用前先检测 Gamma Ramp 支持情况
+      if (willEnable) {
+        console.log("%c[FilterToggle] 检测 Gamma Ramp 支持状态...", "color: #2196F3");
+        try {
+          const supportInfo: any = await invoke("check_gamma_support", {
+            displayIndex: activeDisplayIndex,
+          });
+          console.log("%c[FilterToggle] Gamma Ramp 检测结果:", "color: #2196F3", {
+            supported: supportInfo.supported,
+            capsValue: supportInfo.caps_value,
+            hdrEnabled: supportInfo.hdr_enabled,
+            reason: supportInfo.reason,
+          });
+
+          if (!supportInfo.supported) {
+            console.warn("%c[FilterToggle] ⚠ Gamma Ramp 可能不支持，但仍会尝试启用", "color: #FF9800; font-weight: bold", supportInfo.reason);
+          }
+        } catch (supportErr) {
+          console.warn("%c[FilterToggle] check_gamma_support 调用失败，跳过检测", "color: #FF9800", String(supportErr));
+        }
+      }
+
+      console.log("%c[FilterToggle] 调用 toggle_filter...", "color: #4CAF50", {
+        displayIndex: activeDisplayIndex,
+      });
       const result: any = await invoke("toggle_filter", { displayIndex: activeDisplayIndex });
+
+      console.log("%c[FilterToggle] toggle_filter 返回:", "color: #4CAF50", {
+        success: result.success,
+        message: result.message,
+        isActive: result.settings?.is_active,
+        settings: result.settings,
+      });
+
       if (result.success) {
         setSettings(result.settings as FilterSettings);
         toast({
-          title: result.settings.is_active 
-            ? t("displayFilter.filterEnabled") 
+          title: result.settings.is_active
+            ? t("displayFilter.filterEnabled")
             : t("displayFilter.filterDisabled"),
           status: "success",
           duration: 2000,
@@ -411,11 +468,17 @@ export default function DisplayFilterPage() {
         });
       }
     } catch (error) {
+      console.error("%c[FilterToggle] 操作失败!", "color: #f44336; font-weight: bold", {
+        error: String(error),
+        errorObj: error,
+        willEnable,
+        displayIndex: activeDisplayIndex,
+      });
       toast({
         title: t("displayFilter.error"),
         description: String(error),
         status: "error",
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
     } finally {
@@ -442,22 +505,23 @@ export default function DisplayFilterPage() {
         isActive: settings.is_active,
       });
       if (result.success) {
-        // 直接用 setSettings 更新全部值，避免多次 setState
+        // Use the backend-computed values (icc_active, preview_*) — do NOT hardcode.
+        const s = result.settings;
         setSettings({
-          temperature: preset.temperature,
-          brightness: preset.brightness,
-          contrast: preset.contrast,
-          saturation: preset.saturation,
-          r_gamma: 1.0,
-          g_gamma: 1.0,
-          b_gamma: 1.0,
-          mode: preset.mode,
-          is_active: settings.is_active,
-          icc_active: false,
-          active_icc_id: null,
-          preview_filter_icc: null,
-          preview_tint_color_icc: null,
-          preview_tint_opacity_icc: null,
+          temperature: s?.temperature ?? preset.temperature,
+          brightness: s?.brightness ?? preset.brightness,
+          contrast: s?.contrast ?? preset.contrast,
+          saturation: s?.saturation ?? preset.saturation,
+          r_gamma: s?.r_gamma ?? 1.0,
+          g_gamma: s?.g_gamma ?? 1.0,
+          b_gamma: s?.b_gamma ?? 1.0,
+          mode: s?.mode ?? preset.mode,
+          is_active: s?.is_active ?? settings.is_active,
+          icc_active: s?.icc_active ?? false,
+          active_icc_id: s?.active_icc_id ?? null,
+          preview_filter_icc: s?.preview_filter_icc ?? null,
+          preview_tint_color_icc: s?.preview_tint_color_icc ?? null,
+          preview_tint_opacity_icc: s?.preview_tint_opacity_icc ?? null,
         });
         toast({
           title: `${t("displayFilter.presetAppliedPrefix")}${preset.name}${t("displayFilter.presetAppliedSuffix")}`,
@@ -803,10 +867,11 @@ export default function DisplayFilterPage() {
 
   const resetToDefault = async () => {
     setManualPresetChange(true);
-    setActivePresetId("normal");
+    setActivePresetId("");
     setActiveIccId(null);
     try {
-      const result: any = await invoke("apply_preset", { displayIndex: activeDisplayIndex, presetId: "normal", isActive: settings.is_active });
+      // Apply the 去曝光Pro ICC as display baseline
+      const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id: "builtin_NexBox_去曝光Pro", isActive: settings.is_active });
       if (result.success) {
         setSettings(prev => ({
           temperature: 6500,
@@ -818,11 +883,11 @@ export default function DisplayFilterPage() {
           b_gamma: 1.0,
           mode: 0,
           is_active: prev.is_active,
-          icc_active: false,
-          active_icc_id: null,
-          preview_filter_icc: null,
-          preview_tint_color_icc: null,
-          preview_tint_opacity_icc: null,
+          icc_active: result.settings?.icc_active ?? false,
+          active_icc_id: result.settings?.active_icc_id ?? null,
+          preview_filter_icc: result.settings?.preview_filter_icc ?? null,
+          preview_tint_color_icc: result.settings?.preview_tint_color_icc ?? null,
+          preview_tint_opacity_icc: result.settings?.preview_tint_opacity_icc ?? null,
         }));
         const normal = {
           temperature: 6500,
@@ -1528,48 +1593,71 @@ export default function DisplayFilterPage() {
             {t("displayFilter.title")}
           </Heading>
         </HStack>
-        <HStack>
-          <Tooltip label={t("displayFilter.resetDefault")}>
-            <IconButton
-              aria-label="Reset"
-              icon={<RotateCcw size={18} />}
-              variant="ghost"
-              onClick={resetToDefault}
-              isDisabled={isLoading}
-            />
-          </Tooltip>
-          <HStack spacing={4}>
-            <HotkeyRecorder
-              value={filterHotkey}
-              onChange={(val) => {
-                saveFilterHotkey(val);
-                toast({
-                  title: t("displayFilter.hotkeySaved") || "快捷键已保存",
-                  status: "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
-            <HStack
-              bg={settings.is_active ? hexToRgba(primaryColor, 0.2) : sliderBg}
-              px={4}
-              py={2}
-              borderRadius="xl"
-              border="1px solid"
-              borderColor={settings.is_active ? primaryColor : "transparent"}
-            >
-              <Text color={textColor} fontSize="sm" fontWeight="500">
-                {t("displayFilter.enable")}
-              </Text>
-              <ThemeSwitch
-                isChecked={settings.is_active}
-                onChange={toggleFilter}
+        <VStack align="flex-end" spacing={1}>
+          <HStack>
+            <Tooltip label={t("displayFilter.resetDefault")}>
+              <IconButton
+                aria-label="Reset"
+                icon={<RotateCcw size={18} />}
+                variant="ghost"
+                onClick={resetToDefault}
                 isDisabled={isLoading}
               />
+            </Tooltip>
+            <HStack spacing={4}>
+              <HotkeyRecorder
+                value={filterHotkey}
+                onChange={(val) => {
+                  saveFilterHotkey(val);
+                  toast({
+                    title: t("displayFilter.hotkeySaved") || "快捷键已保存",
+                    status: "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+              <HStack
+                bg={settings.is_active ? hexToRgba(primaryColor, 0.2) : sliderBg}
+                px={4}
+                py={2}
+                borderRadius="xl"
+                border="1px solid"
+                borderColor={settings.is_active ? primaryColor : "transparent"}
+              >
+                <Text color={textColor} fontSize="sm" fontWeight="500">
+                  {t("displayFilter.enable")}
+                </Text>
+                <ThemeSwitch
+                  isChecked={settings.is_active}
+                  onChange={toggleFilter}
+                  isDisabled={isLoading}
+                />
+              </HStack>
             </HStack>
           </HStack>
-        </HStack>
+          <HStack
+            bg={autoApplyOnStartup ? hexToRgba(primaryColor, 0.15) : sliderBg}
+            px={4}
+            py={2}
+            borderRadius="xl"
+            border="1px solid"
+            borderColor={autoApplyOnStartup ? primaryColor : "transparent"}
+          >
+            <Text color={textColor} fontSize="xs" fontWeight="500">
+              启动新境盒时自动启用选中滤镜
+            </Text>
+            <ThemeSwitch
+              isChecked={autoApplyOnStartup}
+              onChange={(e) => {
+                const val = e.target.checked;
+                setAutoApplyOnStartup(val);
+                localStorage.setItem("nexbox_auto_apply", val ? "true" : "false");
+              }}
+              isDisabled={isLoading}
+            />
+          </HStack>
+        </VStack>
       </HStack>
 
       {displays.length > 0 && (
@@ -1604,7 +1692,7 @@ export default function DisplayFilterPage() {
           {presets.map((preset) => {
             const Icon = presetIcons[preset.id] || Monitor;
             const isActive = activePresetId === preset.id;
-            const accentColor = preset.id === "normal" ? primaryColor : (presetColors[preset.id] || primaryColor);
+            const accentColor = presetColors[preset.id] || primaryColor;
             return (
               <Tooltip key={preset.id} label={preset.description} placement="top">
                 <Box
@@ -2319,7 +2407,7 @@ export default function DisplayFilterPage() {
                   {/* 模式参数 */}
                   <Box mt={2} pt={2} borderTop="1px solid" borderColor={cardBorder}>
                     <Text color={subTextColor} fontSize="10px" fontWeight="600" mb={1}>
-                      {presets.find(p => p.id === activePresetId)?.name || "Normal"}
+                      {presets.find(p => p.id === activePresetId)?.name || "Mode"}
                     </Text>
                     <Box fontSize="11px" color={subTextColor} lineHeight="1.6">
                       <Flex justify="space-between"><Text>Gamma</Text><Text color={textColor}>{currentModeParams.gamma.toFixed(2)}</Text></Flex>

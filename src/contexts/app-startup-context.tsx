@@ -255,15 +255,14 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
       }
       setOverlaySettings(settingsToUse);
       
-      await invoke("update_overlay_settings", { settings: settingsToUse });
+      // 仅在存在已保存设置时同步到后端，避免在 LazyStore 未就绪时用默认值覆盖后端已正确加载的设置
+      if (savedSettings) {
+        await invoke("update_overlay_settings", { settings: settingsToUse });
+      }
     } catch (error) {
       console.error("Failed to load overlay settings:", error);
+      // 加载失败时仅设置前端 UI 默认值，不覆盖后端已有的设置
       setOverlaySettings(DEFAULT_OVERLAY_SETTINGS);
-      try {
-        await invoke("update_overlay_settings", { settings: DEFAULT_OVERLAY_SETTINGS });
-      } catch (e) {
-        console.error("Failed to initialize backend settings:", e);
-      }
     }
   };
 
@@ -364,8 +363,8 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
 	saveTimerRef.current = null;
 	const s = pendingSettingsRef.current;
 	if (s) {
-	invoke("update_overlay_settings", { settings: s });
         try {
+          await invoke("update_overlay_settings", { settings: s });
           await store.set("overlay-settings", s);
           await store.save();
         } catch (error) {
@@ -387,6 +386,18 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         { name: "crosshair-hotkey", fn: loadCrosshairHotkey, weight: 1 },
         { name: "crosshair-settings", fn: loadCrosshairSettings, weight: 1 },
         { name: "filter-hotkey", fn: loadFilterHotkey, weight: 1 },
+        {
+          name: "filter-restore",
+          fn: async () => {
+            try {
+              const autoApply = localStorage.getItem("nexbox_auto_apply") === "true";
+              await invoke("restore_filter_state", { displayIndex: null, autoApply });
+            } catch (e) {
+              console.error("Failed to restore filter state:", e);
+            }
+          },
+          weight: 1,
+        },
       ];
 
       const totalWeight = tasks.reduce((sum, t) => sum + t.weight, 0);
