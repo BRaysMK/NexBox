@@ -4,7 +4,8 @@
     "appFullName": "New Horizon Box",
     "description": "Cross-platform performance monitoring (Tauri + Next.js + Sensor Service)",
     "cancel": "Cancel",
-    "add": "Add"
+    "add": "Add",
+    "success": "Success"
   },
   "view": {
     "grid": "Grid View",
@@ -51,8 +52,21 @@
     "epicFree": "Epic Free Games",
     "diskHealth": "Disk Health",
 "screenRecord": "Screen Record",
-    "audioEq": "EQ Tuner"
+    "audioEq": "EQ Tuner",
+    "custom": "Custom"
   },
+"customPage": {
+"title": "Custom Dashboard",
+"addTool": "Add Tool",
+"emptyHint": "Click the add button to add your favorite tools",
+"searchTools": "Search tools...",
+"borderRadius": "Border Radius",
+"clearAll": "Clear All",
+"clearAllConfirm": "Are you sure you want to clear all cards?",
+"editMode": "Edit Mode",
+"enterEdit": "Edit Layout",
+"exitEdit": "Exit Edit"
+},
   "optimization": {
     "pageTitle": "Optimize",
     "pageDesc": "System optimization and performance tools",
@@ -1112,6 +1126,9 @@
       "startup": "Startup",
       "autoStartLabel": "Launch on Startup",
       "autoStartDesc": "Automatically launch NexBox when system starts",
+      "autoStartEnabled": "Startup launch enabled",
+      "autoStartDisabled": "Startup launch disabled",
+      "autoStartError": "Setting failed",
       "closeBehavior": "Close Behavior",
       "closeBehaviorLabel": "When clicking close button",
       "closeBehaviorDesc": "Choose what happens when clicking the close button",

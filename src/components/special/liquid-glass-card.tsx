@@ -71,7 +71,7 @@ export function LiquidGlassCard({
       className={`jelly-bounce-card${isReal ? " real-liquid-glass" : ""}${className ? ` ${className}` : ""}`}
       {...cardStyles}
       position="relative"
-      overflow="hidden"
+      overflow="visible"
       {...props}
     >
       {/* 边缘折射条 —— 独立叠加层，仅覆盖边缘 10px，卡片内部完全不受影响 */}

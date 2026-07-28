@@ -57,8 +57,19 @@ impl SensorBridge {
             return Err("子进程返回空响应".to_string());
         }
 
-        serde_json::from_str::<SensorsResponse>(&line)
-            .map_err(|e| format!("解析传感器JSON失败: {}", e))
+        // 先尝试解析为 SensorsResponse
+        match serde_json::from_str::<SensorsResponse>(&line) {
+            Ok(response) => Ok(response),
+            Err(_) => {
+                // 如果失败，检查是否是子进程报错 JSON（{"error":"..."}）
+                if let Ok(err_obj) = serde_json::from_str::<serde_json::Value>(&line) {
+                    if let Some(err_msg) = err_obj.get("error").and_then(|v| v.as_str()) {
+                        return Err(format!("NexBoxMonitor 子进程报错: {}", err_msg));
+                    }
+                }
+                Err(format!("解析传感器JSON失败: {}", line.trim()))
+            }
+        }
     }
 
     /// 检查子进程是否仍然存活
@@ -98,6 +109,13 @@ impl SensorBridge {
 
 /// 全局传感器桥接
 static SENSOR_BRIDGE: Mutex<Option<SensorBridge>> = Mutex::new(None);
+
+/// 重启冷却（秒）：子进程崩溃后至少等待 30s 才尝试重启
+const RESTART_COOLDOWN_SECS: u64 = 30;
+/// 连续重启次数上限：超过此次数后不再自动重启
+const MAX_RESTART_ATTEMPTS: u32 = 5;
+static LAST_RESTART_TIME: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static RESTART_ATTEMPT_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// 启动传感器子进程
 pub fn start_sensor_process(app: &App) {
@@ -255,18 +273,46 @@ pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
     match guard.as_mut() {
         Some(bridge) => {
             if !bridge.is_alive() {
-                log::warn!("NexBoxMonitor 子进程已退出，尝试重启...");
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                let last = LAST_RESTART_TIME.load(std::sync::atomic::Ordering::Relaxed);
+                let attempts = RESTART_ATTEMPT_COUNT.load(std::sync::atomic::Ordering::Relaxed);
+
+                if attempts >= MAX_RESTART_ATTEMPTS {
+                    log::warn!("NexBoxMonitor 子进程已退出，但已连续重启失败 {attempts} 次，放弃自动重启");
+                    *guard = None;
+                    return Err("NexBoxMonitor 连续崩溃，已禁用".to_string());
+                }
+
+                if now - last < RESTART_COOLDOWN_SECS {
+                    log::warn!(
+                        "NexBoxMonitor 子进程已退出，冷却中（距上次重启 {}s，需等待 {}s）",
+                        now - last,
+                        RESTART_COOLDOWN_SECS - (now - last)
+                    );
+                    *guard = None;
+                    return Err(format!("NexBoxMonitor 冷却中，请稍后重试"));
+                }
+
+                log::warn!("NexBoxMonitor 子进程已退出，尝试重启（第 {} 次）...", attempts + 1);
                 *guard = None;
+                LAST_RESTART_TIME.store(now, std::sync::atomic::Ordering::Relaxed);
+                RESTART_ATTEMPT_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 drop(guard);
                 match spawn_sensor() {
                     Ok(Some(new_bridge)) => {
                         log::info!("NexBoxMonitor 重启成功 (pid={})", new_bridge.child.id());
+                        RESTART_ATTEMPT_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
                         *SENSOR_BRIDGE.lock().unwrap() = Some(new_bridge);
                         return Err("子进程已重启，请重试".to_string());
                     }
                     _ => return Err("NexBoxMonitor 不可用".to_string()),
                 }
             }
+            // 重启成功或进程正常，重置计数
+            RESTART_ATTEMPT_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
             bridge.read_sensors()
         }
         None => {

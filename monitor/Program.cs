@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LibreHardwareMonitor.Hardware;
+using System.Runtime.ExceptionServices;
 
 namespace NexBoxMonitor;
 
@@ -10,6 +11,15 @@ class Program
 
     static int Main(string[] args)
     {
+        // 捕获非托管崩溃（AccessViolationException 等 SEH 异常）
+        AppDomain.CurrentDomain.FirstChanceException += (_, e) =>
+        {
+            if (e.Exception is AccessViolationException || e.Exception is NullReferenceException)
+            {
+                Console.Error.WriteLine($"[NexBoxMonitor] 首次触发异常: {e.Exception.GetType().Name}: {e.Exception.Message}");
+            }
+        };
+
         try
         {
             _computer = new Computer
@@ -24,8 +34,15 @@ class Program
                 IsPsuEnabled = false,
             };
 
-            _computer.Open();
-            _computer.Accept(_visitor);
+            try
+            {
+                _computer.Open();
+                SafeAccept(_computer);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[NexBoxMonitor] 硬件初始化异常: {ex.Message}");
+            }
 
             var input = Console.In;
             var output = Console.Out;
@@ -45,21 +62,7 @@ class Program
                     var cmd = JsonSerializer.Deserialize<ReadCommand>(line);
                     if (cmd?.Cmd == "read")
                     {
-                        UpdateHardware(_computer.Hardware);
-                        _computer.Accept(_visitor);
-
-                        var sensors = new List<SensorReading>();
-                        CollectSensors(_computer.Hardware, sensors);
-
-                        var response = new SensorsResponse
-                        {
-                            UpdatedAt = DateTime.UtcNow.ToString("o"),
-                            Sensors = sensors
-                        };
-
-                        var json = JsonSerializer.Serialize(response);
-                        output.WriteLine(json);
-                        output.Flush();
+                        SafeUpdateAndCollect(output);
                     }
                     else if (cmd?.Cmd == "exit")
                     {
@@ -74,25 +77,62 @@ class Program
         }
         catch (Exception ex)
         {
-            // Write error as JSON so parent can parse it
-            var error = JsonSerializer.Serialize(new { error = ex.Message });
-            Console.WriteLine(error);
-            Console.Out.Flush();
+            var error = JsonSerializer.Serialize(new { error = $"{ex.GetType().Name}: {ex.Message}" });
+            try { Console.WriteLine(error); Console.Out.Flush(); } catch { }
             return 1;
         }
         finally
         {
-            _computer?.Close();
+            try { _computer?.Close(); } catch { }
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// 安全执行 Accept：某些硬件在 Accept 时可能触发 AccessViolation
+    /// </summary>
+    static void SafeAccept(Computer computer)
+    {
+        try
+        {
+            computer.Accept(_visitor);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[NexBoxMonitor] Accept 异常: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 安全执行 Update + Collect，任何硬件崩溃都不会拖垮进程
+    /// </summary>
+    static void SafeUpdateAndCollect(TextWriter output)
+    {
+        // 首次：暴力更新
+        UpdateHardware(_computer!.Hardware);
+
+        // 第二次 Accept（有时 Accept 比 Update 更容易触发崩溃，改用 SafeAccept）
+        SafeAccept(_computer);
+
+        var sensors = new List<SensorReading>();
+        SafeCollectSensors(_computer.Hardware, sensors);
+
+        var response = new SensorsResponse
+        {
+            UpdatedAt = DateTime.UtcNow.ToString("o"),
+            Sensors = sensors
+        };
+
+        var json = JsonSerializer.Serialize(response);
+        output.WriteLine(json);
+        output.Flush();
     }
 
     static void CollectSensors(IEnumerable<IHardware> hardwareList, List<SensorReading> sensors)
     {
         foreach (var hw in hardwareList)
         {
-            // Recurse into sub-hardware (e.g. CPU cores, GPU fans)
             if (hw.SubHardware.Length > 0)
             {
                 CollectSensors(hw.SubHardware, sensors);
@@ -119,13 +159,46 @@ class Program
         }
     }
 
+    /// <summary>
+    /// 安全遍历传感器：将 CollectSensors 整体包在 try/catch 中，
+    /// 防止某个传感器枚举时触发 AccessViolationException 导致进程退出
+    /// </summary>
+    static void SafeCollectSensors(IEnumerable<IHardware> hardwareList, List<SensorReading> sensors)
+    {
+        try
+        {
+            CollectSensors(hardwareList, sensors);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[NexBoxMonitor] CollectSensors 异常: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     static void UpdateHardware(IEnumerable<IHardware> hardwareList)
     {
         foreach (var hw in hardwareList)
         {
-            hw.Update();
+            try
+            {
+                hw.Update();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[NexBoxMonitor] 硬件 \"{hw.Name}\" ({hw.HardwareType}) 更新失败: {ex.GetType().Name}: {ex.Message}");
+            }
+
             if (hw.SubHardware.Length > 0)
-                UpdateHardware(hw.SubHardware);
+            {
+                try
+                {
+                    UpdateHardware(hw.SubHardware);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[NexBoxMonitor] 子硬件 \"{hw.Name}\" 更新失败: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
         }
     }
 

@@ -2,7 +2,8 @@
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
-    "description": "Plattformübergreifende Leistungsüberwachung (Tauri + Next.js + Sensordienst)"
+    "description": "Plattformübergreifende Leistungsüberwachung (Tauri + Next.js + Sensordienst)",
+    "success": "Erfolg"
   },
   "view": {
     "grid": "Rasteransicht",
@@ -50,8 +51,21 @@
         "epicFree": "Epic Gratis-Spiele",
     "diskHealth": "Festplatten-Gesundheit",
 "screenRecord": "Bildschirmaufnahme",
-    "audioEq": "EQ-Tuner"
+    "audioEq": "EQ-Tuner",
+    "custom": "Benutzerdefiniert"
   },
+"customPage": {
+"title": "Benutzerdefinierte Seite",
+"addTool": "Tool hinzufügen",
+"emptyHint": "Klicken Sie auf die Schaltfläche oben rechts, um Ihre Lieblingstools hinzuzufügen",
+"searchTools": "Tools suchen...",
+"borderRadius": "Abrundung",
+"clearAll": "Alle löschen",
+"clearAllConfirm": "Möchten Sie wirklich alle Karten löschen?",
+"editMode": "Bearbeitungsmodus",
+"enterEdit": "Layout bearbeiten",
+"exitEdit": "Bearbeitung beenden"
+},
   "optimization": {
     "pageTitle": "Optimieren",
     "pageDesc": "Systemoptimierung und Leistungstools",
@@ -1002,6 +1016,9 @@
       "startup": "Start",
       "autoStartLabel": "Beim Start ausführen",
       "autoStartDesc": "NexBox automatisch beim Systemstart starten",
+      "autoStartEnabled": "Autostart aktiviert",
+      "autoStartDisabled": "Autostart deaktiviert",
+      "autoStartError": "Einstellung fehlgeschlagen",
       "closeBehavior": "Schließverhalten",
       "closeBehaviorLabel": "Beim Klicken auf Schließen",
       "closeBehaviorDesc": "Wählen Sie, was beim Klicken auf den Schließen-Button passiert",

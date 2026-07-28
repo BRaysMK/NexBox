@@ -14,6 +14,14 @@ uninstaller/src-tauri/target/
 tools/bin/
 tools/obj/
 
+# Monitor C# 项目编译输出（net48，输出与源码同级）
+monitor/bin/
+monitor/obj/
+monitor/*.exe
+monitor/*.dll
+monitor/*.pdb
+monitor/*.config
+
 # 本地生成的图标源（可选用仓库内其他资源重新执行 `npx tauri icon`）
 icon-src.png
 
@@ -23,7 +31,9 @@ icon-src.png
 .env.*.local
 
 # 日志与编辑器
-npm-debug.log*
+npm-debug.log
+.temp_old_filter.rs
+monitor/build.log*
 .DS_Store
 Thumbs.db
 
@@ -85,6 +95,9 @@ ChineseSimplified.isl
 # README
 README.md
 
+# Build output (frontend)
+dist/
+
 # Resources
 resources/
 src-tauri/resources/
@@ -98,3 +111,5 @@ Delta Force.nip
 MCTier技术介绍.md
 
 debug.log
+.temp_old_filter.rs
+monitor/build.log

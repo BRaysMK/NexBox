@@ -57,50 +57,77 @@ interface DiskInfo {
   usage_percent: number;
 }
 
-/** 文字过长时自动轮播 */
+/** 文字过长时自动轮播：没超出不滚；超出时从右侧进入、向左滚出、再从右侧滚回 */
 function MarqueeText({ text, color }: { text: string; color?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [shouldScroll, setShouldScroll] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const [overflow, setOverflow] = useState(false);
 
   useEffect(() => {
-    const check = () => {
-      if (ref.current && innerRef.current) {
-        setShouldScroll(innerRef.current.scrollWidth > ref.current.clientWidth + 4);
-      }
+    const container = containerRef.current;
+    const measure = () => {
+      if (!container || !measureRef.current) return;
+      const cw = container.clientWidth;
+      const tw = measureRef.current.offsetWidth;
+      // 布局未完成（宽度为 0）时跳过，避免误判
+      if (cw === 0) return;
+      setOverflow(tw > cw + 1);
     };
-    check();
-    const ro = new ResizeObserver(check);
-    if (ref.current) ro.observe(ref.current);
-    return () => ro.disconnect();
+    measure();
+    // 下一帧再测一次，确保字体/布局就绪，避免初次宽度为 0 导致卡在「不滚」
+    const raf = requestAnimationFrame(measure);
+    const ro = new ResizeObserver(measure);
+    ro.observe(container);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
   }, [text]);
 
   return (
-    <Box ref={ref} flex={1} overflow="hidden" position="relative" display="flex" justifyContent="flex-end">
+    <Box
+      ref={containerRef}
+      flex={1}
+      overflow="hidden"
+      position="relative"
+      display="flex"
+      justifyContent={overflow ? "flex-start" : "flex-end"}
+      whiteSpace="nowrap"
+      title={overflow ? text : undefined}
+    >
       <style>{`
         @keyframes hw-marquee {
-          0%   { transform: translateX(0%); }
-          10%  { transform: translateX(0%); }
-          80%  { transform: translateX(-50%); }
+          0%   { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
       `}</style>
-      {shouldScroll ? (
+      {/* 隐藏测量副本：精确取得单份文本宽度，不受动画/截断影响 */}
+      <Text
+        as="span"
+        ref={measureRef}
+        position="absolute"
+        visibility="hidden"
+        whiteSpace="nowrap"
+        fontSize="sm"
+        color={color}
+      >
+        {text}
+      </Text>
+      {overflow ? (
         <Box
-          ref={innerRef}
-          display="flex"
+          as="span"
+          display="inline-flex"
           whiteSpace="nowrap"
-          w="max-content"
-          animation="hw-marquee 10s linear infinite"
+          style={{
+            animation: "hw-marquee 12s linear infinite",
+            willChange: "transform",
+          }}
         >
-          <Text fontSize="sm" color={color}>{text}</Text>
-          <Box w="32px" flexShrink={0} />
-          <Text fontSize="sm" color={color}>{text}</Text>
-          <Box w="32px" flexShrink={0} />
-          <Text fontSize="sm" color={color}>{text}</Text>
+          <Text as="span" fontSize="sm" color={color} pr="24px">{text}</Text>
+          <Text as="span" fontSize="sm" color={color} pr="24px">{text}</Text>
         </Box>
       ) : (
-        <Text ref={innerRef} fontSize="sm" color={color} noOfLines={1}>
+        <Text as="span" fontSize="sm" color={color} noOfLines={1} flexShrink={0}>
           {text}
         </Text>
       )}
@@ -424,17 +451,9 @@ export default function HardwarePage() {
           setMemSparkline((prev) => [...prev.slice(1), Math.round(memPercent)]);
         }
 
-        // 多 GPU 数据处理
+        // 多 GPU 数据处理：每轮都更新传感器数值（温度/占用率等实时变化）
         if (overlay.gpu_sensors && overlay.gpu_sensors.length > 0) {
-          setGpuSensors((prev) => {
-            // 只在 GPU 列表发生变化时更新（避免不必要的重渲染）
-            const prevNames = prev.map(g => g.hardware_type).sort().join(",");
-            const newNames = overlay.gpu_sensors.map(g => g.hardware_type).sort().join(",");
-            if (prevNames !== newNames) {
-              return overlay.gpu_sensors;
-            }
-            return prev;
-          });
+          setGpuSensors(overlay.gpu_sensors);
           // 同步后端活跃 GPU 索引
           setActiveGpuIndex((prev) => {
             const idx = overlay.active_gpu_index;

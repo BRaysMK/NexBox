@@ -2,7 +2,8 @@
   "common": {
     "appName": "NexBox",
     "appFullName": "新境盒",
-    "description": "跨平台性能監控（Tauri + Next.js + 傳感器服務）"
+    "description": "跨平台性能監控（Tauri + Next.js + 傳感器服務）",
+    "success": "操作成功"
   },
   "view": {
     "grid": "網格視圖",
@@ -50,8 +51,21 @@
         "epicFree": "喜加一",
     "diskHealth": "磁碟健康",
 "screenRecord": "螢幕錄製",
-    "audioEq": "EQ調音"
+    "audioEq": "EQ調音",
+    "custom": "自訂"
   },
+"customPage": {
+"title": "自訂頁面",
+"addTool": "新增工具",
+"emptyHint": "點擊右上角新增按鈕，新增你常用的工具",
+"searchTools": "搜尋工具...",
+"borderRadius": "圓角",
+"clearAll": "清空全部",
+"clearAllConfirm": "確定要清空所有卡片嗎？",
+"editMode": "編輯模式",
+"enterEdit": "編輯佈局",
+"exitEdit": "退出編輯"
+},
   "optimization": {
     "pageTitle": "優化",
     "pageDesc": "系統優化與效能提升工具",
@@ -984,6 +998,9 @@
       "startup": "啟動",
       "autoStartLabel": "開機自啟",
       "autoStartDesc": "系統啟動時自動執行 NexBox",
+      "autoStartEnabled": "開機自啟已開啟",
+      "autoStartDisabled": "開機自啟已關閉",
+      "autoStartError": "設定失敗",
       "closeBehavior": "關閉行為",
       "closeBehaviorLabel": "點擊關閉按鈕時",
       "closeBehaviorDesc": "選擇點擊關閉按鈕時的行為",

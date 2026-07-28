@@ -318,8 +318,12 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     try {
       const saved = await store.get<CrosshairSettings>("crosshair-settings");
       if (saved) {
+        const autoApply = localStorage.getItem("nexbox_auto_crosshair") === "true";
         saved.enabled = false;
         await invoke("update_crosshair_settings", { settings: saved });
+        if (autoApply) {
+          await invoke("toggle_crosshair");
+        }
       }
     } catch (error) {
       console.error("Failed to load crosshair settings:", error);

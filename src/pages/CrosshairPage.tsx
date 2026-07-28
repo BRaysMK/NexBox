@@ -36,6 +36,8 @@ import { useAppStartup } from "@/contexts/app-startup-context";
 import { useNavigate } from "react-router-dom";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
+import { ThemeSwitch } from "@/components/special/theme-switch";
+import { hexToRgba } from "@/lib/color-utils";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
 interface CrosshairSettings {
@@ -159,6 +161,9 @@ export default function CrosshairPage() {
 
   const [settings, setSettings] = useState<CrosshairSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
+  const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(
+    localStorage.getItem("nexbox_auto_crosshair") === "true"
+  );
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [editingAxis, setEditingAxis] = useState<'x' | 'y' | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -361,39 +366,64 @@ export default function CrosshairPage() {
       <SimpleGrid columns={2} spacing={5}>
         <VStack align="stretch" spacing={5}>
           <SettingCard title={t("crosshair.enableCrosshair")}>
-            <HStack justify="space-between" wrap="wrap" spacing={4}>
-              <HStack>
-                <Icon as={settings.enabled ? Eye : EyeOff} boxSize={5} color={settings.enabled ? "green.400" : "gray.400"} />
-                <Badge colorScheme={settings.enabled ? "green" : "gray"}>
-                  {settings.enabled ? t("crosshair.statusEnabled") : t("crosshair.statusDisabled")}
-                </Badge>
+            <VStack align="stretch" spacing={3}>
+              <HStack justify="space-between" wrap="wrap" spacing={4}>
+                <HStack>
+                  <Icon as={settings.enabled ? Eye : EyeOff} boxSize={5} color={settings.enabled ? "green.400" : "gray.400"} />
+                  <Badge colorScheme={settings.enabled ? "green" : "gray"}>
+                    {settings.enabled ? t("crosshair.statusEnabled") : t("crosshair.statusDisabled")}
+                  </Badge>
+                </HStack>
+                <HStack spacing={4}>
+                  <HotkeyRecorder
+                    value={crosshairHotkey}
+                    onChange={(val) => {
+                      saveCrosshairHotkey(val);
+                      toast({
+                        title: t("crosshair.hotkeySaved") || "快捷键已保存",
+                        status: "success",
+                        duration: 2000,
+                        isClosable: true,
+                      });
+                    }}
+                  />
+                  <Switch
+                    isChecked={settings.enabled}
+                    onChange={toggleCrosshair}
+                    isDisabled={isLoading}
+                    size="lg"
+                    sx={{
+                      '& .chakra-switch__track[data-checked]': {
+                        bg: getActiveColor(),
+                      },
+                    }}
+                  />
+                </HStack>
               </HStack>
-              <HStack spacing={4}>
-                <HotkeyRecorder
-                  value={crosshairHotkey}
-                  onChange={(val) => {
-                    saveCrosshairHotkey(val);
-                    toast({
-                      title: t("crosshair.hotkeySaved") || "快捷键已保存",
-                      status: "success",
-                      duration: 2000,
-                      isClosable: true,
-                    });
+              <HStack
+                bg={autoApplyOnStartup ? hexToRgba(getActiveColor(), 0.15) : sliderBg}
+                px={4}
+                py={2}
+                borderRadius="xl"
+                border="1px solid"
+                borderColor={autoApplyOnStartup ? getActiveColor() : "transparent"}
+                w="fit-content"
+                alignSelf="flex-end"
+              >
+                <Text color={textColor} fontSize="xs" fontWeight="500">
+                  启动新境盒时自动启用选中准星
+                </Text>
+                <ThemeSwitch
+                  isChecked={autoApplyOnStartup}
+                  onChange={(e) => {
+                    const val = e.target.checked;
+                    setAutoApplyOnStartup(val);
+                    localStorage.setItem("nexbox_auto_crosshair", val ? "true" : "false");
                   }}
-                />
-                <Switch
-                  isChecked={settings.enabled}
-                  onChange={toggleCrosshair}
                   isDisabled={isLoading}
-                  size="lg"
-                  sx={{
-                    '& .chakra-switch__track[data-checked]': {
-                      bg: getActiveColor(),
-                    },
-                  }}
                 />
               </HStack>
-            </HStack>
+            </VStack>
           </SettingCard>
 
           <SettingCard title={t("crosshair.renderMode")}>

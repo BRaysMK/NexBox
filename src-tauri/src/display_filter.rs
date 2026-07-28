@@ -442,11 +442,12 @@ fn try_find_icc_file(filename: &str) -> Option<PathBuf> {
 
 /// Apply an ICC profile to the display using xcalib.exe.
 /// Uses std::process::Command (CreateProcessW) — NOT PowerShell.
-fn apply_icc_via_xcalib(icc_path: &Path) -> Result<(), String> {
+fn apply_icc_via_xcalib(icc_path: &Path, display_index: usize) -> Result<(), String> {
     let tool = get_tool_path("xcalib.exe")?;
-    log::info!("apply_icc_via_xcalib: {} {}", tool.display(), icc_path.display());
+    log::info!("apply_icc_via_xcalib[{}]: {} {}", display_index, tool.display(), icc_path.display());
 
     let mut cmd = Command::new(&tool);
+    cmd.arg("-screen").arg(display_index.to_string());
     cmd.arg(icc_path);
 
     #[cfg(target_os = "windows")]
@@ -1364,7 +1365,7 @@ fn apply_filter_to_display(idx: usize) -> Result<(), String> {
             if let Some(filename) = id.strip_prefix("builtin_") {
                 let icc_filename = format!("{}.icc", filename);
                 if let Ok(icc_path) = get_builtin_icc_path(&icc_filename) {
-                    return apply_icc_via_xcalib(&icc_path);
+                    return apply_icc_via_xcalib(&icc_path, idx);
                 }
                 log::warn!("apply_filter_to_display[{}]: builtin ICC '{}' not found", idx, icc_filename);
             }
@@ -1376,7 +1377,7 @@ fn apply_filter_to_display(idx: usize) -> Result<(), String> {
                     log::error!("apply_filter_to_display[{}]: failed to write temp ICC: {}", idx, e);
                     return Err(format!("无法写入临时 ICC 文件: {}", e));
                 }
-                return apply_icc_via_xcalib(&temp_icc);
+                return apply_icc_via_xcalib(&temp_icc, idx);
             }
         }
         return Ok(());
@@ -1396,7 +1397,7 @@ fn apply_filter_to_display(idx: usize) -> Result<(), String> {
 
     if is_identity {
         log::info!("apply_filter_to_display[{}]: identity params → clear gamma ramp", idx);
-        return clear_gamma_ramp_via_xcalib();
+        return clear_gamma_ramp_via_xcalib(idx);
     }
 
     let temp_icc = get_temp_icc_path();
@@ -1410,13 +1411,13 @@ fn apply_filter_to_display(idx: usize) -> Result<(), String> {
     let ramp = build_gamma_ramp(temperature, brightness, contrast, saturation, mode_enum, custom_gamma);
     let icc_data = build_icc_profile(&ramp, "NexBox Custom Filter");
     fs::write(&temp_icc, &icc_data).map_err(|e| format!("无法写入临时 ICC 文件: {}", e))?;
-    apply_icc_via_xcalib(&temp_icc)
+    apply_icc_via_xcalib(&temp_icc, idx)
 }
 
 /// Restore display to default: clear the gamma ramp via xcalib (-c).
 fn restore_display_default(idx: usize) -> Result<(), String> {
     log::info!("restore_display_default[{}]: clearing gamma ramp via xcalib", idx);
-    clear_gamma_ramp_via_xcalib()
+    clear_gamma_ramp_via_xcalib(idx)
 }
 
 #[tauri::command]
@@ -1616,11 +1617,12 @@ fn preset_id_to_builtin_icc(preset_id: &str) -> Option<String> {
 }
 
 /// Clear the gamma ramp via xcalib (reset to system default / linear).
-fn clear_gamma_ramp_via_xcalib() -> Result<(), String> {
+fn clear_gamma_ramp_via_xcalib(display_index: usize) -> Result<(), String> {
     let tool = get_tool_path("xcalib.exe")?;
-    log::info!("clear_gamma_ramp: resetting via xcalib -c");
+    log::info!("clear_gamma_ramp[{}]: resetting via xcalib -c", display_index);
 
     let mut cmd = Command::new(&tool);
+    cmd.arg("-screen").arg(display_index.to_string());
     cmd.arg("-c");
 
     #[cfg(target_os = "windows")]
@@ -1682,7 +1684,8 @@ pub async fn apply_preset(
             let actually_active = with_display_state(idx, |s| s.filter_active);
             if actually_active {
                 let icc_path_clone = icc_path.clone();
-                tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone))
+                let idx_move = idx;
+                tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone, idx_move))
                     .await.map_err(|e| format!("xcalib apply error: {}", e))??;
             }
 
@@ -1994,7 +1997,8 @@ pub async fn apply_icc_preset(
         let actually_active = with_display_state(idx, |s| s.filter_active);
         if actually_active {
             let icc_path_clone = icc_path.clone();
-            tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone))
+            let idx_move = idx;
+            tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone, idx_move))
                 .await.map_err(|e| format!("xcalib apply error: {}", e))??;
         }
 

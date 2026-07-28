@@ -3,8 +3,9 @@
     "appName": "NexBox",
     "appFullName": "新境盒",
     "description": "跨平台性能监控（Tauri + Next.js + 传感器服务）",
-    "cancel": "取消",
-    "add": "添加"
+"cancel": "取消",
+"add": "添加",
+"success": "操作成功"
   },
   "view": {
     "grid": "网格视图",
@@ -53,8 +54,21 @@
     "nvidiaDriver": "显卡设置（仅NVIDIA）",
     "diskHealth": "磁盘健康",
 "screenRecord": "屏幕录制",
-    "audioEq": "EQ调音"
+    "audioEq": "EQ调音",
+    "custom": "自定义"
   },
+"customPage": {
+"title": "自定义页面",
+"addTool": "添加工具",
+"emptyHint": "点击右上角添加按钮，添加你常用的工具",
+"searchTools": "搜索工具...",
+"borderRadius": "圆角",
+"clearAll": "清空全部",
+"clearAllConfirm": "确定要清空所有卡片吗？",
+"editMode": "编辑模式",
+"enterEdit": "编辑布局",
+"exitEdit": "退出编辑"
+},
   "optimization": {
     "pageTitle": "优化",
     "pageDesc": "系统优化与性能提升工具",
@@ -1007,6 +1021,9 @@
       "startup": "启动",
       "autoStartLabel": "开机自启",
       "autoStartDesc": "系统启动时自动运行 NexBox",
+      "autoStartEnabled": "开机自启已开启",
+      "autoStartDisabled": "开机自启已关闭",
+      "autoStartError": "设置失败",
       "closeBehavior": "关闭行为",
       "closeBehaviorLabel": "点击关闭按钮时",
       "closeBehaviorDesc": "选择点击关闭按钮时的行为",

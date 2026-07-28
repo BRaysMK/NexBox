@@ -1,5 +1,5 @@
 import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Music } from "lucide-react";
+import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Music, LayoutGrid } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -8,7 +8,7 @@ import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 import deltaForceIcon from "@/assets/deltaforce.png";
 import epicGamesIcon from "@/assets/epic-games.png";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 interface NavItem {
   path: string;
@@ -17,6 +17,8 @@ interface NavItem {
   ariaLabel: string;
   beta?: boolean;
 }
+
+const NAV_ORDER_KEY = "nexbox_nav_order";
 
 function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconColor, showLabel }: {
   item: NavItem;
@@ -227,16 +229,41 @@ export function Sidebar() {
 
   const isTop = navPosition === "top";
   
-  const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood"];
+  const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood", "/custom"];
   const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
 
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const path of hideableNavPaths) {
-      initial[path] = localStorage.getItem(getNavStorageKey(path)) !== "false";
+      if (path === "/custom") {
+        // 自定义页面默认关闭
+        initial[path] = localStorage.getItem(getNavStorageKey(path)) === "true";
+      } else {
+        initial[path] = localStorage.getItem(getNavStorageKey(path)) !== "false";
+      }
     }
     return initial;
   });
+
+  // 读取导航栏排序（拖拽在设置页面进行）
+  const [navOrder, setNavOrder] = useState<string[] | null>(() => {
+    try {
+      const saved = localStorage.getItem(NAV_ORDER_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  // 监听排序变化
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const saved = localStorage.getItem(NAV_ORDER_KEY);
+        setNavOrder(saved ? JSON.parse(saved) : null);
+      } catch { setNavOrder(null); }
+    };
+    window.addEventListener("nav-order-changed", handler as EventListener);
+    return () => { window.removeEventListener("nav-order-changed", handler as EventListener); };
+  }, []);
 
   useEffect(() => {
     const handler = (e: CustomEvent) => {
@@ -291,7 +318,7 @@ export function Sidebar() {
         : `saturate(1.4) brightness(1.05)`)
     : `blur(${effectiveBlur}px)`;
 
-  const defaultBgColor = useColorModeValue("rgba(255,255,255,0.9)", "rgba(17,17,17,0.95)");
+  const defaultBgColor = useColorModeValue("rgba(255,255,255,1)", "rgba(17,17,17,1)");
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const defaultBorderColor = useColorModeValue("rgba(200,200,200,0.3)", "rgba(51,51,51,0.5)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
@@ -313,8 +340,39 @@ export function Sidebar() {
     { path: "/delta-force", icon: null, customIcon: deltaForceIcon, ariaLabel: t("sidebar.deltaForce") },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
+    { path: "/custom", icon: LayoutGrid, ariaLabel: t("sidebar.custom") },
     { path: "/settings", icon: Settings, ariaLabel: t("sidebar.settings") },
   ];
+
+  // 根据保存的顺序排序 navItems（首页和设置固定首尾）
+  const sortedNavItems = useMemo(() => {
+    if (!navOrder) return navItems;
+    const map = new Map(navItems.map(i => [i.path, i]));
+    const ordered: NavItem[] = [];
+    // 首页始终在最前
+    const home = map.get("/");
+    if (home) ordered.push(home);
+    // 按 navOrder 排序中间项
+    for (const p of navOrder) {
+      if (p === "/" || p === "/settings") continue;
+      const item = map.get(p);
+      if (item) ordered.push(item);
+    }
+    // 追加未在 order 中的新项
+    navItems.forEach(item => {
+      if (item.path === "/" || item.path === "/settings") return;
+      if (!ordered.find(i => i.path === item.path)) ordered.push(item);
+    });
+    // 设置始终在最后
+    const settings = map.get("/settings");
+    if (settings) ordered.push(settings);
+    return ordered;
+  }, [navItems, navOrder]);
+
+  const visibleNavItems = sortedNavItems.filter(item => {
+    if (item.path === "/" || item.path === "/settings") return true;
+    return navVisibility[item.path] !== false;
+  });
 
   const sidebarContent = (
     <Flex
@@ -327,10 +385,7 @@ export function Sidebar() {
         }
       }}
     >
-      {navItems.filter(item => {
-        if (item.path === "/" || item.path === "/settings") return true;
-        return navVisibility[item.path] !== false;
-      }).map((item) => (
+      {visibleNavItems.map((item) => (
         <NavButton
           key={item.path}
           item={item}

@@ -37,6 +37,7 @@ import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
 import AudioEqPage from "./pages/AudioEqPage";
 import CpuSchedulerPage from "./pages/CpuSchedulerPage";
+import CustomPage from "./pages/CustomPage";
 import { useState, useEffect } from "react";
 
 import {
@@ -68,7 +69,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "v6.3.2";
+const CURRENT_VERSION = "v6.4.2";
 
 function App() {
   const { t } = useTranslation();
@@ -296,6 +297,7 @@ function App() {
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
+              <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
         </Routes>
       </AnimatePresence>
     ) : (
@@ -333,6 +335,7 @@ function App() {
               <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
             <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
+            <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
       </Routes>
     )}
 

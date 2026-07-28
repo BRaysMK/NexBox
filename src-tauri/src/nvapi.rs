@@ -1857,24 +1857,30 @@ pub fn get_nvidia_display_modes(device_name: String) -> Result<Vec<DisplayMode>,
 /// under HKLM\SYSTEM\CurrentControlSet\Control\Video\.
 ///
 /// Format: "{width}x{height}x{bpp}-{RRx1000}"
-fn inject_nv_modes_registry(device_name: &str, width: u32, height: u32) -> Result<Vec<String>, String> {
+fn inject_nv_modes_registry(device_name: &str, width: u32, height: u32, refresh_rate: Option<f64>) -> Result<Vec<String>, String> {
     use std::mem;
     use winreg::enums::*;
     use winreg::RegKey;
 
-    // Get current refresh rate via GDI for the NV_Modes entry format
-    let refresh_rrx1k: u32 = unsafe {
-        let wide: Vec<u16> = device_name.encode_utf16().chain(std::iter::once(0)).collect();
-        let mut dm: windows_sys::Win32::Graphics::Gdi::DEVMODEW = mem::zeroed();
-        dm.dmSize = mem::size_of_val(&dm) as u16;
-        if windows_sys::Win32::Graphics::Gdi::EnumDisplaySettingsW(
-            wide.as_ptr(), 0xFFFFFFFF, &mut dm,
-        ) != 0
-        {
-            let freq = dm.dmDisplayFrequency as u32;
-            if freq > 200 { freq } else { freq * 1000 }
-        } else {
-            144000
+    // Calculate NV_Modes refresh rate suffix (RR * 1000)
+    let refresh_rrx1k: u32 = if let Some(rr) = refresh_rate {
+        // Use specified refresh rate: 60.0 → 60000, 144.0 → 144000, 59.95 → 59950
+        (rr * 1000.0).round() as u32
+    } else {
+        // Auto-detect current refresh rate via GDI
+        unsafe {
+            let wide: Vec<u16> = device_name.encode_utf16().chain(std::iter::once(0)).collect();
+            let mut dm: windows_sys::Win32::Graphics::Gdi::DEVMODEW = mem::zeroed();
+            dm.dmSize = mem::size_of_val(&dm) as u16;
+            if windows_sys::Win32::Graphics::Gdi::EnumDisplaySettingsW(
+                wide.as_ptr(), 0xFFFFFFFF, &mut dm,
+            ) != 0
+            {
+                let freq = dm.dmDisplayFrequency as u32;
+                if freq > 200 { freq } else { freq * 1000 }
+            } else {
+                144000
+            }
         }
     };
 
@@ -2095,11 +2101,23 @@ pub fn set_nvidia_display_resolution(
     width: NvU32,
     height: NvU32,
     device_name: String,
+    refresh_rate: Option<f64>,
 ) -> Result<SetResolutionResult, String> {
     try_init_nvapi()?;
 
     if width == 0 || height == 0 {
         return Err("分辨率宽高不能为 0".to_string());
+    }
+
+    // Validate refresh_rate if provided
+    if let Some(rr) = refresh_rate {
+        if rr <= 0.0 || rr > 1000.0 {
+            return Err(format!("无效的刷新率: {} Hz", rr));
+        }
+        log::info!(
+            "设置分辨率 {}x{} @ {}Hz (displayId={})",
+            width, height, rr, display_id
+        );
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -2264,8 +2282,18 @@ pub fn set_nvidia_display_resolution(
                 )
             };
             if s == NVAPI_OK {
-                log::info!("NVIDIA 分辨率已成功设为 {}x{} (NVAPI)", width, height);
-                return Ok(SetResolutionResult { applied: true, injected: false });
+                if refresh_rate.is_none() {
+                    // No refresh rate to set — done
+                    log::info!("NVIDIA 分辨率已成功设为 {}x{} (NVAPI)", width, height);
+                    return Ok(SetResolutionResult { applied: true, injected: false });
+                }
+                // NVAPI can't set refresh rate (NvDisplayConfigSourceModeInfo has no frequency field).
+                // Fall through to ChangeDisplaySettingsExW to apply the refresh rate.
+                log::info!(
+                    "NVAPI 分辨率设置成功，继续通过 ChangeDisplaySettingsExW 设置刷新率 {} Hz",
+                    refresh_rate.unwrap()
+                );
+                break 's1 String::new(); // empty = NVAPI success, fall through for refresh rate
             }
 
             // NVAPI SetDisplayConfig failed — save error for fallback
@@ -2276,20 +2304,29 @@ pub fn set_nvidia_display_resolution(
             )
         };
 
-        // ── Strategy 2: Inject into NVIDIA NV_Modes registry + ChangeDisplaySettingsExW ──
-        log::warn!(
-            "NVAPI SetDisplayConfig 失败 ({}), 尝试注入 NV_Modes 注册表",
-            nvapi_err
-        );
+        // ── Strategy 2: ChangeDisplaySettingsExW (with optional NV_Modes injection) ──
+        let nvapi_succeeded = nvapi_err.is_empty();
+        if !nvapi_succeeded {
+            log::warn!(
+                "NVAPI SetDisplayConfig 失败 ({}), 尝试注入 NV_Modes 注册表",
+                nvapi_err
+            );
+        }
 
-        let reg_inject_err = match inject_nv_modes_registry(&device_name, width, height) {
-            Ok(keys) => {
-                log::info!("NV_Modes 注册表注入成功: {} 个注册表项", keys.len());
-                None
-            }
-            Err(e) => {
-                log::error!("NV_Modes 注册表注入失败: {}", e);
-                Some(e)
+        let reg_inject_err: Option<String> = if nvapi_succeeded {
+            // NVAPI already set the resolution successfully; no need to inject NV_Modes.
+            // Just need ChangeDisplaySettingsExW to apply the refresh rate.
+            None
+        } else {
+            match inject_nv_modes_registry(&device_name, width, height, refresh_rate) {
+                Ok(keys) => {
+                    log::info!("NV_Modes 注册表注入成功: {} 个注册表项", keys.len());
+                    None
+                }
+                Err(e) => {
+                    log::error!("NV_Modes 注册表注入失败: {}", e);
+                    Some(e)
+                }
             }
         };
 
@@ -2304,12 +2341,27 @@ pub fn set_nvidia_display_resolution(
             let _enum_ok =
                 EnumDisplaySettingsW(wide_name.as_ptr(), ENUM_CURRENT_SETTINGS, &mut dm);
 
-            // Set target resolution
+            // Set target resolution and optionally refresh rate
             const DM_PELSWIDTH: u32 = 0x00080000;
             const DM_PELSHEIGHT: u32 = 0x00100000;
+            const DM_DISPLAYFREQUENCY: u32 = 0x00400000;
             dm.dmPelsWidth = width;
             dm.dmPelsHeight = height;
-            dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+            let mut dm_fields = DM_PELSWIDTH | DM_PELSHEIGHT;
+
+            if let Some(rr) = refresh_rate {
+                // dmDisplayFrequency: for integer Hz (60, 144), set directly.
+                // For fractional rates (59.95), some drivers use x100 encoding;
+                // we use the integer Hz which works for most cases.
+                dm.dmDisplayFrequency = rr.round() as u32;
+                dm_fields |= DM_DISPLAYFREQUENCY;
+                log::info!(
+                    "ChangeDisplaySettingsExW 设置刷新率: {} Hz (dmDisplayFrequency={})",
+                    rr,
+                    dm.dmDisplayFrequency
+                );
+            }
+            dm.dmFields = dm_fields;
 
             let mut cds_result: i32 = -999;
 
@@ -2333,13 +2385,33 @@ pub fn set_nvidia_display_resolution(
                     std::ptr::null_mut(),
                 );
                 if cds_result == 0 {
-                    log::info!(
-                        "通过 NV_Modes 注入 + ChangeDisplaySettingsExW(flags={}) 成功设置分辨率 {}x{}",
-                        flags, width, height
-                    );
+                    if nvapi_succeeded {
+                        log::info!(
+                            "ChangeDisplaySettingsExW(flags={}) 成功设置刷新率 {}x{} @ {}Hz",
+                            flags,
+                            width,
+                            height,
+                            refresh_rate.unwrap_or(0.0)
+                        );
+                    } else {
+                        log::info!(
+                            "通过 NV_Modes 注入 + ChangeDisplaySettingsExW(flags={}) 成功设置分辨率 {}x{}",
+                            flags, width, height
+                        );
+                    }
                     return Ok(SetResolutionResult { applied: true, injected: false });
                 }
                 log::warn!("ChangeDisplaySettingsExW(flags={}) 返回 DISP_CHANGE={}", flags, cds_result);
+            }
+
+            // ── If NVAPI already succeeded (just needed refresh rate), no further retry ──
+            if nvapi_succeeded {
+                let err_msg = format!(
+                    "NVAPI 分辨率设置成功，但 ChangeDisplaySettingsExW 设置刷新率失败 (DISP_CHANGE={})",
+                    cds_result
+                );
+                log::error!("{}", err_msg);
+                return Err(err_msg);
             }
 
             // ── Strategy 3: Try SetDisplayConfig again (mode might now be in NV_Modes) ──

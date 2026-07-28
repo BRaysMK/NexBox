@@ -50,7 +50,7 @@ import {
   LuTrash2,
 } from "react-icons/lu";
 import { RiBilibiliFill, RiTiktokFill } from "react-icons/ri";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -67,6 +67,31 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { useAppStartup } from "@/contexts/app-startup-context";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  type Modifier,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
+
+/** 限制导航栏拖拽只能沿竖直方向移动，禁止左右（向右）拖动 */
+const restrictToVerticalAxis: Modifier = ({ transform }) => ({
+  ...transform,
+  x: 0,
+});
 
 const settingItems = [
   { id: "general", labelKey: "settings.general", icon: LuSettings },
@@ -77,8 +102,75 @@ const settingItems = [
   { id: "about", labelKey: "settings.about", icon: LuInfo },
 ];
 
+function SortableNavItem({
+  id,
+  label,
+  visible,
+  onToggle,
+  dragHandleColor,
+  labelColor,
+  dragBg,
+}: {
+  id: string;
+  label: string;
+  visible: boolean;
+  onToggle: () => void;
+  dragHandleColor: string;
+  labelColor: string;
+  dragBg: string;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.8 : 1,
+    zIndex: isDragging ? 10 : 1,
+    background: isDragging ? dragBg : undefined,
+    borderRadius: isDragging ? "md" : undefined,
+  };
+
+  return (
+    <Box ref={setNodeRef} style={style}>
+      <Divider />
+      <HStack justify="space-between" py={2} pl={1}>
+        <HStack spacing={2} flex={1}>
+          <Box
+            cursor="grab"
+            color={dragHandleColor}
+            _hover={{ color: labelColor }}
+            _active={{ cursor: "grabbing" }}
+            {...attributes}
+            {...listeners}
+            display="flex"
+            alignItems="center"
+          >
+            <GripVertical size={16} />
+          </Box>
+          <Text fontSize="sm" color={labelColor} fontWeight="medium">
+            {label}
+          </Text>
+        </HStack>
+        <ThemeSwitch
+          size="md"
+          isChecked={visible}
+          onChange={onToggle}
+        />
+      </HStack>
+    </Box>
+  );
+}
+
 function GeneralSettings() {
   const { t, i18n } = useTranslation();
+  const toast = useToast();
   const { config, getContrastTextColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const [showBlur, setShowBlur] = useState(false);
@@ -109,6 +201,15 @@ function GeneralSettings() {
   const [sidebarShowLabel, setSidebarShowLabel] = useState(false);
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
+  const NAV_ORDER_KEY = "nexbox_nav_order";
+  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood", "/custom"];
+  const [navOrder, setNavOrder] = useState<string[]>(defaultNavOrder);
+  const navSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const dragHandleColor = useColorModeValue("gray.400", "gray.500");
+  const sortableDragBg = useColorModeValue("blue.50", "rgba(59,130,246,0.1)");
   const [pageTransitionMode, setPageTransitionMode] = useState<"slide" | "fade" | "off">("fade");
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
@@ -218,11 +319,24 @@ function GeneralSettings() {
     }
 
     const visibilityMap: Record<string, boolean> = {};
-    for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood"]) {
+    for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood", "/custom"]) {
       const key = `nexbox_nav_visible_${p.replace(/\//g, "").replace(/-/g, "_")}`;
-      visibilityMap[p] = localStorage.getItem(key) !== "false";
+      if (p === "/custom") {
+        visibilityMap[p] = localStorage.getItem(key) === "true";
+      } else {
+        visibilityMap[p] = localStorage.getItem(key) !== "false";
+      }
     }
     setNavVisibility(visibilityMap);
+
+    // 读取导航栏排序
+    try {
+      const savedOrder = localStorage.getItem(NAV_ORDER_KEY);
+      if (savedOrder) {
+        const parsed = JSON.parse(savedOrder) as string[];
+        setNavOrder(parsed);
+      }
+    } catch {}
 
     const savedNavPosition = localStorage.getItem("nexbox_nav_position");
     if (savedNavPosition === "top") {
@@ -343,6 +457,18 @@ function GeneralSettings() {
     window.dispatchEvent(new CustomEvent("nav-visibility-changed", { detail: { path, visible: newValue } }));
   };
 
+  const handleNavDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = navOrder.indexOf(active.id as string);
+    const newIndex = navOrder.indexOf(over.id as string);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const newOrder = arrayMove(navOrder, oldIndex, newIndex);
+    setNavOrder(newOrder);
+    localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(newOrder));
+    window.dispatchEvent(new CustomEvent("nav-order-changed"));
+  }, [navOrder]);
+
   const handleNavPositionChange = (value: string) => {
     const newValue = value as "left" | "top";
     setNavPosition(newValue);
@@ -353,8 +479,24 @@ function GeneralSettings() {
   const handleAutoStartToggle = () => {
     const newValue = !autoStart;
     invoke("set_nexbox_auto_start", { enable: newValue })
-      .then(() => setAutoStart(newValue))
-      .catch(() => {});
+      .then(() => {
+        setAutoStart(newValue);
+        toast({
+          title: newValue ? t("settings.generalSettings.autoStartEnabled", "开机自启已开启") : t("settings.generalSettings.autoStartDisabled", "开机自启已关闭"),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      })
+      .catch((err) => {
+        toast({
+          title: t("settings.generalSettings.autoStartError", "设置失败"),
+          description: typeof err === "string" ? err : undefined,
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      });
   };
 
   const handlePageTransitionChange = (newMode: "slide" | "fade" | "off") => {
@@ -369,8 +511,7 @@ function GeneralSettings() {
         {t("settings.generalSettings.title")}
       </Text>
 
-      {/* 开机自启暂时隐藏 */}
-      {/* <Box mb={6}>
+      <Box mb={6}>
         <Text
           fontSize="xs"
           fontWeight="semibold"
@@ -383,9 +524,11 @@ function GeneralSettings() {
         </Text>
         <LiquidGlassCard px={4} py={3} boxShadow="sm">
           <HStack justify="space-between" py={2}>
-            <Text fontSize="sm" color={labelColor} fontWeight="medium">
-              {t("settings.generalSettings.autoStartLabel")}
-            </Text>
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("settings.generalSettings.autoStartLabel")}
+              </Text>
+            </Box>
             <ThemeSwitch
               size="md"
               isChecked={autoStart}
@@ -394,7 +537,7 @@ function GeneralSettings() {
             />
           </HStack>
         </LiquidGlassCard>
-      </Box> */}
+      </Box>
 
       <Box mb={6}>
         <Text
@@ -817,30 +960,35 @@ function GeneralSettings() {
               />
             </HStack>
             <Divider />
-            {[
-              { path: "/hardware", label: t("sidebar.hardware") },
-              { path: "/tools", label: t("sidebar.tools") },
-              { path: "/builtin-tools", label: t("sidebar.builtinTools") },
-              { path: "/optimization", label: t("sidebar.optimization") },
-              { path: "/music", label: t("sidebar.music") },
-              { path: "/delta-force", label: t("sidebar.deltaForce") },
-              { path: "/epic-free", label: t("sidebar.epicFree") },
-              { path: "/mood", label: t("sidebar.mood") },
-            ].map((item, idx) => (
-              <Box key={item.path}>
-                {idx > 0 && <Divider />}
-                <HStack justify="space-between" py={2}>
-                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                    {item.label}
-                  </Text>
-                  <ThemeSwitch
-                    size="md"
-                    isChecked={navVisibility[item.path] !== false}
-                    onChange={() => handleNavItemToggle(item.path)}
-                  />
-                </HStack>
-              </Box>
-            ))}
+            <DndContext sensors={navSensors} collisionDetection={closestCenter} onDragEnd={handleNavDragEnd} modifiers={[restrictToVerticalAxis]}>
+              <SortableContext items={navOrder} strategy={verticalListSortingStrategy}>
+                {navOrder.map((path) => {
+                  const labelMap: Record<string, string> = {
+                    "/hardware": t("sidebar.hardware"),
+                    "/tools": t("sidebar.tools"),
+                    "/builtin-tools": t("sidebar.builtinTools"),
+                    "/optimization": t("sidebar.optimization"),
+                    "/music": t("sidebar.music"),
+                    "/delta-force": t("sidebar.deltaForce"),
+                    "/epic-free": t("sidebar.epicFree"),
+                    "/mood": t("sidebar.mood"),
+                    "/custom": t("sidebar.custom"),
+                  };
+                  return (
+                    <SortableNavItem
+                      key={path}
+                      id={path}
+                      label={labelMap[path] || path}
+                      visible={navVisibility[path] !== false}
+                      onToggle={() => handleNavItemToggle(path)}
+                      dragHandleColor={dragHandleColor}
+                      labelColor={labelColor}
+                      dragBg={sortableDragBg}
+                    />
+                  );
+                })}
+              </SortableContext>
+            </DndContext>
           </VStack>
         </LiquidGlassCard>
       </Box>
@@ -2111,7 +2259,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "6.3.2";
+  const currentVersion = "6.4.2";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);

@@ -2,7 +2,8 @@
   "common": {
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
-    "description": "クロスプラットフォームパフォーマンスモニタリング (Tauri + Next.js + センサーサービス)"
+    "description": "クロスプラットフォームパフォーマンスモニタリング (Tauri + Next.js + センサーサービス)",
+    "success": "成功"
   },
   "view": {
     "grid": "グリッド表示",
@@ -50,8 +51,21 @@
         "epicFree": "Epic 無料ゲーム",
     "diskHealth": "ディスク健全性",
 "screenRecord": "画面録画",
-    "audioEq": "EQチューニング"
+    "audioEq": "EQチューニング",
+    "custom": "カスタム"
   },
+"customPage": {
+"title": "カスタムページ",
+"addTool": "ツール追加",
+"emptyHint": "右上の追加ボタンをクリックして、よく使うツールを追加してください",
+"searchTools": "ツールを検索...",
+"borderRadius": "角の丸み",
+"clearAll": "すべて削除",
+"clearAllConfirm": "すべてのカードを削除しますか？",
+"editMode": "編集モード",
+"enterEdit": "レイアウト編集",
+"exitEdit": "編集終了"
+},
   "optimization": {
     "pageTitle": "最適化",
     "pageDesc": "システム最適化とパフォーマンスツール",
@@ -1211,6 +1225,9 @@
       "startup": "起動",
       "autoStartLabel": "起動時に自動起動",
       "autoStartDesc": "システム起動時にNexBoxを自動起動します",
+      "autoStartEnabled": "自動起動が有効になりました",
+      "autoStartDisabled": "自動起動が無効になりました",
+      "autoStartError": "設定に失敗しました",
       "closeBehavior": "終了動作",
       "closeBehaviorLabel": "閉じるボタンを押した時",
       "closeBehaviorDesc": "閉じるボタンを押した時の動作を選択",

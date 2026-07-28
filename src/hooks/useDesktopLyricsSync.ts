@@ -52,7 +52,7 @@ export function useDesktopLyricsSync() {
   const isPlayingRef = useRef(false);
   const hasDataRef = useRef(false);
 
-  // 初始化：从 Store 读取设置
+  // 初始化：从 Store 读取设置（锁状态由主窗口推送，不独立读取）
   useEffect(() => {
     (async () => {
       try {
@@ -61,16 +61,17 @@ export function useDesktopLyricsSync() {
         const highlightColor = await store.get<string>("desktopLyricsHighlightColor");
         const baseColor = await store.get<string>("desktopLyricsBaseColor");
         const lineCount = await store.get<1 | 2>("desktopLyricsLineCount");
-        const locked = await store.get<boolean>("desktopLyricsLocked");
         setSettings((prev) => ({
           ...prev,
           fontSize: fontSize ?? prev.fontSize,
           highlightColor: highlightColor ?? prev.highlightColor,
           baseColor: baseColor ?? prev.baseColor,
           lineCount: lineCount ?? prev.lineCount,
-          isLocked: locked ?? prev.isLocked,
+          isLocked: false,
         }));
-        setIsLocked(locked ?? false);
+        // 不恢复锁状态：锁状态由主窗口通过 desktop-lyrics:settings 事件推送
+        // 独立读取 store 会在启动时与主窗口 init() 产生竞态，导致
+        // 桌面歌词未打开但解锁按钮窗口仍然出现的问题
       } catch {
         // ignore
       }

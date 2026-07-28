@@ -374,7 +374,7 @@
         }
       }
     },
-    ".NETFramework,Version=v4.8/win-x64": {
+    ".NETFramework,Version=v4.8/win7-x64": {
       "BlackSharp.Core/1.0.7": {
         "type": "package",
         "compile": {
@@ -1789,8 +1789,7 @@
         "enableAudit": "true",
         "auditLevel": "low",
         "auditMode": "direct"
-      },
-      "SdkAnalysisLevel": "10.0.200"
+      }
     },
     "frameworks": {
       "net48": {
@@ -1811,11 +1810,11 @@
             "version": "[8.0.0, )"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.201\\RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423\\RuntimeIdentifierGraph.json"
       }
     },
     "runtimes": {
-      "win-x64": {
+      "win7-x64": {
         "#import": []
       }
     }

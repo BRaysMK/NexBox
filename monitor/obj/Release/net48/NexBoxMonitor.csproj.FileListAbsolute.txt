@@ -29,3 +29,4 @@ D:\NexBox\monitor\obj\Release\net48\NexBoxMonitor.csproj.CoreCompileInputs.cache
 D:\NexBox\monitor\obj\Release\net48\NexBoxMo.234F07F4.Up2Date
 D:\NexBox\monitor\obj\Release\net48\NexBoxMonitor.exe
 D:\NexBox\monitor\obj\Release\net48\NexBoxMonitor.pdb
+D:\NexBox\monitor\obj\Release\net48\NexBoxMonitor.sourcelink.json

@@ -129,7 +129,7 @@ interface MusicState {
   setDesktopLyricsHighlightColor: (color: string) => Promise<void>;
   setDesktopLyricsBaseColor: (color: string) => Promise<void>;
   setDesktopLyricsLineCount: (count: 1 | 2) => Promise<void>;
-  setDesktopLyricsLocked: (locked: boolean) => void;
+  setDesktopLyricsLocked: (locked: boolean) => Promise<void>;
   emitDesktopLyricsSettings: () => void;
   emitDesktopLyricsData: () => void;
 
@@ -368,7 +368,17 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (dlHighlightColor) set({ desktopLyricsHighlightColor: dlHighlightColor });
       if (dlBaseColor) set({ desktopLyricsBaseColor: dlBaseColor });
       if (dlLineCount) set({ desktopLyricsLineCount: dlLineCount });
-      if (dlLocked != null) set({ desktopLyricsLocked: dlLocked });
+      if (dlLocked != null) {
+        // 锁定状态仅在当前会话有效，启动时始终重置为 false
+        // 防止跨会话残留导致桌面歌词未开但解锁按钮仍在的问题
+        if (dlLocked) {
+          await store.set("desktopLyricsLocked", false);
+          await store.save();
+        }
+      }
+
+      // 确保内存状态与持久化一致
+      set({ desktopLyricsLocked: false });
     } catch {
       // ignore
     }
@@ -814,6 +824,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         } else {
           await win.hide();
           stopTimeSync();
+          // 关闭桌面歌词时同时重置锁定状态，防止重启后残留锁定状态
+          await get().setDesktopLyricsLocked(false);
           // 通知桌面歌词页面解锁并停止轮询，防止在隐藏窗口后仍显示解锁按钮
           emit("desktop-lyrics:settings", {
             fontSize: get().desktopLyricsFontSize,
@@ -858,9 +870,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     get().emitDesktopLyricsSettings();
   },
 
-  setDesktopLyricsLocked: (locked) => {
+  setDesktopLyricsLocked: async (locked) => {
     set({ desktopLyricsLocked: locked });
-    getStore().then((s) => s.set("desktopLyricsLocked", locked).then(() => s.save()));
+    const s = await getStore();
+    await s.set("desktopLyricsLocked", locked);
+    await s.save();
   },
 
   emitDesktopLyricsSettings: () => {
