@@ -31,6 +31,7 @@ import WindowsUpdatePage from "./pages/WindowsUpdatePage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
 import NvidiaDriverPage from "./pages/NvidiaDriverPage";
 import EpicFreePage from "./pages/EpicFreePage";
+import SteamPage from "./pages/SteamPage";
 import TrayMenuPage from "./pages/TrayMenuPage";
 import DesktopLyricsPage from "./pages/DesktopLyricsPage";
 import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
@@ -295,6 +296,7 @@ function App() {
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
+            <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
               <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
@@ -334,6 +336,7 @@ function App() {
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
               <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
+              <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
             <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
             <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
       </Routes>

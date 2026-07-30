@@ -3,9 +3,9 @@
     "appName": "NexBox",
     "appFullName": "新境盒",
     "description": "跨平台性能监控（Tauri + Next.js + 传感器服务）",
-"cancel": "取消",
-"add": "添加",
-"success": "操作成功"
+    "cancel": "取消",
+    "add": "添加",
+    "success": "操作成功"
   },
   "view": {
     "grid": "网格视图",
@@ -50,25 +50,66 @@
     "gpuRename": "显卡改写",
     "resolutionConverter": "分辨率管理",
     "dlssPreset": "三角洲DLSS设置",
+    "steam": "Steam管理",
     "epicFree": "喜加一",
     "nvidiaDriver": "显卡设置（仅NVIDIA）",
     "diskHealth": "磁盘健康",
-"screenRecord": "屏幕录制",
+    "screenRecord": "屏幕录制",
     "audioEq": "EQ调音",
     "custom": "自定义"
   },
-"customPage": {
-"title": "自定义页面",
-"addTool": "添加工具",
-"emptyHint": "点击右上角添加按钮，添加你常用的工具",
-"searchTools": "搜索工具...",
-"borderRadius": "圆角",
-"clearAll": "清空全部",
-"clearAllConfirm": "确定要清空所有卡片吗？",
-"editMode": "编辑模式",
-"enterEdit": "编辑布局",
-"exitEdit": "退出编辑"
-},
+  "customPage": {
+    "title": "自定义页面",
+    "addTool": "添加工具",
+    "emptyHint": "点击右上角添加按钮，添加你常用的工具",
+    "searchTools": "搜索工具...",
+    "borderRadius": "圆角",
+    "clearAll": "清空全部",
+    "clearAllConfirm": "确定要清空所有卡片吗？",
+    "editMode": "编辑模式",
+    "enterEdit": "编辑布局",
+    "exitEdit": "退出编辑"
+  },
+  "steam": {
+    "loading": "正在加载 Steam 数据...",
+    "notInstalled": "未检测到 Steam 安装，请先安装 Steam 客户端",
+    "running": "运行中",
+    "notRunning": "未运行",
+    "launchSteam": "启动 Steam",
+    "launchingSteam": "启动中...",
+    "currentUser": "当前用户",
+    "remembered": "已记住密码",
+    "switchAccount": "切换到此账户",
+    "switchSuccess": "账户切换中，Steam 正在重启...",
+    "accounts": "账户管理",
+    "libraries": "游戏库",
+    "installedGames": "已安装游戏",
+    "totalGames": "游戏总数",
+    "totalSize": "总占用",
+    "accountCount": "账户数",
+    "installPath": "安装路径",
+    "searchGame": "搜索游戏...",
+    "noGames": "暂无已安装游戏",
+    "noSearchResults": "未找到匹配的游戏",
+    "games": "个游戏",
+    "launch": "启动",
+"launching": "启动中...",
+"diskUsage": "磁盘占用",
+"free": "可用",
+    "openFolder": "打开目录",
+    "storePage": "商店页面",
+    "uninstall": "卸载",
+    "uninstallTitle": "确认卸载",
+    "uninstallConfirm": "确定要卸载 \"{{name}}\" 吗？将在 Steam 中打开卸载向导。",
+    "uninstallSent": "卸载请求已发送到 Steam",
+    "cancel": "取消",
+    "confirmUninstall": "确认卸载",
+    "fetchError": "获取 Steam 数据失败",
+    "refresh": "刷新",
+    "debug": "调试信息",
+    "noAccounts": "未找到已保存的 Steam 账户，请先在 Steam 客户端登录并勾选\"记住密码\"",
+    "noLibraries": "未找到游戏库文件夹，可能是 Steam 数据未加载"
+  },
   "optimization": {
     "pageTitle": "优化",
     "pageDesc": "系统优化与性能提升工具",
@@ -667,7 +708,8 @@
       "dot": "点",
       "circle": "圆形",
       "crossDot": "十字+点",
-      "circleCross": "圆形+十字"
+      "circleCross": "圆形+十字",
+      "dotBox": "点+方框"
     }
   },
   "hardwareReport": {
@@ -929,7 +971,7 @@
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
     "nvidiaDriverDesc": "通过 NVAPI 直接控制 NVIDIA 驱动图形设置",
     "diskHealthDesc": "检测硬盘健康状态与SMART信息",
-"screenRecordDesc": "高性能屏幕录制（硬件编码）",
+    "screenRecordDesc": "高性能屏幕录制（硬件编码）",
     "audioEqDesc": "系统级音频均衡器调音",
     "resolutionManagement": "显示器分辨率管理",
     "selectDisplay": "选择显示器",
@@ -966,9 +1008,25 @@
   "settings": {
     "general": "通用",
     "appearance": "外观",
+    "pawnio": {
+      "label": "PawnIO驱动",
+      "title": "PawnIO 驱动管理",
+      "status": "状态",
+      "checking": "检查中...",
+      "installed": "已安装",
+      "notInstalled": "未安装",
+      "description": "PawnIO 是一个可选的内核级驱动，安装后可以获取 CPU 温度、风扇转速等更详细的硬件信息。该驱动为可选组件，不安装不影响 NexBox 的其他功能。",
+      "install": "安装 PawnIO 驱动",
+      "uninstall": "卸载驱动",
+      "refresh": "刷新状态",
+      "uninstalled": "已卸载",
+      "error": "操作失败",
+      "needsRestart": "需要重启"
+    },
     "hotkeys": "热键",
     "network": "网络",
     "sponsor": "赞助",
+    "contributor": "贡献者",
     "navigation": "导航栏",
     "about": "关于",
     "generalSettings": {
@@ -1023,7 +1081,8 @@
       "autoStartDesc": "系统启动时自动运行 NexBox",
       "autoStartEnabled": "开机自启已开启",
       "autoStartDisabled": "开机自启已关闭",
-      "autoStartError": "设置失败",
+      "autoStartError": "开机自启设置失败",
+      "autoStartErrorHint": "请检查杀毒软件是否拦截，或尝试以管理员身份运行",
       "closeBehavior": "关闭行为",
       "closeBehaviorLabel": "点击关闭按钮时",
       "closeBehaviorDesc": "选择点击关闭按钮时的行为",
@@ -1144,6 +1203,12 @@
       "alipay": "支付宝",
       "thankYou": "感谢您的支持！",
       "placeholder": "请添加收款码图片",
+      "contributors": {
+        "title": "贡献者名单",
+        "loading": "加载中...",
+        "error": "加载失败",
+        "empty": "暂无贡献者"
+      },
       "sponsorList": {
         "title": "赞助者名单",
         "loading": "加载中...",
@@ -1782,5 +1847,3 @@
     "noImported": "暂无导入的预设"
   }
 }
-
-

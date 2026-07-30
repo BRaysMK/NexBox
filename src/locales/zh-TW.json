@@ -647,7 +647,8 @@
       "dot": "點",
       "circle": "圓形",
       "crossDot": "十字+點",
-      "circleCross": "圓形+十字"
+      "circleCross": "圓形+十字",
+      "dotBox": "點+方框"
     }
   },
   "hardwareReport": {
@@ -1000,7 +1001,8 @@
       "autoStartDesc": "系統啟動時自動執行 NexBox",
       "autoStartEnabled": "開機自啟已開啟",
       "autoStartDisabled": "開機自啟已關閉",
-      "autoStartError": "設定失敗",
+      "autoStartError": "開機自啟設定失敗",
+      "autoStartErrorHint": "請檢查防毒軟體是否攔截，或嘗試以系統管理員身分執行",
       "closeBehavior": "關閉行為",
       "closeBehaviorLabel": "點擊關閉按鈕時",
       "closeBehaviorDesc": "選擇點擊關閉按鈕時的行為",

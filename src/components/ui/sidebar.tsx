@@ -1,5 +1,5 @@
 import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Music, LayoutGrid } from "lucide-react";
+import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Music, LayoutGrid, Gamepad2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -8,12 +8,14 @@ import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 import deltaForceIcon from "@/assets/deltaforce.png";
 import epicGamesIcon from "@/assets/epic-games.png";
+import steamIcon from "@/assets/tools/Steam.png";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 interface NavItem {
   path: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }> | null;
   customIcon?: string;
+  customIconSize?: string;
   ariaLabel: string;
   beta?: boolean;
 }
@@ -50,8 +52,8 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
     <Image
       src={item.customIcon}
       alt={item.ariaLabel}
-      w="22px"
-      h="22px"
+      w={item.customIconSize || "22px"}
+      h={item.customIconSize || "22px"}
       objectFit="contain"
       filter={isActive ? "none" : "grayscale(30%) opacity(0.7)"}
       transition="filter 0.2s"
@@ -229,7 +231,7 @@ export function Sidebar() {
 
   const isTop = navPosition === "top";
   
-  const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood", "/custom"];
+  const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
   const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
 
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>(() => {
@@ -249,7 +251,20 @@ export function Sidebar() {
   const [navOrder, setNavOrder] = useState<string[] | null>(() => {
     try {
       const saved = localStorage.getItem(NAV_ORDER_KEY);
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
+        let changed = false;
+        for (const p of allPaths) {
+          if (!parsed.includes(p)) { parsed.push(p); changed = true; }
+        }
+        if (changed) {
+          parsed.sort((a: string, b: string) => allPaths.indexOf(a) - allPaths.indexOf(b));
+          localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(parsed));
+        }
+        return parsed;
+      }
+      return null;
     } catch { return null; }
   });
 
@@ -338,6 +353,7 @@ export function Sidebar() {
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
     { path: "/music", icon: Music, ariaLabel: t("sidebar.music") },
     { path: "/delta-force", icon: null, customIcon: deltaForceIcon, ariaLabel: t("sidebar.deltaForce") },
+    { path: "/steam", icon: null, customIcon: steamIcon, customIconSize: "44px", ariaLabel: t("sidebar.steam") },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
     { path: "/custom", icon: LayoutGrid, ariaLabel: t("sidebar.custom") },

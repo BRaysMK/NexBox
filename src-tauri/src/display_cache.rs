@@ -4,6 +4,7 @@
 //! 通过直接读取注册表中的 EDID 数据并解析显示器名称，
 //! 速度极快（纯内存/注册表操作，不启动任何进程）。
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -15,13 +16,28 @@ const CACHE_TTL: Duration = Duration::from_secs(60);
 
 struct EdidCache {
     fetched_at: Option<Instant>,
-    names: Vec<String>,
+    /// (PNP ID, 显示器型号名称) 列表。PNP ID 用于按设备 ID 精确匹配，
+    /// 避免不同 API 的枚举顺序不一致导致型号张冠李戴。
+    entries: Vec<(String, String)>,
 }
 
 static EDID_CACHE: Mutex<EdidCache> = Mutex::new(EdidCache {
     fetched_at: None,
-    names: Vec::new(),
+    entries: Vec::new(),
 });
+
+/// 从原始 (PNP ID, 名称) 条目构建型号名称列表（按名称去重，保留首次出现），
+/// 与历史 `get_edid_monitor_names` 行为一致。
+fn build_names(entries: &[(String, String)]) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut names = Vec::new();
+    for (_, name) in entries {
+        if seen.insert(name.clone()) {
+            names.push(name.clone());
+        }
+    }
+    names
+}
 
 /// 获取 EDID 显示器型号名称（带 TTL 缓存）。
 ///
@@ -33,20 +49,39 @@ pub fn get_edid_monitor_names() -> Vec<String> {
         let lock = EDID_CACHE.lock().unwrap();
         if let Some(t) = lock.fetched_at {
             if t.elapsed() < CACHE_TTL {
-                return lock.names.clone();
+                return build_names(&lock.entries);
             }
         }
     }
 
     // 缓存过期或不存在，重新查询
     log::info!("display_cache: EDID 缓存未命中，从注册表读取 EDID…");
-    let names = query_edid_via_registry();
-    log::info!("display_cache: 注册表 EDID 查询完成，获取到 {} 个名称", names.len());
+    let entries = query_edid_via_registry();
+    log::info!("display_cache: 注册表 EDID 查询完成，获取到 {} 个名称", entries.len());
 
     let mut lock = EDID_CACHE.lock().unwrap();
     lock.fetched_at = Some(Instant::now());
-    lock.names = names.clone();
-    names
+    lock.entries = entries;
+    build_names(&lock.entries)
+}
+
+/// 获取 PNP ID -> 显示器型号名称 的映射（带 TTL 缓存）。
+///
+/// 用于按显示器的 PNP 设备 ID 精确匹配型号，避免 WMI 顺序与注册表 EDID
+/// 顺序不一致时把 A 显示器的型号错配到 B 显示器（型号颠倒）的问题。
+pub fn get_edid_monitor_names_by_pnpid() -> HashMap<String, String> {
+    {
+        let lock = EDID_CACHE.lock().unwrap();
+        if let Some(t) = lock.fetched_at {
+            if t.elapsed() < CACHE_TTL {
+                return lock.entries.iter().cloned().collect();
+            }
+        }
+    }
+    // 触发一次查询（同时填充缓存）
+    get_edid_monitor_names();
+    let lock = EDID_CACHE.lock().unwrap();
+    lock.entries.iter().cloned().collect()
 }
 
 /// 强制刷新缓存（例如显示器配置变化时调用）。
@@ -54,14 +89,15 @@ pub fn get_edid_monitor_names() -> Vec<String> {
 pub fn invalidate() {
     let mut lock = EDID_CACHE.lock().unwrap();
     lock.fetched_at = None;
-    lock.names.clear();
+    lock.entries.clear();
 }
 
 /// 通过注册表枚举所有显示器的 EDID，解析出 Monitor Name。
 ///
+/// 返回 (PNP ID, 显示器型号名称) 列表。
 /// 路径: HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\<PNPID>\<InstanceID>\Device Parameters\EDID
 #[cfg(target_os = "windows")]
-fn query_edid_via_registry() -> Vec<String> {
+fn query_edid_via_registry() -> Vec<(String, String)> {
     use winreg::enums::*;
     use winreg::RegKey;
 
@@ -77,7 +113,7 @@ fn query_edid_via_registry() -> Vec<String> {
         }
     };
 
-    let mut names = Vec::new();
+    let mut entries = Vec::new();
 
     // 遍历每个 PNP ID 子项（如 "DELA409", "SAM0F9E" 等）
     for pnp_result in enum_key.enum_keys() {
@@ -111,19 +147,17 @@ fn query_edid_via_registry() -> Vec<String> {
             };
 
             if let Some(name) = parse_edid_monitor_name(&edid_bytes) {
-                if !names.contains(&name) {
-                    names.push(name);
-                }
+                entries.push((pnp_id.clone(), name));
             }
         }
     }
 
-    log::info!("display_cache: 注册表 EDID 扫描完成，找到 {} 个显示器", names.len());
-    names
+    log::info!("display_cache: 注册表 EDID 扫描完成，找到 {} 个显示器", entries.len());
+    entries
 }
 
 #[cfg(not(target_os = "windows"))]
-fn query_edid_via_registry() -> Vec<String> {
+fn query_edid_via_registry() -> Vec<(String, String)> {
     Vec::new()
 }
 

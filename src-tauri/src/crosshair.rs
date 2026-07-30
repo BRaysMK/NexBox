@@ -20,6 +20,7 @@ pub struct CrosshairSettings {
     pub dot_size: i32,
     pub opacity: u8,
     pub monitor_index: i32,
+    pub monitor_device_name: Option<String>,
     pub use_custom_image: bool,
     pub custom_image_path: Option<String>,
     pub offset_x: i32,
@@ -40,6 +41,7 @@ impl Default for CrosshairSettings {
             dot_size: 2,
             opacity: 255,
             monitor_index: -1,
+            monitor_device_name: None,
             use_custom_image: false,
             custom_image_path: None,
             offset_x: 0,
@@ -155,19 +157,20 @@ pub async fn get_crosshair_displays() -> Result<Vec<DisplayInfo>, String> {
         }
 
         // EDID 回退：EnumDisplayDevicesW 经常返回通用名称，尝试获取真实型号
+        // 使用 PNP ID 精确匹配，消除枚举顺序不一致导致的名称错乱
         let is_fallback = |n: &str| n.starts_with('\\') || {
             let prefix = n.split(" (").next().unwrap_or(n);
             is_generic_monitor_name(prefix)
         };
         if data.displays.iter().any(|d| is_fallback(&d.name)) {
-            let edid_names = crate::display_cache::get_edid_monitor_names();
-            if !edid_names.is_empty() {
-                for (i, d) in data.displays.iter_mut().enumerate() {
+            let edid_by_pnp = get_edid_pnp_map();
+            if !edid_by_pnp.is_empty() {
+                for d in data.displays.iter_mut() {
                     if is_fallback(&d.name) {
-                        if let Some(n) = edid_names.get(i).filter(|s| !s.is_empty()) {
-                            d.name = format!("{} ({}x{})", n, d.width, d.height);
-                        } else if edid_names.len() == 1 && !edid_names[0].is_empty() {
-                            d.name = format!("{} ({}x{})", edid_names[0], d.width, d.height);
+                        if let Some(pnp_id) = get_pnp_id_for_device(&d.device_name) {
+                            if let Some(edid_name) = edid_by_pnp.get(&pnp_id) {
+                                d.name = format!("{} ({}x{})", edid_name, d.width, d.height);
+                            }
                         }
                     }
                 }
@@ -221,6 +224,47 @@ fn get_monitor_model_name(device_name: &str) -> String {
     }
 
     String::new()
+}
+
+/// 通过 EnumDisplayDevicesW 获取指定显示器的 PNP ID（如 "DELA409"）。
+/// DeviceID 格式: "MONITOR\PNPID\..."
+#[cfg(target_os = "windows")]
+fn get_pnp_id_for_device(device_name: &str) -> Option<String> {
+    use std::mem;
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayDevicesW, DISPLAY_DEVICEW};
+
+    unsafe {
+        let device_name_wide: Vec<u16> = device_name.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut disp_device: DISPLAY_DEVICEW = mem::zeroed();
+        disp_device.cb = mem::size_of::<DISPLAY_DEVICEW>() as u32;
+
+        if EnumDisplayDevicesW(device_name_wide.as_ptr(), 0, &mut disp_device, 0) != 0 {
+            let len = disp_device.DeviceID.iter().position(|&c| c == 0).unwrap_or(disp_device.DeviceID.len());
+            if len > 0 {
+                let device_id = String::from_utf16_lossy(&disp_device.DeviceID[..len]);
+                // DeviceID 格式: "MONITOR\PNPID\..."，提取 PNPID
+                let prefix = "MONITOR\\";
+                if let Some(pnp_start) = device_id.find(prefix) {
+                    let after_prefix = &device_id[pnp_start + prefix.len()..];
+                    if let Some(backslash_pos) = after_prefix.find('\\') {
+                        return Some(after_prefix[..backslash_pos].to_string());
+                    }
+                    // 没有反斜杠时取到末尾
+                    if !after_prefix.is_empty() {
+                        return Some(after_prefix.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// 获取 `get_edid_monitor_names_by_pnpid()` 返回的名称映射，
+/// 用于跨模块共享（crosshair 需要此映射消除对 `get_edid_monitor_names` 的索引依赖）。
+#[cfg(target_os = "windows")]
+fn get_edid_pnp_map() -> std::collections::HashMap<String, String> {
+    crate::display_cache::get_edid_monitor_names_by_pnpid()
 }
 #[cfg(target_os = "windows")]
 mod win32 {
@@ -378,6 +422,22 @@ mod win32 {
         GdipFillEllipse(graphics, brush, center_x - r, center_y - r, r * 2.0, r * 2.0);
     }
 
+    unsafe fn draw_style_dot_box(
+        graphics: *mut GpGraphics,
+        pen: *mut GpPen,
+        brush: *mut GpBrush,
+        center_x: f32,
+        center_y: f32,
+        size: f32,
+        dot_size: f32,
+    ) {
+        // Draw outer rectangle
+        GdipDrawRectangle(graphics, pen, center_x - size, center_y - size, size * 2.0, size * 2.0);
+        // Draw center dot
+        let r = dot_size / 2.0;
+        GdipFillEllipse(graphics, brush, center_x - r, center_y - r, r * 2.0, r * 2.0);
+    }
+
     extern "system" {
         fn GdipLoadImageFromFile(
             filename: *const u16,
@@ -476,6 +536,9 @@ mod win32 {
                 draw_style_circle(graphics, pen, center_x, center_y, size);
                 draw_style_cross(graphics, pen, center_x, center_y, gap, size);
             }
+            "DotBox" => {
+                draw_style_dot_box(graphics, pen, brush as *mut GpBrush, center_x, center_y, size, dot_size);
+            }
             _ => {
                 draw_style_cross(graphics, pen, center_x, center_y, gap, size);
             }
@@ -489,8 +552,8 @@ mod win32 {
         }
     }
 
-    pub unsafe fn get_monitor_bounds(monitor_index: i32) -> (i32, i32, i32, i32) {
-        if monitor_index < 0 {
+    pub unsafe fn get_monitor_bounds(settings: &super::CrosshairSettings) -> (i32, i32, i32, i32) {
+        if settings.monitor_index < 0 {
             return (
                 0,
                 0,
@@ -499,24 +562,14 @@ mod win32 {
             );
         }
 
-        struct BoundsData {
-            target: i32,
-            current: i32,
-            left: i32,
-            top: i32,
-            right: i32,
-            bottom: i32,
-            found: bool,
+        struct AllMonitors {
+            device_names: Vec<String>,
+            bounds: Vec<(i32, i32, i32, i32)>,
         }
 
-        let mut data = BoundsData {
-            target: monitor_index,
-            current: 0,
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
-            found: false,
+        let mut all = AllMonitors {
+            device_names: Vec::new(),
+            bounds: Vec::new(),
         };
 
         unsafe extern "system" fn enum_proc(
@@ -525,33 +578,43 @@ mod win32 {
             _rect: *mut windows_sys::Win32::Foundation::RECT,
             lparam: isize,
         ) -> i32 {
-            let data = &mut *(lparam as *mut BoundsData);
-            if data.current == data.target {
-                let mut info: MONITORINFOEXW = std::mem::zeroed();
-                info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
-                if GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _) != 0 {
-                    data.left = info.monitorInfo.rcMonitor.left;
-                    data.top = info.monitorInfo.rcMonitor.top;
-                    data.right = info.monitorInfo.rcMonitor.right;
-                    data.bottom = info.monitorInfo.rcMonitor.bottom;
-                    data.found = true;
-                }
-                0
-            } else {
-                data.current += 1;
-                1
+            let data = &mut *(lparam as *mut AllMonitors);
+            let mut info: MONITORINFOEXW = std::mem::zeroed();
+            info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+            if GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _) != 0 {
+                let device_name = String::from_utf16_lossy(
+                    &info.szDevice[..info.szDevice.iter().position(|&c| c == 0).unwrap_or(info.szDevice.len())],
+                );
+                data.device_names.push(device_name);
+                data.bounds.push((
+                    info.monitorInfo.rcMonitor.left,
+                    info.monitorInfo.rcMonitor.top,
+                    info.monitorInfo.rcMonitor.right,
+                    info.monitorInfo.rcMonitor.bottom,
+                ));
             }
+            1
         }
 
         EnumDisplayMonitors(
             ptr::null_mut(),
             ptr::null(),
             Some(enum_proc),
-            &mut data as *mut _ as isize,
+            &mut all as *mut _ as isize,
         );
 
-        if data.found {
-            (data.left, data.top, data.right, data.bottom)
+        // 优先按设备名称匹配（不受枚举顺序影响）
+        if let Some(ref target_device) = settings.monitor_device_name {
+            for (i, name) in all.device_names.iter().enumerate() {
+                if name == target_device {
+                    return all.bounds[i];
+                }
+            }
+        }
+
+        // 回退：按索引匹配
+        if let Some(bounds) = all.bounds.get(settings.monitor_index as usize) {
+            *bounds
         } else {
             (
                 0,
@@ -563,7 +626,7 @@ mod win32 {
     }
 
     unsafe fn render(hwnd: HWND, settings: &super::CrosshairSettings) {
-        let (mon_left, mon_top, mon_right, mon_bottom) = get_monitor_bounds(settings.monitor_index);
+        let (mon_left, mon_top, mon_right, mon_bottom) = get_monitor_bounds(settings);
         let screen_width = mon_right - mon_left;
         let screen_height = mon_bottom - mon_top;
 
@@ -930,7 +993,7 @@ pub async fn get_crosshair_status() -> Result<CrosshairSettings, String> {
 
     #[cfg(target_os = "windows")]
     {
-        let (left, top, right, bottom) = unsafe { win32::get_monitor_bounds(settings.monitor_index) };
+        let (left, top, right, bottom) = unsafe { win32::get_monitor_bounds(&settings) };
         settings.screen_width = right - left;
         settings.screen_height = bottom - top;
     }

@@ -108,7 +108,7 @@ impl SensorBridge {
 }
 
 /// 全局传感器桥接
-static SENSOR_BRIDGE: Mutex<Option<SensorBridge>> = Mutex::new(None);
+pub static SENSOR_BRIDGE: Mutex<Option<SensorBridge>> = Mutex::new(None);
 
 /// 重启冷却（秒）：子进程崩溃后至少等待 30s 才尝试重启
 const RESTART_COOLDOWN_SECS: u64 = 30;
@@ -116,6 +116,7 @@ const RESTART_COOLDOWN_SECS: u64 = 30;
 const MAX_RESTART_ATTEMPTS: u32 = 5;
 static LAST_RESTART_TIME: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static RESTART_ATTEMPT_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+pub static SENSOR_CHILD_EXE_PATH: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
 
 /// 启动传感器子进程
 pub fn start_sensor_process(app: &App) {
@@ -429,7 +430,11 @@ fn find_monitor_exe() -> Option<std::path::PathBuf> {
 
 fn spawn_sensor() -> std::io::Result<Option<SensorBridge>> {
     let exe_path = match find_monitor_exe() {
-        Some(p) => p,
+        Some(p) => {
+            // 缓存路径供重启使用
+            *SENSOR_CHILD_EXE_PATH.lock().unwrap() = Some(p.clone());
+            p
+        }
         None => return Ok(None),
     };
 
@@ -458,4 +463,95 @@ fn spawn_sensor() -> std::io::Result<Option<SensorBridge>> {
     };
 
     Ok(Some(bridge))
+}
+
+/// 重启 NexBoxMonitor 子进程（内部函数，供 pawnio_driver 调用）
+/// 安装 PawnIO 后调用，让新进程加载驱动
+pub fn restart_sensor_process_internal() -> Result<(), String> {
+    log::info!("[restart_monitor] 开始重启 NexBoxMonitor 子进程");
+
+    // 1. 强制终止旧的子进程（用 kill 而非 shutdown，更快更可靠）
+    if let Some(mut bridge) = SENSOR_BRIDGE.lock().unwrap().take() {
+        log::info!("[restart_monitor] 正在终止旧进程 (pid={})", bridge.child.id());
+        let _ = bridge.child.kill();
+        let _ = bridge.child.wait();
+        log::info!("[restart_monitor] 旧进程已终止");
+    } else {
+        log::info!("[restart_monitor] 没有正在运行的监控进程，直接启动新进程");
+    }
+
+    // 2. 重置重启计数器
+    RESTART_ATTEMPT_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
+    LAST_RESTART_TIME.store(0, std::sync::atomic::Ordering::Relaxed);
+
+    // 3. 尝试启动新进程（最多重试 2 次）
+    for attempt in 0..2 {
+        match spawn_sensor() {
+            Ok(Some(bridge)) => {
+                log::info!(
+                    "[restart_monitor] NexBoxMonitor 重启成功 (pid={}, attempt={})",
+                    bridge.child.id(),
+                    attempt + 1
+                );
+                *SENSOR_BRIDGE.lock().unwrap() = Some(bridge);
+                return Ok(());
+            }
+            Ok(None) => {
+                log::warn!("[restart_monitor] spawn_sensor 返回 None (第{}次)", attempt + 1);
+                // 尝试使用缓存的路径直接启动
+                let cached = SENSOR_CHILD_EXE_PATH.lock().unwrap().clone();
+                if let Some(ref exe_path) = cached {
+                    log::info!("[restart_monitor] 使用缓存路径重试: {}", exe_path.display());
+                    let mut cmd = Command::new(exe_path);
+                    cmd.stdin(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped());
+                    #[cfg(windows)]
+                    {
+                        use std::os::windows::process::CommandExt;
+                        cmd.creation_flags(0x08000000);
+                    }
+                    match cmd.spawn() {
+                        Ok(mut child) => {
+                            let stdin = child.stdin.take().expect("无法获取子进程 stdin");
+                            let stdout = child.stdout.take().expect("无法获取子进程 stdout");
+                            let bridge = SensorBridge {
+                                child,
+                                reader: BufReader::new(stdout),
+                                writer: stdin,
+                            };
+                            log::info!(
+                                "[restart_monitor] 通过缓存路径重启成功 (pid={})",
+                                bridge.child.id()
+                            );
+                            *SENSOR_BRIDGE.lock().unwrap() = Some(bridge);
+                            return Ok(());
+                        }
+                        Err(e) => log::error!("[restart_monitor] 缓存路径启动失败: {}", e),
+                    }
+                } else {
+                    log::warn!("[restart_monitor] 没有缓存的 exe 路径");
+                }
+            }
+            Err(e) => {
+                log::error!("[restart_monitor] spawn_sensor 出错 (第{}次): {}", attempt + 1, e);
+            }
+        }
+        // 两次尝试之间等待 500ms
+        if attempt == 0 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+
+    let err = "NexBoxMonitor 重启失败：无法找到或启动监控进程".to_string();
+    log::error!("[restart_monitor] {}", err);
+    Err(err)
+}
+
+/// 重启 NexBoxMonitor 子进程（Tauri 命令，供前端调用）
+#[tauri::command]
+pub async fn restart_monitor_process() -> Result<String, String> {
+    restart_sensor_process_internal()
+        .map(|_| "监控进程已重启".to_string())
+        .map_err(|e| format!("重启监控进程失败: {}", e))
 }

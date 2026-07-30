@@ -267,6 +267,14 @@ export default function DisplayFilterPage() {
         setIccTintOpacity(result.preview_tint_opacity_icc ?? 0);
         setManualPresetChange(true);
         setTimeout(() => setManualPresetChange(false), 100);
+      } else {
+        // 切换显示器或该显示器滤镜未启用时，清除上一个显示器的选中高亮，
+        // 确保开关与预设/ICC 选择都反映当前显示器的真实状态。
+        setActiveIccId(null);
+        setActivePresetId("");
+        setIccPreviewFilter(null);
+        setIccTintColor(null);
+        setIccTintOpacity(0);
       }
     } catch (error) {
       console.error("Failed to load filter settings:", error);

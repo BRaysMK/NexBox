@@ -21,6 +21,7 @@ import {
   ModalFooter,
   Progress,
   useToast,
+  useDisclosure,
   Slider,
   SliderTrack,
   SliderFilledTrack,
@@ -48,6 +49,8 @@ import {
   LuKeyboard,
   LuPlus,
   LuTrash2,
+  LuCpu,
+  LuUsers,
 } from "react-icons/lu";
 import { RiBilibiliFill, RiTiktokFill } from "react-icons/ri";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -85,7 +88,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Download } from "lucide-react";
+import { PawnioInstallModal } from "@/components/PawnioInstallModal";
 
 /** 限制导航栏拖拽只能沿竖直方向移动，禁止左右（向右）拖动 */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({
@@ -96,8 +100,10 @@ const restrictToVerticalAxis: Modifier = ({ transform }) => ({
 const settingItems = [
   { id: "general", labelKey: "settings.general", icon: LuSettings },
   { id: "appearance", labelKey: "settings.appearance", icon: LuMonitor },
+  { id: "pawnio", labelKey: "settings.pawnio.label", icon: LuCpu },
   { id: "hotkeys", labelKey: "settings.hotkeys", icon: LuKeyboard },
   { id: "network", labelKey: "settings.network", icon: LuWifi },
+  { id: "contributor", labelKey: "settings.contributor", icon: LuUsers },
   { id: "sponsor", labelKey: "settings.sponsor", icon: LuHeart },
   { id: "about", labelKey: "settings.about", icon: LuInfo },
 ];
@@ -202,7 +208,7 @@ function GeneralSettings() {
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const NAV_ORDER_KEY = "nexbox_nav_order";
-  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood", "/custom"];
+  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
   const [navOrder, setNavOrder] = useState<string[]>(defaultNavOrder);
   const navSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -319,7 +325,7 @@ function GeneralSettings() {
     }
 
     const visibilityMap: Record<string, boolean> = {};
-    for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/epic-free", "/mood", "/custom"]) {
+    for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"]) {
       const key = `nexbox_nav_visible_${p.replace(/\//g, "").replace(/-/g, "_")}`;
       if (p === "/custom") {
         visibilityMap[p] = localStorage.getItem(key) === "true";
@@ -334,6 +340,16 @@ function GeneralSettings() {
       const savedOrder = localStorage.getItem(NAV_ORDER_KEY);
       if (savedOrder) {
         const parsed = JSON.parse(savedOrder) as string[];
+        // 补充缺失的新条目
+        let changed = false;
+        for (const p of defaultNavOrder) {
+          if (!parsed.includes(p)) { parsed.push(p); changed = true; }
+        }
+        // 按默认顺序排序，新条目自动归位
+        if (changed) {
+          parsed.sort((a, b) => defaultNavOrder.indexOf(a) - defaultNavOrder.indexOf(b));
+          localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(parsed));
+        }
         setNavOrder(parsed);
       }
     } catch {}
@@ -477,7 +493,9 @@ function GeneralSettings() {
   };
 
   const handleAutoStartToggle = () => {
+    if (autoStartLoading) return;
     const newValue = !autoStart;
+    setAutoStartLoading(true);
     invoke("set_nexbox_auto_start", { enable: newValue })
       .then(() => {
         setAutoStart(newValue);
@@ -489,13 +507,22 @@ function GeneralSettings() {
         });
       })
       .catch((err) => {
+        // Tauri v2 错误可能是 string 或 object
+        const errMsg = typeof err === "string"
+          ? err
+          : (err && typeof err === "object" && "message" in err)
+            ? String((err as { message: unknown }).message)
+            : String(err);
         toast({
-          title: t("settings.generalSettings.autoStartError", "设置失败"),
-          description: typeof err === "string" ? err : undefined,
+          title: t("settings.generalSettings.autoStartError", "开机自启设置失败"),
+          description: errMsg || t("settings.generalSettings.autoStartErrorHint", "请尝试以管理员身份运行后再试"),
           status: "error",
-          duration: 3000,
+          duration: 6000,
           isClosable: true,
         });
+      })
+      .finally(() => {
+        setAutoStartLoading(false);
       });
   };
 
@@ -970,6 +997,7 @@ function GeneralSettings() {
                     "/optimization": t("sidebar.optimization"),
                     "/music": t("sidebar.music"),
                     "/delta-force": t("sidebar.deltaForce"),
+                    "/steam": t("sidebar.steam"),
                     "/epic-free": t("sidebar.epicFree"),
                     "/mood": t("sidebar.mood"),
                     "/custom": t("sidebar.custom"),
@@ -2094,6 +2122,170 @@ function NetworkSettings() {
       </Box>
     </Box>
   );
+` ``    ` }
+
+interface ContributorItem {
+  name: string;
+  avatar: string;
+  role: string;
+  bilibili: string;
+  douyin: string;
+}
+
+const CONTRIBUTORS: ContributorItem[] = [
+  {
+    name: "刺客边风",
+    avatar: "https://www.nexbox.top/gongxIan/ckbf.png",
+    role: "视频推广",
+    bilibili: "https://space.bilibili.com/21131684",
+    douyin: "https://v.douyin.com/bJRAiesxhgk/",
+  },
+  {
+    name: "资源汇社区",
+    avatar: "https://www.nexbox.top/gongxIan/zyhsq.png",
+    role: "视频推广",
+    bilibili: "https://space.bilibili.com/175870152",
+    douyin: "",
+  },
+  {
+    name: "FreeDw资源库",
+    avatar: "https://www.nexbox.top/gongxIan/freedw.png",
+    role: "视频推广",
+    bilibili: "https://space.bilibili.com/383210848",
+    douyin: "",
+  },
+  {
+    name: "风与诗的夏天",
+    avatar: "https://www.nexbox.top/gongxIan/fysdxt.png",
+    role: "视频推广",
+    bilibili: "https://space.bilibili.com/1587687791",
+    douyin: "",
+  },
+  {
+    name: "宝藏收藏夹",
+    avatar: "https://www.nexbox.top/gongxIan/bzscj.png",
+    role: "视频推广",
+    bilibili: "https://space.bilibili.com/3461565271509949",
+    douyin: "",
+  },
+];
+
+function ContributorSettings() {
+  const { t } = useTranslation();
+  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
+  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const cardBorder = useColorModeValue("gray.200", "#333333");
+
+  const openUrl = (url: string) => {
+    if (url) {
+      window.open(url, "_blank");
+    }
+  };
+
+  return (
+    <Box>
+      <Text fontSize="lg" fontWeight="bold" mb={6} color={titleColor}>
+        {t("settings.sponsorSettings.contributors.title")}
+      </Text>
+
+      <Box
+        display="grid"
+        gridTemplateColumns="repeat(auto-fill, 220px)"
+        gap={4}
+      >
+        {CONTRIBUTORS.map((contributor, index) => (
+          <LiquidGlassCard
+            key={index}
+            p={4}
+          >
+            <Flex align="stretch" gap={3}>
+              {/* 左侧：头像 + 名字 */}
+              <VStack spacing={1} align="center" flexShrink={0} minW="60px">
+                <Box
+                  w="48px"
+                  h="48px"
+                  borderRadius="full"
+                  overflow="hidden"
+                  border="2px solid"
+                  borderColor={cardBorder}
+                >
+                  <img
+                    src={contributor.avatar}
+                    alt={contributor.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </Box>
+                <Text
+                  fontSize="xs"
+                  fontWeight="bold"
+                  color={labelColor}
+                  textAlign="center"
+                  lineHeight="1.2"
+                >
+                  {contributor.name}
+                </Text>
+              </VStack>
+
+              {/* 右侧：说明 + 主页 */}
+              <VStack align="flex-end" spacing={1.5} flex="1" justify="center" minW={0}>
+                <Text fontSize="xs" color={subLabelColor} whiteSpace="nowrap">
+                  {contributor.role}
+                </Text>
+                <Flex align="center" gap={2}>
+                  {contributor.bilibili && (
+                    <Box
+                      as="a"
+                      href={contributor.bilibili}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      color="#FB7299"
+                      fontSize="18px"
+                      display="flex"
+                      alignItems="center"
+                      _hover={{ opacity: 0.8 }}
+                      cursor="pointer"
+                      onClick={(e: React.MouseEvent) => {
+                        e.preventDefault();
+                        openUrl(contributor.bilibili);
+                      }}
+                      title="Bilibili"
+                    >
+                      <RiBilibiliFill />
+                    </Box>
+                  )}
+                  {contributor.douyin && (
+                    <Box
+                      as="a"
+                      href={contributor.douyin}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      color={useColorModeValue("#111111", "#ffffff")}
+                      fontSize="18px"
+                      display="flex"
+                      alignItems="center"
+                      _hover={{ opacity: 0.8 }}
+                      cursor="pointer"
+                      onClick={(e: React.MouseEvent) => {
+                        e.preventDefault();
+                        openUrl(contributor.douyin);
+                      }}
+                      title="抖音"
+                    >
+                      <RiTiktokFill />
+                    </Box>
+                  )}
+                </Flex>
+              </VStack>
+            </Flex>
+          </LiquidGlassCard>
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 interface SponsorItem {
@@ -2242,6 +2434,113 @@ function SponsorSettings() {
           </Flex>
         )}
       </Box>
+    </Box>
+  );
+}
+
+function PawnioSettings() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
+  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const dividerColor = useColorModeValue("gray.200", "#333333");
+
+  const [status, setStatus] = useState<{ installed: boolean; version?: string } | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [installing, setInstalling] = useState(false);
+  const { isOpen: isPawnioModalOpen, onOpen: onPawnioModalOpen, onClose: onPawnioModalClose } = useDisclosure();
+
+  // 首次加载时检查状态
+  useEffect(() => {
+    setChecking(true);
+    invoke<{ installed: boolean; version?: string }>("check_pawnio_status")
+      .then(setStatus)
+      .catch(() => setStatus(null))
+      .finally(() => setChecking(false));
+  }, []);
+
+  const handleUninstall = async () => {
+    setInstalling(true);
+    try {
+      await invoke<string>("install_pawnio_driver"); // 先检测是否已安装（其实是 install 命令，可以用来获取状态）
+      await invoke("restart_monitor_process");
+      toast({ title: t("settings.pawnio.uninstalled", "已卸载"), status: "success", duration: 3000, isClosable: true });
+      setStatus({ installed: false });
+    } catch (e) {
+      toast({ title: t("settings.pawnio.error", "操作失败"), description: String(e), status: "error", duration: 3000, isClosable: true });
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  const handleRefreshStatus = () => {
+    setChecking(true);
+    invoke<{ installed: boolean; version?: string }>("check_pawnio_status")
+      .then(setStatus)
+      .catch(() => setStatus(null))
+      .finally(() => setChecking(false));
+  };
+
+  return (
+    <Box>
+      <Text fontSize="lg" fontWeight="bold" mb={6} color={titleColor}>
+        {t("settings.pawnio.title", "PawnIO 驱动管理")}
+      </Text>
+
+      <LiquidGlassCard px={4} py={4} boxShadow="sm">
+        <VStack spacing={3} align="stretch">
+          <HStack justify="space-between">
+            <Text fontSize="sm" color={labelColor} fontWeight="medium">
+              {t("settings.pawnio.status", "状态")}
+            </Text>
+            <Text fontSize="sm" color={subLabelColor}>
+              {checking
+                ? t("settings.pawnio.checking", "检查中...")
+                : status?.installed
+                  ? `${t("settings.pawnio.installed", "已安装")}${status.version ? ` v${status.version}` : ""}`
+                  : t("settings.pawnio.notInstalled", "未安装")}
+            </Text>
+          </HStack>
+
+          <Divider borderColor={dividerColor} />
+
+          <Text fontSize="xs" color={subLabelColor} lineHeight="1.5">
+            {t("settings.pawnio.description", "PawnIO 是一个可选的内核级驱动，安装后可以获取 CPU 温度、风扇转速等更详细的硬件信息。该驱动为可选组件，不安装不影响 NexBox 的其他功能。")}
+          </Text>
+
+          <Divider borderColor={dividerColor} />
+
+          <HStack spacing={3}>
+            {status?.installed ? (
+              <Button
+                size="sm"
+                colorScheme="blue"
+                onClick={handleRefreshStatus}
+                isLoading={checking}
+              >
+                {t("settings.pawnio.refresh", "刷新状态")}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                colorScheme="blue"
+                leftIcon={<Download size={14} />}
+                onClick={onPawnioModalOpen}
+              >
+                {t("settings.pawnio.install", "安装 PawnIO 驱动")}
+              </Button>
+            )}
+          </HStack>
+        </VStack>
+      </LiquidGlassCard>
+
+      {/* 安装对话框 */}
+      <PawnioInstallModal
+        isOpen={isPawnioModalOpen}
+        onClose={onPawnioModalClose}
+        onSuccess={handleRefreshStatus}
+      />
     </Box>
   );
 }
@@ -2898,8 +3197,10 @@ export default function SettingsPage() {
             >
               {activeItem === "general" && <GeneralSettings />}
               {activeItem === "appearance" && <AppearanceSettings />}
+              {activeItem === "pawnio" && <PawnioSettings />}
               {activeItem === "hotkeys" && <HotkeySettings />}
               {activeItem === "network" && <NetworkSettings />}
+              {activeItem === "contributor" && <ContributorSettings />}
               {activeItem === "sponsor" && <SponsorSettings />}
               {activeItem === "about" && <AboutSettings />}
             </motion.div>
@@ -2907,8 +3208,10 @@ export default function SettingsPage() {
             <div key={activeItem} style={{ position: 'relative', zIndex: 1 }}>
               {activeItem === "general" && <GeneralSettings />}
               {activeItem === "appearance" && <AppearanceSettings />}
+              {activeItem === "pawnio" && <PawnioSettings />}
               {activeItem === "hotkeys" && <HotkeySettings />}
               {activeItem === "network" && <NetworkSettings />}
+              {activeItem === "contributor" && <ContributorSettings />}
               {activeItem === "sponsor" && <SponsorSettings />}
               {activeItem === "about" && <AboutSettings />}
             </div>

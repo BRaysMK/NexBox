@@ -10,7 +10,7 @@
  * - 数值颜色渐变（绿→黄→红）
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -51,6 +51,8 @@ interface OverlaySettings {
   opacity: number;
   style: string;
   font: string;
+  font_size: number;
+  item_width: number;
   font_color: string;
   position_x?: number | null;
   position_y?: number | null;
@@ -138,7 +140,9 @@ const DEFAULT_SETTINGS: OverlaySettings = {
   custom_items: [],
   opacity: 200,
   style: "vertical_panel",
-  font: "Microsoft YaHei",
+  font: "MiSans",
+  font_size: 13,
+  item_width: 220,
   font_color: "#ffffff",
 };
 
@@ -231,6 +235,7 @@ function getValueColor(value: string, fallback: string = "#ffffff"): string {
 export default function VerticalOverlayPage() {
   const [hardwareData, setHardwareData] = useState<HardwareData | null>(null);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const win = getCurrentWindow();
 
@@ -263,6 +268,7 @@ export default function VerticalOverlayPage() {
       } catch {
         // 使用默认设置
       }
+      setSettingsLoaded(true);
     })();
   }, []);
 
@@ -293,18 +299,18 @@ export default function VerticalOverlayPage() {
     invoke("set_vertical_overlay_click_through", { enabled: true }).catch(() => {});
   }, []);
 
-  // 窗口大小自适应
-  useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        const height = containerRef.current.scrollHeight;
+  // 窗口大小自适应：每次渲染后同步调整，确保绘制前窗口尺寸正确
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // 用 requestAnimationFrame 确保 DOM 布局已稳定
+    requestAnimationFrame(() => {
+      const height = el.scrollHeight;
+      if (height > 0) {
         invoke("resize_vertical_overlay", { height }).catch(() => {});
       }
-    };
-    // 延迟以等待 DOM 渲染完成
-    const timer = setTimeout(updateSize, 100);
-    return () => clearTimeout(timer);
-  }, [settings.display_items, settings.custom_items, hardwareData]);
+    });
+  });
 
   // 计算启用的项
   const enabledItems = settings.display_items.filter((i) => i.enabled);
@@ -317,7 +323,7 @@ export default function VerticalOverlayPage() {
     <div
       ref={containerRef}
       style={{
-        width: "220px",
+        width: `${settings.item_width || 220}px`,
         background: `rgba(17, 17, 17, ${bgOpacity})`,
         borderRadius: "12px",
         padding: "10px 12px",
@@ -325,11 +331,12 @@ export default function VerticalOverlayPage() {
         flexDirection: "column",
         gap: "2px",
         fontFamily: settings.font || "Microsoft YaHei",
-        fontSize: "13px",
+        fontSize: `${settings.font_size || 13}px`,
         color: "#ffffff",
         userSelect: "none",
         WebkitUserSelect: "none",
         border: "none",
+        overflow: "hidden",
       }}
       onMouseDown={async (e) => {
         e.preventDefault();
@@ -344,6 +351,10 @@ export default function VerticalOverlayPage() {
         }
       }}
     >
+      {!settingsLoaded ? (
+        <div style={{ padding: "1px 0" }} />
+      ) : (
+        <>
       {/* 内置项列表 */}
       {enabledItems.map((item) => {
         const rawValue = getItemValue(item, hardwareData);
@@ -437,6 +448,8 @@ export default function VerticalOverlayPage() {
         <div style={{ textAlign: "center", padding: "12px 0", color: settings.font_color, opacity: 0.5 }}>
           请在设置中启用显示项
         </div>
+      )}
+        </>
       )}
     </div>
   );

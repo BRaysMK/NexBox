@@ -49,24 +49,65 @@
     "settings": "Settings",
     "gpuRename": "GPU Rename",
     "dlssPreset": "Delta Force DLSS Settings",
+    "steam": "Steam Manager",
     "epicFree": "Epic Free Games",
     "diskHealth": "Disk Health",
-"screenRecord": "Screen Record",
+    "screenRecord": "Screen Record",
     "audioEq": "EQ Tuner",
     "custom": "Custom"
   },
-"customPage": {
-"title": "Custom Dashboard",
-"addTool": "Add Tool",
-"emptyHint": "Click the add button to add your favorite tools",
-"searchTools": "Search tools...",
-"borderRadius": "Border Radius",
-"clearAll": "Clear All",
-"clearAllConfirm": "Are you sure you want to clear all cards?",
-"editMode": "Edit Mode",
-"enterEdit": "Edit Layout",
-"exitEdit": "Exit Edit"
-},
+  "customPage": {
+    "title": "Custom Dashboard",
+    "addTool": "Add Tool",
+    "emptyHint": "Click the add button to add your favorite tools",
+    "searchTools": "Search tools...",
+    "borderRadius": "Border Radius",
+    "clearAll": "Clear All",
+    "clearAllConfirm": "Are you sure you want to clear all cards?",
+    "editMode": "Edit Mode",
+    "enterEdit": "Edit Layout",
+    "exitEdit": "Exit Edit"
+  },
+  "steam": {
+    "loading": "Loading Steam data...",
+    "notInstalled": "Steam is not installed. Please install Steam client first.",
+    "running": "Running",
+    "notRunning": "Not Running",
+    "launchSteam": "Launch Steam",
+    "launchingSteam": "Launching...",
+    "currentUser": "Current User",
+    "remembered": "Password Saved",
+    "switchAccount": "Switch to this account",
+    "switchSuccess": "Switching account, Steam is restarting...",
+    "accounts": "Accounts",
+    "libraries": "Libraries",
+    "installedGames": "Installed Games",
+    "totalGames": "Total Games",
+    "totalSize": "Total Size",
+    "accountCount": "Accounts",
+    "installPath": "Install Path",
+    "searchGame": "Search games...",
+    "noGames": "No installed games",
+    "noSearchResults": "No matching games found",
+    "games": "games",
+    "launch": "Launch",
+"launching": "Launching...",
+"diskUsage": "Disk Usage",
+"free": "Free",
+    "openFolder": "Open Folder",
+    "storePage": "Store Page",
+    "uninstall": "Uninstall",
+    "uninstallTitle": "Confirm Uninstall",
+    "uninstallConfirm": "Are you sure you want to uninstall \"{{name}}\"? This will open the uninstall wizard in Steam.",
+    "uninstallSent": "Uninstall request sent to Steam",
+    "cancel": "Cancel",
+    "confirmUninstall": "Confirm Uninstall",
+    "fetchError": "Failed to fetch Steam data",
+    "refresh": "Refresh",
+    "debug": "Debug Info",
+    "noAccounts": "No saved Steam accounts found. Please login in Steam client and check \"Remember password\"",
+    "noLibraries": "No library folders found. Steam data may not be loaded"
+  },
   "optimization": {
     "pageTitle": "Optimize",
     "pageDesc": "System optimization and performance tools",
@@ -805,7 +846,8 @@
       "dot": "Dot",
       "circle": "Circle",
       "crossDot": "Cross+Dot",
-      "circleCross": "Circle+Cross"
+      "circleCross": "Circle+Cross",
+      "dotBox": "Dot+Box"
     }
   },
   "hardwareReport": {
@@ -1071,9 +1113,25 @@
   "settings": {
     "general": "General",
     "appearance": "Appearance",
+    "pawnio": {
+      "label": "PawnIO Driver",
+      "title": "PawnIO Driver Management",
+      "status": "Status",
+      "checking": "Checking...",
+      "installed": "Installed",
+      "notInstalled": "Not Installed",
+      "description": "PawnIO is an optional kernel-level driver that enables reading CPU temperature, fan speed, and other detailed hardware data. This driver is optional and NexBox works normally without it.",
+      "install": "Install PawnIO Driver",
+      "uninstall": "Uninstall Driver",
+      "refresh": "Refresh Status",
+      "uninstalled": "Uninstalled",
+      "error": "Operation failed",
+      "needsRestart": "Restart Required"
+    },
     "hotkeys": "Hotkeys",
     "network": "Network",
     "sponsor": "Sponsor",
+    "contributor": "Contributors",
     "navigation": "Navigation",
     "about": "About",
     "generalSettings": {
@@ -1081,13 +1139,13 @@
       "language": "Language",
       "languageLabel": "Language",
       "languages": {
-          "zh": "Simplified Chinese",
-          "zh-TW": "Traditional Chinese",
-          "en": "English",
-          "fr": "French",
-          "ja": "Japanese",
-          "de": "German"
-        },
+        "zh": "Simplified Chinese",
+        "zh-TW": "Traditional Chinese",
+        "en": "English",
+        "fr": "French",
+        "ja": "Japanese",
+        "de": "German"
+      },
       "homepage": "Homepage",
       "todayPopularityLabel": "Today's Popularity",
       "todayPopularityDesc": "Show today's popularity random number on homepage",
@@ -1128,7 +1186,8 @@
       "autoStartDesc": "Automatically launch NexBox when system starts",
       "autoStartEnabled": "Startup launch enabled",
       "autoStartDisabled": "Startup launch disabled",
-      "autoStartError": "Setting failed",
+      "autoStartError": "Auto-start setup failed",
+      "autoStartErrorHint": "Please check if antivirus is blocking, or try running as administrator",
       "closeBehavior": "Close Behavior",
       "closeBehaviorLabel": "When clicking close button",
       "closeBehaviorDesc": "Choose what happens when clicking the close button",
@@ -1249,6 +1308,12 @@
       "alipay": "Alipay",
       "thankYou": "Thank you for your support!",
       "placeholder": "Please add QR code image",
+      "contributors": {
+        "title": "Contributors",
+        "loading": "Loading...",
+        "error": "Failed to load",
+        "empty": "No contributors yet"
+      },
       "sponsorList": {
         "title": "Sponsors",
         "loading": "Loading...",
@@ -1729,4 +1794,3 @@
     "noImported": "No imported presets"
   }
 }
-

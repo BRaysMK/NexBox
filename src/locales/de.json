@@ -665,7 +665,8 @@
       "dot": "Punkt",
       "circle": "Kreis",
       "crossDot": "Kreuz+Punkt",
-      "circleCross": "Kreis+Kreuz"
+      "circleCross": "Kreis+Kreuz",
+      "dotBox": "Punkt+Rechteck"
     }
   },
   "hardwareReport": {
@@ -1018,7 +1019,8 @@
       "autoStartDesc": "NexBox automatisch beim Systemstart starten",
       "autoStartEnabled": "Autostart aktiviert",
       "autoStartDisabled": "Autostart deaktiviert",
-      "autoStartError": "Einstellung fehlgeschlagen",
+      "autoStartError": "Autostart-Einrichtung fehlgeschlagen",
+      "autoStartErrorHint": "Bitte prüfen Sie, ob Antivirus blockiert, oder versuchen Sie es als Administrator",
       "closeBehavior": "Schließverhalten",
       "closeBehaviorLabel": "Beim Klicken auf Schließen",
       "closeBehaviorDesc": "Wählen Sie, was beim Klicken auf den Schließen-Button passiert",

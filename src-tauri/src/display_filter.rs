@@ -322,13 +322,82 @@ impl Default for DisplayState {
 static DISPLAY_STATES: Mutex<Option<Vec<Mutex<DisplayState>>>> = Mutex::new(None);
 static ACTIVE_DISPLAY_INDEX: AtomicUsize = AtomicUsize::new(0);
 
+/// Build a `DisplayState` for a given display index, loading any persisted
+/// parameters/ICC from disk. `filter_active` is forced to `false` so we never
+/// auto-apply a filter just because the per-display state vector is (re)built.
+fn display_state_from_persisted(saved: &HashMap<usize, PersistentFilterState>, idx: usize) -> DisplayState {
+    let mut st = DisplayState::default();
+    if let Some(p) = saved.get(&idx) {
+        st.filter_active = false; // never auto-apply on (re)init
+        st.temperature = p.temperature;
+        st.brightness = p.brightness;
+        st.contrast = p.contrast;
+        st.saturation = p.saturation;
+        st.r_gamma = p.r_gamma;
+        st.g_gamma = p.g_gamma;
+        st.b_gamma = p.b_gamma;
+        st.mode = p.mode;
+        st.icc_active = p.icc_active;
+        st.active_icc_id = p.active_icc_id.clone();
+        st.icc_ramp = p.icc_ramp.as_ref().map(|r| {
+            let mut arr = [[0u16; 256]; 3];
+            for ch in 0..3.min(r.len()) {
+                for (i, &v) in r[ch].iter().enumerate().take(256) { arr[ch][i] = v; }
+            }
+            arr
+        });
+    }
+    st
+}
+
+/// Ensure the per-display state vector exists and matches the actual number of
+/// connected displays. Each display keeps its own independent filter state, so
+/// switching monitors must not collapse onto a shared state.
+///
+/// This is critical: the frontend may call `get_filter_settings` (which triggers
+/// this) before `get_displays` has populated `DISPLAY_DEVICES`. We therefore
+/// lazily enumerate displays here and (re)size the state vector to the real
+/// display count, preserving in-memory state for indexes that persist and only
+/// defaulting for newly-added indexes.
 fn ensure_display_states() {
+    // Lazily enumerate displays so we know how many per-display states to keep.
+    {
+        let dev_lock = DISPLAY_DEVICES.lock().unwrap();
+        if dev_lock.is_none() {
+            drop(dev_lock);
+            enumerate_displays_inner();
+        }
+    }
+
+    let count = {
+        let dev_lock = DISPLAY_DEVICES.lock().unwrap();
+        dev_lock.as_ref().map(|d| d.len()).unwrap_or(1).max(1)
+    };
+
     let mut lock = DISPLAY_STATES.lock().unwrap();
-    if lock.is_none() {
-        let count = if let Ok(dev_lock) = DISPLAY_DEVICES.lock() {
-            dev_lock.as_ref().map(|d| d.len()).unwrap_or(1)
-        } else { 1 };
-        *lock = Some((0..count).map(|_| Mutex::new(DisplayState::default())).collect());
+    match lock.as_mut() {
+        // Already sized correctly — nothing to do.
+        Some(states) if states.len() == count => {}
+        // Resize: keep existing in-memory state, default only new indexes.
+        Some(states) => {
+            if states.len() > count {
+                states.truncate(count);
+            } else {
+                let saved = load_all_filter_states();
+                while states.len() < count {
+                    let idx = states.len();
+                    states.push(Mutex::new(display_state_from_persisted(&saved, idx)));
+                }
+            }
+        }
+        // First init.
+        None => {
+            let saved = load_all_filter_states();
+            let states = (0..count)
+                .map(|idx| Mutex::new(display_state_from_persisted(&saved, idx)))
+                .collect::<Vec<_>>();
+            *lock = Some(states);
+        }
     }
 }
 

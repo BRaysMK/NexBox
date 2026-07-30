@@ -50,6 +50,7 @@ interface CrosshairSettings {
   dot_size: number;
   opacity: number;
   monitor_index: number;
+  monitor_device_name: string | null;
   use_custom_image: boolean;
   custom_image_path: string | null;
   offset_x: number;
@@ -90,6 +91,7 @@ const DEFAULT_SETTINGS: CrosshairSettings = {
   dot_size: 2,
   opacity: 255,
   monitor_index: -1,
+  monitor_device_name: null,
   use_custom_image: false,
   custom_image_path: null,
   offset_x: 0,
@@ -104,6 +106,7 @@ const STYLE_OPTIONS = [
   { id: "Circle", labelKey: "crosshair.styles.circle", icon: "\u25CB" },
   { id: "CrossDot", labelKey: "crosshair.styles.crossDot", icon: "\u271A" },
   { id: "CircleCross", labelKey: "crosshair.styles.circleCross", icon: "\u2295" },
+  { id: "DotBox", labelKey: "crosshair.styles.dotBox", icon: "\u25A3" },
 ];
 
 const COLOR_PRESETS = [
@@ -515,7 +518,10 @@ export default function CrosshairPage() {
               <Portal>
                 <MenuList bg={menuListBg} borderColor={cardBorder} maxH="300px" overflowY="auto" zIndex={9999}>
                   <MenuItem
-                    onClick={() => updateSetting("monitor_index", -1)}
+                    onClick={() => {
+                      const newSettings = { ...settings, monitor_index: -1, monitor_device_name: null };
+                      updateSettings(newSettings);
+                    }}
                     bg={settings.monitor_index === -1 ? hoverBg : "transparent"}
                     _hover={{ bg: hoverBg }}
                   >
@@ -527,7 +533,10 @@ export default function CrosshairPage() {
                   {displays.map((d) => (
                     <MenuItem
                       key={d.index}
-                      onClick={() => updateSetting("monitor_index", d.index)}
+                      onClick={() => {
+                        const newSettings = { ...settings, monitor_index: d.index, monitor_device_name: d.device_name };
+                        updateSettings(newSettings);
+                      }}
                       bg={settings.monitor_index === d.index ? hoverBg : "transparent"}
                       _hover={{ bg: hoverBg }}
                     >

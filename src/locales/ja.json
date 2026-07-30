@@ -708,7 +708,8 @@
       "dot": "ドット",
       "circle": "円",
       "crossDot": "十字+ドット",
-      "circleCross": "円+十字"
+      "circleCross": "円+十字",
+      "dotBox": "ドット+四角"
     }
   },
   "hardwareReport": {
@@ -1227,7 +1228,8 @@
       "autoStartDesc": "システム起動時にNexBoxを自動起動します",
       "autoStartEnabled": "自動起動が有効になりました",
       "autoStartDisabled": "自動起動が無効になりました",
-      "autoStartError": "設定に失敗しました",
+      "autoStartError": "自動起動の設定に失敗しました",
+      "autoStartErrorHint": "ウイルス対策ソフトがブロックしていないか確認するか、管理者として実行してください",
       "closeBehavior": "終了動作",
       "closeBehaviorLabel": "閉じるボタンを押した時",
       "closeBehaviorDesc": "閉じるボタンを押した時の動作を選択",

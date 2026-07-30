@@ -65,6 +65,8 @@ interface OverlaySettings {
   opacity: number;
   style: string;
   font: string;
+  font_size: number;
+  item_width: number;
   font_color: string;
   position_x?: number | null;
   position_y?: number | null;
@@ -126,6 +128,8 @@ const DEFAULT_SETTINGS: OverlaySettings = {
   opacity: 200,
   style: "default",
   font: "Microsoft YaHei",
+  font_size: 13,
+  item_width: 130,
   font_color: "#ffffff",
 };
 
@@ -958,6 +962,26 @@ export default function OverlayPanelPage() {
                 onChange={(val) => updateSetting("opacity", Math.round(val / 100 * 255))}
                 suffix="%"
               />
+              <SliderControl
+                label="大小"
+                value={settings.font_size}
+                min={10}
+                max={28}
+                step={1}
+                onChange={(val) => updateSetting("font_size", val)}
+                suffix="px"
+              />
+              {settings.style === "vertical_panel" && (
+                <SliderControl
+                  label="单行宽度"
+                  value={settings.item_width}
+                  min={140}
+                  max={400}
+                  step={5}
+                  onChange={(val) => updateSetting("item_width", val)}
+                  suffix="px"
+                />
+              )}
             </VStack>
           </HStack>
         </SettingCard>

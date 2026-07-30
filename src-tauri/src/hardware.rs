@@ -180,9 +180,36 @@ fn is_generic_monitor_name(name: &str) -> bool {
         || lower.contains("analog display")
 }
 
-/// Query real monitor model names from EDID via registry (shared cache, no PowerShell)
-fn query_edid_monitor_names() -> Vec<String> {
-    crate::display_cache::get_edid_monitor_names()
+/// 从 PNPDeviceID（如 "DISPLAY\DELA409\5&1f7..." 或 "MONITOR\DELA0A1A\..."）
+/// 中提取 PNP ID 部分（如 "DELA409"）。用于与注册表 EDID 键精确匹配型号。
+fn extract_pnpid(pnp_device_id: &str) -> Option<String> {
+    let s = pnp_device_id.trim();
+    // 取第一个反斜杠后的那段（DISPLAY 或 MONITOR 之后），再按反斜杠截断
+    let after_prefix = s.split('\\').nth(1)?;
+    let pnpid = after_prefix.split('\\').next().unwrap_or(after_prefix);
+    if pnpid.is_empty() {
+        None
+    } else {
+        Some(pnpid.to_uppercase())
+    }
+}
+
+/// 通过 EnumDisplayDevicesW 获取指定显示设备名（如 "\\.\DISPLAY1"）对应的
+/// PNP ID，用于在回退枚举路径中按设备 ID 匹配 EDID 型号。
+#[cfg(target_os = "windows")]
+fn get_pnpid_for_device(device_name: &str) -> Option<String> {
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayDevicesW, DISPLAY_DEVICEW};
+    use std::mem;
+    let device_name_wide: Vec<u16> = device_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut disp_device: DISPLAY_DEVICEW = unsafe { mem::zeroed() };
+    disp_device.cb = std::mem::size_of::<DISPLAY_DEVICEW>() as u32;
+    if unsafe { EnumDisplayDevicesW(device_name_wide.as_ptr(), 0, &mut disp_device, 0) } != 0 {
+        let device_id = String::from_utf16_lossy(
+            &disp_device.DeviceID[..disp_device.DeviceID.iter().position(|&c| c == 0).unwrap_or(disp_device.DeviceID.len())],
+        );
+        return extract_pnpid(&device_id);
+    }
+    None
 }
 
 /// 当 WMI 查询不到显示器时，使用 EnumDisplaySettingsW 枚举显示器作为回退。
@@ -190,7 +217,8 @@ fn query_edid_monitor_names() -> Vec<String> {
 fn fallback_enumerate_monitors() -> Vec<MonitorInfo> {
     use windows_sys::Win32::Graphics::Gdi::{EnumDisplaySettingsW, DEVMODEW, ENUM_CURRENT_SETTINGS};
 
-    let edid_names = crate::display_cache::get_edid_monitor_names();
+    // 按 PNP ID 匹配型号，避免按下标对齐时顺序颠倒导致型号错配。
+    let edid_map = crate::display_cache::get_edid_monitor_names_by_pnpid();
     let mut monitors = Vec::new();
 
     for i in 0..8 {
@@ -206,13 +234,14 @@ fn fallback_enumerate_monitors() -> Vec<MonitorInfo> {
                     let w = dm.dmPelsWidth;
                     let h = dm.dmPelsHeight;
                     if w > 0 && h > 0 {
-                        let mon_name = edid_names.get(i).cloned()
+                        // 通过 EnumDisplayDevicesW 获取该显示设备的 PNP ID，再匹配 EDID 型号
+                        let (mon_name, manufacturer) = match get_pnpid_for_device(&name)
+                            .as_ref()
+                            .and_then(|p| edid_map.get(p))
                             .filter(|n| !n.is_empty())
-                            .unwrap_or_else(|| format!("DISPLAY{}", i + 1));
-                        let manufacturer = if edid_names.get(i).map_or(false, |n| !n.is_empty()) {
-                            "".to_string()
-                        } else {
-                            "未知".to_string()
+                        {
+                            Some(edid_name) => (edid_name.clone(), "".to_string()),
+                            None => (format!("DISPLAY{}", i + 1), "未知".to_string()),
                         };
                         monitors.push(MonitorInfo {
                             name: mon_name,
@@ -590,16 +619,19 @@ fn get_gpus_from_lhml() -> Vec<GpuInfo> {
 
 fn get_gpu_info() -> Vec<GpuInfo> {
     // 1. 尝试用 NVML 获取 NVIDIA 显卡（最佳方案：提供完整信息包括驱动版本）
-    if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
-        if !nvml_gpus.is_empty() {
-            return nvml_gpus;
-        }
+    let nvml_result = std::panic::catch_unwind(|| get_nvidia_gpus_with_nvml());
+    match nvml_result {
+        Ok(Ok(gpus)) if !gpus.is_empty() => return gpus,
+        Ok(Ok(_)) | Ok(Err(_)) => {} // NVML 返回空或查询失败，继续下一方案
+        Err(_) => log::warn!("NVML 检测崩溃，已跳过"),
     }
 
     // 2. 尝试用 nvidia-smi（NVML 失败时的 NVIDIA 回退）
-    let smi_gpus = get_nvidia_gpus_with_smi();
-    if !smi_gpus.is_empty() {
-        return smi_gpus;
+    let smi_result = std::panic::catch_unwind(|| get_nvidia_gpus_with_smi());
+    match smi_result {
+        Ok(gpus) if !gpus.is_empty() => return gpus,
+        Ok(_) => {}
+        Err(_) => log::warn!("nvidia-smi 检测崩溃，已跳过"),
     }
 
     // 3. 通用 LHML 兜底（支持所有厂商：AMD / Intel / NVIDIA）
@@ -609,22 +641,30 @@ fn get_gpu_info() -> Vec<GpuInfo> {
 // 只获取GPU的动态数据（温度、占用）
 fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<f64>, Option<u32>)> {
     // 1. 尝试用 NVML
-    if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
-        if !nvml_gpus.is_empty() {
-            return nvml_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
+    let nvml_result = std::panic::catch_unwind(|| get_nvidia_gpus_with_nvml());
+    match nvml_result {
+        Ok(Ok(gpus)) if !gpus.is_empty() => {
+            return gpus.iter().map(|g| (g.temperature, g.usage)).collect();
         }
+        _ => {}
     }
 
     // 2. 尝试用 nvidia-smi
-    let smi_gpus = get_nvidia_gpus_with_smi();
-    if !smi_gpus.is_empty() {
-        return smi_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
+    let smi_result = std::panic::catch_unwind(|| get_nvidia_gpus_with_smi());
+    match smi_result {
+        Ok(gpus) if !gpus.is_empty() => {
+            return gpus.iter().map(|g| (g.temperature, g.usage)).collect();
+        }
+        _ => {}
     }
 
     // 3. LHML 通用兜底
-    let lhml_gpus = get_gpus_from_lhml();
-    if !lhml_gpus.is_empty() {
-        return lhml_gpus.iter().map(|g| (g.temperature, g.usage)).collect();
+    let lhml_result = std::panic::catch_unwind(|| get_gpus_from_lhml());
+    match lhml_result {
+        Ok(gpus) if !gpus.is_empty() => {
+            return gpus.iter().map(|g| (g.temperature, g.usage)).collect();
+        }
+        _ => {}
     }
 
     // 所有方案均失败，填充 None
@@ -866,27 +906,32 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
     });
 
     let gpu_handle = thread::spawn(move || {
-        let gpu = get_gpu_info();
-        gpu.into_iter().map(|g| GpuStaticInfo {
-            name: g.name,
-            vendor: g.vendor,
-            memory_gb: g.memory_gb,
-            driver_version: g.driver_version,
-            video_processor: g.video_processor,
-            adapter_compatibility: g.adapter_compatibility,
-            driver_date: g.driver_date,
-            installed_drivers: g.installed_drivers,
-            video_mode: g.video_mode,
-            resolution_width: g.resolution_width,
-            resolution_height: g.resolution_height,
-            refresh_rate: g.refresh_rate,
-            device_id: g.device_id,
-            pnp_device_id: g.pnp_device_id,
-            status: g.status,
-            inf_filename: g.inf_filename,
-            video_architecture: g.video_architecture,
-            video_memory_type: g.video_memory_type,
-        }).collect::<Vec<GpuStaticInfo>>()
+        std::panic::catch_unwind(|| {
+            let gpu = get_gpu_info();
+            gpu.into_iter().map(|g| GpuStaticInfo {
+                name: g.name,
+                vendor: g.vendor,
+                memory_gb: g.memory_gb,
+                driver_version: g.driver_version,
+                video_processor: g.video_processor,
+                adapter_compatibility: g.adapter_compatibility,
+                driver_date: g.driver_date,
+                installed_drivers: g.installed_drivers,
+                video_mode: g.video_mode,
+                resolution_width: g.resolution_width,
+                resolution_height: g.resolution_height,
+                refresh_rate: g.refresh_rate,
+                device_id: g.device_id,
+                pnp_device_id: g.pnp_device_id,
+                status: g.status,
+                inf_filename: g.inf_filename,
+                video_architecture: g.video_architecture,
+                video_memory_type: g.video_memory_type,
+            }).collect::<Vec<GpuStaticInfo>>()
+        }).unwrap_or_else(|_| {
+            log::error!("GPU 检测线程崩溃，已自动降级");
+            Vec::new()
+        })
     });
 
     let errors_mobo = errors.clone();
@@ -1156,22 +1201,23 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                     }
                 }).collect::<Vec<MonitorInfo>>();
 
-                // EDID 回退（通过注册表读取，无 PowerShell）：如果名称是通用的，替换为真实型号
+                // EDID 回退（通过注册表读取，无 PowerShell）：如果名称是通用的，替换为真实型号。
+                // 关键：按 PNP 设备 ID 匹配，而不是按数组下标——WMI 的枚举顺序与注册表
+                // EDID 枚举顺序并不一致，按下标对齐会把 A 显示器的型号错配到 B 显示器。
                 let has_generic = monitors.iter().any(|m| is_generic_monitor_name(&m.name));
                 if has_generic {
-                    log::info!("检测到通用显示器名称，从注册表 EDID 获取真实型号...");
-                    let edid_names = query_edid_monitor_names();
-                    if !edid_names.is_empty() {
-                        for (i, m) in monitors.iter_mut().enumerate() {
+                    log::info!("检测到通用显示器名称，从注册表 EDID 获取真实型号（按 PNP ID 匹配）...");
+                    let edid_map = crate::display_cache::get_edid_monitor_names_by_pnpid();
+                    if !edid_map.is_empty() {
+                        for m in monitors.iter_mut() {
                             if is_generic_monitor_name(&m.name) {
-                                if let Some(edid_name) = edid_names.get(i) {
-                                    if !edid_name.is_empty() {
-                                        log::info!("显示器[{}]: EDID 替换 '{}' -> '{}'", i, m.name, edid_name);
-                                        m.name = edid_name.clone();
+                                if let Some(pnpid) = extract_pnpid(&m.pnp_device_id) {
+                                    if let Some(edid_name) = edid_map.get(&pnpid) {
+                                        if !edid_name.is_empty() {
+                                            log::info!("显示器[PNP {}]: EDID 替换 '{}' -> '{}'", pnpid, m.name, edid_name);
+                                            m.name = edid_name.clone();
+                                        }
                                     }
-                                } else if edid_names.len() == 1 && !edid_names[0].is_empty() {
-                                    log::info!("显示器[{}]: EDID 替换(单结果) '{}' -> '{}'", i, m.name, edid_names[0]);
-                                    m.name = edid_names[0].clone();
                                 }
                             }
                         }
@@ -1349,8 +1395,9 @@ pub struct GpuStatus {
 pub async fn get_gpu_status(index: usize) -> Result<GpuStatus, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         // 1. NVML（NVIDIA 最佳方案）
-        if let Ok(nvml_gpus) = get_nvidia_gpus_with_nvml() {
-            if let Some(gpu) = nvml_gpus.get(index) {
+        let nvml_gpus = std::panic::catch_unwind(|| get_nvidia_gpus_with_nvml());
+        if let Ok(Ok(gpus)) = nvml_gpus {
+            if let Some(gpu) = gpus.get(index) {
                 return GpuStatus {
                     temperature: gpu.temperature,
                     usage: gpu.usage,

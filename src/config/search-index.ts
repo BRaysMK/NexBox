@@ -109,6 +109,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["epic", "喜加一", "免费", "游戏", "free", "games", "白嫖"],
   },
   {
+    id: "steam",
+    nameKey: "sidebar.steam",
+    path: "/steam",
+    icon: Gamepad2,
+    category: "page",
+    keywords: ["steam", "Steam管理", "游戏管理", "账户", "游戏库", "库", "已安装", "卸载"],
+  },
+  {
     id: "music",
     nameKey: "sidebar.music",
     path: "/music",

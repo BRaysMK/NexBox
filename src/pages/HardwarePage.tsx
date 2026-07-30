@@ -36,6 +36,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
+import { PawnioInstallModal } from "@/components/PawnioInstallModal";
 
 interface DisplayInfo {
   name: string;
@@ -370,6 +371,7 @@ export default function HardwarePage() {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { exportReport, isExporting } = useHardwareReportExport();
+  const { isOpen: isPawnioModalOpen, onOpen: onPawnioModalOpen, onClose: onPawnioModalClose } = useDisclosure();
   
   const cardBg = useColorModeValue("white", "#111111");
   const headingColor = useColorModeValue("gray.900", "#ffffff");
@@ -722,24 +724,7 @@ export default function HardwarePage() {
             variant="outline"
             colorScheme="blue"
             leftIcon={<Download size={15} />}
-            onClick={async () => {
-              try {
-                await invoke("run_pawnio_setup");
-                toast({
-                  title: "安装程序已启动",
-                  status: "success",
-                  duration: 3000,
-                  isClosable: true,
-                });
-              } catch (e) {
-                toast({
-                  title: typeof e === "string" ? e : "启动失败",
-                  status: "error",
-                  duration: 3000,
-                  isClosable: true,
-                });
-              }
-            }}
+            onClick={onPawnioModalOpen}
           >
             安装驱动（获取CPU温度）
           </Button>
@@ -1003,6 +988,12 @@ export default function HardwarePage() {
         icon={detailCard?.icon || Cpu}
         type={detailCard?.type || "cpu"}
         specs={detailCard?.specs || []}
+      />
+
+      {/* PawnIO 安装对话框 */}
+      <PawnioInstallModal
+        isOpen={isPawnioModalOpen}
+        onClose={onPawnioModalClose}
       />
     </Box>
   );

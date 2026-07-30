@@ -1,4 +1,4 @@
-import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast, Button, IconButton } from "@chakra-ui/react";
+import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast, Button, IconButton, useDisclosure } from "@chakra-ui/react";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock, Download, Settings } from "lucide-react";
@@ -20,6 +20,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { PawnioInstallModal } from "./PawnioInstallModal";
 
 export interface DisplayItem {
   id: string;
@@ -65,12 +66,14 @@ function SortableItem({
   enabledCount,
   disabled,
   onSettingsClick,
+  onInstallClick,
 }: {
   item: DisplayItem;
   onToggle: (id: string, enabled: boolean) => void;
   enabledCount: number;
   disabled?: boolean;
   onSettingsClick?: () => void;
+  onInstallClick?: () => void;
 }) {
   const textColor = useColorModeValue("gray.800", "#e0e0e0");
   const iconColor = useColorModeValue("gray.500", "#999999");
@@ -159,24 +162,7 @@ function SortableItem({
           borderColor={getActiveColor()}
           _hover={{ bg: hexToRgba(getActiveColor(), 0.1) }}
           leftIcon={<Download size={12} />}
-          onClick={async () => {
-            try {
-              await invoke("run_pawnio_setup");
-              toast({
-                title: "安装程序已启动",
-                status: "success",
-                duration: 3000,
-                isClosable: true,
-              });
-            } catch (e) {
-              toast({
-                title: typeof e === "string" ? e : "启动失败",
-                status: "error",
-                duration: 3000,
-                isClosable: true,
-              });
-            }
-          }}
+          onClick={onInstallClick}
           mr={1}
         >
           安装驱动
@@ -215,6 +201,7 @@ export function DraggableDisplayItems({
     })
   );
 
+  const { isOpen: isPawnioModalOpen, onOpen: onPawnioModalOpen, onClose: onPawnioModalClose } = useDisclosure();
   const enabledCount = items.filter((item) => item.enabled).length;
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -247,10 +234,17 @@ export function DraggableDisplayItems({
               enabledCount={enabledCount}
               disabled={disabledItems.includes(item.id)}
               onSettingsClick={item.id === "delta_password" ? onDeltaPasswordSettings : undefined}
+              onInstallClick={item.id === "cpu_temp" ? onPawnioModalOpen : undefined}
             />
           ))}
         </Box>
       </SortableContext>
+
+      {/* PawnIO 安装对话框 */}
+      <PawnioInstallModal
+        isOpen={isPawnioModalOpen}
+        onClose={onPawnioModalClose}
+      />
     </DndContext>
   );
 }

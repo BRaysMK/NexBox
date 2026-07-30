@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NexBoxMonitor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+02ef94bc24878e4a16fdd2be4041fc45da57d44b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a895a2b1e142bfa1c78d8b4d68907077a7306926")]
 [assembly: System.Reflection.AssemblyProductAttribute("NexBoxMonitor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NexBoxMonitor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

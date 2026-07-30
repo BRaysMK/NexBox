@@ -665,7 +665,8 @@
       "dot": "Point",
       "circle": "Cercle",
       "crossDot": "Croix+Point",
-      "circleCross": "Cercle+Croix"
+      "circleCross": "Cercle+Croix",
+      "dotBox": "Point+Rectangle"
     }
   },
   "hardwareReport": {
@@ -1018,7 +1019,8 @@
       "autoStartDesc": "Lancer NexBox automatiquement au démarrage du système",
       "autoStartEnabled": "Lancement au démarrage activé",
       "autoStartDisabled": "Lancement au démarrage désactivé",
-      "autoStartError": "Échec de la configuration",
+      "autoStartError": "Échec de la configuration du démarrage automatique",
+      "autoStartErrorHint": "Vérifiez si l'antivirus bloque, ou essayez d'exécuter en tant qu'administrateur",
       "closeBehavior": "Comportement de fermeture",
       "closeBehaviorLabel": "Lors du clic sur fermer",
       "closeBehaviorDesc": "Choisir l'action lors du clic sur le bouton fermer",

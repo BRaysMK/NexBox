@@ -34,14 +34,27 @@ class Program
                 IsPsuEnabled = false,
             };
 
-            try
+            // 将 Computer.Open() 放在单独线程中，设置 15 秒超时
+            // 【注意】这是安全网，不是核心修复
+            // 核心修复是确保 PawnIO 在 Open() 之前已安装
+            var openTask = Task.Run(() =>
             {
-                _computer.Open();
-                SafeAccept(_computer);
-            }
-            catch (Exception ex)
+                try
+                {
+                    _computer.Open();
+                    SafeAccept(_computer);
+                    Console.Error.WriteLine("[NexBoxMonitor] Computer.Open() 完成");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[NexBoxMonitor] 硬件初始化异常: {ex.GetType().Name}: {ex.Message}");
+                }
+            });
+
+            if (!openTask.Wait(TimeSpan.FromSeconds(15)))
             {
-                Console.Error.WriteLine($"[NexBoxMonitor] 硬件初始化异常: {ex.Message}");
+                Console.Error.WriteLine("[NexBoxMonitor] Computer.Open() 超时(15s)，PawnIO 可能在当前硬件上不兼容");
+                // 进程仍然存活，已初始化的硬件可正常读取
             }
 
             var input = Console.In;

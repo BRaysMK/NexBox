@@ -30,8 +30,10 @@ mod vertical_overlay;
 
 mod sensor;
 mod shader_cache;
+mod pawnio_driver;
 mod sponsor;
 mod startup_manager;
+mod steam;
 mod storage_clean;
 mod thirdparty_tools;
 mod tray;
@@ -396,7 +398,8 @@ pub fn run() {
         overlay_panel::get_overlay_current_settings,
         overlay_panel::check_drag_mode_status,
         overlay_panel::reset_overlay_position,
-        overlay_panel::run_pawnio_setup,
+        pawnio_driver::check_pawnio_status,
+        pawnio_driver::install_pawnio_driver,
 
         vertical_overlay::start_vertical_overlay,
         vertical_overlay::stop_vertical_overlay,
@@ -412,6 +415,7 @@ pub fn run() {
         sensor::get_lhm_cpu_load,
         sensor::get_lhm_cpu_status,
         sensor::get_lhm_gpu_status,
+        sensor::restart_monitor_process,
 
         game_ping::get_current_ping,
         hotkey::get_overlay_hotkey,
@@ -491,6 +495,24 @@ pub fn run() {
         cpu_scheduler::save_rule,
         cpu_scheduler::delete_rule,
         cpu_scheduler::apply_rule_by_name,
+
+        // === Steam 集成 ===
+        steam::get_steam_install_info,
+        steam::get_steam_users,
+        steam::get_steam_libraries,
+        steam::get_steam_games,
+        steam::get_steam_all_data,
+        steam::launch_steam_client,
+        steam::launch_steam_game,
+        steam::open_steam_store_page,
+        steam::open_game_folder,
+        steam::switch_steam_account,
+        steam::uninstall_steam_game,
+        steam::format_file_size,
+        steam::get_steam_stats,
+        steam::get_library_disk_info,
+        steam::steam_debug,
+        steam::get_steam_user_avatars,
 
     ])
         .build(tauri::generate_context!())

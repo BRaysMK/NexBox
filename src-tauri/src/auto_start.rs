@@ -3,7 +3,6 @@ use std::process::Command;
 
 const APP_NAME: &str = "NexBox";
 const TASK_NAME: &str = "NexBox";
-const REG_PATH: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 
 /// 执行命令（隐藏窗口）
 #[cfg(windows)]
@@ -30,7 +29,130 @@ fn get_startup_folder() -> Result<PathBuf, String> {
         .ok_or("无法获取启动文件夹路径".to_string())
 }
 
-// ========== 方案1：启动文件夹快捷方式（mslnk 纯 Rust） ==========
+// ========== 方案1：任务计划程序（主方案） ==========
+
+/// 创建任务计划：用户登录时启动 NexBox
+/// schtasks /create /tn "NexBox" /tr "\"path\"" /sc onlogon /f
+/// 注意：不指定 /rl highest，避免要求管理员权限
+#[cfg(windows)]
+fn create_scheduled_task(exe_path: &str) -> Result<(), String> {
+    let quoted_exe = format!("\"{}\"", exe_path);
+
+    let output = exec_hidden("schtasks", &[
+        "/create",
+        "/tn", TASK_NAME,
+        "/tr", &quoted_exe,
+        "/sc", "onlogon",
+        "/f",
+    ])?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("创建计划任务失败: {}", stderr.trim()));
+    }
+
+    log::info!("计划任务已创建: {} -> {}", TASK_NAME, exe_path);
+    Ok(())
+}
+
+/// 删除任务计划
+#[cfg(windows)]
+fn remove_scheduled_task() -> Result<(), String> {
+    let output = exec_hidden("schtasks", &[
+        "/delete",
+        "/tn", TASK_NAME,
+        "/f",
+    ])?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("不存在") || stderr.contains("cannot find") {
+            log::info!("计划任务不存在，跳过删除");
+            return Ok(());
+        }
+        return Err(format!("删除计划任务失败: {}", stderr.trim()));
+    }
+
+    log::info!("计划任务已删除: {}", TASK_NAME);
+    Ok(())
+}
+
+/// 检查任务计划是否存在
+#[cfg(windows)]
+fn check_scheduled_task() -> bool {
+    match exec_hidden("schtasks", &["/query", "/tn", TASK_NAME]) {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
+// ========== 方案2：注册表 Run 键（辅助方案，无需管理员权限） ==========
+
+/// 写入注册表 HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NexBox
+#[cfg(windows)]
+fn create_registry_run(exe_path: &str) -> Result<(), String> {
+    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run")
+        .map_err(|e| format!("打开注册表 Run 键失败: {}", e))?;
+
+    key.set_value(APP_NAME, &exe_path)
+        .map_err(|e| format!("写入注册表 Run 键失败: {}", e))?;
+
+    log::info!("注册表 Run 键已设置: {} = {}", APP_NAME, exe_path);
+    Ok(())
+}
+
+/// 删除注册表 Run 键中的 NexBox 条目
+#[cfg(windows)]
+fn remove_registry_run() -> Result<(), String> {
+    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+    let key = hkcu
+        .open_subkey_with_flags(
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            winreg::enums::KEY_SET_VALUE,
+        )
+        .map_err(|e| format!("打开注册表 Run 键失败: {}", e))?;
+
+    match key.delete_value(APP_NAME) {
+        Ok(()) => {
+            log::info!("注册表 Run 键已删除");
+            Ok(())
+        }
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {
+            log::info!("注册表 Run 键不存在，跳过删除");
+            Ok(())
+        }
+        Err(e) => Err(format!("删除注册表 Run 键失败: {}", e)),
+    }
+}
+
+/// 检查注册表 Run 键是否存在
+#[cfg(windows)]
+fn check_registry_run() -> bool {
+    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+    match hkcu.open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run") {
+        Ok(key) => {
+            match key.get_value::<String, _>(APP_NAME) {
+                Ok(val) => {
+                    if let Ok(current) = std::env::current_exe() {
+                        let current_path = current.to_string_lossy().replace("/", "\\");
+                        if val.replace("/", "\\") == current_path {
+                            return true;
+                        }
+                        log::info!("注册表 Run 键路径不匹配，将在下次设置时修正: {} vs {}", val, current_path);
+                        return true;
+                    }
+                    true
+                }
+                Err(_) => false,
+            }
+        }
+        Err(_) => false,
+    }
+}
+
+// ========== 方案3：启动文件夹快捷方式（备选方案，mslnk 纯 Rust） ==========
 
 #[cfg(windows)]
 fn create_startup_shortcut(exe_path: &str) -> Result<(), String> {
@@ -76,132 +198,102 @@ fn check_startup_shortcut() -> bool {
     false
 }
 
-// ========== 方案2：任务计划程序（绕过 UAC 限制） ==========
-
-/// 创建任务计划：登录时以最高权限启动 NexBox
-/// schtasks /create /tn "NexBox" /tr "\"path\"" /sc onlogon /rl highest /f
-#[cfg(windows)]
-fn create_scheduled_task(exe_path: &str) -> Result<(), String> {
-    let quoted_exe = format!("\"{}\"", exe_path);
-
-    let output = exec_hidden("schtasks", &[
-        "/create",
-        "/tn", TASK_NAME,
-        "/tr", &quoted_exe,
-        "/sc", "onlogon",
-        "/rl", "highest",
-        "/f",
-    ])?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("创建计划任务失败: {}", stderr.trim()));
-    }
-
-    log::info!("计划任务已创建: {} -> {}", TASK_NAME, exe_path);
-    Ok(())
-}
-
-/// 删除任务计划
-#[cfg(windows)]
-fn remove_scheduled_task() -> Result<(), String> {
-    let output = exec_hidden("schtasks", &[
-        "/delete",
-        "/tn", TASK_NAME,
-        "/f",
-    ])?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // 任务不存在也算成功
-        if stderr.contains("不存在") || stderr.contains("cannot find") {
-            log::info!("计划任务不存在，跳过删除");
-            return Ok(());
-        }
-        return Err(format!("删除计划任务失败: {}", stderr.trim()));
-    }
-
-    log::info!("计划任务已删除: {}", TASK_NAME);
-    Ok(())
-}
-
-/// 检查任务计划是否存在
-#[cfg(windows)]
-fn check_scheduled_task() -> bool {
-    match exec_hidden("schtasks", &["/query", "/tn", TASK_NAME]) {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
-    }
-}
-
-// ========== 清理旧注册表 Run 键 ==========
-
-/// 清理旧的注册表 Run 键（requireAdministrator 下无效，纯粹清理）
-#[cfg(windows)]
-fn cleanup_old_registry() {
-    let _ = exec_hidden("reg", &["delete", REG_PATH, "/v", APP_NAME, "/f"]);
-}
-
 // ========== Tauri Commands ==========
 
 #[tauri::command]
 pub async fn set_nexbox_auto_start(enable: bool) -> Result<(), String> {
     #[cfg(windows)]
     {
-        if enable {
-            let app_path = std::env::current_exe()
-                .map_err(|e| format!("获取程序路径失败: {}", e))?
-                .to_string_lossy()
-                .replace("/", "\\");
+        let app_path = std::env::current_exe()
+            .map_err(|e| format!("获取程序路径失败: {}", e))?
+            .to_string_lossy()
+            .replace("/", "\\");
 
+        if enable {
             log::info!("准备设置开机自启，程序路径: {}", app_path);
 
-            // 清理旧注册表（避免任务管理器残留无效项）
-            cleanup_old_registry();
+            let mut errors: Vec<String> = Vec::new();
 
-            // 方案1：任务计划程序（主方案，绕过 UAC 限制）
-            let task_result = create_scheduled_task(&app_path);
-            if let Err(e) = &task_result {
-                log::warn!("创建计划任务失败: {}", e);
+            // 方案1：任务计划程序（主方案）
+            match create_scheduled_task(&app_path) {
+                Ok(()) => {
+                    log::info!("计划任务创建成功（主方案）");
+                }
+                Err(e) => {
+                    log::warn!("计划任务创建失败: {}", e);
+                    errors.push(format!("计划任务: {}", e));
+                }
             }
 
-            // 方案2：启动文件夹快捷方式（辅助方案）
-            let shortcut_result = create_startup_shortcut(&app_path);
-            if let Err(e) = &shortcut_result {
-                log::warn!("创建启动文件夹快捷方式失败: {}", e);
+            // 方案2：注册表 Run 键（辅助方案，无需管理员权限）
+            match create_registry_run(&app_path) {
+                Ok(()) => {
+                    log::info!("注册表 Run 键设置成功（辅助方案）");
+                }
+                Err(e) => {
+                    log::warn!("注册表 Run 键设置失败: {}", e);
+                    errors.push(format!("注册表: {}", e));
+                }
             }
 
-            if task_result.is_err() && shortcut_result.is_err() {
-                return Err(format!(
-                    "开机自启设置失败：计划任务({})，快捷方式({})",
-                    task_result.unwrap_err(),
-                    shortcut_result.unwrap_err()
-                ));
+            // 方案3：启动文件夹快捷方式（备选方案）
+            match create_startup_shortcut(&app_path) {
+                Ok(()) => {
+                    log::info!("启动文件夹快捷方式创建成功（备选方案）");
+                }
+                Err(e) => {
+                    log::warn!("启动文件夹快捷方式创建失败: {}", e);
+                    errors.push(format!("快捷方式: {}", e));
+                }
             }
 
-            log::info!("开机自启设置成功（计划任务={}, 快捷方式={}）",
-                task_result.is_ok(), shortcut_result.is_ok());
-            Ok(())
+            if check_scheduled_task() || check_registry_run() || check_startup_shortcut() {
+                log::info!("开机自启设置成功（至少一种方案生效）");
+                return Ok(());
+            }
+
+            return Err(format!(
+                "开机自启设置失败，所有方案均未生效：{}",
+                errors.join("；")
+            ));
         } else {
-            let task_result = remove_scheduled_task();
-            if let Err(e) = &task_result {
-                log::warn!("删除计划任务失败: {}", e);
+            let mut errors: Vec<String> = Vec::new();
+
+            match remove_scheduled_task() {
+                Ok(()) => log::info!("计划任务已删除"),
+                Err(e) => {
+                    log::warn!("删除计划任务失败: {}", e);
+                    errors.push(e);
+                }
             }
 
-            let shortcut_result = remove_startup_shortcut();
-            if let Err(e) = &shortcut_result {
-                log::warn!("删除快捷方式失败: {}", e);
+            match remove_registry_run() {
+                Ok(()) => log::info!("注册表 Run 键已删除"),
+                Err(e) => {
+                    log::warn!("删除注册表 Run 键失败: {}", e);
+                    errors.push(e);
+                }
             }
 
-            // 同时清理旧注册表
-            cleanup_old_registry();
-
-            if task_result.is_err() && shortcut_result.is_err() {
-                return Err("关闭开机自启失败".to_string());
+            match remove_startup_shortcut() {
+                Ok(()) => log::info!("快捷方式已删除"),
+                Err(e) => {
+                    log::warn!("删除快捷方式失败: {}", e);
+                    errors.push(e);
+                }
             }
 
-            log::info!("开机自启已关闭");
-            Ok(())
+            if !check_scheduled_task() && !check_registry_run() && !check_startup_shortcut() {
+                log::info!("开机自启已完全关闭");
+                return Ok(());
+            }
+
+            if errors.is_empty() {
+                log::warn!("开机自启关闭不完整：仍有残留启动项");
+                return Err("部分启动项未能清除，请手动检查".to_string());
+            }
+
+            return Err(format!("关闭开机自启失败：{}", errors.join("；")));
         }
     }
 
@@ -217,12 +309,14 @@ pub async fn check_nexbox_auto_start() -> Result<bool, String> {
     #[cfg(windows)]
     {
         let task_exists = check_scheduled_task();
+        let reg_exists = check_registry_run();
         let shortcut_exists = check_startup_shortcut();
 
-        let enabled = task_exists || shortcut_exists;
+        let enabled = task_exists || reg_exists || shortcut_exists;
         log::debug!(
-            "开机自启状态检查：计划任务={}, 快捷方式={}, 最终={}",
+            "开机自启状态检查：计划任务={}, 注册表={}, 快捷方式={}, 最终={}",
             task_exists,
+            reg_exists,
             shortcut_exists,
             enabled
         );

@@ -45,6 +45,11 @@ pub async fn start_vertical_overlay(
         .get_webview_window("vertical-overlay")
         .ok_or("找不到 vertical-overlay 窗口")?;
 
+    // 先设置初始窗口大小，再显示，避免窗口以默认大尺寸闪一下
+    let init_width = settings.item_width as f64;
+    let init_height = 60.0_f64;
+    let _ = window.set_size(tauri::LogicalSize { width: init_width, height: init_height });
+
     // 恢复保存的位置或使用默认位置（屏幕右上角）
     if let (Some(x), Some(y)) = (settings.position_x, settings.position_y) {
         let _ = window.set_position(tauri::PhysicalPosition { x, y });
@@ -54,8 +59,7 @@ pub async fn start_vertical_overlay(
             if let Some(monitor) = monitor {
                 let screen_size = monitor.size();
                 let scale = monitor.scale_factor();
-                let win_w = 220.0 * scale;
-                let _win_h = 400.0 * scale;
+                let win_w = init_width * scale;
                 let x = (screen_size.width as f64 - win_w - 20.0 * scale) as i32;
                 let y = (20.0 * scale) as i32;
                 let _ = window.set_position(tauri::PhysicalPosition { x, y });
@@ -197,12 +201,11 @@ pub async fn resize_vertical_overlay(
     height: u32,
 ) -> Result<(), String> {
     if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
-        let scale = window
-            .scale_factor()
-            .unwrap_or(1.0);
+        let settings = crate::overlay_panel::get_or_init_settings();
+        let logical_width = settings.item_width as f64;
         let _ = window.set_size(tauri::LogicalSize {
-            width: 220.0,
-            height: height as f64 / scale,
+            width: logical_width,
+            height: height as f64,
         });
     }
     Ok(())

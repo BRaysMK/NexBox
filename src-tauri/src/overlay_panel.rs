@@ -27,6 +27,14 @@ fn default_font() -> String {
     "Microsoft YaHei".to_string()
 }
 
+fn default_font_size() -> u32 {
+    13
+}
+
+fn default_item_width() -> u32 {
+    130
+}
+
 fn default_font_color() -> String {
     "#ffffff".to_string()
 }
@@ -77,6 +85,10 @@ pub struct OverlaySettings {
     pub style: String,
     #[serde(default = "default_font")]
     pub font: String,
+    #[serde(default = "default_font_size")]
+    pub font_size: u32,
+    #[serde(default = "default_item_width")]
+    pub item_width: u32,
     #[serde(default = "default_font_color")]
     pub font_color: String,
     #[serde(default)]
@@ -95,7 +107,9 @@ impl Default for OverlaySettings {
             custom_items: Vec::new(),
             opacity: 255,
             style: "default".to_string(),
-            font: "Microsoft YaHei".to_string(),
+            font: "MiSans".to_string(),
+            font_size: 13,
+            item_width: 130,
             font_color: "#ffffff".to_string(),
             position_x: None,
             position_y: None,
@@ -721,12 +735,14 @@ mod win32 {
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
     use windows_sys::Win32::UI::Accessibility::*;
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use std::path::PathBuf;
     use std::ptr;
     use std::sync::Mutex;
     use std::result::Result::Ok;
 
     static GDIPLUS_TOKEN: Mutex<Option<usize>> = Mutex::new(None);
     static WIN_EVENT_HOOK: Mutex<Option<usize>> = Mutex::new(None);
+    static FONT_PATH: Mutex<Option<String>> = Mutex::new(None);
 
     unsafe extern "system" fn win_event_proc(
         _h_win_event_hook: *mut std::ffi::c_void,
@@ -777,6 +793,67 @@ mod win32 {
         }
     }
 
+    fn find_misans_font_path() -> Option<PathBuf> {
+        let font_name = "MiSansVF.ttf";
+        // 1. 通过 exe 路径查找
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(parent) = exe_path.parent() {
+                let candidates = [
+                    parent.join("Fonts").join(font_name),
+                    parent.join("fonts").join(font_name),
+                    parent.join("..").join("Fonts").join(font_name),
+                    parent.join("..").join("..").join("Fonts").join(font_name),
+                    parent.join("..").join("..").join("..").join("Fonts").join(font_name),
+                ];
+                for path in &candidates {
+                    if path.exists() {
+                        return Some(path.canonicalize().unwrap_or_else(|_| path.clone()));
+                    }
+                }
+            }
+        }
+        // 2. 编译时路径（开发环境）
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let candidates = [
+            manifest_dir.join("..").join("Fonts").join(font_name),
+            manifest_dir.join("..").join("public").join("fonts").join(font_name),
+        ];
+        for path in &candidates {
+            if path.exists() {
+                return Some(path.canonicalize().unwrap_or_else(|_| path.clone()));
+            }
+        }
+        None
+    }
+
+    pub unsafe fn load_misans_font() {
+        if let Some(path) = find_misans_font_path() {
+            let path_str = path.to_string_lossy().to_string();
+            let wide: Vec<u16> = path_str.encode_utf16().chain(std::iter::once(0)).collect();
+            let result = AddFontResourceExW(wide.as_ptr(), FR_PRIVATE, ptr::null_mut());
+            if result > 0 {
+                if let Ok(mut lock) = FONT_PATH.lock() {
+                    *lock = Some(path_str.clone());
+                }
+                log::info!("overlay: 已加载字体: {}", path_str);
+            } else {
+                log::warn!("overlay: 加载字体失败: {} (error: {})", path_str, GetLastError());
+            }
+        } else {
+            log::info!("overlay: 未找到 MiSansVF.ttf 字体文件，使用系统默认字体");
+        }
+    }
+
+    pub unsafe fn unload_misans_font() {
+        if let Ok(mut lock) = FONT_PATH.lock() {
+            if let Some(path) = lock.take() {
+                let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+                RemoveFontResourceExW(wide.as_ptr(), FR_PRIVATE, ptr::null_mut());
+                log::info!("overlay: 已卸载 MiSans 字体");
+            }
+        }
+    }
+
     pub unsafe fn init_gdiplus() -> bool {
         let mut token = GDIPLUS_TOKEN.lock().unwrap();
         if token.is_some() {
@@ -795,6 +872,8 @@ mod win32 {
 
         if result == 0 {
             *token = Some(token_value);
+            // 加载 MiSans 字体供 GDI 渲染使用
+            load_misans_font();
             true
         } else {
             log::error!("GDI+ 初始化失败: {}", result);
@@ -806,12 +885,13 @@ mod win32 {
         let mut token = GDIPLUS_TOKEN.lock().unwrap();
         if let Some(t) = token.take() {
             GdiplusShutdown(t);
+            unload_misans_font();
         }
     }
 
     fn calculate_window_width(settings: &super::OverlaySettings) -> i32 {
-        // 使用较小的单项宽度以缩小悬浮框
-        let normal_item_width = 130;
+        // 使用可配置的单项宽度
+        let normal_item_width = settings.item_width as i32;
         // 默认密码项宽度（逻辑像素）
         let mut password_item_width = 220;
         if settings.display_items.iter().any(|item| item.id == "delta_password" && item.enabled) {
@@ -824,7 +904,7 @@ mod win32 {
                             if !screen_dc.is_null() {
                                 let dpi_x = GetDeviceCaps(screen_dc, 88);
                                 let dpi_scale = dpi_x as f32 / 96.0;
-                                let hfont = create_compatible_font(dpi_scale, &settings.font);
+                                let hfont = create_compatible_font(dpi_scale, &settings.font, settings.font_size);
                                 if !hfont.is_null() {
                                     let val_w = measure_text_width(screen_dc, hfont, pwd);
                                     let est = val_w + (12.0 * dpi_scale) as i32 + 20;
@@ -909,7 +989,8 @@ mod win32 {
         let dpi_scale = dpi_x as f32 / 96.0;
 
         let logical_width = calculate_window_width(settings);
-        let logical_height = if settings.style == "dynamic_island" { 36 } else { 28 };
+        let base_height = if settings.style == "dynamic_island" { 36 } else { 28 };
+        let logical_height = base_height + (settings.font_size.saturating_sub(13) * 2) as i32;
         let physical_width = (logical_width as f32 * dpi_scale) as i32;
         let physical_height = (logical_height as f32 * dpi_scale) as i32;
 
@@ -956,8 +1037,8 @@ mod win32 {
         DestroyWindow(hwnd) != 0
     }
 
-    unsafe fn create_compatible_font(dpi_scale: f32, font_name: &str) -> HFONT {
-        let font_height = -(13.0 * dpi_scale).round() as i32;
+    unsafe fn create_compatible_font(dpi_scale: f32, font_name: &str, font_size: u32) -> HFONT {
+        let font_height = -((font_size as f32) * dpi_scale).round() as i32;
         let wide_name: Vec<u16> = font_name.encode_utf16().chain(std::iter::once(0)).collect();
         CreateFontW(
             font_height,
@@ -1199,7 +1280,7 @@ mod win32 {
             dpi as f32 / 96.0
         };
 
-        let hfont = create_compatible_font(dpi_scale, &settings.font);
+        let hfont = create_compatible_font(dpi_scale, &settings.font, settings.font_size);
         if hfont.is_null() {
             return;
         }
@@ -1213,7 +1294,7 @@ mod win32 {
         ReleaseDC(ptr::null_mut(), temp_dc);
         let sep_count = if items.len() > 1 { items.len() as i32 - 1 } else { 0 };
         let total_content_width = content_width + sep_count * item_gap + padding * 2;
-        let logical_height = 28;
+        let logical_height = 28 + (settings.font_size.saturating_sub(13) * 2) as i32;
         let physical_height = (logical_height as f32 * dpi_scale) as i32;
 
         let dib_width = total_content_width;
@@ -1409,7 +1490,7 @@ mod win32 {
             dpi as f32 / 96.0
         };
 
-        let hfont = create_compatible_font(dpi_scale, &settings.font);
+        let hfont = create_compatible_font(dpi_scale, &settings.font, settings.font_size);
         if hfont.is_null() {
             return;
         }
@@ -1424,7 +1505,7 @@ mod win32 {
         ReleaseDC(ptr::null_mut(), temp_dc);
         let sep_count = if items.len() > 1 { items.len() as i32 - 1 } else { 0 };
         let total_content_width = content_width + sep_count * item_gap + padding * 2;
-        let logical_height = 36;
+        let logical_height = 36 + (settings.font_size.saturating_sub(13) * 2) as i32;
         let physical_height = (logical_height as f32 * dpi_scale) as i32;
 
         let dib_width = total_content_width;
@@ -2273,32 +2354,4 @@ pub fn cleanup() {
         win32::shutdown_gdiplus();
     }
 }
-
-#[tauri::command]
-pub async fn run_pawnio_setup() -> Result<String, String> {
-    let exe_dir = std::env::current_exe()
-        .map_err(|e| format!("获取程序路径失败: {}", e))?;
-    let parent_dir = exe_dir.parent().ok_or("无法获取父目录")?;
-
-    let candidates = [
-        parent_dir.join("PawnIO_setup.exe"),
-        parent_dir.join("_up_").join("PawnIO_setup.exe"),
-        parent_dir.join("resources").join("PawnIO_setup.exe"),
-    ];
-
-    for path in &candidates {
-        if path.exists() {
-            match std::process::Command::new(path).spawn() {
-                Ok(_) => return Ok("安装程序已启动".to_string()),
-                Err(e) => return Err(format!("启动安装程序失败: {}", e)),
-            }
-        }
-    }
-
-    Err("未找到 PawnIO_setup.exe，请确保已将其放在程序目录下".to_string())
-}
-
-
-
-
 

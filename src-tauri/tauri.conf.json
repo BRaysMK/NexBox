@@ -125,6 +125,7 @@
       "resources/binaries/fxvad/presets/*",
       "resources/binaries/PresentMon-2.5.1-x64.exe",
       "resources/binaries/icc-tools/*",
+      "resources/binaries/PawnIO_setup.exe",
       "resources/crosshair-presets/*",
       "resources/icc-presets/*"
     ],
