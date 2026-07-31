@@ -268,6 +268,9 @@ pub fn run() {
         music_api::music_open_login_window,
         // === 酷狗音乐 API ===
         music_api::kugou_search,
+        music_api::kugou_artist_search,
+        music_api::kugou_playlist_search,
+        music_api::kugou_artist_songs,
         music_api::kugou_song_url,
         music_api::kugou_lyric,
         music_api::kugou_login_status,

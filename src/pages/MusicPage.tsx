@@ -2198,14 +2198,15 @@ export default function MusicPage() {
     setViewMode("artistDetail");
     // 歌手可能没有头像（从歌曲卡片进入时），异步搜索补齐
     if (!patched.pic_url && patched.name) {
-      invoke<Artist[]>("music_artist_search", { keywords: patched.name, limit: 10 }).then((results) => {
+      const cmd = playbackSource === "kugou" ? "kugou_artist_search" : "music_artist_search";
+      invoke<Artist[]>(cmd, { keywords: patched.name, limit: 10 }).then((results) => {
         const match = results.find((a) => a.id === artist.id || a.name === artist.name);
         if (match?.pic_url) {
           useMusicStore.setState({ selectedArtist: { ...patched, pic_url: match.pic_url } });
         }
       }).catch(() => {});
     }
-  }, [storeActions, viewMode]);
+  }, [storeActions, viewMode, playbackSource]);
 
 // ── 我的歌单点击：在左侧面板切换到曲目视图 ──
 const handlePlaylistClick = useCallback((pl: Playlist) => {
@@ -2239,7 +2240,8 @@ setRightPanelView("tracks");
     setSearchExpandedTracks([]);
     setSearchLoadingExpanded(true);
     try {
-      const result = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id: pl.id });
+      const cmd = pl.provider === "kugou" ? "kugou_playlist_tracks" : "music_playlist_tracks";
+      const result = await invoke<[Playlist, Song[]]>(cmd, { id: pl.id });
       setSearchExpandedTracks(result[1]);
     } catch {
       setSearchExpandedTracks([]);
@@ -2334,7 +2336,7 @@ setRightPanelView("tracks");
           {pl.track_count} 首 {pl.creator ? `· ${pl.creator}` : ""}
         </Text>
       </VStack>
-      {loginInfo?.logged_in && !isOwnPlaylist(pl) && (
+      {loginInfo?.logged_in && pl.provider !== "kugou" && !isOwnPlaylist(pl) && (
         <IconButton
           aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
           icon={<Heart size={16} fill={pl.subscribed ? "#e53e3e" : "none"} />}
@@ -2673,7 +2675,7 @@ setRightPanelView("tracks");
                               {pl.track_count} 首 {pl.creator ? `· ${pl.creator}` : ""}
                             </Text>
                           </VStack>
-                          {loginInfo?.logged_in && (
+                          {loginInfo?.logged_in && pl.provider !== "kugou" && (
                             <IconButton
                               aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
                               icon={<Heart size={14} fill={pl.subscribed ? "#e53e3e" : "none"} />}

@@ -53,6 +53,8 @@ fn get_stream_client() -> &'static reqwest::Client {
 fn referer_for(url: &str) -> &'static str {
     if url.contains("qq.com") || url.contains("qpic.cn") {
         "https://y.qq.com/"
+    } else if url.contains("kugou.com") {
+        "https://www.kugou.com/"
     } else {
         "https://music.163.com/"
     }

@@ -714,6 +714,57 @@ fn kugou_cover_url(raw: &str, size: u32) -> String {
     url.replace("{size}", &size.to_string())
 }
 
+fn value_as_string(value: Option<&Value>) -> String {
+    match value {
+        Some(Value::String(s)) => s.trim().to_string(),
+        Some(Value::Number(n)) => n.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn first_string(item: &Value, keys: &[&str]) -> String {
+    for key in keys {
+        let text = value_as_string(item.get(*key));
+        if !text.is_empty() {
+            return text;
+        }
+    }
+    String::new()
+}
+
+fn first_u64(item: &Value, keys: &[&str]) -> u64 {
+    for key in keys {
+        if let Some(value) = item.get(*key) {
+            if let Some(n) = value.as_u64() {
+                return n;
+            }
+            if let Some(n) = value.as_i64() {
+                if n > 0 {
+                    return n as u64;
+                }
+            }
+            if let Some(s) = value.as_str() {
+                if let Ok(n) = s.trim().parse::<u64>() {
+                    return n;
+                }
+            }
+        }
+    }
+    0
+}
+
+fn split_artist_title(raw: &str) -> (String, String) {
+    let text = strip_html(raw);
+    if let Some((artist, title)) = text.split_once(" - ") {
+        let artist = artist.trim();
+        let title = title.trim();
+        if !artist.is_empty() && !title.is_empty() {
+            return (artist.to_string(), title.to_string());
+        }
+    }
+    (String::new(), text)
+}
+
 fn resolve_album_audio_id(params: &Value) -> String {
     let candidates = ["mixSongId", "mixsongid", "albumAudioId", "album_audio_id"];
     for key in &candidates {
@@ -828,8 +879,50 @@ fn map_artists(item: &Value) -> Vec<Artist> {
 }
 
 /// 将酷狗搜索结果映射到统一 Song 结构 (对照 mapKugouSearchItem)
+fn map_kugou_artists(item: &Value) -> Vec<Artist> {
+    let singers = item
+        .get("Singers")
+        .and_then(|v| v.as_array())
+        .or_else(|| item.get("authors").and_then(|v| v.as_array()))
+        .or_else(|| item.get("singerinfo").and_then(|v| v.as_array()));
+    if let Some(singers) = singers {
+        let artists: Vec<Artist> = singers
+            .iter()
+            .map(|s| {
+                let id = first_string(s, &["id", "SingerId", "author_id", "singerid"]);
+                Artist {
+                    id: if id.is_empty() { None } else { Some(id) },
+                    name: strip_html(&first_string(s, &["name", "SingerName", "author_name", "singername"])),
+                    ..Default::default()
+                }
+            })
+            .filter(|a| !a.name.is_empty())
+            .collect();
+        if !artists.is_empty() {
+            return artists;
+        }
+    }
+
+    let singer_name = first_string(item, &["SingerName", "singername", "author_name", "singer"]);
+    let ids = item.get("SingerId").and_then(|v| v.as_array());
+    singer_name
+        .split(|c| c == '/' || c == ',' || c == '\u{3001}')
+        .map(|s| strip_html(s))
+        .filter(|s| !s.is_empty())
+        .enumerate()
+        .map(|(i, name)| Artist {
+            id: ids
+                .and_then(|arr| arr.get(i))
+                .map(|v| value_as_string(Some(v)))
+                .filter(|s| !s.is_empty()),
+            name,
+            ..Default::default()
+        })
+        .collect()
+}
+
 fn map_search_item(item: &Value) -> Song {
-    let artists = map_artists(item);
+    let artists = map_kugou_artists(item);
     let hash = item.get("FileHash").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
     let album_id = item.get("AlbumID").map(|v| match v {
         Value::String(s) => s.clone(),
@@ -911,11 +1004,12 @@ fn map_search_item(item: &Value) -> Song {
 fn map_playlist_track(item: &Value) -> Song {
     let singers = item.get("singerinfo")
         .and_then(|v| v.as_array())
-        .or_else(|| item.get("Singers").and_then(|v| v.as_array()));
+        .or_else(|| item.get("Singers").and_then(|v| v.as_array()))
+        .or_else(|| item.get("authors").and_then(|v| v.as_array()));
     let artist_label = singers
         .map(|arr| {
             arr.iter()
-                .filter_map(|s| s.get("name").or_else(|| s.get("SingerName")).and_then(|v| v.as_str()))
+                .map(|s| first_string(s, &["name", "SingerName", "author_name", "singername"]))
                 .filter(|s| !s.is_empty())
                 .collect::<Vec<_>>()
                 .join(" / ")
@@ -947,27 +1041,53 @@ fn map_playlist_track(item: &Value) -> Song {
         .map(|v| match v { Value::String(s) => s.clone(), Value::Number(n) => n.to_string(), _ => String::new() })
         .unwrap_or_default();
 
-    let name_raw = item.get("name")
-        .or_else(|| item.get("SongName"))
-        .or_else(|| item.get("filename"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let explicit_name = first_string(item, &["name", "SongName", "songname", "audio_name"]);
+    let filename = first_string(item, &["filename", "FileName"]);
+    let (filename_artist, filename_title) = split_artist_title(&filename);
+    let name_raw = if !explicit_name.is_empty() {
+        explicit_name
+    } else if !filename_title.is_empty() {
+        filename_title
+    } else {
+        filename
+    };
+    let singer_name = {
+        let direct = first_string(item, &["SingerName", "singername", "author_name", "singer"]);
+        if !direct.is_empty() {
+            direct
+        } else if !artist_label.is_empty() {
+            artist_label.clone()
+        } else {
+            filename_artist
+        }
+    };
+    let duration_secs = {
+        let duration = first_u64(item, &["duration", "Duration"]);
+        if duration > 1000 {
+            duration / 1000
+        } else if duration > 0 {
+            duration
+        } else {
+            first_u64(item, &["timelen", "timelength", "duration_ms"]) / 1000
+        }
+    };
 
     // 构建一个合并的 item 用于 map_search_item
     let merged = json!({
         "FileHash": hash,
         "SongName": name_raw,
-        "SingerName": item.get("SingerName").and_then(|v| v.as_str()).unwrap_or(&artist_label),
+        "SingerName": singer_name,
         "Singers": singers,
         "AlbumID": album_id,
         "MixSongID": mix_song_id,
         "EMixSongID": if album_audio_id.chars().all(|c| c.is_ascii_digit()) && !album_audio_id.is_empty() { album_audio_id.clone() } else { String::new() },
         "AlbumName": item.get("albuminfo").and_then(|a| a.get("name")).or_else(|| item.get("album_name")).or_else(|| item.get("AlbumName")).and_then(|v| v.as_str()).unwrap_or(""),
         "Image": item.get("cover").or_else(|| item.get("img")).or_else(|| item.get("Image")).or_else(|| item.get("trans_param").and_then(|t| t.get("union_cover"))),
-        "Duration": item.get("duration").and_then(|v| v.as_u64()).unwrap_or_else(|| {
-            item.get("timelen").and_then(|v| v.as_u64()).map(|t| t / 1000).unwrap_or(0)
-        }),
+        "Duration": duration_secs,
         "Privilege": item.get("media_privilege").or_else(|| item.get("privilege")).or_else(|| item.get("Privilege")),
+        "HQFileHash": first_string(item, &["HQFileHash", "320hash", "hash_320"]),
+        "SQFileHash": first_string(item, &["SQFileHash", "sqhash", "hash_flac", "hash_sq"]),
+        "ResFileHash": first_string(item, &["ResFileHash", "hash_high", "hash_super"]),
     });
 
     let mut mapped = map_search_item(&merged);
@@ -985,6 +1105,8 @@ fn map_playlist_track(item: &Value) -> Song {
 
 fn map_playlist_item(item: &Value) -> Playlist {
     let id = item.get("global_collection_id")
+        .or_else(|| item.get("global_specialid"))
+        .or_else(|| item.get("gid"))
         .or_else(|| item.get("specialid"))
         .or_else(|| item.get("listid"))
         .or_else(|| item.get("list_id"))
@@ -997,6 +1119,7 @@ fn map_playlist_item(item: &Value) -> Playlist {
         .or_else(|| item.get("imgurl"))
         .or_else(|| item.get("sizable_cover"))
         .or_else(|| item.get("create_user_pic"))
+        .or_else(|| item.get("user_avatar"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
@@ -1005,7 +1128,7 @@ fn map_playlist_item(item: &Value) -> Playlist {
         id,
         name: strip_html(item.get("name").or_else(|| item.get("listname")).or_else(|| item.get("specialname")).or_else(|| item.get("title")).and_then(|v| v.as_str()).unwrap_or("酷狗歌单")),
         cover: kugou_cover_url(cover_raw, 240),
-        track_count: item.get("count").or_else(|| item.get("m_count")).or_else(|| item.get("song_count")).or_else(|| item.get("total")).or_else(|| item.get("list_count")).and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+        track_count: item.get("count").or_else(|| item.get("m_count")).or_else(|| item.get("song_count")).or_else(|| item.get("songcount")).or_else(|| item.get("total")).or_else(|| item.get("list_count")).and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         creator: strip_html(item.get("nickname").or_else(|| item.get("username")).or_else(|| item.get("user_name")).or_else(|| item.get("list_create_username")).and_then(|v| v.as_str()).unwrap_or("")),
         subscribed: false,
     }
@@ -1060,6 +1183,205 @@ fn parse_kugou_list_id(playlist_id: &str) -> String {
 // ============================================================
 
 /// 搜索歌曲 (对照 kugouSearch)
+fn public_special_id_from_playlist_id(playlist_id: &str) -> String {
+    let id = playlist_id.trim();
+    if let Some(rest) = id.strip_prefix("special_") {
+        return rest.trim().to_string();
+    }
+    if id.chars().all(|c| c.is_ascii_digit()) {
+        return id.to_string();
+    }
+    String::new()
+}
+
+fn public_special_id_from_item(item: &Value) -> String {
+    first_string(item, &["specialid", "collection_id"])
+}
+
+fn extract_mobile_list(json: &Value) -> Vec<Value> {
+    if let Some(arr) = json.get("data").and_then(|v| v.as_array()) {
+        return arr.clone();
+    }
+    if let Some(arr) = json
+        .get("data")
+        .and_then(|d| d.get("info"))
+        .and_then(|v| v.as_array())
+    {
+        return arr.clone();
+    }
+    Vec::new()
+}
+
+fn map_singer_item(item: &Value) -> Artist {
+    let id = first_string(item, &["singerid", "SingerId", "id"]);
+    let pic = first_string(item, &["imgurl", "sizable_avatar", "avatar", "pic", "image"]);
+    let size = first_u64(item, &["songcount", "song_count", "music_size"]);
+    Artist {
+        id: if id.is_empty() { None } else { Some(id) },
+        name: strip_html(&first_string(item, &["singername", "SingerName", "name"])),
+        pic_url: if pic.is_empty() { None } else { Some(kugou_cover_url(&pic, 240)) },
+        music_size: if size == 0 { None } else { Some(size as i64) },
+        ..Default::default()
+    }
+}
+
+/// 通过歌手详情接口获取头像 (搜索接口不返回头像字段)
+async fn singer_avatar(singer_id: &str, cookie: &str) -> String {
+    if singer_id.is_empty() {
+        return String::new();
+    }
+    let mut url = match url::Url::parse(&format!("{}/api/v3/singer/info", KUGOU_MOBILE_CDN)) {
+        Ok(u) => u,
+        Err(_) => return String::new(),
+    };
+    url.query_pairs_mut()
+        .append_pair("format", "json")
+        .append_pair("singerid", singer_id);
+
+    let cookie_header = build_request_cookie(cookie);
+    let json = match request_json(
+        url.as_str(),
+        reqwest::Method::GET,
+        &[
+            (USER_AGENT.as_str(), KUGOU_H5_UA),
+            (REFERER.as_str(), KUGOU_REFERER),
+            (COOKIE.as_str(), &cookie_header),
+        ],
+        None,
+    )
+    .await
+    {
+        Ok(j) => j,
+        Err(_) => return String::new(),
+    };
+
+    let img = json
+        .get("data")
+        .map(|d| first_string(d, &["imgurl", "ImgUrl", "avatar", "pic"]))
+        .unwrap_or_default();
+    kugou_cover_url(&img, 240)
+}
+
+/// 酷狗歌手搜索接口不返回头像，并行通过 /api/v3/singer/info 补充
+async fn fill_singer_avatars(artists: &mut [Artist], cookie: &str) {
+    use futures_util::StreamExt;
+
+    let cookie_owned = cookie.to_string();
+    let futures: Vec<_> = artists
+        .iter()
+        .filter(|a| {
+            let id = a.id.as_deref().unwrap_or("");
+            let has_pic = a.pic_url.as_deref().map(|u| !u.is_empty()).unwrap_or(false);
+            !id.is_empty() && !has_pic
+        })
+        .map(|a| {
+            let id = a.id.clone().unwrap_or_default();
+            let cookie = cookie_owned.clone();
+            async move {
+                let avatar = singer_avatar(&id, &cookie).await;
+                (id, avatar)
+            }
+        })
+        .collect();
+
+    let mut stream = futures_util::stream::iter(futures).buffer_unordered(8);
+    while let Some((id, avatar)) = stream.next().await {
+        if !avatar.is_empty() {
+            if let Some(artist) = artists.iter_mut().find(|a| a.id.as_deref() == Some(id.as_str())) {
+                artist.pic_url = Some(avatar);
+            }
+        }
+    }
+}
+
+async fn public_special_info(special_id: &str, cookie: &str) -> Playlist {
+    let mut url = match url::Url::parse(&format!("{}/api/v3/special/info", KUGOU_MOBILE_CDN)) {
+        Ok(url) => url,
+        Err(_) => return Playlist::default(),
+    };
+    url.query_pairs_mut()
+        .append_pair("format", "json")
+        .append_pair("specialid", special_id);
+    let cookie_header = build_request_cookie(cookie);
+    match request_json(
+        url.as_str(),
+        reqwest::Method::GET,
+        &[
+            (USER_AGENT.as_str(), KUGOU_H5_UA),
+            (REFERER.as_str(), KUGOU_REFERER),
+            (COOKIE.as_str(), &cookie_header),
+        ],
+        None,
+    )
+    .await
+    {
+        Ok(json) => {
+            let mut playlist = json.get("data").map(map_playlist_item).unwrap_or_default();
+            if playlist.id.is_empty() {
+                playlist.id = format!("special_{}", special_id);
+            }
+            playlist
+        }
+        Err(_) => Playlist::default(),
+    }
+}
+
+async fn public_special_tracks_paged(
+    playlist_id: &str,
+    cookie: &str,
+    start: usize,
+    count: usize,
+) -> Result<(Playlist, Vec<Song>), String> {
+    let special_id = public_special_id_from_playlist_id(playlist_id);
+    if special_id.is_empty() {
+        return Ok((Playlist::default(), Vec::new()));
+    }
+
+    let pagesize = count.clamp(1, 50) as u32;
+    let page = (start / pagesize as usize) as u32 + 1;
+    let mut url = url::Url::parse(&format!("{}/api/v3/special/song", KUGOU_MOBILE_CDN))
+        .map_err(|e| e.to_string())?;
+    url.query_pairs_mut()
+        .append_pair("format", "json")
+        .append_pair("specialid", &special_id)
+        .append_pair("page", &page.to_string())
+        .append_pair("pagesize", &pagesize.to_string());
+
+    let cookie_header = build_request_cookie(cookie);
+    let json = request_json(
+        url.as_str(),
+        reqwest::Method::GET,
+        &[
+            (USER_AGENT.as_str(), KUGOU_H5_UA),
+            (REFERER.as_str(), KUGOU_REFERER),
+            (COOKIE.as_str(), &cookie_header),
+        ],
+        None,
+    )
+    .await?;
+
+    let total = json
+        .get("data")
+        .and_then(|d| d.get("total"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+    let mut playlist = public_special_info(&special_id, cookie).await;
+    if playlist.id.is_empty() {
+        playlist.id = format!("special_{}", special_id);
+    }
+    if playlist.track_count == 0 {
+        playlist.track_count = total;
+    }
+
+    let songs = extract_mobile_list(&json)
+        .iter()
+        .map(map_playlist_track)
+        .filter(|s| !s.name.is_empty() && (s.hash.as_deref().unwrap_or("").is_empty() == false || !s.id.is_empty()))
+        .collect();
+
+    Ok((playlist, songs))
+}
+
 pub async fn search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Song>, String> {
     let auth = extract_kugou_auth(cookie);
     let page_size = limit.clamp(1, 20);
@@ -1112,6 +1434,109 @@ pub async fn search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Song
 }
 
 /// H5 方式获取播放 URL (对照 kugouPlayViaH5)
+pub async fn artist_search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Artist>, String> {
+    let page_size = limit.clamp(1, 30);
+    let mut url = url::Url::parse(&format!("{}/api/v3/search/singer", KUGOU_MOBILE_CDN))
+        .map_err(|e| e.to_string())?;
+    url.query_pairs_mut()
+        .append_pair("format", "json")
+        .append_pair("keyword", keywords)
+        .append_pair("page", "1")
+        .append_pair("pagesize", &page_size.to_string());
+
+    let cookie_header = build_request_cookie(cookie);
+    let json = request_json(
+        url.as_str(),
+        reqwest::Method::GET,
+        &[
+            (USER_AGENT.as_str(), KUGOU_H5_UA),
+            (REFERER.as_str(), KUGOU_REFERER),
+            (COOKIE.as_str(), &cookie_header),
+        ],
+        None,
+    )
+    .await?;
+
+    let mut artists: Vec<Artist> = extract_mobile_list(&json)
+        .iter()
+        .map(map_singer_item)
+        .filter(|a| !a.name.is_empty())
+        .collect();
+
+    // 搜索接口不返回头像，通过歌手详情接口补充
+    fill_singer_avatars(&mut artists, cookie).await;
+
+    Ok(artists)
+}
+
+pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Playlist>, String> {
+    let page_size = limit.clamp(1, 30);
+    let mut url = url::Url::parse(&format!("{}/api/v3/search/special", KUGOU_MOBILE_CDN))
+        .map_err(|e| e.to_string())?;
+    url.query_pairs_mut()
+        .append_pair("format", "json")
+        .append_pair("keyword", keywords)
+        .append_pair("page", "1")
+        .append_pair("pagesize", &page_size.to_string());
+
+    let cookie_header = build_request_cookie(cookie);
+    let json = request_json(
+        url.as_str(),
+        reqwest::Method::GET,
+        &[
+            (USER_AGENT.as_str(), KUGOU_H5_UA),
+            (REFERER.as_str(), KUGOU_REFERER),
+            (COOKIE.as_str(), &cookie_header),
+        ],
+        None,
+    )
+    .await?;
+
+    Ok(extract_mobile_list(&json)
+        .iter()
+        .map(|item| {
+            let mut playlist = map_playlist_item(item);
+            let special_id = public_special_id_from_item(item);
+            if !special_id.is_empty() {
+                playlist.id = format!("special_{}", special_id);
+            }
+            playlist
+        })
+        .filter(|pl| !pl.id.is_empty() && !pl.name.is_empty())
+        .collect())
+}
+
+pub async fn artist_songs(artist_id: &str, limit: u32, offset: u32, cookie: &str) -> Result<Vec<Song>, String> {
+    let page_size = limit.clamp(1, 50);
+    let page = (offset / page_size) + 1;
+    let mut url = url::Url::parse(&format!("{}/api/v3/singer/song", KUGOU_MOBILE_CDN))
+        .map_err(|e| e.to_string())?;
+    url.query_pairs_mut()
+        .append_pair("format", "json")
+        .append_pair("singerid", artist_id)
+        .append_pair("page", &page.to_string())
+        .append_pair("pagesize", &page_size.to_string());
+
+    let cookie_header = build_request_cookie(cookie);
+    let json = request_json(
+        url.as_str(),
+        reqwest::Method::GET,
+        &[
+            (USER_AGENT.as_str(), KUGOU_H5_UA),
+            (REFERER.as_str(), KUGOU_REFERER),
+            (COOKIE.as_str(), &cookie_header),
+        ],
+        None,
+    )
+    .await?;
+
+    Ok(extract_mobile_list(&json)
+        .iter()
+        .map(map_playlist_track)
+        .filter(|s| !s.name.is_empty() && (s.hash.as_deref().unwrap_or("").is_empty() == false || !s.id.is_empty()))
+        .collect())
+}
+
 async fn play_via_h5(
     hash: &str,
     album_id: &str,
@@ -1767,6 +2192,10 @@ fn pick_profile_from_lists(lists: &[Value], auth: &KugouAuth) -> (String, String
 
 /// 获取歌单曲目 (对照 handleKugouPlaylistTracks)
 pub async fn playlist_tracks(playlist_id: &str, cookie: &str) -> Result<(Playlist, Vec<Song>), String> {
+    if playlist_id.trim().starts_with("special_") {
+        return public_special_tracks_paged(playlist_id, cookie, 0, 50).await;
+    }
+
     let auth = extract_kugou_auth(cookie);
     if !auth.playback_ready {
         return Ok((Playlist::default(), Vec::new()));
@@ -1825,6 +2254,14 @@ pub async fn playlist_tracks(playlist_id: &str, cookie: &str) -> Result<(Playlis
                         _ => {}
                     }
                 }
+                if all_tracks.is_empty() {
+                    match public_special_tracks_paged(&listid, cookie, 0, pagesize as usize).await {
+                        Ok((playlist, songs)) if !songs.is_empty() => {
+                            return Ok((playlist, songs));
+                        }
+                        _ => {}
+                    }
+                }
                 break;
             }
         };
@@ -1865,6 +2302,14 @@ pub async fn playlist_tracks(playlist_id: &str, cookie: &str) -> Result<(Playlis
                     _ => {}
                 }
             }
+            if all_tracks.is_empty() {
+                match public_special_tracks_paged(&listid, cookie, 0, pagesize as usize).await {
+                    Ok((playlist, songs)) if !songs.is_empty() => {
+                        return Ok((playlist, songs));
+                    }
+                    _ => {}
+                }
+            }
             break;
         }
 
@@ -1900,6 +2345,12 @@ pub async fn playlist_tracks(playlist_id: &str, cookie: &str) -> Result<(Playlis
 
 /// 分页获取歌单曲目
 pub async fn playlist_tracks_paged(playlist_id: &str, cookie: &str, start: usize, count: usize) -> Result<Vec<Song>, String> {
+    if playlist_id.trim().starts_with("special_") {
+        return public_special_tracks_paged(playlist_id, cookie, start, count)
+            .await
+            .map(|(_, songs)| songs);
+    }
+
     let auth = extract_kugou_auth(cookie);
     if !auth.playback_ready {
         return Ok(Vec::new());

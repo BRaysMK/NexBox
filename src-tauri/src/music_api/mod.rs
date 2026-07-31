@@ -195,6 +195,24 @@ pub async fn kugou_search(app: AppHandle, keywords: String, limit: Option<u32>) 
 }
 
 #[tauri::command]
+pub async fn kugou_artist_search(app: AppHandle, keywords: String, limit: Option<u32>) -> Result<Vec<Artist>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::artist_search(&keywords, limit.unwrap_or(30), &cookie).await
+}
+
+#[tauri::command]
+pub async fn kugou_playlist_search(app: AppHandle, keywords: String, limit: Option<u32>) -> Result<Vec<Playlist>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::playlist_search(&keywords, limit.unwrap_or(30), &cookie).await
+}
+
+#[tauri::command]
+pub async fn kugou_artist_songs(app: AppHandle, artist_id: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::artist_songs(&artist_id, limit.unwrap_or(50), offset.unwrap_or(0), &cookie).await
+}
+
+#[tauri::command]
 pub async fn kugou_song_url(
     app: AppHandle,
     hash: String,

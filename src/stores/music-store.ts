@@ -561,7 +561,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (!keywords.trim()) return;
     set({ searchingArtists: true, artistSearchResults: [], selectedArtist: null, artistSongs: [] });
     try {
-      const results = await invoke<Artist[]>("music_artist_search", { keywords, limit: 30 });
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_artist_search" : "music_artist_search";
+      const results = await invoke<Artist[]>(cmd, { keywords, limit: 30 });
       set({ artistSearchResults: results });
     } catch (e) {
       console.error("Artist search failed:", e);
@@ -574,7 +576,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   loadArtistSongs: async (artistId, offset = 0) => {
     set({ loadingArtistSongs: true });
     try {
-      const songs = await invoke<Song[]>("music_artist_songs", { artistId, limit: 50, offset });
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_artist_songs" : "music_artist_songs";
+      const songs = await invoke<Song[]>(cmd, { artistId, limit: 50, offset });
       set((state) => ({
         artistSongs: offset === 0 ? songs : [...state.artistSongs, ...songs],
       }));
@@ -593,7 +597,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (!keywords.trim()) return;
     set({ searchingPlaylists: true, playlistSearchResults: [] });
     try {
-      const results = await invoke<Playlist[]>("music_playlist_search", { keywords, limit: 30 });
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_playlist_search" : "music_playlist_search";
+      const results = await invoke<Playlist[]>(cmd, { keywords, limit: 30 });
       // 同步已收藏状态
       const subscribedIds = new Set(get().userPlaylists.filter((pl) => pl.subscribed).map((pl) => pl.id));
       set({
