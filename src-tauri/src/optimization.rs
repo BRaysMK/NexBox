@@ -2188,7 +2188,7 @@ pub async fn import_power_plan(app: tauri::AppHandle, plan_id: String) -> Result
                     guid: Some(guid),
                 })
             } else {
-                Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败", display_name))
+                Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，可能是厂商锁定了电源计划，无法更改", display_name))
             }
         }
         Err(e) => Err(format!("执行导入命令失败: {}", e)),
@@ -2237,7 +2237,7 @@ pub async fn activate_power_plan(guid: String) -> Result<PowerPlanOperationResul
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                 let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
-                Err(format!("激活电源计划失败: {}", err_msg))
+                Err(format!("电源计划激活失败: {}\n如果您是笔记本，可能是厂商锁定了电源计划，无法更改", err_msg))
             }
         }
         Err(e) => Err(format!("执行激活命令失败: {}", e)),
@@ -2297,7 +2297,7 @@ pub async fn import_and_activate_power_plan(app: tauri::AppHandle, plan_id: Stri
                     } else if let Some(g) = find_plan_guid_by_name(&system_plans_after, &display_name) {
                         g
                     } else {
-                        return Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败", display_name));
+                        return Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，可能是厂商锁定了电源计划，无法更改", display_name));
                     }
                 }
                 Err(e) => return Err(format!("导入失败: {}", e)),

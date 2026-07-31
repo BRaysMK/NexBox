@@ -515,7 +515,15 @@ fn get_gpus_from_lhml() -> Vec<GpuInfo> {
         Ok(r) => r,
         Err(e) => {
             log::warn!("LHML GPU 查询失败: {}", e);
-            return Vec::new();
+            // LHML（NexBoxMonitor）可能尚未就绪，等 200ms 后重试一次
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            match crate::sensor::read_lhm_sensors() {
+                Ok(r) => r,
+                Err(e) => {
+                    log::warn!("LHML GPU 重试仍失败: {}", e);
+                    return Vec::new();
+                }
+            }
         }
     };
 

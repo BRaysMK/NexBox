@@ -12,6 +12,7 @@ import type {
   PlaybackQuality,
   SongUrlResult,
   KaraokeLine,
+  MusicProvider,
 } from "@/types/music";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 
@@ -27,8 +28,10 @@ interface MusicState {
   playQueue: Song[];
   currentIndex: number;
 
-  // 登录状态
-  loginInfo: LoginInfo | null;
+  // 登录状态 (多平台)
+  loginInfo: LoginInfo | null; // 当前播放源的登录信息 (向后兼容)
+  loginInfos: Record<MusicProvider, LoginInfo | null>; // 所有平台登录信息
+  playbackSource: MusicProvider; // 当前播放源
 
   // 数据
   searchResults: Song[];
@@ -134,11 +137,16 @@ interface MusicState {
   emitDesktopLyricsData: () => void;
 
   loginStatus: () => Promise<void>;
+  loginStatusFor: (provider: MusicProvider) => Promise<void>;
   loginWithCookie: (cookie: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  openLoginWindow: () => Promise<void>;
+  logoutFor: (provider: MusicProvider) => Promise<void>;
+  openLoginWindow: (provider?: MusicProvider) => Promise<void>;
+  switchPlaybackSource: (provider: MusicProvider) => Promise<void>;
+  loadAllLoginStatuses: () => Promise<void>;
 
   loadUserPlaylists: () => Promise<void>;
+  loadUserPlaylistsFor: (provider: MusicProvider) => Promise<void>;
   loadLeftPlaylistTracks: (id: string) => Promise<void>;
   loadMoreLeftPlaylistTracks: () => Promise<void>;
   loadRightPlaylistTracks: (id: string) => Promise<void>;
@@ -146,6 +154,7 @@ interface MusicState {
   loadLikedList: () => Promise<void>;
   toggleLike: (songId: string) => Promise<void>;
   loadLyrics: (songId: string) => Promise<void>;
+  loadLyricsForSong: (song: Song) => Promise<void>;
   loadRecommendations: () => Promise<void>;
   loadOfficialCharts: () => Promise<void>;
   togglePlaylistSubscribe: (playlistId: string, currentSubscribed: boolean) => Promise<void>;
@@ -280,6 +289,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   currentIndex: -1,
 
   loginInfo: null,
+  loginInfos: { netease: null, kugou: null, qqmusic: null },
+  playbackSource: "netease",
 
   searchResults: [],
   userPlaylists: [],
@@ -392,6 +403,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       }
     } catch {}
 
+    // 加载播放源 (重启后恢复上次使用的平台)
+    try {
+      const source = await invoke<MusicProvider>("music_get_playback_source");
+      if (source) set({ playbackSource: source });
+    } catch {}
+
     // 防止 React Strict Mode 双重调用导致重复注册
     if (listenersRegistered) return;
     listenersRegistered = true;
@@ -443,28 +460,53 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       })
     );
 
-    // 监听登录成功事件 (来自网页登录窗口的 cookie 捕获)
-    // 后端会附带 LoginInfo 数据
+    // 监听网易云登录成功事件
     unlistenFns.push(
       await listen<LoginInfo>("netease-login-success", async (event) => {
-        console.log("[Music] Login success event received", event.payload);
+        console.log("[Music] Netease login success", event.payload);
         const info = event.payload;
         if (info && info.logged_in) {
-          // 直接使用后端返回的登录信息
-          set({ loginInfo: info });
+          // 如果当前播放源未登录, 自动切换到网易云
+          const currentInfo = get().loginInfos[get().playbackSource];
+          const shouldSwitch = !currentInfo?.logged_in;
+          if (shouldSwitch) {
+            set({ playbackSource: "netease" });
+            try { await invoke("music_switch_provider", { provider: "netease" }); } catch {}
+          }
+          set((s) => ({
+            loginInfo: (shouldSwitch || s.playbackSource === "netease") ? info : s.loginInfo,
+            loginInfos: { ...s.loginInfos, netease: info }
+          }));
           get().loadUserPlaylists();
           get().loadLikedList();
           get().loadOfficialCharts();
           get().loadRecommendations();
-        } else {
-          // 后端没带数据，手动刷新
-          await get().loginStatus();
-          if (get().loginInfo?.logged_in) {
-            get().loadUserPlaylists();
-            get().loadLikedList();
-            get().loadOfficialCharts();
-            get().loadRecommendations();
+        }
+      })
+    );
+
+    // 监听酷狗登录成功事件
+    unlistenFns.push(
+      await listen<LoginInfo>("kugou-login-success", async (event) => {
+        console.log("[Music] Kugou login success", event.payload);
+        const info = event.payload;
+        if (info && info.logged_in) {
+          // 如果当前播放源未登录, 自动切换到酷狗
+          const currentInfo = get().loginInfos[get().playbackSource];
+          const shouldSwitch = !currentInfo?.logged_in;
+          if (shouldSwitch) {
+            set({ playbackSource: "kugou" });
+            try { await invoke("music_switch_provider", { provider: "kugou" }); } catch {}
           }
+          set((s) => ({
+            loginInfo: (shouldSwitch || s.playbackSource === "kugou") ? info : s.loginInfo,
+            loginInfos: { ...s.loginInfos, kugou: info }
+          }));
+          // 加载歌单等数据
+          get().loadUserPlaylists();
+          get().loadLikedList();
+          get().loadRecommendations();
+          get().loadOfficialCharts();
         }
       })
     );
@@ -472,17 +514,29 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // 监听登录失败事件
     unlistenFns.push(
       await listen<string>("netease-login-failed", (event) => {
-        console.error("[Music] Login failed:", event.payload);
+        console.error("[Music] Netease login failed:", event.payload);
+      })
+    );
+    unlistenFns.push(
+      await listen<string>("kugou-login-failed", (event) => {
+        console.error("[Music] Kugou login failed:", event.payload);
       })
     );
 
-    // 检查登录状态
-    await get().loginStatus();
-    // 如果已登录, 加载歌单、喜欢列表和官方榜单
+    // 加载所有平台登录状态
+    await get().loadAllLoginStatuses();
+    // 加载当前播放源的歌单
     if (get().loginInfo?.logged_in) {
       get().loadUserPlaylists();
-      await get().loadLikedList();
-      get().loadOfficialCharts();
+      if (get().playbackSource === "netease") {
+        await get().loadLikedList();
+        get().loadOfficialCharts();
+        get().loadRecommendations();
+      } else if (get().playbackSource === "kugou") {
+        await get().loadLikedList();
+        get().loadOfficialCharts();
+        get().loadRecommendations();
+      }
     }
   },
 
@@ -492,7 +546,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (!keywords.trim()) return;
     set({ searching: true });
     try {
-      const results = await invoke<Song[]>("music_search", { keywords, limit: 30 });
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_search" : "music_search";
+      const results = await invoke<Song[]>(cmd, { keywords, limit: 30 });
       set({ searchResults: results });
     } catch (e) {
       console.error("Search failed:", e);
@@ -577,10 +633,18 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     set({ currentSong: song, currentTime: 0, duration: 0, isPlaying: false, currentLyrics: null });
 
     try {
-      const result = await invoke<SongUrlResult>("music_song_url", {
-        id: song.id,
-        quality: state.playbackQuality,
-      });
+      // 根据歌曲 provider 调用对应 API
+      const result = song.provider === "kugou"
+        ? await invoke<SongUrlResult>("kugou_song_url", {
+            hash: song.hash || song.id,
+            albumId: song.album_id,
+            albumAudioId: song.album_audio_id,
+            quality: state.playbackQuality,
+          })
+        : await invoke<SongUrlResult>("music_song_url", {
+            id: song.id,
+            quality: state.playbackQuality,
+          });
 
       // 检查是否有更新的 playSong 调用覆盖了本次请求
       if (mySeq !== playSongSeq) return;
@@ -608,7 +672,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
       }
       // 异步加载歌词（不阻塞播放）
-      get().loadLyrics(song.id);
+      get().loadLyricsForSong(song);
     } catch (e) {
       if (mySeq !== playSongSeq) return;
       console.error("Play failed:", e);
@@ -638,10 +702,17 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         if (song) {
           const savedTime = audioRef.currentTime;
           try {
-            const result = await invoke<SongUrlResult>("music_song_url", {
-              id: song.id,
-              quality: state.playbackQuality,
-            });
+            const result = song.provider === "kugou"
+              ? await invoke<SongUrlResult>("kugou_song_url", {
+                  hash: song.hash || song.id,
+                  albumId: song.album_id,
+                  albumAudioId: song.album_audio_id,
+                  quality: state.playbackQuality,
+                })
+              : await invoke<SongUrlResult>("music_song_url", {
+                  id: song.id,
+                  quality: state.playbackQuality,
+                });
             if (result.playable && result.url) {
               const audioUrl = await getProxyAudioUrl(result.url, state.proxyPort);
               audioRef.src = audioUrl;
@@ -739,10 +810,18 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
     if (state.currentSong && state.audioRef && state.audioRef.src) {
       try {
-        const result = await invoke<SongUrlResult>("music_song_url", {
-          id: state.currentSong.id,
-          quality,
-        });
+        const song = state.currentSong;
+        const result = song.provider === "kugou"
+          ? await invoke<SongUrlResult>("kugou_song_url", {
+              hash: song.hash || song.id,
+              albumId: song.album_id,
+              albumAudioId: song.album_audio_id,
+              quality,
+            })
+          : await invoke<SongUrlResult>("music_song_url", {
+              id: song.id,
+              quality,
+            });
         if (result.playable && result.url) {
           const resumeAt = state.audioRef.currentTime;
           const wasPlaying = state.isPlaying;
@@ -900,18 +979,52 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   loginStatus: async () => {
+    await get().loginStatusFor(get().playbackSource);
+  },
+
+  loginStatusFor: async (provider) => {
     try {
-      const info = await invoke<LoginInfo>("music_login_status");
-      set({ loginInfo: info });
+      const cmd = provider === "kugou" ? "kugou_login_status" : "music_login_status";
+      const info = await invoke<LoginInfo>(cmd);
+      set((s) => ({
+        loginInfos: { ...s.loginInfos, [provider]: info },
+        loginInfo: s.playbackSource === provider ? info : s.loginInfo,
+      }));
     } catch {
-      set({ loginInfo: null });
+      set((s) => ({
+        loginInfos: { ...s.loginInfos, [provider]: null },
+        loginInfo: s.playbackSource === provider ? null : s.loginInfo,
+      }));
+    }
+  },
+
+  loadAllLoginStatuses: async () => {
+    try {
+      const statuses = await invoke<Record<string, LoginInfo>>("music_get_login_statuses");
+      const currentSource = get().playbackSource;
+      const loginInfos: Record<MusicProvider, LoginInfo | null> = {
+        netease: statuses.netease || null,
+        kugou: statuses.kugou || null,
+        qqmusic: statuses.qqmusic || null,
+      };
+      set({
+        loginInfos,
+        loginInfo: loginInfos[currentSource],
+      });
+    } catch {
+      // fallback to individual calls
+      await get().loginStatusFor("netease");
+      await get().loginStatusFor("kugou");
     }
   },
 
   loginWithCookie: async (cookie) => {
     try {
       const info = await invoke<LoginInfo>("music_login_cookie", { cookie });
-      set({ loginInfo: info });
+      set((s) => ({
+        loginInfos: { ...s.loginInfos, netease: info },
+        loginInfo: s.playbackSource === "netease" ? info : s.loginInfo,
+      }));
       if (info.logged_in) {
         get().loadUserPlaylists();
         get().loadLikedList();
@@ -923,30 +1036,72 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   logout: async () => {
+    await get().logoutFor(get().playbackSource);
+  },
+
+  logoutFor: async (provider) => {
     try {
-      await invoke("music_logout");
-      set({ loginInfo: null, userPlaylists: [], likedSongIds: new Set() });
+      const cmd = provider === "kugou" ? "kugou_logout" : "music_logout";
+      await invoke(cmd);
+      set((s) => ({
+        loginInfos: { ...s.loginInfos, [provider]: null },
+        loginInfo: s.playbackSource === provider ? null : s.loginInfo,
+        userPlaylists: s.playbackSource === provider ? [] : s.userPlaylists,
+        likedSongIds: s.playbackSource === provider ? new Set() : s.likedSongIds,
+      }));
     } catch {
       // ignore
     }
   },
 
-  openLoginWindow: async () => {
-    // 如果已登录，先清除 cookie，让登录页显示全新的登录界面
-    if (get().loginInfo?.logged_in) {
-      await get().logout();
+  openLoginWindow: async (provider) => {
+    const target = provider || get().playbackSource;
+    // 如果已登录该平台，先退出
+    if (get().loginInfos[target]?.logged_in) {
+      await get().logoutFor(target);
     }
     try {
-      await invoke("music_open_login_window");
+      await invoke("music_open_login_window", { provider: target });
     } catch (e) {
-      console.error("Failed to open login window:", e);
+      console.error(`Failed to open ${target} login window:`, e);
+    }
+  },
+
+  switchPlaybackSource: async (provider) => {
+    set({ playbackSource: provider });
+    try {
+      await invoke("music_switch_provider", { provider });
+    } catch {}
+    // 更新 loginInfo 为当前平台的登录状态
+    const info = get().loginInfos[provider];
+    set({ loginInfo: info, userPlaylists: [] });
+    // 重新加载当前平台的歌单
+    if (info?.logged_in) {
+      get().loadUserPlaylists();
+      if (provider === "netease") {
+        await get().loadLikedList();
+        get().loadOfficialCharts();
+        get().loadRecommendations();
+      } else if (provider === "kugou") {
+        await get().loadLikedList();
+        get().loadRecommendations();
+        get().loadOfficialCharts();
+      }
+    } else {
+      // 未登录, 清空所有数据
+      set({ officialCharts: [], recommendations: [], recommendSongs: [] });
     }
   },
 
   loadUserPlaylists: async () => {
+    await get().loadUserPlaylistsFor(get().playbackSource);
+  },
+
+  loadUserPlaylistsFor: async (provider) => {
     set({ loadingPlaylists: true });
     try {
-      const playlists = await invoke<Playlist[]>("music_user_playlist");
+      const cmd = provider === "kugou" ? "kugou_user_playlists" : "music_user_playlist";
+      const playlists = await invoke<Playlist[]>(cmd);
       set({ userPlaylists: playlists });
     } catch {
       set({ userPlaylists: [] });
@@ -958,10 +1113,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   loadLeftPlaylistTracks: async (id) => {
     set({ loadingLeftTracks: true, leftPlaylistTracks: [], leftPlaylistMeta: null });
     try {
-      const [meta, songs] = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id });
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_playlist_tracks" : "music_playlist_tracks";
+      const [meta, songs] = await invoke<[Playlist, Song[]]>(cmd, { id });
       set({ leftPlaylistMeta: meta, leftPlaylistTracks: songs });
       // 后台加载全部剩余 → 只追加到播放列表，不塞进歌单
-      batchLoadToQueue(id, songs, meta.track_count);
+      if (provider === "netease") {
+        batchLoadToQueue(id, songs, meta.track_count);
+      }
     } catch {
       set({ leftPlaylistTracks: [] });
     } finally {
@@ -979,7 +1138,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (start >= total) return;
     set({ leftPlaylistLoadingMore: true });
     try {
-      const songs = await invoke<Song[]>("music_playlist_tracks_range", { id, start, count: 50 });
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_playlist_tracks_range" : "music_playlist_tracks_range";
+      const songs = await invoke<Song[]>(cmd, { id, start, count: 50 });
       set((s) => {
         // 如果当前播放队列是从左侧歌单播放的，同步追加（去重）
         const shouldSync = s.playQueue.length > 0
@@ -1008,9 +1169,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   loadRightPlaylistTracks: async (id) => {
     set({ loadingRightTracks: true, rightPlaylistTracks: [], rightPlaylistMeta: null });
     try {
-      const [meta, songs] = await invoke<[Playlist, Song[]]>("music_playlist_tracks", { id });
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_playlist_tracks" : "music_playlist_tracks";
+      const [meta, songs] = await invoke<[Playlist, Song[]]>(cmd, { id });
       set({ rightPlaylistMeta: meta, rightPlaylistTracks: songs });
-      batchLoadToQueue(id, songs, meta.track_count);
+      if (provider === "netease") {
+        batchLoadToQueue(id, songs, meta.track_count);
+      }
     } catch {
       set({ rightPlaylistTracks: [] });
     } finally {
@@ -1027,7 +1192,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (start >= total) return;
     set({ rightPlaylistLoadingMore: true });
     try {
-      const songs = await invoke<Song[]>("music_playlist_tracks_range", { id, start, count: 50 });
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_playlist_tracks_range" : "music_playlist_tracks_range";
+      const songs = await invoke<Song[]>(cmd, { id, start, count: 50 });
       set((s) => {
         const shouldSync = s.playQueue.length > 0
           && s.playQueue[s.currentIndex]?.id === s.currentSong?.id
@@ -1054,15 +1221,24 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   loadLikedList: async () => {
     try {
-      const ids = await invoke<string[]>("music_likelist");
-      console.log("[Music] liked songs loaded:", ids.length);
-      set({ likedSongIds: new Set(ids) });
+      const provider = get().playbackSource;
+      if (provider === "kugou") {
+        // 酷狗: 从"我喜欢"歌单获取已喜欢的歌曲 hash 列表
+        const hashes = await invoke<string[]>("kugou_liked_hashes").catch(() => []);
+        console.log("[Music] kugou liked songs loaded:", hashes.length);
+        set({ likedSongIds: new Set(hashes) });
+      } else {
+        const ids = await invoke<string[]>("music_likelist");
+        console.log("[Music] liked songs loaded:", ids.length);
+        set({ likedSongIds: new Set(ids) });
+      }
     } catch (e) {
       console.error("[Music] loadLikedList failed:", e);
     }
   },
 
   toggleLike: async (songId) => {
+    const provider = get().playbackSource;
     const liked = get().likedSongIds.has(songId);
     // 乐观更新：先改 UI，API 在后台执行
     const newSet = new Set(get().likedSongIds);
@@ -1073,10 +1249,42 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
     set({ likedSongIds: newSet });
     try {
-      await invoke("music_like", { id: songId, like: !liked });
+      if (provider === "kugou") {
+        // 酷狗: 需要完整的歌曲对象来执行喜欢/取消喜欢
+        // 从多个来源查找完整歌曲对象 (currentSong → playQueue → searchResults → 歌单列表 → 推荐)
+        let song = get().currentSong;
+        if (!song || song.id !== songId) {
+          song = get().playQueue.find((s) => s.id === songId) || null;
+        }
+        if (!song) {
+          song = get().searchResults.find((s) => s.id === songId) || null;
+        }
+        if (!song) {
+          song = get().leftPlaylistTracks.find((s) => s.id === songId) || null;
+        }
+        if (!song) {
+          song = get().rightPlaylistTracks.find((s) => s.id === songId) || null;
+        }
+        if (!song) {
+          song = get().recommendSongs.find((s) => s.id === songId) || null;
+        }
+        if (!song) {
+          song = get().artistSongs.find((s) => s.id === songId) || null;
+        }
+        if (!song) {
+          console.warn("[Music] toggleLike: song not found in any list, using minimal object (album_id/mixsongid will be 0)");
+          // 构造最小歌曲对象 (仅有 id/hash)
+          song = { provider: "kugou", id: songId, hash: songId, name: "", artist: "", artists: [], album: "", cover: "", duration: 0, fee: 0, playable: true, language: 0 };
+        }
+        await invoke("kugou_like_toggle", { song, like: !liked });
+        // 刷新喜欢列表, 确保与服务器同步
+        await get().loadLikedList();
+      } else {
+        await invoke("music_like", { id: songId, like: !liked });
+      }
     } catch (e) {
       // 回滚
-      console.error("Toggle like failed:", e);
+      console.error("Toggle like failed:", e, "provider:", provider, "songId:", songId, "like:", !liked);
       const rollback = new Set(get().likedSongIds);
       if (liked) {
         rollback.add(songId);
@@ -1092,7 +1300,30 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
       const lyrics = await invoke<Lyrics>("music_lyric", { id: songId });
       set({ currentLyrics: lyrics });
-      // 桌面歌词可见时推送歌词数据
+      if (get().desktopLyricsVisible) {
+        get().emitDesktopLyricsData();
+      }
+    } catch {
+      set({ currentLyrics: null });
+      if (get().desktopLyricsVisible) {
+        get().emitDesktopLyricsData();
+      }
+    } finally {
+      set({ loadingLyrics: false });
+    }
+  },
+
+  loadLyricsForSong: async (song) => {
+    set({ loadingLyrics: true });
+    try {
+      const lyrics = song.provider === "kugou"
+        ? await invoke<Lyrics>("kugou_lyric", {
+            hash: song.hash || song.id,
+            albumAudioId: song.album_audio_id,
+            duration: Math.floor(song.duration / 1000),
+          })
+        : await invoke<Lyrics>("music_lyric", { id: song.id });
+      set({ currentLyrics: lyrics });
       if (get().desktopLyricsVisible) {
         get().emitDesktopLyricsData();
       }
@@ -1108,17 +1339,39 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   loadRecommendations: async () => {
     try {
-      const [playlists, songs] = await Promise.all([
-        invoke<Playlist[]>("music_personalized"),
-        invoke<Song[]>("music_recommend_songs").catch(() => []),
-      ]);
-      set({ recommendations: playlists, recommendSongs: songs });
+      const provider = get().playbackSource;
+      if (provider === "kugou") {
+        // 酷狗没有推荐歌单 API, 清空推荐
+        set({ recommendations: [], recommendSongs: [] });
+      } else {
+        const [playlists, songs] = await Promise.all([
+          invoke<Playlist[]>("music_personalized"),
+          invoke<Song[]>("music_recommend_songs").catch(() => []),
+        ]);
+        set({ recommendations: playlists, recommendSongs: songs });
+      }
     } catch {
       // ignore
     }
   },
 
   loadOfficialCharts: async () => {
+    // 酷狗平台: 加载酷狗官方排行榜
+    if (get().playbackSource === "kugou") {
+      try {
+        const charts = await invoke<Playlist[]>("kugou_rank_list").catch(() => []);
+        set({ officialCharts: charts });
+        // 持久化缓存
+        try {
+          const s = await getStore();
+          await s.set("officialCharts", charts);
+          await s.save();
+        } catch {}
+      } catch {
+        set({ officialCharts: [] });
+      }
+      return;
+    }
     const chartIds = ["3778678", "19723756", "3779629", "6723173524", "5453912201", "6886768100"];
     const chartNames = ["热歌榜", "飙升榜", "新歌榜", "网络热歌榜", "VIP热歌榜", "中文DJ榜"];
     try {

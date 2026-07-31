@@ -222,6 +222,7 @@ fn map_song_record(s: &Value) -> Song {
         fee: s.get("fee").and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0),
         playable: true,
         language: s.get("language").and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0),
+        ..Default::default()
     }
 }
 

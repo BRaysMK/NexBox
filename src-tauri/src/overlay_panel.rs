@@ -253,6 +253,7 @@ fn extract_sensor(
     sensors: &[crate::sensor::SensorReading],
     sensor_type: &str,
     hardware_type: &str,
+    hardware: Option<&str>,
     names: &[&str],
     skip_zero: bool,
 ) -> Option<(f64, String)> {
@@ -260,6 +261,7 @@ fn extract_sensor(
         if let Some(s) = sensors.iter().find(|s| {
             s.sensor_type == sensor_type
                 && s.hardware_type.eq_ignore_ascii_case(hardware_type)
+                && hardware.map_or(true, |h| s.hardware == h)
                 && s.name.contains(name)
                 && (!skip_zero || s.value > 0.0)
         }) {
@@ -274,6 +276,7 @@ fn extract_all_avg(
     sensors: &[crate::sensor::SensorReading],
     sensor_type: &str,
     hardware_type: &str,
+    hardware: Option<&str>,
     name_prefixes: &[&str],
 ) -> Option<f64> {
     let values: Vec<f64> = sensors
@@ -281,6 +284,7 @@ fn extract_all_avg(
         .filter(|s| {
             s.sensor_type == sensor_type
                 && s.hardware_type.eq_ignore_ascii_case(hardware_type)
+                && hardware.map_or(true, |h| s.hardware == h)
                 && name_prefixes.iter().any(|p| s.name.starts_with(p))
         })
         .map(|s| s.value)
@@ -296,101 +300,105 @@ static LAST_LHML_UPDATE: std::sync::atomic::AtomicU64 = std::sync::atomic::Atomi
 static ACTIVE_GPU_INDEX: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// 从 LHML 传感器列表中收集所有 GPU 的传感器数据（支持多 GPU）
+/// 按 hardware 名称分组（而非 hardware_type），避免 AMD 核显+独显都是 GpuAmd 被合并的问题
 fn collect_all_gpu_sensors(
     sensors: &[crate::sensor::SensorReading],
 ) -> Vec<GpuSensorData> {
-    // 找到所有唯一的 GPU 硬件类型
-    let gpu_hw_types: Vec<String> = {
-        let mut types: Vec<String> = sensors
+    // 找到所有唯一的 GPU 硬件名称
+    let gpu_hardware_names: Vec<String> = {
+        let mut names: Vec<String> = sensors
             .iter()
             .filter(|s| {
                 let t = s.hardware_type.to_lowercase();
                 t.starts_with("gpu")
             })
-            .map(|s| s.hardware_type.clone())
+            .map(|s| s.hardware.clone())
             .collect();
-        types.sort();
-        types.dedup();
-        types
+        names.sort();
+        names.dedup();
+        names
     };
 
-    if gpu_hw_types.is_empty() {
+    if gpu_hardware_names.is_empty() {
         return Vec::new();
     }
 
-    // NVIDIA 独显存在时跳过 Intel 核显（AMD 核显保留，老 AMD A 系列 APU 需要显示）
-    let has_nvidia = gpu_hw_types
+    // 判断是否有 NVIDIA 独显（用于跳过 Intel 核显）
+    let has_nvidia = sensors
         .iter()
-        .any(|t| t.eq_ignore_ascii_case("GpuNvidia"));
+        .any(|s| s.hardware_type.eq_ignore_ascii_case("GpuNvidia"));
 
     let mut gpus = Vec::new();
-    for hw_type in &gpu_hw_types {
+    for hw_name in &gpu_hardware_names {
+        // 获取该 GPU 的 hardware_type
+        let hw_type = sensors
+            .iter()
+            .find(|s| s.hardware == *hw_name)
+            .map(|s| s.hardware_type.clone())
+            .unwrap_or_default();
+
+        // NVIDIA 独显存在时跳过 Intel 核显（AMD 核显保留，老 AMD A 系列 APU 需要显示）
         if has_nvidia && hw_type.eq_ignore_ascii_case("GpuIntel") {
             log::debug!("跳过 Intel 核显: 存在 NVIDIA 独显");
             continue;
         }
 
-        // GPU 名称：从第一个匹配的传感器中获取 Hardware 名称
-        let name = sensors
-            .iter()
-            .find(|s| s.hardware_type == *hw_type)
-            .map(|s| s.hardware.clone())
-            .unwrap_or_else(|| hw_type.clone());
+        let name = hw_name.clone();
 
         let temperature = extract_sensor(
-            sensors, "Temperature", hw_type,
+            sensors, "Temperature", &hw_type, Some(hw_name),
             &["GPU Core", "GPU", "Core", "GPU Temperature"],
             false,
         ).map(|(v, _)| v);
 
         let usage = extract_sensor(
-            sensors, "Load", hw_type,
+            sensors, "Load", &hw_type, Some(hw_name),
             &["GPU Core", "GPU", "D3D Usage", "Core"],
             false,
         ).map(|(v, _)| v as u32);
 
-        let fan_speed = extract_all_avg(sensors, "Fan", hw_type, &["GPU Fan", "GPU", "Fans"])
+        let fan_speed = extract_all_avg(sensors, "Fan", &hw_type, Some(hw_name), &["GPU Fan", "GPU", "Fans"])
             .map(|v| v as u32);
 
         let power = extract_sensor(
-            sensors, "Power", hw_type,
+            sensors, "Power", &hw_type, Some(hw_name),
             &["GPU Power", "GPU Package", "GPU Chip Power", "Power", "Package"],
             false,
         ).map(|(v, _)| v as u32);
 
         let clock = extract_sensor(
-            sensors, "Clock", hw_type,
+            sensors, "Clock", &hw_type, Some(hw_name),
             &["GPU Core", "GPU", "Core"],
             false,
         ).map(|(v, _)| v as u32);
 
         let vram_used = extract_sensor(
-            sensors, "SmallData", hw_type,
+            sensors, "SmallData", &hw_type, Some(hw_name),
             &["GPU Memory Used", "D3D Shared Memory Used", "GPU Memory"],
             false,
         ).map(|(v, _)| v as u32);
 
         let vram_total = extract_sensor(
-            sensors, "SmallData", hw_type,
+            sensors, "SmallData", &hw_type, Some(hw_name),
             &["GPU Memory Total", "GPU Memory"],
             false,
         ).map(|(v, _)| v as u32);
 
         let memory_clock = extract_sensor(
-            sensors, "Clock", hw_type,
+            sensors, "Clock", &hw_type, Some(hw_name),
             &["GPU Memory", "Memory"],
             false,
         ).map(|(v, _)| v as u32);
 
         let voltage = extract_sensor(
-            sensors, "Voltage", hw_type,
+            sensors, "Voltage", &hw_type, Some(hw_name),
             &["GPU Core Voltage", "GPU Core", "GPU Voltage", "GPU", "Core"],
             false,
         ).map(|(v, _)| v);
 
         gpus.push(GpuSensorData {
             name,
-            hardware_type: hw_type.clone(),
+            hardware_type: hw_type,
             temperature,
             usage,
             fan_speed,
@@ -455,6 +463,7 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                     &response.sensors,
                     "Load",
                     "CPU",
+                    None,
                     &["CPU Total", "Total"],
                     false,
                 ).unzip();
@@ -464,21 +473,23 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                     &response.sensors,
                     "Temperature",
                     "CPU",
+                    None,
                     &["Core (Tctl/Tdie)", "CPU Package", "Tctl", "Core"],
                     false,
                 )
-                    .or_else(|| extract_sensor(&response.sensors, "Temperature", "SuperIO", &["CPU", "CPU Core", "CPU Temperature", "Core"], false))
-                    .or_else(|| extract_sensor(&response.sensors, "Temperature", "Motherboard", &["CPU", "CPU Core", "CPU Temperature", "Core"], false))
+                    .or_else(|| extract_sensor(&response.sensors, "Temperature", "SuperIO", None, &["CPU", "CPU Core", "CPU Temperature", "Core"], false))
+                    .or_else(|| extract_sensor(&response.sensors, "Temperature", "Motherboard", None, &["CPU", "CPU Core", "CPU Temperature", "Core"], false))
                     .unzip();
                 // CPU 频率 (老AMD可能通过SuperIO报告总线频率)
                 let (cpu_clock, cpu_clock_name) = extract_sensor(
                     &response.sensors,
                     "Clock",
                     "CPU",
+                    None,
                     &["Cores (Average)", "Core #1", "Bus Speed"],
                     true,
                 )
-                    .or_else(|| extract_sensor(&response.sensors, "Clock", "SuperIO", &["Bus Speed", "CPU Clock"], true))
+                    .or_else(|| extract_sensor(&response.sensors, "Clock", "SuperIO", None, &["Bus Speed", "CPU Clock"], true))
                     .unzip();
                 let cpu_clock = cpu_clock.map(|v| v as u32);
                 // CPU 电压 (老AMD也可能通过SuperIO报告)
@@ -486,16 +497,18 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                     &response.sensors,
                     "Voltage",
                     "CPU",
+                    None,
                     &["CPU Core", "Vcore", "Core", "CPU VCore"],
                     false,
                 )
-                    .or_else(|| extract_sensor(&response.sensors, "Voltage", "SuperIO", &["CPU Core", "Vcore", "CPU VCore", "CPU"], false));
+                    .or_else(|| extract_sensor(&response.sensors, "Voltage", "SuperIO", None, &["CPU Core", "Vcore", "CPU VCore", "CPU"], false));
                 let cpu_voltage = cpu_voltage_result.as_ref().map(|(v, _)| *v);
                 // CPU 功耗
                 let cpu_power_result = extract_sensor(
                     &response.sensors,
                     "Power",
                     "CPU",
+                    None,
                     &["Package", "CPU Package", "CPU Cores", "CPU Core"],
                     false,
                 );
@@ -505,6 +518,7 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                     &response.sensors,
                     "Temperature",
                     "Storage",
+                    None,
                     &["Composite Temperature", "Temperature #1", "Temperature"],
                     true,
                 ).unzip();
@@ -514,6 +528,7 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                     &response.sensors,
                     "Load",
                     "Memory",
+                    None,
                     &["Memory"],
                     false,
                 ).map(|(v, _)| v);
@@ -597,7 +612,7 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                 // LHML 中 CPU 风扇传感器出现在 SuperIO（Nuvoton 等）或 Motherboard 硬件类型下
                 // 名称通常为 "Fan #1"、"CPU Fan"、"CPU1 Fan" 等，优先取第一个非零值风扇作为 CPU 风扇
                 let cpu_fan_speed = {
-                    let fan = extract_sensor(&response.sensors, "Fan", "SuperIO", &["Fan #1", "Fan #2", "CPU Fan", "CPU1 Fan", "CPUFAN"], false)
+                    let fan = extract_sensor(&response.sensors, "Fan", "SuperIO", None, &["Fan #1", "Fan #2", "CPU Fan", "CPU1 Fan", "CPUFAN"], false)
                         .or_else(|| {
                             // 取 SuperIO 下第一个非零 RPM 的风扇
                             response.sensors.iter()

@@ -86,24 +86,9 @@ fn check_scheduled_task() -> bool {
     }
 }
 
-// ========== 方案2：注册表 Run 键（辅助方案，无需管理员权限） ==========
+// ========== 清理旧版注册表 Run 键残留（已不再作为自启方案） ==========
 
-/// 写入注册表 HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NexBox
-#[cfg(windows)]
-fn create_registry_run(exe_path: &str) -> Result<(), String> {
-    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-    let (key, _) = hkcu
-        .create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run")
-        .map_err(|e| format!("打开注册表 Run 键失败: {}", e))?;
-
-    key.set_value(APP_NAME, &exe_path)
-        .map_err(|e| format!("写入注册表 Run 键失败: {}", e))?;
-
-    log::info!("注册表 Run 键已设置: {} = {}", APP_NAME, exe_path);
-    Ok(())
-}
-
-/// 删除注册表 Run 键中的 NexBox 条目
+/// 删除注册表 Run 键中的 NexBox 条目（仅清理历史遗留，不再写入）
 #[cfg(windows)]
 fn remove_registry_run() -> Result<(), String> {
     let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
@@ -127,32 +112,7 @@ fn remove_registry_run() -> Result<(), String> {
     }
 }
 
-/// 检查注册表 Run 键是否存在
-#[cfg(windows)]
-fn check_registry_run() -> bool {
-    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-    match hkcu.open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Run") {
-        Ok(key) => {
-            match key.get_value::<String, _>(APP_NAME) {
-                Ok(val) => {
-                    if let Ok(current) = std::env::current_exe() {
-                        let current_path = current.to_string_lossy().replace("/", "\\");
-                        if val.replace("/", "\\") == current_path {
-                            return true;
-                        }
-                        log::info!("注册表 Run 键路径不匹配，将在下次设置时修正: {} vs {}", val, current_path);
-                        return true;
-                    }
-                    true
-                }
-                Err(_) => false,
-            }
-        }
-        Err(_) => false,
-    }
-}
-
-// ========== 方案3：启动文件夹快捷方式（备选方案，mslnk 纯 Rust） ==========
+// ========== 方案2：启动文件夹快捷方式（备选方案，mslnk 纯 Rust） ==========
 
 #[cfg(windows)]
 fn create_startup_shortcut(exe_path: &str) -> Result<(), String> {
@@ -225,18 +185,7 @@ pub async fn set_nexbox_auto_start(enable: bool) -> Result<(), String> {
                 }
             }
 
-            // 方案2：注册表 Run 键（辅助方案，无需管理员权限）
-            match create_registry_run(&app_path) {
-                Ok(()) => {
-                    log::info!("注册表 Run 键设置成功（辅助方案）");
-                }
-                Err(e) => {
-                    log::warn!("注册表 Run 键设置失败: {}", e);
-                    errors.push(format!("注册表: {}", e));
-                }
-            }
-
-            // 方案3：启动文件夹快捷方式（备选方案）
+            // 方案2：启动文件夹快捷方式（备选方案）
             match create_startup_shortcut(&app_path) {
                 Ok(()) => {
                     log::info!("启动文件夹快捷方式创建成功（备选方案）");
@@ -247,7 +196,7 @@ pub async fn set_nexbox_auto_start(enable: bool) -> Result<(), String> {
                 }
             }
 
-            if check_scheduled_task() || check_registry_run() || check_startup_shortcut() {
+            if check_scheduled_task() || check_startup_shortcut() {
                 log::info!("开机自启设置成功（至少一种方案生效）");
                 return Ok(());
             }
@@ -267,10 +216,11 @@ pub async fn set_nexbox_auto_start(enable: bool) -> Result<(), String> {
                 }
             }
 
+            // 清理旧版注册表 Run 键残留（历史遗留，不再作为自启方案）
             match remove_registry_run() {
-                Ok(()) => log::info!("注册表 Run 键已删除"),
+                Ok(()) => log::info!("注册表 Run 键残留已清理"),
                 Err(e) => {
-                    log::warn!("删除注册表 Run 键失败: {}", e);
+                    log::warn!("清理注册表 Run 键残留失败: {}", e);
                     errors.push(e);
                 }
             }
@@ -283,7 +233,7 @@ pub async fn set_nexbox_auto_start(enable: bool) -> Result<(), String> {
                 }
             }
 
-            if !check_scheduled_task() && !check_registry_run() && !check_startup_shortcut() {
+            if !check_scheduled_task() && !check_startup_shortcut() {
                 log::info!("开机自启已完全关闭");
                 return Ok(());
             }
@@ -309,14 +259,12 @@ pub async fn check_nexbox_auto_start() -> Result<bool, String> {
     #[cfg(windows)]
     {
         let task_exists = check_scheduled_task();
-        let reg_exists = check_registry_run();
         let shortcut_exists = check_startup_shortcut();
 
-        let enabled = task_exists || reg_exists || shortcut_exists;
+        let enabled = task_exists || shortcut_exists;
         log::debug!(
-            "开机自启状态检查：计划任务={}, 注册表={}, 快捷方式={}, 最终={}",
+            "开机自启状态检查：计划任务={}, 快捷方式={}, 最终={}",
             task_exists,
-            reg_exists,
             shortcut_exists,
             enabled
         );

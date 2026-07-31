@@ -70,7 +70,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "v6.4.2";
+const CURRENT_VERSION = "v6.5.4";
 
 function App() {
   const { t } = useTranslation();

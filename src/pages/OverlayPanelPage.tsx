@@ -184,6 +184,7 @@ function SliderControl({
   value,
   min,
   max,
+  step,
   onChange,
   suffix = "",
 }: {
@@ -191,6 +192,7 @@ function SliderControl({
   value: number;
   min: number;
   max: number;
+  step?: number;
   onChange: (val: number) => void;
   suffix?: string;
 }) {
@@ -204,7 +206,7 @@ function SliderControl({
         <Text color={textColor} fontSize="sm">{label}</Text>
         <Text color={getActiveColor()} fontSize="sm" fontWeight="bold">{value}{suffix}</Text>
       </HStack>
-      <Slider value={value} min={min} max={max} onChange={onChange}>
+      <Slider value={value} min={min} max={max} step={step} onChange={onChange}>
         <SliderTrack bg={sliderBg}>
           <SliderFilledTrack bg={getActiveColor()} />
         </SliderTrack>

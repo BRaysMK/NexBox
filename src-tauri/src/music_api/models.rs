@@ -19,6 +19,19 @@ pub struct Song {
     pub playable: bool,
     #[serde(default)]
     pub language: i32,
+    // === 酷狗扩展字段 ===
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub album_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub album_audio_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub hq_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub sq_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub res_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -138,4 +151,16 @@ pub fn quality_candidates_from(target: &str) -> Vec<QualityCandidate> {
     let all = netease_quality_candidates();
     let start = all.iter().position(|c| c.level == normalized).unwrap_or(0);
     all[start..].to_vec()
+}
+
+/// 酷狗音质候选
+#[allow(dead_code)]
+pub fn kugou_quality_candidates() -> Vec<QualityCandidate> {
+    vec![
+        QualityCandidate { level: "jymaster".into(), label: "超清母带".into() },
+        QualityCandidate { level: "hires".into(),    label: "Hi-Res".into()    },
+        QualityCandidate { level: "lossless".into(), label: "无损".into()    },
+        QualityCandidate { level: "exhigh".into(),   label: "极高".into()    },
+        QualityCandidate { level: "standard".into(), label: "标准".into()    },
+    ]
 }

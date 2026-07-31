@@ -13,6 +13,13 @@ export interface Song {
   fee: number;
   playable: boolean;
   language: number;
+  // === 酷狗扩展字段 ===
+  hash?: string;
+  album_id?: string;
+  album_audio_id?: string;
+  hq_hash?: string;
+  sq_hash?: string;
+  res_hash?: string;
 }
 
 export interface Artist {
@@ -95,3 +102,14 @@ export interface QrCheckResult {
 export type PlayMode = "list" | "shuffle" | "one";
 
 export type PlaybackQuality = "jymaster" | "hires" | "lossless" | "exhigh" | "standard";
+
+/// 音乐平台类型
+export type MusicProvider = "netease" | "kugou" | "qqmusic";
+
+/// 平台显示信息
+export interface ProviderInfo {
+  id: MusicProvider;
+  name: string;
+  icon: string;
+  color: string;
+}

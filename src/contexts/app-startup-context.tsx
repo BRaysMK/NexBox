@@ -44,6 +44,8 @@ interface OverlaySettings {
   opacity: number;
   style: string;
   font: string;
+  font_size: number;
+  item_width: number;
   font_color: string;
   _version?: number;
   position_x?: number | null;
@@ -113,6 +115,8 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   opacity: 255,
   style: "default",
   font: "Microsoft YaHei",
+  font_size: 13,
+  item_width: 130,
   font_color: "#ffffff",
   position_x: null,
   position_y: null,

@@ -1,10 +1,15 @@
 pub mod audio_proxy;
 pub mod cookie;
 pub mod crypto;
+pub mod kugou;
 pub mod models;
 pub mod netease;
 
+use std::collections::HashMap;
+use std::time::Duration;
+
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_store::StoreExt;
 use url::Url;
 use models::*;
 
@@ -179,6 +184,172 @@ pub async fn music_artist_songs(artist_id: String, limit: Option<u32>, offset: O
     netease::artist_songs(&artist_id, limit.unwrap_or(50), offset.unwrap_or(0), &app_cookie).await
 }
 
+// ============================================================
+//  Tauri Commands - 酷狗音乐
+// ============================================================
+
+#[tauri::command]
+pub async fn kugou_search(app: AppHandle, keywords: String, limit: Option<u32>) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::search(&keywords, limit.unwrap_or(30), &cookie).await
+}
+
+#[tauri::command]
+pub async fn kugou_song_url(
+    app: AppHandle,
+    hash: String,
+    album_id: Option<String>,
+    album_audio_id: Option<String>,
+    quality: Option<String>,
+) -> Result<SongUrlResult, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::song_url(
+        &hash,
+        &album_id.unwrap_or_default(),
+        &album_audio_id.unwrap_or_default(),
+        &quality.unwrap_or_else(|| "standard".into()),
+        &cookie,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn kugou_lyric(
+    hash: String,
+    album_audio_id: Option<String>,
+    duration: Option<u64>,
+) -> Result<Lyrics, String> {
+    kugou::lyric(&hash, &album_audio_id.unwrap_or_default(), duration.unwrap_or(0)).await
+}
+
+#[tauri::command]
+pub async fn kugou_login_status(app: AppHandle) -> Result<LoginInfo, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::login_info(&cookie).await
+}
+
+#[tauri::command]
+pub async fn kugou_login_cookie(app: AppHandle, cookie: String) -> Result<LoginInfo, String> {
+    let normalized = cookie::normalize_cookie_header(&cookie);
+    if !kugou::kugou_cookie_has_login(&normalized) {
+        return Ok(LoginInfo {
+            provider: "kugou".into(),
+            ..Default::default()
+        });
+    }
+    cookie::save_cookie(&app, "kugou", &normalized)?;
+    set_provider_cookie("kugou", normalized).await;
+    let c = get_provider_cookie("kugou").await;
+    kugou::login_info(&c).await
+}
+
+#[tauri::command]
+pub async fn kugou_logout(app: AppHandle) -> Result<(), String> {
+    cookie::clear_cookie(&app, "kugou")?;
+    set_provider_cookie("kugou", String::new()).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn kugou_user_playlists(app: AppHandle) -> Result<Vec<Playlist>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::user_playlists(&cookie).await
+}
+
+#[tauri::command]
+pub async fn kugou_playlist_tracks(app: AppHandle, id: String) -> Result<(Playlist, Vec<Song>), String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::playlist_tracks(&id, &cookie).await
+}
+
+#[tauri::command]
+pub async fn kugou_playlist_tracks_range(app: AppHandle, id: String, start: usize, count: usize) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::playlist_tracks_paged(&id, &cookie, start, count).await
+}
+
+#[tauri::command]
+pub async fn kugou_guess_like(app: AppHandle, limit: Option<u32>) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::guess_like(&cookie, limit.unwrap_or(12)).await
+}
+
+#[tauri::command]
+pub async fn kugou_rank_list(app: AppHandle) -> Result<Vec<Playlist>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::get_rank_list(&cookie).await
+}
+
+#[tauri::command]
+pub async fn kugou_rank_songs(app: AppHandle, rank_id: String, limit: Option<u32>) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::get_rank_songs(&cookie, &rank_id, limit.unwrap_or(30)).await
+}
+
+#[tauri::command]
+pub async fn kugou_like_toggle(app: AppHandle, song: Song, like: bool) -> Result<bool, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::like_toggle(&song, like, &cookie).await
+}
+
+#[tauri::command]
+pub async fn kugou_liked_hashes(app: AppHandle) -> Result<Vec<String>, String> {
+    let cookie = load_provider_cookie(&app, "kugou").await;
+    kugou::liked_hashes(&cookie).await
+}
+
+// ============================================================
+//  Tauri Commands - 多平台管理
+// ============================================================
+
+/// 获取所有平台登录状态
+#[tauri::command]
+pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, LoginInfo>, String> {
+    let mut result = HashMap::new();
+    // 网易云
+    let netease_cookie = load_provider_cookie(&app, "netease").await;
+    if !netease_cookie.is_empty() {
+        if let Ok(info) = netease::login_status(&netease_cookie).await {
+            result.insert("netease".into(), info);
+        }
+    }
+    // 酷狗
+    let kugou_cookie = load_provider_cookie(&app, "kugou").await;
+    if !kugou_cookie.is_empty() {
+        if let Ok(info) = kugou::login_info(&kugou_cookie).await {
+            result.insert("kugou".into(), info);
+        }
+    }
+    Ok(result)
+}
+
+/// 切换播放源平台
+#[tauri::command]
+pub async fn music_switch_provider(app: AppHandle, provider: String) -> Result<(), String> {
+    match provider.as_str() {
+        "netease" | "kugou" => {}
+        _ => return Err(format!("Unknown provider: {}", provider)),
+    }
+    let store = app.store("music-cookies.json").map_err(|e| e.to_string())?;
+    store.set("playback_source", provider);
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 获取当前播放源平台
+#[tauri::command]
+pub async fn music_get_playback_source(app: AppHandle) -> Result<String, String> {
+    let store = app.store("music-cookies.json").map_err(|e| e.to_string())?;
+    Ok(store
+        .get("playback_source")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "netease".into()))
+}
+
+// ============================================================
+//  登录窗口 - 多平台
+// ============================================================
+
 /// 网易云登录 cookie 优先级 (参考 Mineradio)
 const NETEASE_COOKIE_PRIORITY: &[&str] = &[
     "MUSIC_U",
@@ -193,6 +364,20 @@ const NETEASE_COOKIE_PRIORITY: &[&str] = &[
     "JSESSIONID-WYYY",
 ];
 
+/// 酷狗登录 cookie 优先级 (参考 Mineradio KUGOU_LOGIN_COOKIE_PRIORITY)
+const KUGOU_COOKIE_PRIORITY: &[&str] = &[
+    "KuGoo",
+    "token",
+    "userid",
+    "KugooID",
+    "kugouID",
+    "UserId",
+    "kg_mid",
+    "kg_dfid",
+    "Kugou",
+    "NickName",
+];
+
 /// 检查域名是否属于网易云
 fn is_netease_domain(domain: &str) -> bool {
     let d = domain.trim_start_matches('.').to_lowercase();
@@ -201,16 +386,61 @@ fn is_netease_domain(domain: &str) -> bool {
     d == "netease.com" || d.ends_with(".netease.com")
 }
 
-/// 打开登录窗口 (网易云) - 使用 Tauri cookies() API 直接读取 HttpOnly cookie
+/// 检查域名是否属于酷狗 (参考 Mineradio isKugouCookieDomain)
+fn is_kugou_domain(domain: &str) -> bool {
+    let d = domain.trim_start_matches('.').to_lowercase();
+    d == "kugou.com" || d.ends_with(".kugou.com")
+}
+
+/// 从 webview cookies 构建指定平台的 cookie 字符串
+fn build_cookie_from_webview(cookies: &[tauri::webview::Cookie], priority: &[&str], domain_check: fn(&str) -> bool) -> String {
+    use std::collections::HashMap;
+    let mut picked: HashMap<String, String> = HashMap::new();
+    for c in cookies {
+        if let Some(domain) = c.domain() {
+            if domain_check(domain) {
+                let name = c.name().to_string();
+                let value = c.value().to_string();
+                if !name.is_empty() && !value.is_empty() {
+                    picked.insert(name, value);
+                }
+            }
+        }
+    }
+    let mut ordered: Vec<(String, String)> = Vec::new();
+    for name in priority {
+        if let Some(value) = picked.remove(*name) {
+            ordered.push((name.to_string(), value));
+        }
+    }
+    for (name, value) in picked {
+        ordered.push((name, value));
+    }
+    ordered
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// 打开登录窗口 (多平台) - 使用 Tauri cookies() API 直接读取 HttpOnly cookie
 /// 参考 Mineradio 的 Electron session.cookies.get() 方案
 #[tauri::command]
-pub async fn music_open_login_window(app: AppHandle) -> Result<String, String> {
+pub async fn music_open_login_window(app: AppHandle, provider: String) -> Result<String, String> {
+    match provider.as_str() {
+        "netease" => open_netease_login_window(&app).await,
+        "kugou" => open_kugou_login_window(&app).await,
+        _ => Err(format!("Unknown provider: {}", provider)),
+    }
+}
+
+/// 打开网易云登录窗口
+async fn open_netease_login_window(app: &AppHandle) -> Result<String, String> {
     use tauri::WebviewUrl;
 
     let url = "https://music.163.com/#/login";
     let label = "netease-login";
 
-    // 如果窗口已存在，清除 cookie 后刷新登录页（切换账号场景）
     if let Some(existing) = app.get_webview_window(label) {
         let _ = existing.clear_all_browsing_data();
         let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
@@ -219,9 +449,8 @@ pub async fn music_open_login_window(app: AppHandle) -> Result<String, String> {
         return Ok("window_refreshed".into());
     }
 
-    // 新窗口：先以 about:blank 创建，清除 cookie 后再导航到登录页
     let login_window = tauri::WebviewWindowBuilder::new(
-        &app,
+        app,
         label,
         WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
     )
@@ -231,75 +460,35 @@ pub async fn music_open_login_window(app: AppHandle) -> Result<String, String> {
     .build()
     .map_err(|e| format!("Failed to create login window: {e}"))?;
 
-    // 清除残留 cookie，确保登录页不会自动登录
     let _ = login_window.clear_all_browsing_data();
-    // 导航到登录页
     let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
     let _ = login_window.navigate(login_url);
 
-    // 轮询读取 webview 的 cookie (包括 HttpOnly 的 MUSIC_U)
-    // 这是关键: document.cookie 无法读取 HttpOnly cookie,
-    // 但 Tauri 的 cookies() API 直接从 WebView2/WKWebView 读取, 可以拿到全部
     let win = login_window.clone();
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        // 等待页面加载
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_secs(3)).await;
 
         for _ in 0..150 {
-            // 直接从 webview 读取所有 cookie (包括 HttpOnly)
             match win.cookies() {
                 Ok(cookies) => {
-                    // 内联构建 cookie 字符串 (类型由编译器推断, 无需命名)
-                    use std::collections::HashMap;
-                    let mut picked: HashMap<String, String> = HashMap::new();
-                    for c in &cookies {
-                        let domain_opt: Option<&str> = c.domain();
-                        if let Some(domain) = domain_opt {
-                            if is_netease_domain(domain) {
-                                let name = c.name().to_string();
-                                let value = c.value().to_string();
-                                if !name.is_empty() && !value.is_empty() {
-                                    picked.insert(name, value);
-                                }
-                            }
-                        }
-                    }
-                    let mut ordered: Vec<(String, String)> = Vec::new();
-                    for name in NETEASE_COOKIE_PRIORITY {
-                        if let Some(value) = picked.remove(*name) {
-                            ordered.push((name.to_string(), value));
-                        }
-                    }
-                    for (name, value) in picked {
-                        ordered.push((name, value));
-                    }
-                    let cookie_str = ordered.iter()
-                        .map(|(k, v)| format!("{k}={v}"))
-                        .collect::<Vec<_>>()
-                        .join("; ");
+                    let cookie_str = build_cookie_from_webview(&cookies, NETEASE_COOKIE_PRIORITY, is_netease_domain);
 
                     if cookie::netease_cookie_has_login(&cookie_str) {
-                        log::info!("[MusicAPI] MUSIC_U cookie found via webview cookies() API, cookie length: {}", cookie_str.len());
+                        log::info!("[MusicAPI] MUSIC_U cookie found, cookie length: {}", cookie_str.len());
                         let _ = cookie::save_cookie(&app_handle, "netease", &cookie_str);
                         set_app_cookie(cookie_str).await;
-                        // 强制关闭登录窗口
                         let _ = win.close();
-                        // 直接在后端调用 login_status 验证 cookie 是否有效
                         let app_cookie = get_app_cookie().await;
                         match netease::login_status(&app_cookie).await {
                             Ok(info) => {
-                                log::info!("[MusicAPI] Login status after cookie capture: logged_in={}, nickname={}", info.logged_in, info.nickname);
                                 if info.logged_in {
                                     let _ = app_handle.emit("netease-login-success", &info);
-                                    log::info!("[MusicAPI] Login success event emitted with user info");
                                 } else {
-                                    log::warn!("[MusicAPI] Cookie captured but login_status returned not logged in");
                                     let _ = app_handle.emit("netease-login-failed", "Cookie 无效或已过期");
                                 }
                             }
                             Err(e) => {
-                                log::error!("[MusicAPI] Login status check failed after cookie capture: {e}");
                                 let _ = app_handle.emit("netease-login-failed", &e);
                             }
                         }
@@ -310,7 +499,7 @@ pub async fn music_open_login_window(app: AppHandle) -> Result<String, String> {
                     log::warn!("[MusicAPI] Failed to read cookies from webview: {e}");
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
         log::warn!("[MusicAPI] Login window polling timed out after 5 minutes");
     });
@@ -318,28 +507,133 @@ pub async fn music_open_login_window(app: AppHandle) -> Result<String, String> {
     Ok("window_created".into())
 }
 
+/// 打开酷狗登录窗口 (参考 Mineradio openKugouMusicLoginWindow)
+/// 包含 Warmup 机制: 首次登录可能只有 loggedIn 没有 playbackReady,
+/// 需要导航到 warmup URL 触发更多 cookie 写入
+async fn open_kugou_login_window(app: &AppHandle) -> Result<String, String> {
+    use tauri::WebviewUrl;
+
+    let url = "https://www.kugou.com/";
+    let warmup_url = "https://www.kugou.com/newuc/user/uc/type=edit";
+    let label = "kugou-login";
+
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.clear_all_browsing_data();
+        let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
+        let _ = existing.navigate(login_url);
+        let _ = existing.set_focus();
+        return Ok("window_refreshed".into());
+    }
+
+    let login_window = tauri::WebviewWindowBuilder::new(
+        app,
+        label,
+        WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
+    )
+    .title("酷狗音乐登录")
+    .inner_size(900.0, 720.0)
+    .min_inner_size(760.0, 560.0)
+    .build()
+    .map_err(|e| format!("Failed to create login window: {e}"))?;
+
+    let _ = login_window.clear_all_browsing_data();
+    let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
+    let _ = login_window.navigate(login_url);
+
+    let win = login_window.clone();
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // 等待页面加载
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let mut warmup_started = false;
+
+        for _ in 0..150 {
+            match win.cookies() {
+                Ok(cookies) => {
+                    let cookie_str = build_cookie_from_webview(&cookies, KUGOU_COOKIE_PRIORITY, is_kugou_domain);
+
+                    if kugou::kugou_cookie_has_playback(&cookie_str) {
+                        // 登录完成 (playbackReady: userid + token)
+                        log::info!("[KugouLogin] playbackReady cookie found, length: {}", cookie_str.len());
+                        let _ = cookie::save_cookie(&app_handle, "kugou", &cookie_str);
+                        set_provider_cookie("kugou", cookie_str).await;
+                        let _ = win.close();
+                        let kugou_cookie = get_provider_cookie("kugou").await;
+                        match kugou::login_info(&kugou_cookie).await {
+                            Ok(info) => {
+                                if info.logged_in {
+                                    let _ = app_handle.emit("kugou-login-success", &info);
+                                } else {
+                                    let _ = app_handle.emit("kugou-login-failed", "Cookie 无效或已过期");
+                                }
+                            }
+                            Err(e) => {
+                                let _ = app_handle.emit("kugou-login-failed", &e);
+                            }
+                        }
+                        return;
+                    } else if kugou::kugou_cookie_has_login(&cookie_str) && !warmup_started {
+                        // 有登录态但 token 不完整 → warmup
+                        // 参考 Mineradio: 导航到 warmup URL 触发更多 cookie 写入
+                        warmup_started = true;
+                        log::info!("[KugouLogin] loggedIn but not playbackReady, starting warmup...");
+                        if let Ok(warmup) = warmup_url.parse::<Url>() {
+                            let _ = win.navigate(warmup);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!("[KugouLogin] Failed to read cookies from webview: {e}");
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(1200)).await;
+        }
+
+        // 超时 — 最后检查一次 cookie
+        if let Ok(cookies) = win.cookies() {
+            let cookie_str = build_cookie_from_webview(&cookies, KUGOU_COOKIE_PRIORITY, is_kugou_domain);
+            if kugou::kugou_cookie_has_login(&cookie_str) {
+                log::info!("[KugouLogin] Timeout but found partial login, saving cookie");
+                let _ = cookie::save_cookie(&app_handle, "kugou", &cookie_str);
+                set_provider_cookie("kugou", cookie_str).await;
+                let kugou_cookie = get_provider_cookie("kugou").await;
+                if let Ok(info) = kugou::login_info(&kugou_cookie).await {
+                    let _ = app_handle.emit("kugou-login-success", &info);
+                }
+                return;
+            }
+        }
+        log::warn!("[KugouLogin] Polling timed out after 5 minutes");
+    });
+
+    Ok("window_created".into())
+}
+
 // ============================================================
-//  全局 Cookie 缓存 (内存中，避免每次都读 store)
+//  全局 Cookie 缓存 (多平台, 内存中)
 // ============================================================
 
 static APP_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
+static KUGOU_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 
+/// 获取网易云 cookie (向后兼容)
 async fn get_app_cookie() -> String {
     APP_COOKIE.read().await.clone()
 }
 
+/// 设置网易云 cookie (向后兼容)
 pub async fn set_app_cookie(cookie: String) {
     let mut guard = APP_COOKIE.write().await;
     *guard = cookie;
 }
 
+/// 加载网易云 cookie (向后兼容)
 async fn load_app_cookie(app: &AppHandle) -> String {
-    // 先检查内存缓存
     let cached = APP_COOKIE.read().await.clone();
     if !cached.is_empty() {
         return cached;
     }
-    // 从 store 加载
     match cookie::load_cookie(app, "netease") {
         Ok(c) => {
             set_app_cookie(c.clone()).await;
@@ -349,9 +643,51 @@ async fn load_app_cookie(app: &AppHandle) -> String {
     }
 }
 
+/// 获取指定平台的 cookie
+async fn get_provider_cookie(provider: &str) -> String {
+    match provider {
+        "netease" => APP_COOKIE.read().await.clone(),
+        "kugou" => KUGOU_COOKIE.read().await.clone(),
+        _ => String::new(),
+    }
+}
+
+/// 设置指定平台的 cookie
+async fn set_provider_cookie(provider: &str, cookie: String) {
+    match provider {
+        "netease" => {
+            let mut guard = APP_COOKIE.write().await;
+            *guard = cookie;
+        }
+        "kugou" => {
+            let mut guard = KUGOU_COOKIE.write().await;
+            *guard = cookie;
+        }
+        _ => {}
+    }
+}
+
+/// 加载指定平台的 cookie (先检查内存缓存, 再从 store 加载)
+async fn load_provider_cookie(app: &AppHandle, provider: &str) -> String {
+    let cached = get_provider_cookie(provider).await;
+    if !cached.is_empty() {
+        return cached;
+    }
+    match cookie::load_cookie(app, provider) {
+        Ok(c) => {
+            set_provider_cookie(provider, c.clone()).await;
+            c
+        }
+        Err(_) => String::new(),
+    }
+}
+
 /// 初始化时从 store 加载 cookie 到内存
 pub async fn init_cookie_cache(app: &AppHandle) {
     if let Ok(c) = cookie::load_cookie(app, "netease") {
-        set_app_cookie(c).await;
+        set_provider_cookie("netease", c).await;
+    }
+    if let Ok(c) = cookie::load_cookie(app, "kugou") {
+        set_provider_cookie("kugou", c).await;
     }
 }

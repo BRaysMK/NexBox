@@ -26,6 +26,7 @@ import {
   PopoverContent,
   PopoverBody,
   Switch,
+  SimpleGrid,
 } from "@chakra-ui/react";
 import {
   Search,
@@ -480,7 +481,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   // 切歌时加载歌词（不再管理 timeupdate，由 ProgressSection 独立处理）
   useEffect(() => {
     if (currentSong) {
-      useMusicStore.getState().loadLyrics(currentSong.id);
+      useMusicStore.getState().loadLyricsForSong(currentSong);
     }
   }, [currentSong]);
 
@@ -2040,6 +2041,7 @@ export default function MusicPage() {
   const likedSongIds = useMusicStore((s) => s.likedSongIds);
   const recommendations = useMusicStore((s) => s.recommendations);
   const loginInfo = useMusicStore((s) => s.loginInfo);
+  const playbackSource = useMusicStore((s) => s.playbackSource);
   const searching = useMusicStore((s) => s.searching);
   const loadingPlaylists = useMusicStore((s) => s.loadingPlaylists);
   const loadingLeftTracks = useMusicStore((s) => s.loadingLeftTracks);
@@ -2160,7 +2162,7 @@ export default function MusicPage() {
   const handleExpandPlayer = useCallback(() => {
     const song = useMusicStore.getState().currentSong;
     if (song) {
-      useMusicStore.getState().loadLyrics(song.id);
+      useMusicStore.getState().loadLyricsForSong(song);
     }
     setExpandedPlayer(true);
   }, []);
@@ -3037,7 +3039,7 @@ setRightPanelView("tracks");
               </>
             ) : (
               <>
-                {loginInfo?.logged_in && (
+                {loginInfo?.logged_in && playbackSource !== "kugou" && (
                   <>
                 <HStack justify="space-between" mb={3} flexShrink={0}>
                   <HStack spacing={2}>
@@ -3055,14 +3057,64 @@ setRightPanelView("tracks");
                     刷新
                   </Button>
                 </HStack>
+                  </>
+                )}
 
                 {/* 官方榜单 */}
-                <VStack spacing={1.5} align="stretch" mb={2} flexShrink={0}>
+                {loginInfo?.logged_in && (
+                <VStack spacing={2} align="stretch" mb={2} flexShrink={playbackSource === "kugou" ? undefined : 0} flex={playbackSource === "kugou" ? 1 : undefined} overflowY={playbackSource === "kugou" ? "auto" : undefined} sx={playbackSource === "kugou" ? memoScrollbarSx : undefined}>
                   <HStack spacing={1.5}>
                     <TrendingUp size={13} color={activeColor} />
                     <Text fontSize="2xs" fontWeight="bold" color={subTextColor}>官方榜单</Text>
                   </HStack>
-                  <HStack spacing={1.5} minW={0} overflowX="auto" sx={memoScrollbarSx}>
+                  {playbackSource === "kugou" ? (
+                    /* 酷狗: 网格布局铺满面板 */
+                    <Box>
+                      <SimpleGrid columns={3} spacing={2}>
+                        {officialCharts.length > 0 ? officialCharts.map((chart) => (
+                          <VStack
+                            key={chart.id}
+                            spacing={0.5}
+                            cursor="pointer"
+                            onClick={() => handleRecPlaylistClick(chart)}
+                            _hover={{ transform: "scale(1.04)" }}
+                            transition="transform 0.15s"
+                          >
+                            <Box
+                              w="100%"
+                              borderRadius="lg"
+                              overflow="hidden"
+                              sx={{ aspectRatio: "1 / 1" }}
+                            >
+                              <ChakraImage
+                                src={coverProxyUrl(chart.cover, proxyPort)}
+                                alt=""
+                                w="100%"
+                                h="100%"
+                                objectFit="cover"
+                                fallback={
+                                  <Box w="100%" h="100%" bg="gray.700" display="flex" alignItems="center" justifyContent="center">
+                                    <TrendingUp size={14} color={subTextColor} />
+                                  </Box>
+                                }
+                              />
+                            </Box>
+                            <Text color={textColor} fontSize="xs" fontWeight="medium" noOfLines={1} textAlign="center" w="100%">
+                              {chart.name}
+                            </Text>
+                          </VStack>
+                        )) : (
+                          <>
+                            {[0, 1, 2, 3, 4, 5].map((i) => (
+                              <Box key={i} borderRadius="lg" bg={itemHoverBg} sx={{ aspectRatio: "1 / 1" }} />
+                            ))}
+                          </>
+                        )}
+                      </SimpleGrid>
+                    </Box>
+                  ) : (
+                    /* 网易云: 横向滚动 */
+                    <HStack spacing={1.5} minW={0} overflowX="auto" sx={memoScrollbarSx}>
                     {officialCharts.length > 0 ? officialCharts.map((chart) => (
                       <VStack
                         key={chart.id}
@@ -3099,18 +3151,18 @@ setRightPanelView("tracks");
                         </Text>
                       </VStack>
                     )) : (
-                      // 骨架占位
                       <>
                         {[0, 1, 2, 3, 4, 5].map((i) => (
                           <Box key={i} minW="60px" maxW="70px" flexShrink={0} borderRadius="lg" bg={itemHoverBg} sx={{ aspectRatio: "1 / 1" }} />
                         ))}
                       </>
                     )}
-                  </HStack>
+                    </HStack>
+                  )}
                 </VStack>
-                  </>
                 )}
 
+                {playbackSource !== "kugou" && (
                 <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
                   {!loginInfo?.logged_in ? (
                     <VStack py={8} spacing={3}>
@@ -3130,6 +3182,7 @@ setRightPanelView("tracks");
                     </motion.div>
                   )}
                 </Box>
+                )}
               </>
             )}
           </LiquidGlassCard>
