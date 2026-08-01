@@ -70,7 +70,7 @@ export default function StartupManagerPage() {
 
   const [items, setItems] = useState<StartupItem[]>([]);
   const [isScanning, setIsScanning] = useState(false);
-  const [deletingItems, setDeletingItems] = useState<Set<string>>(new Set());
+  const [disablingItems, setDisablingItems] = useState<Set<string>>(new Set());
 
   const doScan = useCallback(async () => {
     setIsScanning(true);
@@ -94,29 +94,29 @@ export default function StartupManagerPage() {
     doScan();
   }, [doScan]);
 
-  const handleDelete = async (item: StartupItem, index: number) => {
+  const handleDisable = async (item: StartupItem, index: number) => {
     const key = `${item.name}-${index}`;
-    setDeletingItems((prev) => new Set(prev).add(key));
+    setDisablingItems((prev) => new Set(prev).add(key));
     try {
       await invoke("delete_startup_item", { item });
       toast({
-        title: t("optimization.startupManager.deleteSuccess", { name: item.name }),
+        title: t("optimization.startupManager.disableSuccess", { name: item.name }),
         status: "success",
         duration: 2000,
         isClosable: true,
       });
       setItems((prev) => prev.filter((_, i) => i !== index));
     } catch (error) {
-      console.error("Failed to delete startup item:", error);
+      console.error("Failed to disable startup item:", error);
       toast({
-        title: t("optimization.startupManager.deleteError"),
+        title: t("optimization.startupManager.disableError"),
         description: String(error),
         status: "error",
         duration: 3000,
         isClosable: true,
       });
     }
-    setDeletingItems((prev) => {
+    setDisablingItems((prev) => {
       const next = new Set(prev);
       next.delete(key);
       return next;
@@ -224,13 +224,13 @@ export default function StartupManagerPage() {
             <Tbody>
               {items.map((item, index) => {
                 const key = `${item.name}-${index}`;
-                const isDeleting = deletingItems.has(key);
+                const isDisabling = disablingItems.has(key);
                 return (
                   <Tr
                     key={key}
                     _hover={{ bg: hoverBg }}
                     transition="background 0.15s"
-                    opacity={isDeleting ? 0.5 : 1}
+                    opacity={isDisabling ? 0.5 : 1}
                   >
                     <Td px={4} py={3}>
                       <Flex align="center" gap={2}>
@@ -298,16 +298,16 @@ export default function StartupManagerPage() {
                             />
                           </Tooltip>
                         )}
-                        <Tooltip label={t("optimization.startupManager.delete")} placement="top">
+                        <Tooltip label={t("optimization.startupManager.disable")} placement="top">
                           <IconButton
-                            aria-label={t("optimization.startupManager.delete")}
+                            aria-label={t("optimization.startupManager.disable")}
                             icon={<Trash2 size={14} />}
                             size="sm"
                             variant="ghost"
                             colorScheme="red"
                             color={deleteColor}
-                            onClick={() => handleDelete(item, index)}
-                            isLoading={isDeleting}
+                            onClick={() => handleDisable(item, index)}
+                            isLoading={isDisabling}
                           />
                         </Tooltip>
                       </HStack>

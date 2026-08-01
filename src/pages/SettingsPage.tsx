@@ -555,6 +555,9 @@ function GeneralSettings() {
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
                 {t("settings.generalSettings.autoStartLabel")}
               </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={1}>
+                （部分电脑可能开机无法自启，还没修好qwq）
+              </Text>
             </Box>
             <ThemeSwitch
               size="md"
