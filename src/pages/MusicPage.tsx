@@ -11,6 +11,7 @@ import {
   Text,
   Spinner,
   useColorModeValue,
+  useToast,
   IconButton,
   Tooltip,
   Menu,
@@ -94,6 +95,7 @@ const tabContentVariants = {
 };
 
 const scrollbarSx = (color: string) => ({
+  scrollbarGutter: "stable",
   "&::-webkit-scrollbar": { width: "4px" },
   "&::-webkit-scrollbar-thumb": { background: color, borderRadius: "2px" },
   "&::-webkit-scrollbar-track": { background: "transparent" },
@@ -2042,6 +2044,15 @@ export default function MusicPage() {
   const recommendations = useMusicStore((s) => s.recommendations);
   const loginInfo = useMusicStore((s) => s.loginInfo);
   const playbackSource = useMusicStore((s) => s.playbackSource);
+
+  const providerName = useMemo(() => {
+    const map: Record<string, string> = {
+      netease: "网易云音乐",
+      kugou: "酷狗音乐",
+      qqmusic: "QQ 音乐",
+    };
+    return map[playbackSource] ?? playbackSource;
+  }, [playbackSource]);
   const searching = useMusicStore((s) => s.searching);
   const loadingPlaylists = useMusicStore((s) => s.loadingPlaylists);
   const loadingLeftTracks = useMusicStore((s) => s.loadingLeftTracks);
@@ -2054,6 +2065,23 @@ export default function MusicPage() {
   const loadingArtistSongs = useMusicStore((s) => s.loadingArtistSongs);
   const playlistSearchResults = useMusicStore((s) => s.playlistSearchResults);
   const searchingPlaylists = useMusicStore((s) => s.searchingPlaylists);
+  const musicToast = useMusicStore((s) => s.musicToast);
+
+  const toast = useToast();
+
+  // 监听 musicToast 变化，弹出提示
+  useEffect(() => {
+    if (musicToast) {
+      toast({
+        title: "提示",
+        description: musicToast.message,
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      useMusicStore.setState({ musicToast: null });
+    }
+  }, [musicToast, toast]);
 
   // actions 是稳定的，用 useRef 只获取一次，避免每次渲染重新创建导致 useCallback 失效
   const storeActionsRef = useRef(useMusicStore.getState());
@@ -2336,7 +2364,7 @@ setRightPanelView("tracks");
           {pl.track_count} 首 {pl.creator ? `· ${pl.creator}` : ""}
         </Text>
       </VStack>
-      {loginInfo?.logged_in && pl.provider !== "kugou" && !isOwnPlaylist(pl) && (
+      {loginInfo?.logged_in && pl.provider === "netease" && !isOwnPlaylist(pl) && (
         <IconButton
           aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
           icon={<Heart size={16} fill={pl.subscribed ? "#e53e3e" : "none"} />}
@@ -2675,7 +2703,7 @@ setRightPanelView("tracks");
                               {pl.track_count} 首 {pl.creator ? `· ${pl.creator}` : ""}
                             </Text>
                           </VStack>
-                          {loginInfo?.logged_in && pl.provider !== "kugou" && (
+                          {loginInfo?.logged_in && pl.provider === "netease" && (
                             <IconButton
                               aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
                               icon={<Heart size={14} fill={pl.subscribed ? "#e53e3e" : "none"} />}
@@ -2919,6 +2947,18 @@ setRightPanelView("tracks");
           <Heading size="md" color={textColor}>
             音乐播放器
           </Heading>
+          <Box
+            px={2.5}
+            py={0.5}
+            borderRadius="md"
+            bg={useColorModeValue("gray.100", "rgba(255,255,255,0.08)")}
+            border="1px solid"
+            borderColor={useColorModeValue("gray.200", "rgba(255,255,255,0.12)")}
+          >
+            <Text fontSize="xs" color={subTextColor} fontWeight="medium" whiteSpace="nowrap">
+              当前平台：{providerName}
+            </Text>
+          </Box>
         </HStack>
         <MusicLoginSection />
       </HStack>
@@ -3041,6 +3081,16 @@ setRightPanelView("tracks");
               </>
             ) : (
               <>
+                {/* QQ 音乐: 榜单和推荐不可用，显示提示 */}
+                {playbackSource === "qqmusic" && loginInfo?.logged_in ? (
+                  <VStack py={8} spacing={3} flex={1} justify="center">
+                    <TrendingUp size={32} color={subTextColor} />
+                    <Text color={subTextColor} fontSize="sm" textAlign="center">
+                      QQ音乐暂时无法获取榜单和推荐
+                    </Text>
+                  </VStack>
+                ) : (
+                <>
                 {loginInfo?.logged_in && playbackSource !== "kugou" && (
                   <>
                 <HStack justify="space-between" mb={3} flexShrink={0}>
@@ -3116,7 +3166,11 @@ setRightPanelView("tracks");
                     </Box>
                   ) : (
                     /* 网易云: 横向滚动 */
-                    <HStack spacing={1.5} minW={0} overflowX="auto" sx={memoScrollbarSx}>
+                    <HStack spacing={1.5} minW={0} overflowX="auto" sx={memoScrollbarSx}
+                      onWheel={(e) => {
+                        e.currentTarget.scrollLeft += e.deltaY;
+                      }}
+                    >
                     {officialCharts.length > 0 ? officialCharts.map((chart) => (
                       <VStack
                         key={chart.id}
@@ -3164,7 +3218,7 @@ setRightPanelView("tracks");
                 </VStack>
                 )}
 
-                {playbackSource !== "kugou" && (
+                {playbackSource !== "kugou" && playbackSource !== "qqmusic" && (
                 <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
                   {!loginInfo?.logged_in ? (
                     <VStack py={8} spacing={3}>
@@ -3184,6 +3238,8 @@ setRightPanelView("tracks");
                     </motion.div>
                   )}
                 </Box>
+                )}
+                </>
                 )}
               </>
             )}

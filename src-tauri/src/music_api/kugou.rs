@@ -35,6 +35,18 @@ const KUGOU_SIGN_KEY_SALT: &str = "57ae12eb6890223e355ccfcb74edf70d";
 const KUGOU_GATEWAY_UA: &str = "Android15-1070-11083-46-0-DiscoveryDRADProtocol-wifi";
 const KUGOU_H5_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 const KUGOU_REFERER: &str = "https://www.kugou.com/";
+const KUGOU_VIP_ROLEINFO_URL: &str = "https://vip.kugou.com/recharge/roleinfo";
+
+// Web roleinfo 角色映射 (对照 Minerradio KUGOU_WEB_VIP_ROLES / SVIP / MUSIC_PACKAGE)
+const KUGOU_WEB_VIP_ROLES: &[i64] = &[1, 2];
+const KUGOU_WEB_SVIP_ROLES: &[i64] = &[6, 11, 13];
+const KUGOU_WEB_MUSIC_PACKAGE_ROLES: &[i64] = &[31, 33];
+
+// Web roleinfo 字段候选名称
+const KUGOU_WEB_ROLE_KEYS: &[&str] = &[
+    "role", "user_type", "userType", "usertype",
+    "user_y_type", "userYType", "userytype", "y_type", "yType", "ytype",
+];
 
 const KUGOU_QUALITY_CHAIN: &[(&str, &str, &str)] = &[
     ("jymaster", "Hi-Res", "ResFileHash"),
@@ -1879,6 +1891,9 @@ pub async fn song_url(
     album_audio_id: &str,
     quality: &str,
     cookie: &str,
+    hq_hash: &str,
+    sq_hash: &str,
+    res_hash: &str,
 ) -> Result<SongUrlResult, String> {
     let auth = extract_kugou_auth(cookie);
     let hash = hash.trim();
@@ -1898,12 +1913,12 @@ pub async fn song_url(
 
     let requested_quality = normalize_quality_preference(quality);
 
-    // 构建 song 用于 hash 候选
+    // 构建 song 用于 hash 候选 (使用传入的高音质 hash 值)
     let song = Song {
         hash: Some(hash.to_string()),
-        hq_hash: Some(String::new()),
-        sq_hash: Some(String::new()),
-        res_hash: Some(String::new()),
+        hq_hash: Some(hq_hash.to_string()),
+        sq_hash: Some(sq_hash.to_string()),
+        res_hash: Some(res_hash.to_string()),
         ..Default::default()
     };
 
@@ -2557,9 +2572,18 @@ fn normalize_membership_key(key: &str) -> String {
 
 /// 检查对象是否有会员信号 (对照 kugouObjectHasMembershipSignal)
 fn object_has_membership_signal(obj: &Value) -> bool {
+    object_has_membership_signal_with_web(obj, false)
+}
+
+/// 检查对象是否包含会员信号 (可选 web role 字段)
+fn object_has_membership_signal_with_web(obj: &Value, allow_web_signals: bool) -> bool {
     if !obj.is_object() || obj.is_array() {
         return false;
     }
+    // 规范化 web role key 列表
+    let web_role_normalized: Vec<String> = KUGOU_WEB_ROLE_KEYS.iter()
+        .map(|k| normalize_membership_key(k))
+        .collect();
     if let Some(map) = obj.as_object() {
         for (key, val) in map {
             // 跳过嵌套对象/数组 (与 JS 逻辑一致)
@@ -2570,6 +2594,7 @@ fn object_has_membership_signal(obj: &Value) -> bool {
             if VIP_SIGNAL_KEYS.contains(&normalized.as_str())
                 || SVIP_SIGNAL_KEYS.contains(&normalized.as_str())
                 || VIP_EXPIRY_KEYS.contains(&normalized.as_str())
+                || (allow_web_signals && web_role_normalized.contains(&normalized))
             {
                 return true;
             }
@@ -2680,10 +2705,18 @@ struct VipInfo {
     is_vip: bool,
     is_svip: bool,
     membership_known: bool,
+    web_role: f64,
+    web_role_known: bool,
 }
 
 /// 规范化 VIP 负载 (对照 normalizeKugouVipPayloadV2)
+/// 支持 web roleinfo payload 和 gateway API payload
 fn normalize_vip_payload(payload: &Value, fallback: &KugouAuth) -> VipInfo {
+    let membership_origin = payload.get("__kugouMembershipOrigin")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let is_web_role_payload = membership_origin == "kugou-web-roleinfo";
+
     let data = payload.get("data")
         .or_else(|| payload.get("result"))
         .or_else(|| payload.get("vip"))
@@ -2721,7 +2754,46 @@ fn normalize_vip_payload(payload: &Value, fallback: &KugouAuth) -> VipInfo {
         return VipInfo::default();
     }
 
-    let api_membership_known = payload_objects.iter().any(|obj| object_has_membership_signal(obj));
+    // 检查 web role 字段 (仅在 web roleinfo payload 中启用)
+    let web_role_state = if is_web_role_payload {
+        first_positive_kugou_number(&payload_objects, KUGOU_WEB_ROLE_KEYS)
+    } else {
+        0.0
+    };
+    let web_role_known = web_role_state > 0.0 && is_web_role_payload;
+
+    // Web role 检测: 优先使用 roleinfo 提供的 role 映射
+    if web_role_known {
+        let web_role = web_role_state as i64;
+        let role_is_vip = KUGOU_WEB_VIP_ROLES.contains(&web_role);
+        let role_is_svip = KUGOU_WEB_SVIP_ROLES.contains(&web_role);
+
+        // 检查过期时间
+        let (vip_present, vip_future) = kugou_time_state(&payload_objects, &[
+            "rawVipEndTime", "raw_vip_end_time", "rawvipendtime",
+            "vip_end_time", "vipEndTime", "vip_expire_time", "vipExpireTime",
+        ]);
+        let role_expiry_current = !vip_present || (vip_present && vip_future);
+
+        let is_svip = role_is_svip && role_expiry_current;
+        let is_vip = (role_is_vip || role_is_svip) && role_expiry_current;
+        let vip_level = if is_svip { "svip" } else if is_vip { "vip" } else { "none" };
+
+        return VipInfo {
+            vip_type: if is_vip { web_role as f64 } else { 0.0 },
+            svip_type: if is_svip { web_role as f64 } else { 0.0 },
+            vip_level: vip_level.to_string(),
+            is_vip,
+            is_svip,
+            membership_known: true,
+            web_role: web_role as f64,
+            web_role_known: true,
+        };
+    }
+
+    // 常规 gateway API 检测
+    let allow_web_in_signal = is_web_role_payload;
+    let api_membership_known = payload_objects.iter().any(|obj| object_has_membership_signal_with_web(obj, allow_web_in_signal));
     if !api_membership_known {
         return VipInfo::default();
     }
@@ -2758,100 +2830,194 @@ fn normalize_vip_payload(payload: &Value, fallback: &KugouAuth) -> VipInfo {
         is_vip,
         is_svip,
         membership_known: api_membership_known,
+        web_role: 0.0,
+        web_role_known: false,
+    }
+}
+
+/// 获取酷狗 Web VIP 信息 (对照 fetchKugouWebVipInfo)
+/// 调用 https://vip.kugou.com/recharge/roleinfo — 最权威的 VIP 来源
+async fn fetch_kugou_web_vip_info(cookie: &str, auth: &KugouAuth) -> Option<Value> {
+    if !auth.logged_in || cookie.is_empty() {
+        return None;
+    }
+    let cookie_header = build_request_cookie(cookie);
+    let url = format!("{}?n={}", KUGOU_VIP_ROLEINFO_URL, now_ms());
+
+    let client = super::qqmusic::build_client_with_timeout(2500);
+    let resp = client
+        .get(&url)
+        .header("Accept", "application/json, text/javascript, */*; q=0.01")
+        .header("Referer", "https://vip.kugou.com/")
+        .header("User-Agent", KUGOU_H5_UA)
+        .header("X-Requested-With", "XMLHttpRequest")
+        .header("Cookie", &cookie_header)
+        .send()
+        .await;
+
+    match resp {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: Value = match resp.json().await {
+                Ok(v) => v,
+                Err(_) => return None,
+            };
+            if !status.is_success() {
+                log::info!("[KugouWebVip] HTTP {} from roleinfo", status.as_u16());
+                return None;
+            }
+            // 检查是否有错误码
+            let data = body.get("data").unwrap_or_else(|| &body);
+            let has_error = [body.get("errno"), body.get("error_code"), body.get("errorCode"), body.get("errcode"),
+                data.get("errno"), data.get("error_code"), data.get("errorCode"), data.get("errcode")]
+                .iter()
+                .any(|v| v.and_then(|n| n.as_i64()).map(|n| n > 0).unwrap_or(false));
+            let explicitly_failed = body.get("success").and_then(|v| v.as_bool()) == Some(false)
+                || body.get("status").and_then(|v| match v {
+                    Value::Number(n) => Some(n.as_f64()? == 0.0),
+                    Value::String(s) => Some(s == "0" || s == "-1" || s.eq_ignore_ascii_case("false") || s.eq_ignore_ascii_case("fail") || s.eq_ignore_ascii_case("failed") || s.eq_ignore_ascii_case("error")),
+                    _ => None,
+                }).unwrap_or(false)
+                || body.get("error").and_then(|v| v.as_str()).map(|s| !s.trim().is_empty()).unwrap_or(false);
+            if has_error || explicitly_failed {
+                log::info!("[KugouWebVip] roleinfo returned error/unsuccessful status");
+                return None;
+            }
+            // 包装为带 origin 标记的 payload (与 normalizeKugouWebRoleInfoPayload 一致)
+            let role_data = body.get("data").unwrap_or(&body);
+            Some(json!({
+                "data": role_data,
+                "__kugouMembershipOrigin": "kugou-web-roleinfo",
+            }))
+        }
+        Err(e) => {
+            log::info!("[KugouWebVip] request failed: {}", e);
+            None
+        }
     }
 }
 
 /// 获取酷狗 VIP 信息 (对照 fetchKugouVipInfo)
-/// 尝试多个 VIP API 端点, 使用第一个返回有效会员信息的
+/// 先尝试 web roleinfo，然后降级到 gateway 探针
 async fn fetch_kugou_vip_info(cookie: &str, auth: &KugouAuth) -> Option<Value> {
+    if !auth.logged_in {
+        return None;
+    }
+
+    // 第一步: 尝试 web roleinfo (最权威的来源)
+    if let Some(web_result) = fetch_kugou_web_vip_info(cookie, auth).await {
+        let web_vip = normalize_vip_payload(&web_result, auth);
+        if web_vip.membership_known {
+            log::info!("[KugouVip] web roleinfo succeeded: is_vip={}, is_svip={}, web_role={}",
+                web_vip.is_vip, web_vip.is_svip, web_vip.web_role);
+            return Some(web_result);
+        }
+        log::info!("[KugouVip] web roleinfo unknown, falling back to gateway probes");
+    }
+
+    // 如果没有 playback token，到此为止
     if !auth.playback_ready {
         return None;
     }
 
-    // VIP API 端点列表 (对照 fetchKugouVipInfo attempts)
-    // 第6个端点使用 kugouvip.kugou.com 作为 base URL
-    let endpoints: &[(&str, &[(&str, &str)], Option<&str>)] = &[
-        ("/v1/get_union_vip", &[("busi_type", "concept")], None),
-        ("/v1/vipuser_sub", &[("busi_type", "concept")], None),
-        ("/kugouvip/v2/batch_union_vipinfo", &[("busi_type", "concept"), ("userids", &auth.userid)], None),
-        ("/kugouvip/v1/batch_union_vipinfo", &[("busi_type", "concept"), ("userids", &auth.userid)], None),
-        ("/mobile/vipinfo", &[("plat", "0")], None),
-        ("/v1/get_union_vip", &[("busi_type", "concept")], Some("https://kugouvip.kugou.com")),
-    ];
+    let cookie = cookie.to_string();
+    let auth_userid = auth.userid.clone();
+    let auth_clone = auth.clone();
 
-    // 尝试每个端点 (对照 fetchKugouVipInfo, VIP端点使用 vip.kugou.com 作为 Referer)
-    for (path, params, base_url) in endpoints {
-        let extra: Vec<(String, String)> = params.iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
+    let mut handles: Vec<tokio::task::JoinHandle<Option<Value>>> = Vec::new();
 
-        log::info!("[KugouVip] trying {} with params: {:?}, base: {:?}", path, extra, base_url);
-
-        match gateway_request_full(path, "GET", cookie, extra, None, None, false, Some("https://vip.kugou.com/"), *base_url).await {
-            Ok(json) => {
-                let parsed = normalize_vip_payload(&json, auth);
-                if parsed.membership_known {
-                    return Some(json);
+    // 辅助宏：生成一个 gateway 探测任务
+    macro_rules! spawn_gw {
+        ($path:expr, $params:expr, $base:expr) => {{
+            let c = cookie.clone();
+            let a = auth_clone.clone();
+            let p = $path.to_string();
+            let extra: Vec<(String, String)> = $params.iter().map(|(k, v): &(&str, &str)| (k.to_string(), v.to_string())).collect();
+            let bu: Option<String> = $base.map(|s: &str| s.to_string());
+            handles.push(tokio::spawn(async move {
+                log::info!("[KugouVip] trying {} with params: {:?}, base: {:?}", p, extra, bu);
+                match gateway_request_full(&p, "GET", &c, extra, None, None, false, Some("https://vip.kugou.com/"), bu.as_deref()).await {
+                    Ok(json) => {
+                        if normalize_vip_payload(&json, &a).membership_known {
+                            Some(json)
+                        } else { None }
+                    }
+                    Err(e) => { log::info!("[KugouVip] {} failed: {}", p, e); None }
                 }
-            }
-            Err(e) => {
-                log::info!("[KugouVip] {} failed: {}", path, e);
-                continue;
-            }
-        }
+            }));
+        }};
     }
 
-    // 所有 gateway VIP 端点都失败, 尝试 H5 gateway (使用不同的参数和签名方式)
-    log::info!("[KugouVip] all gateway endpoints failed, trying H5 gateway");
-    let h5_endpoints: &[&str] = &["/v1/get_union_vip", "/v1/vipuser_sub"];
-    for path in h5_endpoints {
-        match h5_gateway_request(
-            path,
-            "GET",
-            cookie,
-            vec![("busi_type".into(), "concept".into())],
-            None,
-            None,
-        ).await {
-            Ok(json) => {
-                let parsed = normalize_vip_payload(&json, auth);
-                if parsed.membership_known {
-                    log::info!("[KugouVip] H5 gateway {} succeeded", path);
-                    return Some(json);
+    // 辅助宏：生成一个 H5 gateway 探测任务
+    macro_rules! spawn_h5 {
+        ($path:expr) => {{
+            let c = cookie.clone();
+            let a = auth_clone.clone();
+            let p = $path.to_string();
+            handles.push(tokio::spawn(async move {
+                match h5_gateway_request(&p, "GET", &c, vec![("busi_type".into(), "concept".into())], None, None).await {
+                    Ok(json) => {
+                        if normalize_vip_payload(&json, &a).membership_known {
+                            log::info!("[KugouVip] H5 gateway {} succeeded", p);
+                            Some(json)
+                        } else { None }
+                    }
+                    Err(e) => { log::info!("[KugouVip] H5 gateway {} failed: {}", p, e); None }
                 }
-            }
-            Err(e) => {
-                log::info!("[KugouVip] H5 gateway {} failed: {}", path, e);
-            }
-        }
+            }));
+        }};
     }
 
-    // 尝试 mobilecdn web API (公开 API, 不需要 gateway 签名)
-    log::info!("[KugouVip] trying mobilecdn web API");
-    let cookie_header = build_request_cookie(cookie);
-    let mobile_url = format!(
-        "http://mobilecdn.kugou.com/api/v3/user/info?userid={}&token={}",
-        auth.userid, auth.token
-    );
-    match request_json(
-        &mobile_url,
-        reqwest::Method::GET,
-        &[
-            (USER_AGENT.as_str(), KUGOU_H5_UA),
-            (REFERER.as_str(), "http://m.kugou.com/"),
-            (COOKIE.as_str(), &cookie_header),
-        ],
-        None,
-    ).await {
-        Ok(json) => {
-            let parsed = normalize_vip_payload(&json, auth);
-            if parsed.membership_known {
-                log::info!("[KugouVip] mobilecdn web API succeeded");
-                return Some(json);
+    // Gateway 端点 (并行发起)
+    spawn_gw!("/v1/get_union_vip", vec![("busi_type", "concept")], None::<&str>);
+    spawn_gw!("/v1/vipuser_sub", vec![("busi_type", "concept")], None::<&str>);
+    spawn_gw!("/kugouvip/v2/batch_union_vipinfo", vec![("busi_type", "concept"), ("userids", &auth_userid)], None::<&str>);
+    spawn_gw!("/kugouvip/v1/batch_union_vipinfo", vec![("busi_type", "concept"), ("userids", &auth_userid)], None::<&str>);
+    spawn_gw!("/mobile/vipinfo", vec![("plat", "0")], None::<&str>);
+    spawn_gw!("/v1/get_union_vip", vec![("busi_type", "concept")], Some("https://kugouvip.kugou.com"));
+
+    // H5 Gateway 端点
+    spawn_h5!("/v1/get_union_vip");
+    spawn_h5!("/v1/vipuser_sub");
+
+    // mobilecdn web API
+    {
+        let c = cookie.clone();
+        let a = auth_clone.clone();
+        let uid = auth_userid.clone();
+        let token = auth.token.clone();
+        handles.push(tokio::spawn(async move {
+            let cookie_header = build_request_cookie(&c);
+            let mobile_url = format!(
+                "http://mobilecdn.kugou.com/api/v3/user/info?userid={}&token={}",
+                uid, token
+            );
+            match request_json(
+                &mobile_url,
+                reqwest::Method::GET,
+                &[
+                    (USER_AGENT.as_str(), KUGOU_H5_UA),
+                    (REFERER.as_str(), "http://m.kugou.com/"),
+                    (COOKIE.as_str(), &cookie_header),
+                ],
+                None,
+            ).await {
+                Ok(json) => {
+                    if normalize_vip_payload(&json, &a).membership_known {
+                        log::info!("[KugouVip] mobilecdn web API succeeded");
+                        Some(json)
+                    } else { None }
+                }
+                Err(e) => { log::info!("[KugouVip] mobilecdn web API failed: {}", e); None }
             }
-        }
-        Err(e) => {
-            log::info!("[KugouVip] mobilecdn web API failed: {}", e);
+        }));
+    }
+
+    // 等待任意一个成功返回
+    for handle in handles {
+        match handle.await {
+            Ok(Some(json)) => return Some(json),
+            _ => continue,
         }
     }
 
@@ -2889,11 +3055,16 @@ pub async fn login_info(cookie: &str) -> Result<LoginInfo, String> {
 
     // VIP 探测 (对照 fetchKugouVipInfo)
     // API探测失败时回退到Cookie中的VIP信息
+    // 加 5 秒超时，避免网络不通时长时间阻塞登录状态返回
     let vip = if auth.playback_ready {
-        match fetch_kugou_vip_info(cookie, &auth).await {
-            Some(vip_json) => normalize_vip_payload(&vip_json, &auth),
-            None => {
-                log::info!("[KugouVip] API probe failed, falling back to cookie-based VIP: is_vip={}, is_svip={}, vip_level={}",
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            fetch_kugou_vip_info(cookie, &auth),
+        ).await
+        {
+            Ok(Some(vip_json)) => normalize_vip_payload(&vip_json, &auth),
+            _ => {
+                log::info!("[KugouVip] API probe failed or timed out, falling back to cookie-based VIP: is_vip={}, is_svip={}, vip_level={}",
                     auth.is_vip, auth.is_svip, auth.vip_level);
                 VipInfo {
                     vip_type: auth.vip_type as f64,
@@ -2902,6 +3073,8 @@ pub async fn login_info(cookie: &str) -> Result<LoginInfo, String> {
                     is_vip: auth.is_vip,
                     is_svip: auth.is_svip,
                     membership_known: auth.is_vip || auth.is_svip,
+                    web_role: 0.0,
+                    web_role_known: false,
                 }
             }
         }

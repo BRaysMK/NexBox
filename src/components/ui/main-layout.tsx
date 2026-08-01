@@ -8,6 +8,7 @@ import { TitleBar } from "./title-bar";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 function useNavPosition() {
   const [navPosition, setNavPosition] = useState<"left" | "top">(() => {
@@ -47,6 +48,11 @@ export function MainLayout({ children }: MainLayoutProps) {
   const showImageBg = backgroundMode === "image" && activeImage;
   const showDynamicBg = backgroundMode === "dynamic" && dynamicBgVideo;
   const showPresetBg = backgroundMode === "preset" && activePreset;
+  // 始终保存最新的"是否显示动态背景"，供窗口可见性监听使用（避免 effect 反复重订阅）
+  const showDynamicBgRef = useRef(showDynamicBg);
+  useEffect(() => {
+    showDynamicBgRef.current = showDynamicBg;
+  }, [showDynamicBg]);
   const videoSrc = useMemo(() => {
     if (!dynamicBgVideo) return null;
     return convertFileSrc(dynamicBgVideo);
@@ -110,10 +116,46 @@ export function MainLayout({ children }: MainLayoutProps) {
   }, [showImageBg, showDynamicBg, showPresetBg, bgColor]);
 
   useEffect(() => {
-    if (videoRef.current && dynamicBgVideo) {
+    // 窗口隐藏时保持暂停，避免切回动态背景后视频在托盘状态下继续解码
+    if (videoRef.current && dynamicBgVideo && !document.hidden) {
       videoRef.current.play().catch(() => {});
     }
   }, [dynamicBgVideo, showDynamicBg]);
+
+  // 窗口最小化 / 隐藏到托盘时自动暂停动态背景视频，减少 CPU 占用；
+  // 恢复显示后自动继续播放。双保险：
+  //   1) 标准 Web API visibilitychange（覆盖最小化场景）
+  //   2) Rust 端 window-visibility-changed 事件（覆盖隐藏到托盘等 visibilitychange 不可靠的场景）
+  useEffect(() => {
+    const applyVisibility = (visible: boolean) => {
+      if (!showDynamicBgRef.current) return;
+      const video = videoRef.current;
+      if (!video) return;
+      if (visible) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    };
+
+    const onVisibilityChange = () => applyVisibility(!document.hidden);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    let unlisten: UnlistenFn | undefined;
+    let disposed = false;
+    listen<boolean>("window-visibility-changed", (e) => {
+      applyVisibility(e.payload);
+    }).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    });
+
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      unlisten?.();
+    };
+  }, []);
 
   // 顶部导航栏模式下，body 不滚动，内容区域自行管理滚动
   useEffect(() => {

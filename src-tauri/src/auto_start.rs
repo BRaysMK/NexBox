@@ -31,28 +31,86 @@ fn get_startup_folder() -> Result<PathBuf, String> {
 
 // ========== 方案1：任务计划程序（主方案） ==========
 
-/// 创建任务计划：用户登录时启动 NexBox
-/// schtasks /create /tn "NexBox" /tr "\"path\"" /sc onlogon /f
-/// 注意：不指定 /rl highest，避免要求管理员权限
+/// 创建任务计划：用户登录后延迟 5 秒启动 NexBox
+/// 通过 schtasks /create /xml 导入带 <Delay>PT5S</Delay> 的任务定义
+/// 延迟 5 秒可确保 explorer.exe 已加载、托盘区就绪，避免启动过早导致托盘图标失败
+/// 不使用 PowerShell，避免启动慢、杀软拦截、弹窗
 #[cfg(windows)]
 fn create_scheduled_task(exe_path: &str) -> Result<(), String> {
-    let quoted_exe = format!("\"{}\"", exe_path);
+    use std::io::Write;
+
+    // 获取工作目录（exe 所在目录）
+    let working_dir = std::path::Path::new(exe_path)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    let task_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <Triggers>
+    <LogonTrigger>
+      <Delay>PT5S</Delay>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>{}</Command>
+      <WorkingDirectory>{}</WorkingDirectory>
+    </Exec>
+  </Actions>
+  <Settings>
+    <AllowStartIfOnBatteries>true</AllowStartIfOnBatteries>
+    <DontStopIfOnBatteries>true</DontStopIfOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+  </Settings>
+</Task>"#,
+        xml_escape(exe_path),
+        xml_escape(&working_dir),
+    );
+
+    // 写入临时 XML 文件（UTF-16 LE，schtasks 标准格式）
+    let temp_dir = std::env::temp_dir();
+    let xml_path = temp_dir.join("nexbox_task.xml");
+    {
+        let mut file = std::fs::File::create(&xml_path)
+            .map_err(|e| format!("创建临时文件失败: {}", e))?;
+        // UTF-16 LE BOM
+        file.write_all(&[0xFF, 0xFE])
+            .map_err(|e| format!("写入XML失败: {}", e))?;
+        for code_unit in task_xml.encode_utf16() {
+            file.write_all(&code_unit.to_le_bytes())
+                .map_err(|e| format!("写入XML失败: {}", e))?;
+        }
+    }
 
     let output = exec_hidden("schtasks", &[
         "/create",
+        "/xml", &xml_path.to_string_lossy(),
         "/tn", TASK_NAME,
-        "/tr", &quoted_exe,
-        "/sc", "onlogon",
         "/f",
     ])?;
+
+    // 清理临时文件
+    let _ = std::fs::remove_file(&xml_path);
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("创建计划任务失败: {}", stderr.trim()));
     }
 
-    log::info!("计划任务已创建: {} -> {}", TASK_NAME, exe_path);
+    log::info!("计划任务已创建(登录后延迟5秒): {} -> {}", TASK_NAME, exe_path);
     Ok(())
+}
+
+/// 对 XML 特殊字符进行转义
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 /// 删除任务计划

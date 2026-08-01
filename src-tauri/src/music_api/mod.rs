@@ -4,6 +4,7 @@ pub mod crypto;
 pub mod kugou;
 pub mod models;
 pub mod netease;
+pub mod qqmusic;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -219,6 +220,9 @@ pub async fn kugou_song_url(
     album_id: Option<String>,
     album_audio_id: Option<String>,
     quality: Option<String>,
+    hq_hash: Option<String>,
+    sq_hash: Option<String>,
+    res_hash: Option<String>,
 ) -> Result<SongUrlResult, String> {
     let cookie = load_provider_cookie(&app, "kugou").await;
     kugou::song_url(
@@ -227,6 +231,9 @@ pub async fn kugou_song_url(
         &album_audio_id.unwrap_or_default(),
         &quality.unwrap_or_else(|| "standard".into()),
         &cookie,
+        &hq_hash.unwrap_or_default(),
+        &sq_hash.unwrap_or_default(),
+        &res_hash.unwrap_or_default(),
     )
     .await
 }
@@ -317,27 +324,153 @@ pub async fn kugou_liked_hashes(app: AppHandle) -> Result<Vec<String>, String> {
 }
 
 // ============================================================
+//  Tauri Commands - QQ 音乐
+// ============================================================
+
+#[tauri::command]
+pub async fn qq_search(app: AppHandle, keywords: String, limit: Option<u32>) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::search(&keywords, limit.unwrap_or(30), &cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_song_url(
+    app: AppHandle,
+    mid: String,
+    media_mid: Option<String>,
+    quality: Option<String>,
+) -> Result<SongUrlResult, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::song_url(&mid, &media_mid.unwrap_or_default(), &quality.unwrap_or_else(|| "hires".into()), &cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_lyric(app: AppHandle, mid: String, id: Option<String>) -> Result<Lyrics, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::lyric(&mid, &id.unwrap_or_default(), &cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_login_status(app: AppHandle) -> Result<LoginInfo, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::login_info(&cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_login_cookie(app: AppHandle, cookie: String) -> Result<LoginInfo, String> {
+    let normalized = cookie::normalize_cookie_header(&cookie);
+    if !cookie::qq_cookie_has_login(&normalized) {
+        return Ok(LoginInfo {
+            provider: "qqmusic".into(),
+            ..Default::default()
+        });
+    }
+    cookie::save_cookie(&app, "qqmusic", &normalized)?;
+    set_provider_cookie("qqmusic", normalized).await;
+    let c = get_provider_cookie("qqmusic").await;
+    qqmusic::login_info(&c).await
+}
+
+#[tauri::command]
+pub async fn qq_logout(app: AppHandle) -> Result<(), String> {
+    cookie::clear_cookie(&app, "qqmusic")?;
+    set_provider_cookie("qqmusic", String::new()).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn qq_user_playlists(app: AppHandle) -> Result<Vec<Playlist>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::user_playlists(&cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_playlist_tracks(app: AppHandle, id: String) -> Result<(Playlist, Vec<Song>), String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::playlist_tracks(&id, &cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_playlist_tracks_range(app: AppHandle, id: String, start: usize, count: usize) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::playlist_tracks_range(&id, start, count, &cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_artist_search(app: AppHandle, keywords: String, limit: Option<u32>) -> Result<Vec<Artist>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::artist_search(&keywords, limit.unwrap_or(30), &cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_artist_songs(app: AppHandle, artist_mid: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::artist_songs(&artist_mid, limit.unwrap_or(50), offset.unwrap_or(0), &cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_playlist_search(app: AppHandle, keywords: String, limit: Option<u32>) -> Result<Vec<Playlist>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::playlist_search(&keywords, limit.unwrap_or(30), &cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_rank_list(app: AppHandle) -> Result<Vec<Playlist>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::get_rank_list(&cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_rank_songs(app: AppHandle, rank_id: String, limit: Option<u32>) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::get_rank_songs(&cookie, &rank_id, limit.unwrap_or(30)).await
+}
+
+#[tauri::command]
+pub async fn qq_liked_hashes(app: AppHandle) -> Result<Vec<String>, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::liked_hashes(&cookie).await
+}
+
+#[tauri::command]
+pub async fn qq_like_toggle(app: AppHandle, song: Song, like: bool) -> Result<bool, String> {
+    let cookie = load_provider_cookie(&app, "qqmusic").await;
+    qqmusic::like_toggle(&song, like, &cookie).await
+}
+
+// ============================================================
 //  Tauri Commands - 多平台管理
 // ============================================================
 
-/// 获取所有平台登录状态
+/// 获取所有平台登录状态 (并行执行，避免酷狗/VIP等慢速接口阻塞整体登录)
 #[tauri::command]
 pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, LoginInfo>, String> {
-    let mut result = HashMap::new();
-    // 网易云
     let netease_cookie = load_provider_cookie(&app, "netease").await;
-    if !netease_cookie.is_empty() {
-        if let Ok(info) = netease::login_status(&netease_cookie).await {
-            result.insert("netease".into(), info);
-        }
-    }
-    // 酷狗
     let kugou_cookie = load_provider_cookie(&app, "kugou").await;
-    if !kugou_cookie.is_empty() {
-        if let Ok(info) = kugou::login_info(&kugou_cookie).await {
-            result.insert("kugou".into(), info);
-        }
-    }
+    let qq_cookie = load_provider_cookie(&app, "qqmusic").await;
+
+    let (netease_result, kugou_result, qq_result) = tokio::join!(
+        async {
+            if !netease_cookie.is_empty() {
+                netease::login_status(&netease_cookie).await.ok()
+            } else { None }
+        },
+        async {
+            if !kugou_cookie.is_empty() {
+                kugou::login_info(&kugou_cookie).await.ok()
+            } else { None }
+        },
+        async {
+            if !qq_cookie.is_empty() {
+                qqmusic::login_info(&qq_cookie).await.ok()
+            } else { None }
+        },
+    );
+
+    let mut result = HashMap::new();
+    if let Some(info) = netease_result { result.insert("netease".into(), info); }
+    if let Some(info) = kugou_result { result.insert("kugou".into(), info); }
+    if let Some(info) = qq_result { result.insert("qqmusic".into(), info); }
     Ok(result)
 }
 
@@ -345,7 +478,7 @@ pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, 
 #[tauri::command]
 pub async fn music_switch_provider(app: AppHandle, provider: String) -> Result<(), String> {
     match provider.as_str() {
-        "netease" | "kugou" => {}
+        "netease" | "kugou" | "qqmusic" => {}
         _ => return Err(format!("Unknown provider: {}", provider)),
     }
     let store = app.store("music-cookies.json").map_err(|e| e.to_string())?;
@@ -396,6 +529,29 @@ const KUGOU_COOKIE_PRIORITY: &[&str] = &[
     "NickName",
 ];
 
+/// QQ 音乐登录 cookie 优先级 (参考 Mineradio QQ_LOGIN_COOKIE_PRIORITY)
+const QQ_COOKIE_PRIORITY: &[&str] = &[
+    "uin",
+    "qqmusic_uin",
+    "wxuin",
+    "login_type",
+    "qm_keyst",
+    "qqmusic_key",
+    "p_skey",
+    "skey",
+    "psrf_qqopenid",
+    "psrf_qqunionid",
+    "psrf_qqaccess_token",
+    "psrf_qqrefresh_token",
+    "wxopenid",
+    "wxunionid",
+    "wxrefresh_token",
+    "wxskey",
+    "p_uin",
+    "ptcz",
+    "RK",
+];
+
 /// 检查域名是否属于网易云
 fn is_netease_domain(domain: &str) -> bool {
     let d = domain.trim_start_matches('.').to_lowercase();
@@ -408,6 +564,12 @@ fn is_netease_domain(domain: &str) -> bool {
 fn is_kugou_domain(domain: &str) -> bool {
     let d = domain.trim_start_matches('.').to_lowercase();
     d == "kugou.com" || d.ends_with(".kugou.com")
+}
+
+/// 检查域名是否属于 QQ 音乐 (参考 Mineradio isQQCookieDomain)
+fn is_qq_domain(domain: &str) -> bool {
+    let d = domain.trim_start_matches('.').to_lowercase();
+    d == "qq.com" || d.ends_with(".qq.com") || d.ends_with("qqmusic.qq.com")
 }
 
 /// 从 webview cookies 构建指定平台的 cookie 字符串
@@ -448,6 +610,7 @@ pub async fn music_open_login_window(app: AppHandle, provider: String) -> Result
     match provider.as_str() {
         "netease" => open_netease_login_window(&app).await,
         "kugou" => open_kugou_login_window(&app).await,
+        "qqmusic" => open_qq_login_window(&app).await,
         _ => Err(format!("Unknown provider: {}", provider)),
     }
 }
@@ -628,12 +791,113 @@ async fn open_kugou_login_window(app: &AppHandle) -> Result<String, String> {
     Ok("window_created".into())
 }
 
+/// 打开 QQ 音乐登录窗口 (参考 Mineradio openQQMusicLoginWindow)
+/// 包含 Warmup 机制: 首次登录可能只有 loggedIn 没有 playbackReady,
+/// 需要导航到 warmup URL 触发更多 cookie 写入
+async fn open_qq_login_window(app: &AppHandle) -> Result<String, String> {
+    use tauri::WebviewUrl;
+
+    let url = "https://y.qq.com/n/ryqq/profile";
+    let warmup_url = "https://y.qq.com/n/ryqq/player";
+    let label = "qqmusic-login";
+
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.clear_all_browsing_data();
+        let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
+        let _ = existing.navigate(login_url);
+        let _ = existing.set_focus();
+        return Ok("window_refreshed".into());
+    }
+
+    let login_window = tauri::WebviewWindowBuilder::new(
+        app,
+        label,
+        WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
+    )
+    .title("QQ 音乐登录")
+    .inner_size(900.0, 720.0)
+    .min_inner_size(760.0, 560.0)
+    .build()
+    .map_err(|e| format!("Failed to create login window: {e}"))?;
+
+    let _ = login_window.clear_all_browsing_data();
+    let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
+    let _ = login_window.navigate(login_url);
+
+    let win = login_window.clone();
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // 等待页面加载
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let mut warmup_started = false;
+
+        for _ in 0..150 {
+            match win.cookies() {
+                Ok(cookies) => {
+                    let cookie_str = build_cookie_from_webview(&cookies, QQ_COOKIE_PRIORITY, is_qq_domain);
+
+                    if cookie::qq_cookie_has_playback(&cookie_str) {
+                        log::info!("[QQLogin] playbackReady cookie found, length: {}", cookie_str.len());
+                        let _ = cookie::save_cookie(&app_handle, "qqmusic", &cookie_str);
+                        set_provider_cookie("qqmusic", cookie_str).await;
+                        let _ = win.close();
+                        let qq_cookie = get_provider_cookie("qqmusic").await;
+                        match qqmusic::login_info(&qq_cookie).await {
+                            Ok(info) => {
+                                if info.logged_in {
+                                    let _ = app_handle.emit("qqmusic-login-success", &info);
+                                } else {
+                                    let _ = app_handle.emit("qqmusic-login-failed", "Cookie 无效或已过期");
+                                }
+                            }
+                            Err(e) => {
+                                let _ = app_handle.emit("qqmusic-login-failed", &e);
+                            }
+                        }
+                        return;
+                    } else if cookie::qq_cookie_has_login(&cookie_str) && !warmup_started {
+                        warmup_started = true;
+                        log::info!("[QQLogin] loggedIn but not playbackReady, starting warmup...");
+                        if let Ok(warmup) = warmup_url.parse::<Url>() {
+                            let _ = win.navigate(warmup);
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!("[QQLogin] Failed to read cookies from webview: {e}");
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(1200)).await;
+        }
+
+        // 超时 — 最后检查一次 cookie
+        if let Ok(cookies) = win.cookies() {
+            let cookie_str = build_cookie_from_webview(&cookies, QQ_COOKIE_PRIORITY, is_qq_domain);
+            if cookie::qq_cookie_has_login(&cookie_str) {
+                log::info!("[QQLogin] Timeout but found partial login, saving cookie");
+                let _ = cookie::save_cookie(&app_handle, "qqmusic", &cookie_str);
+                set_provider_cookie("qqmusic", cookie_str).await;
+                let qq_cookie = get_provider_cookie("qqmusic").await;
+                if let Ok(info) = qqmusic::login_info(&qq_cookie).await {
+                    let _ = app_handle.emit("qqmusic-login-success", &info);
+                }
+                return;
+            }
+        }
+        log::warn!("[QQLogin] Polling timed out after 5 minutes");
+    });
+
+    Ok("window_created".into())
+}
+
 // ============================================================
 //  全局 Cookie 缓存 (多平台, 内存中)
 // ============================================================
 
 static APP_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 static KUGOU_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
+static QQ_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 
 /// 获取网易云 cookie (向后兼容)
 async fn get_app_cookie() -> String {
@@ -666,6 +930,7 @@ async fn get_provider_cookie(provider: &str) -> String {
     match provider {
         "netease" => APP_COOKIE.read().await.clone(),
         "kugou" => KUGOU_COOKIE.read().await.clone(),
+        "qqmusic" => QQ_COOKIE.read().await.clone(),
         _ => String::new(),
     }
 }
@@ -679,6 +944,10 @@ async fn set_provider_cookie(provider: &str, cookie: String) {
         }
         "kugou" => {
             let mut guard = KUGOU_COOKIE.write().await;
+            *guard = cookie;
+        }
+        "qqmusic" => {
+            let mut guard = QQ_COOKIE.write().await;
             *guard = cookie;
         }
         _ => {}
@@ -707,5 +976,8 @@ pub async fn init_cookie_cache(app: &AppHandle) {
     }
     if let Ok(c) = cookie::load_cookie(app, "kugou") {
         set_provider_cookie("kugou", c).await;
+    }
+    if let Ok(c) = cookie::load_cookie(app, "qqmusic") {
+        set_provider_cookie("qqmusic", c).await;
     }
 }

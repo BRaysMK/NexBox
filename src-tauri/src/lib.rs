@@ -32,6 +32,7 @@ mod sensor;
 mod shader_cache;
 mod pawnio_driver;
 mod sponsor;
+mod contributor;
 mod startup_manager;
 mod steam;
 mod storage_clean;
@@ -40,7 +41,122 @@ mod tray;
 mod utils;
 mod video_bg;
 mod wmi_query;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
+
+/// 主窗口可见性状态（用于最小化/托盘时暂停动态背景视频）
+static MAIN_WINDOW_VISIBLE: AtomicBool = AtomicBool::new(true);
+
+/// 按需创建竖排悬浮框窗口（不常驻，启用时创建、关闭时销毁）。
+/// 创建后 visible(false)，前端渲染完成后调用 `vertical_overlay_ready` 命令 show，避免白屏闪烁。
+pub fn ensure_vertical_overlay<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Option<tauri::WebviewWindow<R>> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+    let label = "vertical-overlay";
+    if let Some(win) = app.get_webview_window(label) {
+        return Some(win);
+    }
+
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(label.into()))
+        .title("NexBox Vertical Overlay")
+        .inner_size(220.0, 400.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .visible(false)
+        .maximizable(false)
+        .skip_taskbar(true)
+        .shadow(false);
+
+    match builder.build() {
+        Ok(win) => Some(win),
+        Err(e) => {
+            log::error!("[Window] 创建 vertical-overlay 失败: {e}");
+            None
+        }
+    }
+}
+
+/// 设置当前进程效能模式（EcoQoS，即任务管理器中的"小绿叶"）。
+/// 开启后 Windows 会主动限制该进程的 CPU/功耗，适合后台/最小化状态。
+#[cfg(windows)]
+fn set_efficiency_mode(enable: bool) {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, SetProcessInformation,
+        ProcessPowerThrottling,
+        PROCESS_POWER_THROTTLING_STATE,
+        PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        PROCESS_SET_INFORMATION,
+    };
+    use windows::Win32::Foundation::GetLastError;
+
+    let pid = std::process::id();
+    unsafe {
+        match OpenProcess(PROCESS_SET_INFORMATION, false, pid) {
+            Ok(handle) => {
+                // ControlMask / StateMask 直接用 u32 数值，避免 newtype 隐式转换问题
+                // PROCESS_POWER_THROTTLING_EXECUTION_SPEED = 0x1
+                const EXECUTION_SPEED: u32 = 0x1;
+
+                let state = PROCESS_POWER_THROTTLING_STATE {
+                    Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+                    ControlMask: EXECUTION_SPEED,
+                    StateMask: if enable { EXECUTION_SPEED } else { 0 },
+                };
+
+                match SetProcessInformation(
+                    handle,
+                    ProcessPowerThrottling,
+                    &state as *const _ as *const std::ffi::c_void,
+                    std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+                ) {
+                    Ok(_) => log::info!(
+                        "[EcoQoS] 效能模式 {} 成功 (pid={})",
+                        if enable { "开启 (小绿叶)" } else { "关闭" },
+                        pid,
+                    ),
+                    Err(e) => log::error!(
+                        "[EcoQoS] SetProcessInformation 失败: {e} (last_error={})",
+                        GetLastError().0,
+                    ),
+                }
+
+                let _ = CloseHandle(handle);
+            }
+            Err(e) => {
+                log::error!("[EcoQoS] OpenProcess 失败: {e} (pid={})", pid);
+            }
+        }
+    }
+}
+
+/// 通知前端主窗口可见性变化。仅在状态切换时发送，避免重复事件刷屏。
+/// 同时自动切换系统效能模式：隐藏时开启 EcoQoS 降功耗，恢复时关闭。
+pub fn emit_main_visibility<R: tauri::Runtime>(app: &tauri::AppHandle<R>, visible: bool) {
+    use tauri::Emitter;
+    if MAIN_WINDOW_VISIBLE.swap(visible, Ordering::SeqCst) != visible {
+        let _ = app.emit("window-visibility-changed", visible);
+
+        #[cfg(windows)]
+        {
+            if visible {
+                set_efficiency_mode(false);
+            } else {
+                // 延时 3 秒，避免刚最小化又恢复时反复切换
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    if !MAIN_WINDOW_VISIBLE.load(Ordering::SeqCst) {
+                        set_efficiency_mode(true);
+                    }
+                });
+            }
+        }
+    }
+}
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -51,6 +167,7 @@ pub fn run() {
                 let _: () = window.show().unwrap_or(());
                 let _: () = window.set_focus().unwrap_or(());
                 let _: () = window.unminimize().unwrap_or(());
+                emit_main_visibility(app, true);
             }
         }))
         .plugin(tauri_plugin_shell::init())
@@ -137,65 +254,22 @@ pub fn run() {
                 cpu_scheduler::apply_all_saved_rules(&app_handle_for_rules).await;
             });
 
-            // Configure widget window (DWM clipping + close intercept)
-            if let Some(widget_window) = app.get_webview_window("widget") {
-                #[cfg(target_os = "windows")]
-                {
-                    use windows_sys::Win32::Graphics::Dwm::{
-                        DwmSetWindowAttribute,
-                        DWMWA_WINDOW_CORNER_PREFERENCE,
-                        DWMWA_BORDER_COLOR,
-                        DWMWCP_DONOTROUND,
-                    };
-                    use windows_sys::Win32::UI::WindowsAndMessaging::{
-                        SetWindowLongPtrW,
-                        GWL_STYLE,
-                        WS_CAPTION,
-                    };
-                    use windows_sys::Win32::Foundation::HWND;
-
-                    if let Ok(hwnd) = widget_window.hwnd() {
-                        let hwnd_raw = hwnd.0 as HWND;
-                        unsafe {
-                            let current_style = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd_raw, GWL_STYLE);
-                            SetWindowLongPtrW(hwnd_raw, GWL_STYLE, current_style & !(WS_CAPTION as isize));
-
-                            let border_color: u32 = 0xFFFFFFFE;
-                            let _ = DwmSetWindowAttribute(
-                                hwnd_raw,
-                                DWMWA_BORDER_COLOR as u32,
-                                &border_color as *const _ as *const _,
-                                std::mem::size_of::<u32>() as u32,
-                            );
-
-                            let corner_preference = DWMWCP_DONOTROUND;
-                            let _ = DwmSetWindowAttribute(
-                                hwnd_raw,
-                                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
-                                &corner_preference as *const _ as *const _,
-                                std::mem::size_of::<i32>() as u32,
-                            );
-                        }
-                    }
-                }
-
-                // Intercept close → hide instead
-                let w_clone = widget_window.clone();
-                widget_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = w_clone.hide();
-                    }
-                });
-            }
-
-            // Main window: intercept taskbar Close / Alt+F4 → hide instead of destroy
+            // Main window: intercept taskbar Close / Alt+F4 → hide instead of destroy，
+            // 并通知前端窗口可见性变化（最小化/隐藏到托盘时暂停动态背景视频，降低 CPU 占用）
             if let Some(main_window) = app.get_webview_window("main") {
                 let main_clone = main_window.clone();
                 main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = main_clone.hide();
+                    match event {
+                        tauri::WindowEvent::CloseRequested { api, .. } => {
+                            api.prevent_close();
+                            let _ = main_clone.hide();
+                            emit_main_visibility(&main_clone.app_handle(), false);
+                        }
+                        tauri::WindowEvent::Resized(_) => {
+                            let minimized = main_clone.is_minimized().unwrap_or(false);
+                            emit_main_visibility(&main_clone.app_handle(), !minimized);
+                        }
+                        _ => {}
                     }
                 });
             }
@@ -284,6 +358,23 @@ pub fn run() {
         music_api::kugou_rank_songs,
         music_api::kugou_like_toggle,
         music_api::kugou_liked_hashes,
+        // === QQ 音乐 API ===
+        music_api::qq_search,
+        music_api::qq_song_url,
+        music_api::qq_lyric,
+        music_api::qq_login_status,
+        music_api::qq_login_cookie,
+        music_api::qq_logout,
+        music_api::qq_user_playlists,
+        music_api::qq_playlist_tracks,
+        music_api::qq_playlist_tracks_range,
+        music_api::qq_artist_search,
+        music_api::qq_artist_songs,
+        music_api::qq_playlist_search,
+        music_api::qq_rank_list,
+        music_api::qq_rank_songs,
+        music_api::qq_liked_hashes,
+        music_api::qq_like_toggle,
         // === 多平台管理 ===
         music_api::music_get_login_statuses,
         music_api::music_switch_provider,
@@ -425,6 +516,7 @@ pub fn run() {
 
         vertical_overlay::start_vertical_overlay,
         vertical_overlay::stop_vertical_overlay,
+        vertical_overlay::vertical_overlay_ready,
         vertical_overlay::save_vertical_overlay_position,
         vertical_overlay::set_vertical_overlay_click_through,
         vertical_overlay::reset_vertical_overlay_position,
@@ -475,6 +567,7 @@ pub fn run() {
         gpu_rename::restore_gpu_name,
         video_bg::pick_video_file,
             sponsor::get_sponsors,
+            contributor::get_contributors,
         shader_cache::scan_shader_caches,
         shader_cache::clean_shader_cache,
         nvapi::get_nvapi_status,
@@ -544,7 +637,7 @@ pub fn run() {
         match event {
             tauri::RunEvent::ExitRequested { .. } => {
                 // 退出流程开始前隐藏所有窗口，避免 WebView2 销毁后闪现原生标题栏
-                for label in &["main", "widget", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
+                for label in &["main", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
                     if let Some(w) = app_handle.get_webview_window(label) {
                         let _ = w.hide();
                     }

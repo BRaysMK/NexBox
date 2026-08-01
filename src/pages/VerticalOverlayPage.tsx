@@ -239,6 +239,11 @@ export default function VerticalOverlayPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const win = getCurrentWindow();
 
+  // 页面渲染完成后通知 Rust 端 show 窗口（避免加载时的白屏闪烁）
+  useEffect(() => {
+    invoke("vertical_overlay_ready");
+  }, []);
+
   // 强制背景透明（与桌面歌词窗口相同处理）
   useEffect(() => {
     const html = document.documentElement;

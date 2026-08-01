@@ -28,12 +28,7 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                         let _ = window.show();
                         let _ = window.unminimize();
                         let _ = window.set_focus();
-
-                        if let Some(widget) = app.get_webview_window("widget") {
-                            let _ = widget.set_always_on_top(false);
-                            let _ = widget.set_focus();
-                        }
-                        let _ = window.set_focus();
+                        crate::emit_main_visibility(app, true);
                     }
                 }
                 tauri::tray::TrayIconEvent::Click {
@@ -74,6 +69,7 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
 #[tauri::command]
 pub async fn minimize_to_tray<R: Runtime>(window: Window<R>) -> Result<(), String> {
     window.hide().map_err(|e| e.to_string())?;
+    crate::emit_main_visibility(&window.app_handle(), false);
     Ok(())
 }
 
@@ -84,11 +80,9 @@ pub async fn show_window<R: Runtime>(window: Window<R>) -> Result<(), String> {
     window.unminimize().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
 
-    if let Some(widget) = app.get_webview_window("widget") {
-        let _ = widget.set_always_on_top(false);
-        let _ = widget.set_focus();
-    }
     let _ = window.set_focus();
+
+    crate::emit_main_visibility(app, true);
 
     Ok(())
 }
@@ -118,7 +112,7 @@ pub fn set_dont_ask_again(value: bool) {
 #[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
     // 先隐藏所有窗口，避免退出时 WebView2 销毁后短暂露出原生标题栏
-    for label in &["main", "widget", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
+    for label in &["main", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
         if let Some(w) = app.get_webview_window(label) {
             let _ = w.hide();
         }
@@ -135,6 +129,7 @@ pub fn check_update_and_show(app: AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+    crate::emit_main_visibility(&app, true);
     let _ = app.emit("check-update", ());
 }
 

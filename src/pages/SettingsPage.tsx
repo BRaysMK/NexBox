@@ -2176,6 +2176,29 @@ function ContributorSettings() {
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#888888");
   const cardBorder = useColorModeValue("gray.200", "#333333");
+  // 优先展示远程最新名单，拉取失败时回退到内置硬编码名单
+  const [contributors, setContributors] = useState<ContributorItem[]>(CONTRIBUTORS);
+  const [contributorsLoading, setContributorsLoading] = useState(true);
+  const [contributorsError, setContributorsError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    invoke<ContributorItem[]>("get_contributors")
+      .then((data) => {
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          setContributors(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setContributorsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setContributorsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const openUrl = (url: string) => {
     if (url) {
@@ -2189,12 +2212,22 @@ function ContributorSettings() {
         {t("settings.sponsorSettings.contributors.title")}
       </Text>
 
-      <Box
-        display="grid"
-        gridTemplateColumns="repeat(auto-fill, 220px)"
-        gap={4}
-      >
-        {CONTRIBUTORS.map((contributor, index) => (
+      {!contributorsLoading && contributorsError && (
+        <Text fontSize="xs" color={subLabelColor} mb={4} textAlign="center">
+          {t("settings.sponsorSettings.sponsorList.error")}
+        </Text>
+      )}
+      {contributorsLoading ? (
+        <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
+          {t("settings.sponsorSettings.sponsorList.loading")}
+        </Text>
+      ) : (
+        <Box
+          display="grid"
+          gridTemplateColumns="repeat(auto-fill, 220px)"
+          gap={4}
+        >
+        {contributors.map((contributor, index) => (
           <LiquidGlassCard
             key={index}
             p={4}
@@ -2283,7 +2316,8 @@ function ContributorSettings() {
             </Flex>
           </LiquidGlassCard>
         ))}
-      </Box>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -2558,7 +2592,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "6.5.4";
+  const currentVersion = "6.6.5";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);

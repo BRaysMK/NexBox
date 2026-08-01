@@ -238,6 +238,87 @@ extern "C" {
 }
 
 // ---------------------------------------------------------------------------
+// NVAPI DISP mode enumeration structures (NV_MODE_TIMING / NV_MODE_INFO / ...)
+//
+// NvAPI_DISP_EnumDisplayModes is NOT exported by the bundled SDK nvapi64.lib,
+// so it must be loaded dynamically from the runtime nvapi64.dll. These structs
+// mirror the public NVAPI headers so we can read width/height/refresh-rate.
+// ---------------------------------------------------------------------------
+#[allow(non_snake_case)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvTimingExt {
+    flag: NvU32,
+    rr: NvU16,
+    rrx1k: NvU32,
+    aspect: NvU32,
+    rep: NvU16,
+    status: NvU32,
+    name: [u8; 40],
+}
+const _: () = assert!(std::mem::size_of::<NvTimingExt>() == 64);
+
+#[allow(non_snake_case)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvTiming {
+    h_visible: NvU16,
+    h_border: NvU16,
+    h_front_porch: NvU16,
+    h_sync_width: NvU16,
+    h_total: NvU16,
+    h_sync_pol: u8,
+    v_visible: NvU16,
+    v_border: NvU16,
+    v_front_porch: NvU16,
+    v_sync_width: NvU16,
+    v_total: NvU16,
+    v_sync_pol: u8,
+    interlaced: NvU16,
+    pclk: NvU32,
+    etc: NvTimingExt,
+}
+const _: () = assert!(std::mem::size_of::<NvTiming>() == 96);
+
+#[allow(non_snake_case)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvModeProperty {
+    property_version: NvU32,
+    scaling: i32,
+    rotation: i32,
+    b_gdi_compat: NvU32,
+    b_stretch_compat: NvU32,
+    color_format: i32,
+    position: NvU32,
+    dithering: NvU32,
+    clone_compat: NvU32,
+    b_prev_mode: NvU32,
+    b_mode_changed: NvU32,
+}
+const _: () = assert!(std::mem::size_of::<NvModeProperty>() == 44);
+
+#[allow(non_snake_case)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvModeInfo {
+    timing: NvTiming,
+    mode_type: i32,
+    orig_v_visible: NvU32,
+    property: NvModeProperty,
+    aspect: NvU32,
+}
+const _: () = assert!(std::mem::size_of::<NvModeInfo>() == 152);
+
+#[allow(non_snake_case)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvModeTiming {
+    mode_info: NvModeInfo,
+}
+const _: () = assert!(std::mem::size_of::<NvModeTiming>() == 152);
+
+// ---------------------------------------------------------------------------
 // Global state — Library kept alive, function pointers cached
 // ---------------------------------------------------------------------------
 struct NvapiState {
@@ -1612,8 +1693,33 @@ fn list_nvidia_displays_inner() -> Result<Vec<NvidiaDisplay>, String> {
             return Err("未检测到任何显示器".to_string());
         }
 
-        // ── Step 2: Get real NVAPI displayIds from GetDisplayConfig ──
-        let nvapi_display_ids: Vec<NvU32> = unsafe {
+        // ── Step 2: Get real NVAPI displayIds ──
+        // 优先通过 NvAPI_DISP_GetDisplayIdByDisplayName 按设备名精确匹配，
+        // 避免 GDI 与 NVAPI 枚举顺序不一致导致 displayId 错配（A 的 ID 配到 B，
+        // 应用分辨率时会把 A 的宽高设置到 B 上）。
+        let name_resolved_ids: Vec<NvU32> = {
+            let mut ok = true;
+            let mut ids: Vec<NvU32> = Vec::new();
+            for m in &data.monitors {
+                let ansi: Vec<u8> = m.device_name.bytes().chain(std::iter::once(0)).collect();
+                let mut id: NvU32 = 0;
+                let s = unsafe { NvAPI_DISP_GetDisplayIdByDisplayName(ansi.as_ptr(), &mut id) };
+                if s != NVAPI_OK || id == 0 {
+                    log::warn!(
+                        "GetDisplayIdByDisplayName({}) 失败: status={}, 回退到 GetDisplayConfig 顺序匹配",
+                        m.device_name, s
+                    );
+                    ok = false;
+                    break;
+                }
+                ids.push(id);
+            }
+            if ok { ids } else { Vec::new() }
+        };
+
+        let nvapi_display_ids: Vec<NvU32> = if name_resolved_ids.is_empty() {
+            // 回退：通过 GetDisplayConfig 按顺序获取 displayId
+            unsafe {
             let mut path_info_count: NvU32 = 0;
             let mut status =
                 NvAPI_DISP_GetDisplayConfig(&mut path_info_count, std::ptr::null_mut());
@@ -1714,17 +1820,24 @@ fn list_nvidia_displays_inner() -> Result<Vec<NvidiaDisplay>, String> {
                     }
                 })
                 .collect()
+            }
+        } else {
+            log::info!(
+                "list_nvidia_displays: 按设备名精确匹配 displayId 成功: {:?}",
+                name_resolved_ids
+            );
+            name_resolved_ids
         };
 
         log::info!(
-            "list_nvidia_displays: {} GDI monitors, {} NVAPI paths, display_ids={:?}",
+            "list_nvidia_displays: {} GDI monitors, display_ids={:?}",
             data.monitors.len(),
-            nvapi_display_ids.len(),
             nvapi_display_ids
         );
 
         // ── Step 3: Combine GDI info with real NVAPI displayIds ──
-        // Match by order: GDI monitor N → NVAPI path N (typically correct for NVIDIA)
+        // displayId 已优先按设备名精确匹配；仅当按名解析失败时才按顺序
+        // (GDI monitor N → NVAPI path N) 对齐。
         let mut displays: Vec<NvidiaDisplay> = data
             .monitors
             .into_iter()
@@ -1744,22 +1857,26 @@ fn list_nvidia_displays_inner() -> Result<Vec<NvidiaDisplay>, String> {
 
         // EDID 回退：如果 EnumDisplayDevicesW 返回通用名称，
         // monitor_name 会退化为 GDI 设备名（如 DISPLAY1）。
+        // 按 PNP ID 精确匹配 EDID 型号，避免注册表 EDID 枚举顺序与 GDI
+        // 枚举顺序不一致时把 A 显示器的型号错配到 B 显示器（型号颠倒）。
         let has_fallback = displays.iter().any(|d| {
             let stripped = d.device_name.trim_start_matches("\\\\.\\");
             d.monitor_name == stripped
         });
         if has_fallback {
-            let edid_names = crate::display_cache::get_edid_monitor_names();
-            if !edid_names.is_empty() {
-                for (i, d) in displays.iter_mut().enumerate() {
+            let edid_by_pnp = crate::display_cache::get_edid_monitor_names_by_pnpid();
+            if !edid_by_pnp.is_empty() {
+                for d in displays.iter_mut() {
                     let stripped = d.device_name.trim_start_matches("\\\\.\\");
                     if d.monitor_name == stripped {
-                        if let Some(name) = edid_names.get(i) {
-                            if !name.is_empty() {
-                                d.monitor_name = name.clone();
+                        if let Some(pnp_id) =
+                            crate::display_cache::get_pnp_id_for_device(&d.device_name)
+                        {
+                            if let Some(name) = edid_by_pnp.get(&pnp_id) {
+                                if !name.is_empty() {
+                                    d.monitor_name = name.clone();
+                                }
                             }
-                        } else if edid_names.len() == 1 && !edid_names[0].is_empty() {
-                            d.monitor_name = edid_names[0].clone();
                         }
                     }
                 }
@@ -1767,6 +1884,88 @@ fn list_nvidia_displays_inner() -> Result<Vec<NvidiaDisplay>, String> {
         }
 
         Ok(displays)
+}
+
+/// 通过 NVAPI 驱动层枚举指定显示器支持的所有模式（分辨率 + 刷新率）。
+///
+/// GDI 的 `EnumDisplaySettingsW` 在某些驱动/显示器上返回的模式列表不完整
+/// （缺少 1920x1440 等非推荐分辨率），而 NVIDIA 控制面板正是通过
+/// `NvAPI_DISP_EnumDisplayModes` 列出模式的，因此用它做补充。
+///
+/// 该函数由运行时的 nvapi64.dll 导出（SDK 附带的 .lib 未导出），
+/// 这里通过 libloading 动态加载，失败时安全降级（不影响 GDI 结果）。
+#[cfg(target_os = "windows")]
+fn enum_nvapi_display_modes(display_id: NvU32) -> Result<Vec<DisplayMode>, String> {
+    use libloading::Library;
+
+    try_init_nvapi()?;
+
+    let candidates = find_nvapi64_candidates();
+    let path = candidates
+        .first()
+        .map(|(p, _)| p.clone())
+        .ok_or_else(|| "未找到 nvapi64.dll".to_string())?;
+
+    // SAFETY: NvAPI_DISP_EnumDisplayModes 是 NVAPI 公开导出函数，
+    // 存在于运行时的完整版 nvapi64.dll 中。
+    let lib = unsafe { Library::new(&path) }
+        .map_err(|e| format!("加载 nvapi64.dll 失败: {}", e))?;
+    let func: libloading::Symbol<
+        unsafe extern "C" fn(NvU32, NvU32, *mut NvModeTiming, *mut NvU32) -> NvAPI_Status,
+    > = unsafe { lib.get(b"NvAPI_DISP_EnumDisplayModes") }
+        .map_err(|e| format!("nvapi64.dll 中未找到 NvAPI_DISP_EnumDisplayModes: {}", e))?;
+
+    // 第一遍：获取模式数量
+    let mut count: NvU32 = 0;
+    let status = unsafe { func(display_id, 0, std::ptr::null_mut(), &mut count) };
+    if status != NVAPI_OK || count == 0 || count > 1000 {
+        return Err(format!(
+            "NvAPI_DISP_EnumDisplayModes 失败: {} (code {})",
+            nvapi_error_string(status),
+            status
+        ));
+    }
+
+    // 第二遍：填充模式数组
+    let mut buffer: Vec<NvModeTiming> = vec![unsafe { std::mem::zeroed() }; count as usize];
+    let mut filled: NvU32 = count;
+    let status = unsafe { func(display_id, 0, buffer.as_mut_ptr(), &mut filled) };
+    if status != NVAPI_OK {
+        return Err(format!(
+            "NvAPI_DISP_EnumDisplayModes(第 2 次调用) 失败: {} (code {})",
+            nvapi_error_string(status),
+            status
+        ));
+    }
+
+    let mut modes = Vec::new();
+    for m in buffer.into_iter().take(filled as usize) {
+        let t = &m.mode_info.timing;
+        let width = t.h_visible as NvU32;
+        let height = t.v_visible as NvU32;
+        if width == 0 || height == 0 {
+            continue;
+        }
+        // rrx1k 单位为 0.001 Hz，除以 1000 得到 Hz；异常时回退到 rr 字段
+        let rr = if t.etc.rrx1k != 0 {
+            t.etc.rrx1k as f64 / 1000.0
+        } else {
+            t.etc.rr as f64
+        };
+        modes.push(DisplayMode {
+            width,
+            height,
+            refresh_rate: rr,
+            is_current: false,
+        });
+    }
+
+    log::info!(
+        "NVAPI EnumDisplayModes: displayId={}, 共 {} 个模式",
+        display_id,
+        modes.len()
+    );
+    Ok(modes)
 }
 
 /// Enumerate all available display modes (resolution + refresh rate) for a given GDI device name.
@@ -1780,44 +1979,131 @@ pub fn get_nvidia_display_modes(device_name: String) -> Result<Vec<DisplayMode>,
     #[cfg(target_os = "windows")]
     {
         use std::mem;
-        use windows_sys::Win32::Graphics::Gdi::{EnumDisplaySettingsW, DEVMODEW};
+        use windows_sys::Win32::Graphics::Gdi::{
+            EnumDisplaySettingsW, DEVMODEW, ENUM_CURRENT_SETTINGS,
+        };
 
-        let wide_name: Vec<u16> =
-            device_name.encode_utf16().chain(std::iter::once(0)).collect();
-        let mut modes: Vec<DisplayMode> = Vec::new();
-        let mut mode_num: u32 = 0;
-
-        loop {
-            let mut dev_mode: DEVMODEW = unsafe { mem::zeroed() };
-            dev_mode.dmSize = mem::size_of::<DEVMODEW>() as u16;
-
-            let result =
-                unsafe { EnumDisplaySettingsW(wide_name.as_ptr(), mode_num, &mut dev_mode) };
-
-            if result == 0 {
-                break;
+        // 有些系统上 EnumDisplaySettingsW 不接受 "\\\\.\\DISPLAY1" 格式，
+        // 必须回退到 "DISPLAY1"（与 list_nvidia_displays 中的回退逻辑一致）。
+        let candidates: Vec<String> = {
+            let mut v = vec![device_name.clone()];
+            let stripped = device_name.trim_start_matches("\\\\.\\").to_string();
+            if stripped != device_name {
+                v.push(stripped);
             }
+            v
+        };
 
-            // Calculate effective refresh rate
-            // dmDisplayFrequency may be exact (e.g. 60, 144) or fractional (e.g. 5995 → 59.95)
-            let freq_raw = dev_mode.dmDisplayFrequency as f64;
-            let refresh_rate = if freq_raw > 200.0 {
-                // Assume it's 100x encoded (e.g., 5995 = 59.95 Hz)
-                freq_raw / 100.0
-            } else {
-                freq_raw
-            };
+        // 先读取当前设置，用于标记 is_current，并在枚举列表缺失当前模式时补入，
+        // 保证当前分辨率始终可选、刷新率调节始终可用。
+        let current: Option<DisplayMode> = (|| {
+            for name in &candidates {
+                let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+                let mut dm: DEVMODEW = unsafe { mem::zeroed() };
+                dm.dmSize = mem::size_of::<DEVMODEW>() as u16;
+                if unsafe { EnumDisplaySettingsW(wide.as_ptr(), ENUM_CURRENT_SETTINGS, &mut dm) }
+                    != 0
+                {
+                    let freq_raw = dm.dmDisplayFrequency as f64;
+                    let refresh_rate = if freq_raw > 200.0 {
+                        freq_raw / 100.0
+                    } else {
+                        freq_raw
+                    };
+                    return Some(DisplayMode {
+                        width: dm.dmPelsWidth,
+                        height: dm.dmPelsHeight,
+                        refresh_rate,
+                        is_current: true,
+                    });
+                }
+            }
+            None
+        })();
 
-            modes.push(DisplayMode {
-                width: dev_mode.dmPelsWidth,
-                height: dev_mode.dmPelsHeight,
-                refresh_rate,
-                is_current: false,
-            });
+        let mut modes: Vec<DisplayMode> = Vec::new();
+        // 枚举所有候选设备名格式，并把结果合并起来：
+        // 部分系统上带 "\\\\.\\" 前缀的 EnumDisplaySettingsW 返回的模式列表
+        // 可能不完整（缺少 1920x1440 等非推荐分辨率），需要叠加无前缀格式
+        // 的枚举结果，确保与 Windows 显示设置里的列表一致。
+        for name in &candidates {
+            let wide_name: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+            let mut mode_num: u32 = 0;
 
-            mode_num += 1;
-            if mode_num > 300 {
-                break;
+            loop {
+                let mut dev_mode: DEVMODEW = unsafe { mem::zeroed() };
+                dev_mode.dmSize = mem::size_of::<DEVMODEW>() as u16;
+
+                let result =
+                    unsafe { EnumDisplaySettingsW(wide_name.as_ptr(), mode_num, &mut dev_mode) };
+                if result == 0 {
+                    break;
+                }
+
+                // Calculate effective refresh rate
+                // dmDisplayFrequency may be exact (e.g. 60, 144) or fractional (e.g. 5995 → 59.95)
+                let freq_raw = dev_mode.dmDisplayFrequency as f64;
+                let refresh_rate = if freq_raw > 200.0 {
+                    // Assume it's 100x encoded (e.g., 5995 = 59.95 Hz)
+                    freq_raw / 100.0
+                } else {
+                    freq_raw
+                };
+
+                let m = DisplayMode {
+                    width: dev_mode.dmPelsWidth,
+                    height: dev_mode.dmPelsHeight,
+                    refresh_rate,
+                    is_current: false,
+                };
+                // 合并去重：同一显示器的不同设备名格式可能枚举到相同模式
+                if !modes.iter().any(|e| {
+                    e.width == m.width
+                        && e.height == m.height
+                        && (e.refresh_rate - m.refresh_rate).abs() < 0.5
+                }) {
+                    modes.push(m);
+                }
+
+                mode_num += 1;
+                if mode_num > 300 {
+                    break;
+                }
+            }
+        }
+
+        // 再用 NVAPI 驱动层枚举补充 GDI 缺失的模式（如 1920x1440 等
+        // 非推荐分辨率），合并去重。失败时静默忽略，不影响 GDI 结果。
+        {
+            let ansi: Vec<u8> = device_name.bytes().chain(std::iter::once(0)).collect();
+            let mut display_id: NvU32 = 0;
+            if unsafe { NvAPI_DISP_GetDisplayIdByDisplayName(ansi.as_ptr(), &mut display_id) }
+                == NVAPI_OK
+                && display_id != 0
+            {
+                if let Ok(nv_modes) = enum_nvapi_display_modes(display_id) {
+                    for m in nv_modes {
+                        if !modes.iter().any(|e| {
+                            e.width == m.width
+                                && e.height == m.height
+                                && (e.refresh_rate - m.refresh_rate).abs() < 0.5
+                        }) {
+                            modes.push(m);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 枚举列表可能不含当前模式（部分驱动/自定义分辨率），手动补上，
+        // 保证当前分辨率始终可选、刷新率调节始终可用。
+        if let Some(cur) = &current {
+            if !modes.iter().any(|m| {
+                m.width == cur.width
+                    && m.height == cur.height
+                    && (m.refresh_rate - cur.refresh_rate).abs() < 0.5
+            }) {
+                modes.push(cur.clone());
             }
         }
 
@@ -1844,6 +2130,18 @@ pub fn get_nvidia_display_modes(device_name: String) -> Result<Vec<DisplayMode>,
                 && a.height == b.height
                 && (a.refresh_rate - b.refresh_rate).abs() < 0.5
         });
+
+        // 标记当前使用的模式
+        if let Some(cur) = &current {
+            for m in modes.iter_mut() {
+                if m.width == cur.width
+                    && m.height == cur.height
+                    && (m.refresh_rate - cur.refresh_rate).abs() < 0.5
+                {
+                    m.is_current = true;
+                }
+            }
+        }
 
         Ok(modes)
     }

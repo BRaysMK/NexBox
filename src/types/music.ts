@@ -20,6 +20,8 @@ export interface Song {
   hq_hash?: string;
   sq_hash?: string;
   res_hash?: string;
+  // === QQ 音乐扩展字段 ===
+  qq_song_id?: number;
 }
 
 export interface Artist {

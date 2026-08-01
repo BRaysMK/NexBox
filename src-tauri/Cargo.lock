@@ -3215,7 +3215,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nexbox"
-version = "6.5.4"
+version = "6.6.5"
 dependencies = [
  "aes",
  "async-stream",
@@ -3227,6 +3227,7 @@ dependencies = [
  "cipher",
  "dashmap",
  "dirs 5.0.1",
+ "encoding_rs",
  "env_logger",
  "futures-util",
  "hex",
@@ -3243,6 +3244,7 @@ dependencies = [
  "rfd 0.15.4",
  "serde",
  "serde_json",
+ "sha1",
  "spin_sleep",
  "sysinfo",
  "tauri",

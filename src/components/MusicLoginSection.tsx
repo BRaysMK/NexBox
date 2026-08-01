@@ -64,10 +64,9 @@ const PROVIDERS: ProviderOption[] = [
   {
     id: "qqmusic",
     name: "QQ 音乐",
-    desc: "开发中 · 敬请期待",
-    color: "#1FA5FF",
+    desc: "海量曲库 · Hi-Res · 精准推荐",
+    color: "#FEC135",
     logo: "/music-providers/qqmusic.png",
-    disabled: true,
   },
 ];
 
@@ -131,7 +130,7 @@ export function MusicLoginSection() {
   const menuHoverBg = useColorModeValue("gray.50", "#252525");
 
   // 已登录的平台数量
-  const loggedInProviders = PROVIDERS.filter((p) => p.id !== "qqmusic" && loginInfos[p.id]?.logged_in);
+  const loggedInProviders = PROVIDERS.filter((p) => !p.disabled && loginInfos[p.id]?.logged_in);
   const hasMultipleLoggedIn = loggedInProviders.length > 1;
 
   // 处理平台选择点击（开发中平台仅提示，不响应）

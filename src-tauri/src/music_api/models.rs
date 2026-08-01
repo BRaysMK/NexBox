@@ -32,6 +32,9 @@ pub struct Song {
     pub sq_hash: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub res_hash: Option<String>,
+    // === QQ 音乐扩展字段 ===
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub qq_song_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -158,6 +161,27 @@ pub fn quality_candidates_from(target: &str) -> Vec<QualityCandidate> {
 pub fn kugou_quality_candidates() -> Vec<QualityCandidate> {
     vec![
         QualityCandidate { level: "jymaster".into(), label: "超清母带".into() },
+        QualityCandidate { level: "hires".into(),    label: "Hi-Res".into()    },
+        QualityCandidate { level: "lossless".into(), label: "无损".into()    },
+        QualityCandidate { level: "exhigh".into(),   label: "极高".into()    },
+        QualityCandidate { level: "standard".into(), label: "标准".into()    },
+    ]
+}
+
+/// QQ 音乐音质模板 (对照 Mineradio QQ_QUALITY_CANDIDATE_TEMPLATES)
+/// (prefix, ext, level, label)
+pub const QQ_QUALITY_TEMPLATES: &[(&str, &str, &str, &str)] = &[
+    ("RS01", ".flac", "hires",    "Hi-Res FLAC"),
+    ("F000", ".flac", "lossless", "无损 FLAC"),
+    ("M800", ".mp3",  "exhigh",   "320k MP3"),
+    ("M500", ".mp3",  "standard", "128k MP3"),
+    ("C400", ".m4a",  "aac",      "AAC/M4A"),
+];
+
+/// QQ 音乐音质候选列表
+#[allow(dead_code)]
+pub fn qq_quality_candidates() -> Vec<QualityCandidate> {
+    vec![
         QualityCandidate { level: "hires".into(),    label: "Hi-Res".into()    },
         QualityCandidate { level: "lossless".into(), label: "无损".into()    },
         QualityCandidate { level: "exhigh".into(),   label: "极高".into()    },

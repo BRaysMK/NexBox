@@ -308,6 +308,8 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (backgroundMode === "preset" && carouselEnabled) {
       carouselTimerRef.current = setInterval(() => {
+        // 窗口最小化/隐藏到托盘时暂停轮播，降低后台 CPU 占用
+        if (document.hidden) return;
         setActivePresetIndex((prev) => (prev + 1) % PRESET_BACKGROUNDS.length);
       }, 10000);
     } else {

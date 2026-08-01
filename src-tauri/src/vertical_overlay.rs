@@ -40,10 +40,10 @@ pub async fn start_vertical_overlay(
     let settings = get_or_init_settings();
     VERTICAL_OVERLAY_ACTIVE.store(true, Ordering::SeqCst);
 
-    // 显示 Tauri 窗口
-    let window = app_handle
-        .get_webview_window("vertical-overlay")
-        .ok_or("找不到 vertical-overlay 窗口")?;
+    // 按需创建竖排悬浮框窗口（不常驻，启用时创建、关闭时销毁）
+    let Some(window) = crate::ensure_vertical_overlay(&app_handle) else {
+        return Err("创建 vertical-overlay 窗口失败".to_string());
+    };
 
     // 先设置初始窗口大小，再显示，避免窗口以默认大尺寸闪一下
     let init_width = settings.item_width as f64;
@@ -67,8 +67,9 @@ pub async fn start_vertical_overlay(
         }
     }
 
-    let _ = window.show();
     let _ = window.set_always_on_top(true);
+
+    // 窗口已创建但 visible=false，等前端 mount 后调用 vertical_overlay_ready 命令再 show，避免加载时白屏闪烁
 
     // 启动数据推送线程（如果尚未启动）
     if !DATA_THREAD_STARTED.swap(true, Ordering::SeqCst) {
@@ -99,6 +100,16 @@ pub async fn start_vertical_overlay(
     })
 }
 
+/// 前端页面渲染完成后调用，此时才 show 窗口（避免 WebView2 初次加载时闪烁空白页）
+#[tauri::command]
+pub fn vertical_overlay_ready(app_handle: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app_handle.get_webview_window("vertical-overlay") {
+        let _ = win.show();
+        let _ = app_handle.emit("overlay-status-changed", ());
+    }
+    Ok(())
+}
+
 /// 停止竖排悬浮框
 #[tauri::command]
 pub async fn stop_vertical_overlay(
@@ -114,7 +125,7 @@ pub async fn stop_vertical_overlay(
     VERTICAL_OVERLAY_ACTIVE.store(false, Ordering::SeqCst);
 
     if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
-        let _ = window.hide();
+        let _ = window.destroy();
     }
 
     let _ = app_handle.emit("overlay-status-changed", ());
@@ -242,7 +253,7 @@ pub fn cleanup(app_handle: &tauri::AppHandle) {
     if VERTICAL_OVERLAY_ACTIVE.load(Ordering::SeqCst) {
         VERTICAL_OVERLAY_ACTIVE.store(false, Ordering::SeqCst);
         if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
-            let _ = window.hide();
+            let _ = window.destroy();
         }
     }
     stop_data_thread();

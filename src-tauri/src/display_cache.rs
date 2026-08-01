@@ -84,6 +84,53 @@ pub fn get_edid_monitor_names_by_pnpid() -> HashMap<String, String> {
     lock.entries.iter().cloned().collect()
 }
 
+/// 通过 EnumDisplayDevicesW 获取指定显示设备（如 "\\.\DISPLAY1"）的 PNP ID
+/// （如 "DELA409"），用于按设备 ID 精确匹配 EDID 型号，
+/// 避免不同 API 枚举顺序不一致导致型号张冠李戴。
+#[cfg(target_os = "windows")]
+pub fn get_pnp_id_for_device(device_name: &str) -> Option<String> {
+    use std::mem;
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayDevicesW, DISPLAY_DEVICEW};
+
+    unsafe {
+        let device_name_wide: Vec<u16> = device_name
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut disp_device: DISPLAY_DEVICEW = mem::zeroed();
+        disp_device.cb = mem::size_of::<DISPLAY_DEVICEW>() as u32;
+
+        if EnumDisplayDevicesW(device_name_wide.as_ptr(), 0, &mut disp_device, 0) != 0 {
+            let len = disp_device
+                .DeviceID
+                .iter()
+                .position(|&c| c == 0)
+                .unwrap_or(disp_device.DeviceID.len());
+            if len > 0 {
+                let device_id = String::from_utf16_lossy(&disp_device.DeviceID[..len]);
+                // DeviceID 格式: "MONITOR\PNPID\..."，提取 PNPID
+                let prefix = "MONITOR\\";
+                if let Some(pnp_start) = device_id.find(prefix) {
+                    let after_prefix = &device_id[pnp_start + prefix.len()..];
+                    if let Some(backslash_pos) = after_prefix.find('\\') {
+                        return Some(after_prefix[..backslash_pos].to_string());
+                    }
+                    // 没有反斜杠时取到末尾
+                    if !after_prefix.is_empty() {
+                        return Some(after_prefix.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn get_pnp_id_for_device(_device_name: &str) -> Option<String> {
+    None
+}
+
 /// 强制刷新缓存（例如显示器配置变化时调用）。
 #[allow(dead_code)]
 pub fn invalidate() {

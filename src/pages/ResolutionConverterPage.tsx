@@ -681,7 +681,7 @@ export default function ResolutionConverterPage() {
       </LiquidGlassCard>
 
       {/* 刷新率切换 */}
-      {currentResRefreshRates.length > 1 && (
+      {currentResRefreshRates.length > 0 && (
         <LiquidGlassCard w="full" p={5} boxShadow="2xl">
           <HStack mb={4} spacing={2}>
             <RefreshCw size={18} color={getActiveColor()} />
