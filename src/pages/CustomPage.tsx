@@ -37,9 +37,11 @@ import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { searchIndex, type SearchItem } from "@/config/search-index";
+import { store } from "@/lib/store";
 import type { CustomCardInstance, CustomDashboardConfig } from "@/types/custom-dashboard";
 
-const STORAGE_KEY = "nexbox_custom_dashboard_config";
+const STORE_CONFIG_KEY = "nexbox_custom_dashboard_config";
+const LS_CONFIG_KEY = "nexbox_custom_dashboard_config";
 
 const MIN_CARD_W = 120;
 const MIN_CARD_H = 100;
@@ -50,7 +52,7 @@ const DEFAULT_CARD_H = 120;
 
 function loadConfig(): CustomDashboardConfig {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(LS_CONFIG_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
@@ -63,7 +65,8 @@ function loadConfig(): CustomDashboardConfig {
 }
 
 function saveConfig(config: CustomDashboardConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  localStorage.setItem(LS_CONFIG_KEY, JSON.stringify(config));
+  store.set(STORE_CONFIG_KEY, config).then(() => store.save());
 }
 
 /** 可添加到自定义页面的项：排除第三方工具 */
@@ -443,6 +446,16 @@ export default function CustomPage() {
   const [zOrderMap, setZOrderMap] = useState<Record<string, number>>({});
   const [zOrderCounter, setZOrderCounter] = useState(0);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // 从 store 加载配置（覆盖旧 localStorage 数据）
+  useEffect(() => {
+    (async () => {
+      const saved = await store.get<CustomDashboardConfig>(STORE_CONFIG_KEY);
+      if (saved && Array.isArray(saved.cards) && saved.cards.length > 0) {
+        setConfig(saved);
+      }
+    })();
+  }, []);
 
   const headerColor = useColorModeValue("gray.800", "#ffffff");
   const descColor = useColorModeValue("gray.500", "#888888");

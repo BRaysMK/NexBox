@@ -168,6 +168,12 @@ pub async fn music_recommend_songs() -> Result<Vec<Song>, String> {
 }
 
 #[tauri::command]
+pub async fn music_recommend_resource() -> Result<Vec<Playlist>, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::recommend_resource(&app_cookie).await
+}
+
+#[tauri::command]
 pub async fn music_artist_search(keywords: String, limit: Option<u32>) -> Result<Vec<Artist>, String> {
     let app_cookie = get_app_cookie().await;
     netease::artist_search(&keywords, limit.unwrap_or(30), &app_cookie).await
@@ -403,9 +409,9 @@ pub async fn qq_artist_search(app: AppHandle, keywords: String, limit: Option<u3
 }
 
 #[tauri::command]
-pub async fn qq_artist_songs(app: AppHandle, artist_mid: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Song>, String> {
+pub async fn qq_artist_songs(app: AppHandle, artist_id: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Song>, String> {
     let cookie = load_provider_cookie(&app, "qqmusic").await;
-    qqmusic::artist_songs(&artist_mid, limit.unwrap_or(50), offset.unwrap_or(0), &cookie).await
+    qqmusic::artist_songs(&artist_id, limit.unwrap_or(50), offset.unwrap_or(0), &cookie).await
 }
 
 #[tauri::command]
@@ -424,6 +430,11 @@ pub async fn qq_rank_list(app: AppHandle) -> Result<Vec<Playlist>, String> {
 pub async fn qq_rank_songs(app: AppHandle, rank_id: String, limit: Option<u32>) -> Result<Vec<Song>, String> {
     let cookie = load_provider_cookie(&app, "qqmusic").await;
     qqmusic::get_rank_songs(&cookie, &rank_id, limit.unwrap_or(30)).await
+}
+
+#[tauri::command]
+pub async fn music_qq_recommend_playlists() -> Result<Vec<Playlist>, String> {
+    qqmusic::recommend_playlists().await
 }
 
 #[tauri::command]
@@ -678,6 +689,11 @@ async fn open_netease_login_window(app: &AppHandle) -> Result<String, String> {
                 }
                 Err(e) => {
                     log::warn!("[MusicAPI] Failed to read cookies from webview: {e}");
+                    // 窗口可能已被用户关闭，检测到后停止轮询
+                    if !win.is_visible().unwrap_or(false) {
+                        log::info!("[MusicAPI] Login window closed, stop polling");
+                        break;
+                    }
                 }
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
@@ -766,6 +782,11 @@ async fn open_kugou_login_window(app: &AppHandle) -> Result<String, String> {
                 }
                 Err(e) => {
                     log::warn!("[KugouLogin] Failed to read cookies from webview: {e}");
+                    // 窗口可能已被用户关闭，检测到后停止轮询
+                    if !win.is_visible().unwrap_or(false) {
+                        log::info!("[KugouLogin] Login window closed, stop polling");
+                        break;
+                    }
                 }
             }
             tokio::time::sleep(Duration::from_millis(1200)).await;
@@ -866,6 +887,11 @@ async fn open_qq_login_window(app: &AppHandle) -> Result<String, String> {
                 }
                 Err(e) => {
                     log::warn!("[QQLogin] Failed to read cookies from webview: {e}");
+                    // 窗口可能已被用户关闭，检测到后停止轮询
+                    if !win.is_visible().unwrap_or(false) {
+                        log::info!("[QQLogin] Login window closed, stop polling");
+                        break;
+                    }
                 }
             }
             tokio::time::sleep(Duration::from_millis(1200)).await;

@@ -3,7 +3,7 @@ use std::time::Duration;
 use reqwest::header::{COOKIE, REFERER, USER_AGENT};
 use serde_json::{json, Value};
 
-use super::crypto::{build_eapi_header, encrypt_eapi_payload};
+use super::crypto::{build_eapi_header, encrypt_eapi_payload, encrypt_weapi_payload};
 use super::models::*;
 
 const NETEASE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 9; PCT-AL10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.64 HuaweiBrowser/10.0.3.311 Mobile Safari/537.36";
@@ -150,6 +150,42 @@ async fn post_eapi(
     post_eapi_full(client, api_path, payload, user_cookie)
         .await
         .map(|r| r.json)
+}
+
+/// 网易云 weapi 桌面端 User-Agent (参考 NeteaseCloudMusicApi)
+const NETEASE_WEAPI_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
+
+/// 发送 weapi 加密请求 (每日推荐歌单等需要 weapi 的接口)
+/// /api/v1/xxx -> https://music.163.com/weapi/v1/xxx
+async fn post_weapi(
+    client: &reqwest::Client,
+    api_path: &str,
+    payload: serde_json::Map<String, Value>,
+    cookie: &str,
+) -> Result<Value, String> {
+    let url = format!("https://music.163.com/weapi{}", &api_path[4..]);
+
+    let mut full = payload;
+    full.insert("csrf_token".into(), json!(""));
+    let payload_text = serde_json::to_string(&full)
+        .map_err(|e| format!("Failed to serialize weapi payload: {e}"))?;
+    let (params, enc_sec_key) = encrypt_weapi_payload(&payload_text);
+
+    let resp = client
+        .post(&url)
+        .header(USER_AGENT, NETEASE_WEAPI_USER_AGENT)
+        .header(REFERER, "https://music.163.com/")
+        .header(COOKIE, cookie)
+        .form(&[("params", params.as_str()), ("encSecKey", enc_sec_key.as_str())])
+        .send()
+        .await
+        .map_err(|e| format!("POST {api_path} failed: {e}"))?;
+
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read weapi response: {e}"))?;
+    serde_json::from_str(&text).map_err(|e| format!("Failed to parse JSON from {api_path}: {e}"))
 }
 
 fn map_artists(raw: &[Value]) -> Vec<Artist> {
@@ -906,6 +942,61 @@ pub async fn recommend_songs(cookie: &str) -> Result<Vec<Song>, String> {
         .unwrap_or_default();
 
     Ok(songs.iter().map(map_song_record).collect())
+}
+
+/// 每日推荐歌单 (recommend/resource, weapi 加密)
+/// 返回当天为用户推荐的歌单列表，需要登录态 cookie
+pub async fn recommend_resource(cookie: &str) -> Result<Vec<Playlist>, String> {
+    let client = build_client();
+    let result = post_weapi(
+        &client,
+        "/api/v1/discovery/recommend/resource",
+        serde_json::Map::new(),
+        cookie,
+    ).await?;
+
+    let playlists = result.get("recommend").and_then(|v| v.as_array()).cloned()
+        .or_else(|| result.get("data").and_then(|v| v.as_array()).cloned())
+        .unwrap_or_default();
+
+    Ok(playlists
+        .iter()
+        .filter_map(|pl| {
+            let id = pl.get("id").and_then(|v| v.as_i64())
+                .or_else(|| pl.get("resourceId").and_then(|v| v.as_i64()))
+                .map(|n| n.to_string())
+                .unwrap_or_default();
+            if id.is_empty() {
+                return None;
+            }
+            // creator 可能是字符串，也可能是 { nickname } 对象
+            let creator = pl.get("creator").map(|c| {
+                if let Some(s) = c.as_str() {
+                    s.to_string()
+                } else if let Some(nick) = c.get("nickname").and_then(|v| v.as_str()) {
+                    nick.to_string()
+                } else if let Some(copy) = c.get("copywriter").and_then(|v| v.as_str()) {
+                    copy.to_string()
+                } else {
+                    String::new()
+                }
+            }).unwrap_or_default();
+            Some(Playlist {
+                provider: "netease".into(),
+                id,
+                name: pl.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                cover: pl.get("picUrl").and_then(|v| v.as_str())
+                    .or_else(|| pl.get("coverImgUrl").and_then(|v| v.as_str()))
+                    .unwrap_or("").to_string(),
+                track_count: pl.get("trackCount")
+                    .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|n| n as u64)).or_else(|| v.as_f64().map(|n| n as u64)))
+                    .map(|n| n as u32)
+                    .unwrap_or(0),
+                creator,
+                ..Default::default()
+            })
+        })
+        .collect())
 }
 
 /// 搜索歌单 (使用 cloudsearch type=1000)

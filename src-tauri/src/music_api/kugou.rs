@@ -574,9 +574,9 @@ async fn h5_gateway_request(
         req_builder = req_builder.header("x-router", r);
     }
 
+    // 对齐 Mineradio: H5 网关不设置 Content-Type
     if !body_text.is_empty() {
         req_builder = req_builder
-            .header("Content-Type", "application/json")
             .body(body_text);
     }
 
@@ -2141,6 +2141,21 @@ pub async fn user_playlists(cookie: &str) -> Result<Vec<Playlist>, String> {
     )
     .await?;
 
+    // 登录态失效/接口异常时明确报错，避免静默显示"暂无歌单"
+    let errmsg = json.get("errmsg")
+        .or_else(|| json.get("error"))
+        .or_else(|| json.get("msg"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    let status = json.get("status").and_then(|v| v.as_i64())
+        .or_else(|| json.get("code").and_then(|v| v.as_i64()))
+        .unwrap_or(0);
+    if !errmsg.is_empty() {
+        log::warn!("[KugouPlaylist] user_playlists error: status={}, msg={}", status, errmsg);
+        return Err(format!("酷狗歌单获取失败: {}", errmsg));
+    }
+
     let data = json.get("data").unwrap_or(&Value::Null);
     let lists = extract_gateway_playlist_lists(data);
 
@@ -3084,7 +3099,9 @@ pub async fn login_info(cookie: &str) -> Result<LoginInfo, String> {
 
     Ok(LoginInfo {
         provider: "kugou".into(),
-        logged_in: auth.logged_in,
+        // 登录态必须包含有效 token（token 过期/缺失视为未登录），
+        // 否则长时间不用后 token 失效但界面仍显示已登录、歌单却拉不到
+        logged_in: auth.playback_ready,
         user_id: auth.userid,
         nickname: final_nickname,
         avatar: final_avatar,

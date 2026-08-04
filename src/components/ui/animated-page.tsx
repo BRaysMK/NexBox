@@ -1,5 +1,6 @@
 import { motion, Transition, Variants } from "framer-motion";
 import { ReactNode, useEffect, useState } from "react";
+import { store } from "@/lib/store";
 
 interface AnimatedPageProps {
   children: ReactNode;
@@ -7,8 +8,9 @@ interface AnimatedPageProps {
 
 export type TransitionMode = "slide" | "fade" | "off";
 
-const STORAGE_KEY = "nexbox_page_transition";
+const STORE_KEY = "nexbox_page_transition";
 const OLD_STORAGE_KEY = "nexbox_page_transition_enabled";
+const LS_KEY = "nexbox_page_transition";
 const EVENT_NAME = "page-transition-setting-changed";
 
 export const slideVariants: Variants = {
@@ -61,17 +63,29 @@ export function readTransitionMode(): TransitionMode {
   if (oldVal !== null) {
     localStorage.removeItem(OLD_STORAGE_KEY);
     const mode: TransitionMode = oldVal === "true" ? "slide" : "off";
-    localStorage.setItem(STORAGE_KEY, mode);
+    localStorage.setItem(LS_KEY, mode);
+    store.set(STORE_KEY, mode).then(() => store.save());
     return mode;
   }
-  return (localStorage.getItem(STORAGE_KEY) as TransitionMode) || "fade";
+  return (localStorage.getItem(LS_KEY) as TransitionMode) || "fade";
 }
 
 export function useTransitionMode(): TransitionMode {
   const [mode, setMode] = useState<TransitionMode>(readTransitionMode);
 
   useEffect(() => {
-    const handler = () => setMode(readTransitionMode());
+    (async () => {
+      let saved = await store.get<string>(STORE_KEY) as TransitionMode | null;
+      if (saved === "slide" || saved === "fade" || saved === "off") {
+        setMode(saved);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const handler = async () => {
+      setMode(readTransitionMode());
+    };
     window.addEventListener(EVENT_NAME, handler);
     return () => window.removeEventListener(EVENT_NAME, handler);
   }, []);

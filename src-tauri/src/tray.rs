@@ -10,6 +10,39 @@ static TRAY_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static CLOSE_BEHAVIOR: LazyLock<Mutex<String>> = LazyLock::new(|| Mutex::new(String::from("ask")));
 static DONT_ASK_AGAIN: AtomicBool = AtomicBool::new(false);
 
+/// 获取指定屏幕坐标所在显示器的工作区（已排除任务栏），返回物理像素 (x, y, width, height)。
+#[cfg(target_os = "windows")]
+fn get_monitor_work_area(px: i32, py: i32) -> Option<(i32, i32, i32, i32)> {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+
+    unsafe {
+        let point = POINT { x: px, y: py };
+        let hmonitor = MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
+        if hmonitor.is_null() {
+            return None;
+        }
+        let mut info: MONITORINFO = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if GetMonitorInfoW(hmonitor, &mut info) == 0 {
+            return None;
+        }
+        Some((
+            info.rcWork.left,
+            info.rcWork.top,
+            info.rcWork.right - info.rcWork.left,
+            info.rcWork.bottom - info.rcWork.top,
+        ))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_monitor_work_area(_px: i32, _py: i32) -> Option<(i32, i32, i32, i32)> {
+    None
+}
+
 pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn std::error::Error>> {
     if TRAY_INITIALIZED.load(Ordering::SeqCst) {
         return Err("Tray already initialized".into());
@@ -45,8 +78,32 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                             tauri::Size::Physical(s) => (s.width as i32, s.height as i32),
                             tauri::Size::Logical(s) => (s.width as i32, s.height as i32),
                         };
-                        let x = (px + sw / 2 - 95).max(0);
-                        let y = (py - 140).max(0);
+                        // 使用窗口实际物理尺寸计算偏移，避免 DPI 缩放导致菜单侵入任务栏
+                        let (mw, mh) = menu_window
+                            .outer_size()
+                            .ok()
+                            .map(|s| (s.width as i32, s.height as i32))
+                            .unwrap_or((190, 140));
+
+                        // 默认：菜单底部对齐托盘图标顶部（任务栏在屏幕下方）
+                        let mut x = px + sw / 2 - mw / 2;
+                        let mut y = py - mh;
+
+                        // 依据所在显示器的工作区(不含任务栏)钳制，确保菜单完整显示在任务栏上方
+                        if let Some((wx, wy, ww, wh)) = get_monitor_work_area(px, py) {
+                            if mw <= ww && mh <= wh {
+                                x = x.clamp(wx, wx + ww - mw);
+                                y = y.clamp(wy, wy + wh - mh);
+                            } else {
+                                // 工作区容纳不下时退回屏幕内
+                                x = x.clamp(wx, wx + ww - mw.min(ww));
+                                y = y.clamp(wy, wy + wh - mh.min(wh));
+                            }
+                        } else {
+                            x = x.max(0);
+                            y = y.max(0);
+                        }
+
                         let _ = menu_window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
                             x,
                             y,

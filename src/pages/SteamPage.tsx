@@ -180,11 +180,13 @@ function StatusBadge({ running, activeColor, t }: { running: boolean; activeColo
 function UserCard({
   user,
   onSwitch,
+  onDelete,
   isSwitching,
   isLoadingAvatar,
 }: {
   user: SteamUser;
   onSwitch: (accountName: string) => void;
+  onDelete: (user: SteamUser) => void;
   isSwitching: boolean;
   isLoadingAvatar: boolean;
 }) {
@@ -235,22 +237,35 @@ function UserCard({
           ID: {steamId64To32(user.steam_id64)}
         </Text>
       </Box>
-      {!user.most_recent && (
-        <Tooltip label={t("steam.switchAccount")} placement="top">
+      <HStack spacing={1}>
+        {!user.most_recent && (
+          <Tooltip label={t("steam.switchAccount")} placement="top">
+            <IconButton
+              aria-label={t("steam.switchAccount")}
+              icon={<LuCircleDot size={16} />}
+              size="sm"
+              variant="ghost"
+              color={activeColor}
+              isLoading={isSwitching}
+              onClick={() => onSwitch(user.account_name)}
+            />
+          </Tooltip>
+        )}
+        <Tooltip label={t("steam.deleteAccount")} placement="top">
           <IconButton
-            aria-label={t("steam.switchAccount")}
-            icon={<LuCircleDot size={16} />}
+            aria-label={t("steam.deleteAccount")}
+            icon={<LuTrash2 size={16} />}
             size="sm"
             variant="ghost"
-            color={activeColor}
-            isLoading={isSwitching}
-            onClick={() => onSwitch(user.account_name)}
+            color="red.400"
+            _hover={{ bg: "red.50", color: "red.500" }}
+            onClick={() => onDelete(user)}
           />
         </Tooltip>
-      )}
-      {user.most_recent && (
-        <Box w="16px" h="16px" borderRadius="full" bg={activeColor} />
-      )}
+        {user.most_recent && (
+          <Box w="16px" h="16px" borderRadius="full" bg={activeColor} />
+        )}
+      </HStack>
     </HStack>
   );
 
@@ -599,6 +614,8 @@ export default function SteamPage() {
 
   const [uninstallTarget, setUninstallTarget] = useState<{ appId: number; name: string } | null>(null);
   const { isOpen: isUninstallOpen, onOpen: onUninstallOpen, onClose: onUninstallClose } = useDisclosure();
+  const [deleteTarget, setDeleteTarget] = useState<SteamUser | null>(null);
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   const activeColor = getActiveColor();
@@ -766,6 +783,30 @@ export default function SteamPage() {
     onUninstallOpen();
   }, [onUninstallOpen]);
 
+  const handleDeleteAccount = useCallback(async () => {
+    if (!deleteTarget) return;
+    try {
+      if (data?.install_info.is_running) {
+        toast({ title: t("steam.deleteAccountCloseSteam"), status: "info", duration: 3000, isClosable: true });
+      }
+      await invoke("delete_steam_account", { steamId64: deleteTarget.steam_id64 });
+      toast({ title: t("steam.deleteAccountSuccess"), status: "success", duration: 3000, isClosable: true });
+      setDeleteTarget(null);
+      onDeleteClose();
+      // 后端删除完成后 vdf 已更新，立即刷新
+      fetchData();
+    } catch (err) {
+      toast({ title: String(err), status: "error", duration: 3000, isClosable: true });
+      setDeleteTarget(null);
+      onDeleteClose();
+    }
+  }, [deleteTarget, data, toast, t, onDeleteClose, fetchData]);
+
+  const onDeleteClick = useCallback((user: SteamUser) => {
+    setDeleteTarget(user);
+    onDeleteOpen();
+  }, [onDeleteOpen]);
+
   // 加载中
   if (loading) {
     return (
@@ -923,6 +964,7 @@ export default function SteamPage() {
                     key={user.steam_id64}
                     user={user}
                     onSwitch={handleSwitchAccount}
+                    onDelete={onDeleteClick}
                     isSwitching={switchingAccount === user.account_name}
                     isLoadingAvatar={loadingAvatars.has(user.steam_id64)}
                   />
@@ -1058,6 +1100,34 @@ export default function SteamPage() {
               </Button>
               <Button colorScheme="red" onClick={handleUninstall} ml={3}>
                 {t("steam.confirmUninstall")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+
+      {/* 删除账户确认弹窗 */}
+      <AlertDialog
+        isOpen={isDeleteOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={onDeleteClose}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent bg={cardBg} borderColor={borderColor}>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold" color={textColor}>
+              {t("steam.deleteAccountTitle")}
+            </AlertDialogHeader>
+            <AlertDialogBody color={subTextColor}>
+              {t("steam.deleteAccountConfirm", {
+                name: deleteTarget?.account_name || deleteTarget?.persona_name || deleteTarget?.steam_id64,
+              })}
+            </AlertDialogBody>
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={onDeleteClose}>
+                {t("steam.cancel")}
+              </Button>
+              <Button colorScheme="red" onClick={handleDeleteAccount} ml={3}>
+                {t("steam.deleteAccount")}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
+import { store } from "@/lib/store";
 
 const bounceKeyframes = keyframes`
   0% { transform: scale(1); }
@@ -20,10 +21,16 @@ export function useTodayPopularityEnabled() {
   const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
-    const saved = localStorage.getItem("nexbox_today_popularity_enabled");
-    if (saved !== null) {
-      setEnabled(saved === "true");
-    }
+    (async () => {
+      const saved = await store.get<boolean>("nexbox_today_popularity_enabled");
+      if (saved !== null && saved !== undefined) {
+        setEnabled(saved);
+      } else {
+        // 兼容旧 localStorage
+        const ls = localStorage.getItem("nexbox_today_popularity_enabled");
+        if (ls !== null) setEnabled(ls === "true");
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -48,28 +55,41 @@ export function TodayPopularity() {
   const borderColor = useColorModeValue("gray.200", "#333333");
 
   useEffect(() => {
-    const todayKey = getTodayKey();
-    const savedDate = localStorage.getItem("nexbox_today_popularity_date");
-    const savedValue = localStorage.getItem("nexbox_today_popularity_value");
+    (async () => {
+      const todayKey = getTodayKey();
+      // 优先从 store 读取，兼容旧 localStorage
+      let savedDate = await store.get<string>("nexbox_today_popularity_date");
+      let savedValue = await store.get<string>("nexbox_today_popularity_value");
+      if (!savedDate || !savedValue) {
+        savedDate = localStorage.getItem("nexbox_today_popularity_date");
+        savedValue = localStorage.getItem("nexbox_today_popularity_value");
+      }
 
-    if (savedDate === todayKey && savedValue !== null) {
-      setValue(Number(savedValue));
-    }
+      if (savedDate === todayKey && savedValue !== null) {
+        setValue(Number(savedValue));
+      }
+    })();
   }, []);
 
   const generate = useCallback(() => {
     const todayKey = getTodayKey();
-    const savedDate = localStorage.getItem("nexbox_today_popularity_date");
 
-    if (savedDate === todayKey && value !== null) {
-      return;
+    // 从 store 读取判断是否已生成（避免异步过时问题）
+    store.get<string>("nexbox_today_popularity_date").then((savedDate) => {
+      if (savedDate === todayKey && value !== null) return;
+    });
+
+    if (value !== null) {
+      // 同步检查 localStorage 作为回退
+      const savedDate = localStorage.getItem("nexbox_today_popularity_date");
+      if (savedDate === todayKey) return;
     }
 
     const randomValue = Math.floor(Math.random() * 101);
     setValue(randomValue);
     setAnimating(true);
-    localStorage.setItem("nexbox_today_popularity_date", todayKey);
-    localStorage.setItem("nexbox_today_popularity_value", String(randomValue));
+    store.set("nexbox_today_popularity_date", todayKey).then(() => store.save());
+    store.set("nexbox_today_popularity_value", String(randomValue)).then(() => store.save());
     setTimeout(() => setAnimating(false), 600);
   }, [value]);
 

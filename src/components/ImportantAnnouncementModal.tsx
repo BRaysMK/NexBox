@@ -16,6 +16,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
+import { store } from "@/lib/store";
 
 interface Announcement {
   title: string;
@@ -51,9 +52,12 @@ export function ImportantAnnouncementModal() {
 
         if (importantAnnouncements.length === 0) return;
 
-        const confirmedKeys = JSON.parse(
-          localStorage.getItem("nexbox_confirmed_announcements") || "[]"
-        ) as string[];
+        // 优先从 store 读取，兼容旧 localStorage
+        let confirmedKeysStr = await store.get<string>("nexbox_confirmed_announcements");
+        if (!confirmedKeysStr) {
+          confirmedKeysStr = localStorage.getItem("nexbox_confirmed_announcements") || "[]";
+        }
+        const confirmedKeys = JSON.parse(confirmedKeysStr) as string[];
 
         const unconfirmed = importantAnnouncements.find(
           a => !confirmedKeys.includes(getAnnouncementKey(a))
@@ -75,15 +79,23 @@ export function ImportantAnnouncementModal() {
   const handleConfirm = () => {
     if (!currentAnnouncement) return;
 
-    const confirmedKeys = JSON.parse(
-      localStorage.getItem("nexbox_confirmed_announcements") || "[]"
-    ) as string[];
+    // 从 store 读取当前已确认列表
+    (async () => {
+      let confirmedKeysStr = await store.get<string>("nexbox_confirmed_announcements");
+      if (!confirmedKeysStr) {
+        confirmedKeysStr = localStorage.getItem("nexbox_confirmed_announcements") || "[]";
+      }
+      const confirmedKeys = JSON.parse(confirmedKeysStr) as string[];
 
-    confirmedKeys.push(getAnnouncementKey(currentAnnouncement));
-    localStorage.setItem("nexbox_confirmed_announcements", JSON.stringify(confirmedKeys));
+      confirmedKeys.push(getAnnouncementKey(currentAnnouncement));
+      const newStr = JSON.stringify(confirmedKeys);
+      localStorage.setItem("nexbox_confirmed_announcements", newStr);
+      await store.set("nexbox_confirmed_announcements", newStr);
+      await store.save();
 
-    setIsOpen(false);
-    setCurrentAnnouncement(null);
+      setIsOpen(false);
+      setCurrentAnnouncement(null);
+    })();
   };
 
   if (!currentAnnouncement) return null;

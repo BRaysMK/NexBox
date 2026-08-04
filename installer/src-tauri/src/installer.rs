@@ -210,12 +210,35 @@ pub fn get_resource_files() -> Result<Vec<FileEntry>, String> {
     Ok(files)
 }
 
+/// 强制结束正在运行的 NexBox 本体（nexbox.exe）及其子进程。
+/// 若本体正在运行，其 exe/dll 文件被占用会导致解压失败、安装卡住，
+/// 因此安装开始前先强制结束本体，并等待其完全退出、文件句柄释放。
+fn kill_running_app() {
+    // taskkill /T 会连带结束本体的子进程树（如 NexBoxMonitor.exe）
+    let _ = Command::new("taskkill")
+        .args(["/F", "/T", "/IM", "nexbox.exe"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+
+    // 兜底清理可能残留的监控子进程，避免其独占文件
+    let _ = Command::new("taskkill")
+        .args(["/F", "/IM", "NexBoxMonitor.exe"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+
+    // 等待进程完全退出、文件句柄释放
+    std::thread::sleep(std::time::Duration::from_millis(500));
+}
+
 #[tauri::command]
 pub fn install(
     target_dir: String,
     create_desktop_shortcut: bool,
 ) -> Result<(), String> {
     let target = PathBuf::from(&target_dir);
+
+    // 若本体正在运行则强制结束，避免文件被占用导致安装失败/卡住
+    kill_running_app();
 
     // Cleanup old Inno Setup artifacts before installing
     cleanup_old_innosetup(&target);

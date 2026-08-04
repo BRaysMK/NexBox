@@ -9,12 +9,21 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { store } from "@/lib/store";
 
 function useNavPosition() {
-  const [navPosition, setNavPosition] = useState<"left" | "top">(() => {
-    const saved = localStorage.getItem("nexbox_nav_position");
-    return saved === "top" ? "top" : "left";
-  });
+  const [navPosition, setNavPosition] = useState<"left" | "top">("left");
+
+  useEffect(() => {
+    (async () => {
+      let nv = await store.get<string>("nexbox_nav_position");
+      if (nv === "top" || nv === "left") {
+        setNavPosition(nv);
+      } else {
+        setNavPosition(localStorage.getItem("nexbox_nav_position") === "top" ? "top" : "left");
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const handler = (e: CustomEvent) => {
@@ -128,6 +137,9 @@ export function MainLayout({ children }: MainLayoutProps) {
   //   2) Rust 端 window-visibility-changed 事件（覆盖隐藏到托盘等 visibilitychange 不可靠的场景）
   useEffect(() => {
     const applyVisibility = (visible: boolean) => {
+      // 隐藏时停止 WebView2 GPU 渲染，释放 GPU 资源
+      document.body.style.contentVisibility = visible ? "" : "hidden";
+      // 暂停/恢复视频背景
       if (!showDynamicBgRef.current) return;
       const video = videoRef.current;
       if (!video) return;

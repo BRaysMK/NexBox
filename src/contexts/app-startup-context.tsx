@@ -85,6 +85,8 @@ interface AppStartupContextType {
   saveCrosshairHotkey: (shortcut: string) => Promise<void>;
   filterHotkey: string;
   saveFilterHotkey: (shortcut: string) => Promise<void>;
+  hotkeysEnabled: boolean;
+  saveHotkeysEnabled: (enabled: boolean) => Promise<void>;
 }
 
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
@@ -138,6 +140,8 @@ const AppStartupContext = createContext<AppStartupContextType>({
   saveCrosshairHotkey: async () => {},
   filterHotkey: DEFAULT_FILTER_HOTKEY,
   saveFilterHotkey: async () => {},
+  hotkeysEnabled: true,
+  saveHotkeysEnabled: async () => {},
 });
 
 export function useAppStartup() {
@@ -154,6 +158,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [overlayHotkey, setOverlayHotkey] = useState(DEFAULT_OVERLAY_HOTKEY);
   const [crosshairHotkey, setCrosshairHotkey] = useState(DEFAULT_CROSSHAIR_HOTKEY);
   const [filterHotkey, setFilterHotkey] = useState(DEFAULT_FILTER_HOTKEY);
+  const [hotkeysEnabled, setHotkeysEnabled] = useState(true);
   const hasStarted = useRef(false);
 
   const updateProgress = (progress: number, message: string) => {
@@ -322,7 +327,10 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     try {
       const saved = await store.get<CrosshairSettings>("crosshair-settings");
       if (saved) {
-        const autoApply = localStorage.getItem("nexbox_auto_crosshair") === "true";
+        let autoApply = await store.get<boolean>("nexbox_auto_crosshair");
+        if (autoApply === null || autoApply === undefined) {
+          autoApply = localStorage.getItem("nexbox_auto_crosshair") === "true";
+        }
         saved.enabled = false;
         await invoke("update_crosshair_settings", { settings: saved });
         if (autoApply) {
@@ -355,6 +363,30 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
       await store.save();
     } catch (error) {
       console.error("Failed to save filter hotkey:", error);
+    }
+  };
+
+  const loadHotkeysEnabled = async () => {
+    try {
+      const saved = await store.get<boolean>("hotkeys-enabled");
+      if (saved !== undefined && saved !== null) {
+        setHotkeysEnabled(saved);
+        await invoke("set_hotkeys_enabled_cmd", { enabled: saved });
+      }
+      // 没有保存值则保持默认开启，Rust 端默认也是开启
+    } catch (error) {
+      console.error("Failed to load hotkeys enabled:", error);
+    }
+  };
+
+  const saveHotkeysEnabled = async (enabled: boolean) => {
+    setHotkeysEnabled(enabled);
+    try {
+      await invoke("set_hotkeys_enabled_cmd", { enabled });
+      await store.set("hotkeys-enabled", enabled);
+      await store.save();
+    } catch (error) {
+      console.error("Failed to save hotkeys enabled:", error);
     }
   };
 
@@ -394,11 +426,15 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         { name: "crosshair-hotkey", fn: loadCrosshairHotkey, weight: 1 },
         { name: "crosshair-settings", fn: loadCrosshairSettings, weight: 1 },
         { name: "filter-hotkey", fn: loadFilterHotkey, weight: 1 },
+        { name: "hotkeys-enabled", fn: loadHotkeysEnabled, weight: 1 },
         {
           name: "filter-restore",
           fn: async () => {
             try {
-              const autoApply = localStorage.getItem("nexbox_auto_apply") === "true";
+              let autoApply = await store.get<boolean>("nexbox_auto_apply");
+              if (autoApply === null || autoApply === undefined) {
+                autoApply = localStorage.getItem("nexbox_auto_apply") === "true";
+              }
               await invoke("restore_filter_state", { displayIndex: null, autoApply });
             } catch (e) {
               console.error("Failed to restore filter state:", e);
@@ -462,6 +498,8 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         saveCrosshairHotkey,
         filterHotkey,
         saveFilterHotkey,
+        hotkeysEnabled,
+        saveHotkeysEnabled,
       }}
     >
       {children}

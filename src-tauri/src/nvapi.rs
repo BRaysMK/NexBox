@@ -1259,9 +1259,38 @@ pub struct NvidiaDriverInfo {
     pub gpu_name: String,
 }
 
+/// 轻量初始化 NVAPI：仅调用 NvAPI_Initialize，不创建 DRS 会话。
+/// 用于只需读取驱动版本 / 显卡名称等简单信息的场景，
+/// 避免 NvAPI_DRS_CreateSession + NvAPI_DRS_LoadSettings 带来的额外耗时。
+static NVAPI_LIGHT_INIT: Mutex<Option<()>> = Mutex::new(None);
+
+pub fn ensure_nvapi_light_init() -> Result<(), String> {
+    let mut guard = NVAPI_LIGHT_INIT
+        .lock()
+        .map_err(|e| format!("Lock error: {e}"))?;
+    if guard.is_some() {
+        return Ok(());
+    }
+    // 完整初始化（含 DRS 会话）已完成则无需重复调用 NvAPI_Initialize
+    if NVAPI.lock().map(|g| g.is_some()).unwrap_or(false) {
+        *guard = Some(());
+        return Ok(());
+    }
+    let init_status = unsafe { NvAPI_Initialize() };
+    if init_status != NVAPI_OK {
+        return Err(format!(
+            "NvAPI_Initialize 失败: {} (代码 {init_status})",
+            nvapi_error_string(init_status)
+        ));
+    }
+    *guard = Some(());
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_nvidia_driver_version() -> Result<NvidiaDriverInfo, String> {
-    try_init_nvapi()?;
+    // 只需驱动版本/显卡名称，走轻量初始化，跳过 DRS 会话加载
+    ensure_nvapi_light_init()?;
     let mut display: NvDisplayHandle = std::ptr::null_mut();
     let status = unsafe { NvAPI_EnumNvidiaDisplayHandle(0, &mut display) };
     if status != NVAPI_OK {

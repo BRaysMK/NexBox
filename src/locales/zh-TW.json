@@ -231,6 +231,14 @@
         "restore": "恢復自動獲取"
       },
       "dnsRequired": "請至少輸入首選 DNS 位址",
+      "dnsCacheCleared": "DNS 快取已清理",
+      "clearDnsError": "清理 DNS 快取失敗",
+      "dnsCache": {
+        "title": "清理 DNS 快取",
+        "description": "刷新系統 DNS 解析快取，解決網域名稱解析異常",
+        "clear": "立即清理",
+        "clearing": "清理中..."
+      },
       "batch": {
         "title": "批次優化",
         "description": "一鍵套用或恢復所有網路優化項目",
@@ -423,7 +431,12 @@
     "noAnnouncement": "暫無公告",
     "important": "重要",
     "importantAnnouncement": "重要公告",
-    "confirmAnnouncement": "好的"
+    "confirmAnnouncement": "好的",
+    "gameWinKey": {
+      "loading": "載入中...",
+      "title": "遊戲時停用 Win 鍵",
+      "subtitle": "偵測到名單內遊戲執行時自動屏蔽 Win 鍵"
+    }
   },
   "hardware": {
     "title": "硬體資訊",
@@ -594,7 +607,10 @@
     "deletePreset": "刪除預設",
     "deletePresetConfirm": "確定刪除此預設？",
     "deletePresetSuccess": "預設已刪除",
-    "save": "儲存"
+    "save": "儲存",
+    "gameFilterTitle": "遊戲啟動時自動套用濾鏡",
+    "gameFilterSupportedTitle": "已支援的遊戲",
+    "gameFilterError": "操作失敗"
   },
 "floatingNav": {
     "title": "懸浮導航框",
@@ -976,6 +992,8 @@
       "gameLauncherDesc": "在首頁顯示快捷啟動卡片",
       "feedbackLabel": "圖片輪播",
       "feedbackDesc": "在首頁顯示圖片輪播",
+      "gameWinKeyLabel": "Win 鍵停用卡片",
+      "gameWinKeyDesc": "在首頁顯示遊戲時停用 Win 鍵卡片",
       "splash": "動畫",
       "splashLogoLabel": "啟動動畫 Logo",
       "splashLogoDesc": "自訂啟動動畫中顯示的 Logo 圖片",
@@ -1209,7 +1227,9 @@
     "filter": "濾鏡",
     "filterToggle": "切換濾鏡",
     "filterToggleDesc": "使用快速鍵開啟或關閉濾鏡",
-    "saved": "快速鍵已保存"
+    "saved": "快速鍵已保存",
+    "masterToggle": "全部熱鍵總開關",
+    "masterToggleDesc": "關閉後所有全域熱鍵將不生效"
   },
   "diskHealth": {
     "title": "磁碟健康檢測",

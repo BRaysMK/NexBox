@@ -414,6 +414,7 @@ fn map_qq_track(track: &Value, fallback: &Song) -> Song {
     let album = track.get("album").unwrap_or(&Value::Null);
     let artists = map_qq_artists(track.get("singer").unwrap_or(&Value::Null));
     let mid = track.get("mid")
+        .or_else(|| track.get("songmid"))
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
@@ -423,17 +424,20 @@ fn map_qq_track(track: &Value, fallback: &Song) -> Song {
     let album_mid = album.get("mid")
         .or_else(|| album.get("pmid"))
         .and_then(|v| v.as_str())
+        .or_else(|| track.get("albummid").and_then(|v| v.as_str()))
         .unwrap_or("")
         .to_string();
 
     let media_mid = track.get("file")
         .and_then(|f| f.get("media_mid"))
         .and_then(|v| v.as_str())
+        .or_else(|| track.get("strMediaMid").and_then(|v| v.as_str()))
         .unwrap_or("")
         .to_string();
 
     let name = track.get("name")
         .or_else(|| track.get("title"))
+        .or_else(|| track.get("songname"))
         .and_then(|v| v.as_str())
         .unwrap_or(&fallback.name)
         .to_string();
@@ -447,6 +451,7 @@ fn map_qq_track(track: &Value, fallback: &Song) -> Song {
     let album_name = album.get("name")
         .or_else(|| album.get("title"))
         .and_then(|v| v.as_str())
+        .or_else(|| track.get("albumname").and_then(|v| v.as_str()))
         .unwrap_or(&fallback.album)
         .to_string();
 
@@ -462,12 +467,14 @@ fn map_qq_track(track: &Value, fallback: &Song) -> Song {
 
     let id = if !song_mid.is_empty() { song_mid.to_string() } else {
         track.get("id")
+            .or_else(|| track.get("songid"))
             .and_then(|v| v.as_i64())
             .map(|n| n.to_string())
             .unwrap_or_else(|| fallback.id.clone())
     };
 
     let qq_song_id = track.get("id")
+        .or_else(|| track.get("songid"))
         .and_then(|v| v.as_i64());
 
     Song {
@@ -1140,12 +1147,15 @@ pub async fn song_url(mid: &str, media_mid: &str, quality: &str, cookie: &str) -
             .collect())
         .unwrap_or_else(|| vec!["https://ws.stream.qqmusic.qq.com/".into()]);
 
-    let probe_deadline_ms = QQ_AUDIO_PROBE_TOTAL_MS;
+    // 探测音频 URL（快速版），参考 Mineradio 但大幅降低超时时间
+    // 每次探测 800ms，总超时 2s，确保用户点击后快速响应
+    let probe_deadline_ms = 2000u64;
+    let probe_attempt_ms = 800u64;
     let start_time = std::time::Instant::now();
 
     for candidate_info in &purl_infos {
         for sip in &sips {
-            if start_time.elapsed().as_millis() as u64 > probe_deadline_ms - 300 {
+            if start_time.elapsed().as_millis() as u64 > probe_deadline_ms - 200 {
                 break;
             }
             let purl = candidate_info.get("purl")
@@ -1156,7 +1166,7 @@ pub async fn song_url(mid: &str, media_mid: &str, quality: &str, cookie: &str) -
             }
             let candidate_url = format!("{}{}", sip, purl);
             let remaining_ms = probe_deadline_ms.saturating_sub(start_time.elapsed().as_millis() as u64);
-            let probe_timeout = QQ_AUDIO_PROBE_ATTEMPT_MS.min(remaining_ms);
+            let probe_timeout = probe_attempt_ms.min(remaining_ms);
             if probe_audio_url(&candidate_url, probe_timeout).await {
                 let filename = candidate_info.get("filename")
                     .and_then(|v| v.as_str())
@@ -1168,6 +1178,31 @@ pub async fn song_url(mid: &str, media_mid: &str, quality: &str, cookie: &str) -
 
                 return Ok(SongUrlResult {
                     url: Some(candidate_url),
+                    playable: true,
+                    trial: false,
+                    level,
+                    quality: label,
+                    br: 0,
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    // 探测全部失败，返回第一个候选 URL（让前端处理失败）
+    // 相比 Mineradio 直接返回不可用，提供一个 URL 让前端有机会重试
+    if let Some(first_info) = purl_infos.first() {
+        if let Some(purl) = first_info.get("purl").and_then(|v| v.as_str()) {
+            if !purl.is_empty() {
+                let sip = sips.first().map(|s| s.as_str()).unwrap_or("https://ws.stream.qqmusic.qq.com/");
+                let fallback_url = format!("{}{}", sip, purl);
+                let filename = first_info.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+                let file_meta = file_candidates.iter().find(|(f, _, _)| f == filename);
+                let level = file_meta.map(|(_, l, _)| l.clone()).unwrap_or_default();
+                let label = file_meta.map(|(_, _, lb)| lb.clone()).unwrap_or_default();
+
+                return Ok(SongUrlResult {
+                    url: Some(fallback_url),
                     playable: true,
                     trial: false,
                     level,
@@ -2276,6 +2311,7 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
         ("utf8", "1"),
         ("disstid", pid),
         ("song_begin", "0"),
+        ("song_num", "100"),
         ("loginUin", &auth.uin),
         ("format", "json"),
         ("inCharset", "utf8"),
@@ -2286,6 +2322,14 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
     ];
     let headers = vec![("Referer", "https://y.qq.com/n/yqq/playlist")];
     let body = qq_get_json(QQ_PLAYLIST_TRACKS_URL, &params, cookie, &headers).await?;
+
+    // 诊断: 输出接口返回, 便于排查"歌单打不开"
+    let resp_subcode = body.get("subcode").and_then(|v| v.as_i64()).unwrap_or(0);
+    let resp_msg = body.get("msg").or_else(|| body.get("errmsg")).and_then(|v| v.as_str()).unwrap_or("");
+    let cdlist_len = body.get("cdlist").and_then(|c| c.as_array()).map(|a| a.len()).unwrap_or(0);
+    if resp_subcode != 0 || !resp_msg.is_empty() || cdlist_len == 0 {
+        log::warn!("[QQPlaylist] tracks subcode={} msg={} cdlist_len={} body={}", resp_subcode, resp_msg, cdlist_len, body);
+    }
 
     let detail = body.get("cdlist")
         .and_then(|c| c.as_array())
@@ -2624,15 +2668,18 @@ fn parse_toplist_songs_from_json(json: &Value, limit: usize) -> Vec<Song> {
     }
 }
 
-/// QQ 音乐排行榜预设列表 (API 不可用时的降级方案)
+/// QQ 音乐排行榜预设列表 (榜单列表接口已失效, 使用实测可用的 topid)
 const QQ_RANK_PRESETS: &[(&str, &str, &str)] = &[
-    ("4", "热歌榜", ""),
-    ("26", "新歌榜", ""),
-    ("62", "飙升榜", ""),
-    ("16", "流行指数榜", ""),
-    ("5", "内地榜", ""),
-    ("3", "欧美榜", ""),
-    ("6", "港台榜", ""),
+    ("26", "巅峰榜·热歌", "https://y.gtimg.cn/music/photo_new/T003R300x300M000003kErY34CR2zg.jpg"),
+    ("27", "巅峰榜·新歌", "https://y.gtimg.cn/music/photo_new/T003R300x300M000003lDPtw0sKXJK.jpg"),
+    ("4", "巅峰榜·流行指数", "https://y.gtimg.cn/music/photo_new/T003R300x300M000002aA7GQ0YoZYe.jpg"),
+    ("62", "飙升榜", "https://y.gtimg.cn/music/photo_new/T003R300x300M000002DWfWl0cjhjP.jpg"),
+    ("5", "巅峰榜·内地", "https://y.gtimg.cn/music/photo_new/T003R300x300M000003V5yNn4TIRVP.jpg"),
+    ("6", "巅峰榜·港台", "https://y.gtimg.cn/music/photo_new/T003R300x300M000000CLXb916ik5d.jpg"),
+    ("105", "日本公信榜", "https://y.gtimg.cn/music/photo_new/T003R300x300M000003EpI9F1a0tFY.jpg"),
+    ("51", "巅峰榜·明日之子", "https://y.gtimg.cn/music/common/upload/iphone_order_channel/toplist_51_300_203451421.jpg"),
+    ("52", "巅峰榜·腾讯音乐人原创榜", "https://y.gtimg.cn/music/photo_new/T003R300x300M000000UTVyf0BnyCn.jpg"),
+    ("53", "机车", "https://y.gtimg.cn/music/photo_new/T003R300x300M000002nNMsB2S520Y.jpg"),
 ];
 
 /// 获取 QQ 音乐排行榜列表
@@ -2735,6 +2782,61 @@ pub async fn get_rank_list(cookie: &str) -> Result<Vec<Playlist>, String> {
     Ok(playlists)
 }
 
+/// QQ 音乐推荐歌单 (歌单广场-推荐分类)
+/// 接口: fcg_get_diss_by_tag categoryId=10000000 (推荐)
+pub async fn recommend_playlists() -> Result<Vec<Playlist>, String> {
+    let url = format!(
+        "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?\
+        g_tk=5381&loginUin=0&hostUin=0&inCharset=utf8&outCharset=utf-8&\
+        notice=0&platform=yqq&needNewCode=0&\
+        categoryId=10000000&sin=0&size=20&order=play&format=json"
+    );
+    let headers = vec![
+        (REFERER.as_str(), QQ_HEADERS_REFERER),
+        (USER_AGENT.as_str(), QQ_HEADERS_UA),
+    ];
+    let text = request_text(&url, "GET", &headers, None, 10000).await?;
+    let json = parse_json_text(&text)?;
+    let list = json.get("data")
+        .and_then(|d| d.get("list"))
+        .and_then(|l| l.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(list
+        .iter()
+        .filter_map(|item| {
+            let id = item.get("dissid")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .or_else(|| item.get("dissid").and_then(|v| v.as_i64()).map(|n| n.to_string()))
+                .unwrap_or_default();
+            if id.is_empty() {
+                return None;
+            }
+            let creator = item.get("creator").map(|c| {
+                if let Some(s) = c.as_str() {
+                    s.to_string()
+                } else {
+                    c.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string()
+                }
+            }).unwrap_or_default();
+            Some(Playlist {
+                provider: "qqmusic".into(),
+                id,
+                name: item.get("dissname").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                cover: item.get("imgurl").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                track_count: item.get("songnum")
+                    .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|n| n as u64)))
+                    .map(|n| n as u32)
+                    .unwrap_or(0),
+                creator,
+                subscribed: false,
+            })
+        })
+        .collect())
+}
+
 /// 辅助: musicu GetAllTop
 async fn try_musicu_get_all_top(payload: &Value, cookie: &str) -> Vec<Playlist> {
     match qq_musicu_request(payload, cookie, 10000).await {
@@ -2759,7 +2861,8 @@ async fn try_musicu_get_all_top(payload: &Value, cookie: &str) -> Vec<Playlist> 
 /// 策略 2: musicu 带认证 (ct:19)
 /// 策略 3: musicu 不带认证 (ct:24)
 pub async fn get_rank_songs(cookie: &str, rank_id: &str, limit: u32) -> Result<Vec<Song>, String> {
-    let limit = limit.clamp(1, 100) as usize;
+    // 不设上限：接口返回多少就取多少
+    let limit = limit.max(1) as usize;
     let mut songs = Vec::new();
 
     // 策略 1: CGI 端点 page=detail&topid=X
@@ -3004,6 +3107,8 @@ pub async fn artist_songs(artist_mid: &str, limit: u32, offset: u32, cookie: &st
 }
 
 /// 歌单搜索
+/// 优先使用与单曲搜索相同的通道 (DoSearchForQQMusicMobile + 搜索签名, search_type=1004 为歌单),
+/// 无结果时回退旧版 musicu UniformSearch
 pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Playlist>, String> {
     let kw = keywords.trim();
     if kw.is_empty() {
@@ -3011,36 +3116,159 @@ pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result
     }
     let limit = limit.clamp(1, 30);
 
-    // 使用 musicu 搜索歌单
+    let mut playlists: Vec<Playlist> = Vec::new();
+
+    // 主路径: DoSearchForQQMusicMobile (search_type=1004 歌单)
     let payload = json!({
-        "comm": { "ct": 19, "cv": 0 },
-        "req_0": {
-            "module": "music.musicz.UniformSearch",
-            "method": "CgiUniformSearch",
+        "comm": {
+            "ct": "11",
+            "cv": "14090508",
+            "v": "14090508",
+            "tmeAppID": "qqmusic",
+            "phonetype": "EBG-AN10",
+            "os_ver": "12",
+            "OpenUDID": "0",
+            "QIMEI36": "0",
+            "udid": "0",
+            "chid": "0",
+            "aid": "0",
+            "oaid": "0",
+            "taid": "0",
+            "tid": "0",
+            "wid": "0",
+            "uid": "0",
+            "sid": "0",
+            "modeSwitch": "6",
+            "teenMode": "0",
+            "ui_mode": "2",
+            "nettype": "1020"
+        },
+        "req": {
+            "module": "music.search.SearchCgiService",
+            "method": "DoSearchForQQMusicMobile",
             "param": {
-                "search_type": 4,
+                "search_type": 3,
+                "searchid": format!("{}{:06}", chrono::Utc::now().timestamp_millis(), rand::random::<u32>() % 1000000),
                 "query": kw,
                 "page_num": 1,
                 "num_per_page": limit,
-                "highlight": 0
+                "highlight": 0,
+                "nqc_flag": 0,
+                "multi_zhida": 0,
+                "cat": 2,
+                "grp": 1,
+                "sin": 0,
+                "sem": 0
             }
         }
     });
 
-    match qq_musicu_request(&payload, cookie, 10000).await {
-        Ok(json) => {
+    let body_text = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+    let sign = qq_search_sign(&body_text);
+    let url = format!("https://u.y.qq.com/cgi-bin/musics.fcg?sign={}", sign);
+    let headers = vec![
+        ("User-Agent", QQ_SEARCH_UA),
+        ("Content-Type", "application/json"),
+    ];
+
+    if let Ok(text) = request_text(&url, "POST", &headers, Some(&body_text), 10000).await {
+        if let Ok(json) = parse_json_text(&text) {
+            let data = json.get("req")
+                .and_then(|r| r.get("data"))
+                .unwrap_or(&Value::Null);
+            let body = data.get("body").unwrap_or(data);
+            let items = body.get("item_songlist")
+                .or_else(|| body.get("playlist"))
+                .or_else(|| body.get("songlist"))
+                .and_then(|l| l.as_array());
+
+            if let Some(arr) = items {
+                playlists = arr.iter().filter_map(|item| {
+                    let id = item.get("dissid")
+                        .or_else(|| item.get("tid"))
+                        .or_else(|| item.get("id"))
+                        .and_then(|v| match v {
+                            Value::String(s) => Some(s.clone()),
+                            Value::Number(n) => Some(n.to_string()),
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+                    if id.is_empty() {
+                        return None;
+                    }
+                    let name = item.get("dissname")
+                        .or_else(|| item.get("name"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if name.is_empty() {
+                        return None;
+                    }
+                    let creator = item.get("nickname")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .or_else(|| {
+                            item.get("creator").map(|c| {
+                                if let Some(s) = c.as_str() {
+                                    s.to_string()
+                                } else {
+                                    c.get("name").or_else(|| c.get("nick"))
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("QQ 音乐")
+                                        .to_string()
+                                }
+                            })
+                        })
+                        .unwrap_or_else(|| "QQ 音乐".to_string());
+                    Some(Playlist {
+                        provider: "qqmusic".into(),
+                        id,
+                        name,
+                        cover: item.get("pic_url")
+                            .or_else(|| item.get("picurl"))
+                            .or_else(|| item.get("logo"))
+                            .or_else(|| item.get("imgurl"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        track_count: item.get("songnum")
+                            .or_else(|| item.get("song_count"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as u32,
+                        creator,
+                        subscribed: false,
+                    })
+                }).collect();
+            }
+        }
+    }
+
+    // 兜底: 主路径无结果时回退旧版 musicu UniformSearch
+    if playlists.is_empty() {
+        let payload = json!({
+            "comm": { "ct": 19, "cv": 0 },
+            "req_0": {
+                "module": "music.musicz.UniformSearch",
+                "method": "CgiUniformSearch",
+                "param": {
+                    "search_type": 4,
+                    "query": kw,
+                    "page_num": 1,
+                    "num_per_page": limit,
+                    "highlight": 0
+                }
+            }
+        });
+        if let Ok(json) = qq_musicu_request(&payload, cookie, 10000).await {
             let data = json.get("req_0")
                 .and_then(|r| r.get("data"))
-                .and_then(|d| d.get("data"))
                 .unwrap_or(&Value::Null);
-            let body = data.get("body")
-                .unwrap_or(data);
+            let body = data.get("body").unwrap_or(data);
             let items = body.get("playlist")
                 .or_else(|| body.get("item"))
                 .and_then(|l| l.as_array());
-
-            let playlists = items.map(|arr| {
-                arr.iter().take(limit as usize).map(|item| {
+            if let Some(arr) = items {
+                playlists = arr.iter().filter_map(|item| {
                     let id = item.get("dissid")
                         .or_else(|| item.get("id"))
                         .and_then(|v| match v {
@@ -3049,46 +3277,44 @@ pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result
                             _ => None,
                         })
                         .unwrap_or_default();
+                    if id.is_empty() {
+                        return None;
+                    }
                     let name = item.get("dissname")
                         .or_else(|| item.get("name"))
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    let cover = item.get("logo")
-                        .or_else(|| item.get("picurl"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let creator = item.get("creator")
-                        .and_then(|c| c.get("name"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("QQ 音乐")
-                        .to_string();
-                    let track_count = item.get("song_count")
-                        .or_else(|| item.get("songnum"))
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as u32;
-
-                    Playlist {
+                    if name.is_empty() {
+                        return None;
+                    }
+                    Some(Playlist {
                         provider: "qqmusic".into(),
                         id,
                         name,
-                        cover,
-                        track_count,
-                        creator,
+                        cover: item.get("logo")
+                            .or_else(|| item.get("picurl"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        track_count: item.get("song_count")
+                            .or_else(|| item.get("songnum"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as u32,
+                        creator: item.get("creator")
+                            .and_then(|c| c.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("QQ 音乐")
+                            .to_string(),
                         subscribed: false,
-                    }
-                }).filter(|p| !p.id.is_empty() && !p.name.is_empty())
-                .collect()
-            }).unwrap_or_default();
-
-            Ok(playlists)
-        }
-        Err(e) => {
-            log::warn!("[QQPlaylistSearch] failed: {e}");
-            Ok(vec![])
+                    })
+                }).collect();
+            }
         }
     }
+
+    log::info!("[QQPlaylistSearch] query={} results={}", kw, playlists.len());
+    Ok(playlists)
 }
 
 // ============================================================

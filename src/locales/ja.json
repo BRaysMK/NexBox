@@ -231,6 +231,14 @@
         "restore": "自動取得に戻す"
       },
       "dnsRequired": "プライマリDNSアドレスを入力してください",
+      "dnsCacheCleared": "DNSキャッシュをクリアしました",
+      "clearDnsError": "DNSキャッシュのクリアに失敗しました",
+      "dnsCache": {
+        "title": "DNSキャッシュをクリア",
+        "description": "システムのDNSリゾルバーキャッシュをフラッシュしてドメイン解決の問題を修正",
+        "clear": "今すぐクリア",
+        "clearing": "クリア中..."
+      },
       "batch": {
         "title": "一括最適化",
         "description": "すべてのネットワーク最適化を一括で適用/復元",
@@ -441,7 +449,12 @@
     "noAnnouncement": "お知らせはありません",
     "important": "重要",
     "importantAnnouncement": "重要なお知らせ",
-    "confirmAnnouncement": "OK"
+    "confirmAnnouncement": "OK",
+    "gameWinKey": {
+      "loading": "読み込み中...",
+      "title": "ゲーム中にWinキーを無効化",
+      "subtitle": "リスト内のゲーム実行中にWinキーを自動的にブロックします"
+    }
   },
   "hardware": {
     "title": "ハードウェア情報",
@@ -655,7 +668,10 @@
     "deletePreset": "プリセットを削除",
     "deletePresetConfirm": "このプリセットを削除しますか？",
     "deletePresetSuccess": "プリセットを削除しました",
-    "save": "保存"
+    "save": "保存",
+    "gameFilterTitle": "ゲーム起動時にフィルターを自動適用",
+    "gameFilterSupportedTitle": "対応しているゲーム",
+    "gameFilterError": "操作に失敗しました"
   },
 "floatingNav": {
     "title": "フローティングナビゲーションボックス",
@@ -1203,6 +1219,8 @@
       "gameLauncherDesc": "ホームページにクイック起動カードを表示",
       "feedbackLabel": "画像カルーセル",
       "feedbackDesc": "ホームページに画像カルーセルを表示",
+      "gameWinKeyLabel": "Winキー無効化カード",
+      "gameWinKeyDesc": "ホームページにゲーム中にWinキーを無効化するカードを表示",
       "splash": "アニメーション",
       "splashLogoLabel": "スプラッシュロゴ",
       "splashLogoDesc": "起動時に表示されるロゴ画像をカスタマイズ",
@@ -1436,7 +1454,9 @@
     "filter": "フィルター",
     "filterToggle": "フィルター切替",
     "filterToggleDesc": "ショートカットでフィルターを有効/無効",
-    "saved": "ホットキーを保存しました"
+    "saved": "ホットキーを保存しました",
+    "masterToggle": "全ホットキー総合スイッチ",
+    "masterToggleDesc": "オフにするとすべてのグローバルホットキーが無効になります"
   },
   "diskHealth": {
     "title": "ディスク健全性",

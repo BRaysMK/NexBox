@@ -480,12 +480,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   // memoize scrollbarSx，避免每次渲染创建新对象导致 KaraokeLyricsView 不必要重渲染
   const memoScrollbarSx = useMemo(() => scrollbarSx(activeColor), [activeColor]);
 
-  // 切歌时加载歌词（不再管理 timeupdate，由 ProgressSection 独立处理）
-  useEffect(() => {
-    if (currentSong) {
-      useMusicStore.getState().loadLyricsForSong(currentSong);
-    }
-  }, [currentSong]);
+  // 歌词加载由 playSong 在 URL 获取前并行触发，不再需要此处 useEffect 重复加载
 
   // 歌词解析：优先 YRC 逐字歌词，降级为 LRC 逐行歌词
   const karaokeLines = useMemo(() => {
@@ -2041,7 +2036,8 @@ export default function MusicPage() {
   const rightPlaylistTracks = useMusicStore((s) => s.rightPlaylistTracks);
   const rightPlaylistMeta = useMusicStore((s) => s.rightPlaylistMeta);
   const likedSongIds = useMusicStore((s) => s.likedSongIds);
-  const recommendations = useMusicStore((s) => s.recommendations);
+  const dailyRecommendPlaylists = useMusicStore((s) => s.dailyRecommendPlaylists);
+  const recommendSongs = useMusicStore((s) => s.recommendSongs);
   const loginInfo = useMusicStore((s) => s.loginInfo);
   const playbackSource = useMusicStore((s) => s.playbackSource);
 
@@ -2055,6 +2051,7 @@ export default function MusicPage() {
   }, [playbackSource]);
   const searching = useMusicStore((s) => s.searching);
   const loadingPlaylists = useMusicStore((s) => s.loadingPlaylists);
+  const userPlaylistsError = useMusicStore((s) => s.userPlaylistsError);
   const loadingLeftTracks = useMusicStore((s) => s.loadingLeftTracks);
   const loadingRightTracks = useMusicStore((s) => s.loadingRightTracks);
   const proxyPort = useMusicStore((s) => s.proxyPort);
@@ -2093,7 +2090,7 @@ export default function MusicPage() {
   const [searchTab, setSearchTab] = useState<"songs" | "playlists" | "artists">("songs");
   const previousViewRef = useRef<typeof viewMode>("main");
   const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
-  const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks">("recommendations");
+  const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks" | "daily">("recommendations");
   const [expandedPlayer, setExpandedPlayer] = useState(false);
 
   // 搜索结果中展开的歌单
@@ -2166,7 +2163,7 @@ export default function MusicPage() {
 
   // 自动加载推荐歌单（登录后且无推荐数据时）
   useEffect(() => {
-    if (loginInfo?.logged_in && recommendations.length === 0) {
+    if (loginInfo?.logged_in && dailyRecommendPlaylists.length === 0) {
       storeActions.loadRecommendations();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2222,7 +2219,7 @@ export default function MusicPage() {
     previousViewRef.current = viewMode;
     const patched = { ...artist };
     useMusicStore.setState({ selectedArtist: patched });
-    storeActions.loadArtistSongs(patched.id || "");
+    storeActions.loadArtistSongs(patched.mid || patched.id || "");
     setViewMode("artistDetail");
     // 歌手可能没有头像（从歌曲卡片进入时），异步搜索补齐
     if (!patched.pic_url && patched.name) {
@@ -2253,8 +2250,27 @@ storeActions.loadRightPlaylistTracks(pl.id);
 setRightPanelView("tracks");
 }, [storeActions]);
 
+// ── 官方榜单点击：QQ 榜单走榜单歌曲接口，其他平台走歌单歌曲接口 ──
+const handleChartClick = useCallback((pl: Playlist) => {
+  useMusicStore.setState({ rightPlaylistMeta: pl });
+  setRightPanelView("tracks");
+  if (playbackSource === "qqmusic") {
+    storeActions.loadRightRankTracks(pl.id);
+  } else {
+    storeActions.loadRightPlaylistTracks(pl.id);
+  }
+}, [playbackSource, storeActions]);
+
+// 榜单平铺：酷狗/QQ 用网格铺满面板，网易云保持横向滚动
+const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
+
   const handleBackToRecommendations = useCallback(() => {
     setRightPanelView("recommendations");
+  }, []);
+
+  // ── 每日推荐入口：切换右侧面板到每日推荐歌曲列表 ──
+  const handleDailyRecommendClick = useCallback(() => {
+    setRightPanelView("daily");
   }, []);
 
   // ── 收藏/取消收藏歌单 ──
@@ -2332,6 +2348,10 @@ setRightPanelView("tracks");
   const renderRightTrackItem = useCallback(
     (song: Song, i: number) => renderSongRow(song, i, rightPlaylistTracks),
     [renderSongRow, rightPlaylistTracks]
+  );
+  const renderDailyTrackItem = useCallback(
+    (song: Song, i: number) => renderSongRow(song, i, recommendSongs),
+    [renderSongRow, recommendSongs]
   );
 
   // ── 渲染歌单行（可自定义 onClick）──
@@ -3019,7 +3039,27 @@ setRightPanelView("tracks");
                       ))}
                     </motion.div>
                   ) : (
-                    <Text color={subTextColor} fontSize="xs" py={4} textAlign="center">暂无歌单</Text>
+                    <VStack py={4} spacing={2}>
+                      <Text color={subTextColor} fontSize="xs" textAlign="center">
+                        {userPlaylistsError ? "歌单获取失败" : "暂无歌单"}
+                      </Text>
+                      {userPlaylistsError ? (
+                        <>
+                          <Text color={subTextColor} fontSize="2xs" textAlign="center" wordBreak="break-all" px={2}>
+                            {userPlaylistsError}
+                          </Text>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            color={activeColor}
+                            onClick={() => useMusicStore.getState().openLoginWindow(playbackSource)}
+                            alignSelf="center"
+                          >
+                            重新登录
+                          </Button>
+                        </>
+                      ) : null}
+                    </VStack>
                   )}
                 </Box>
               </>
@@ -3044,7 +3084,41 @@ setRightPanelView("tracks");
 
           {/* 推荐歌单 / 推荐歌单曲目 */}
           <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
-            {rightPanelView === "tracks" ? (
+            {rightPanelView === "daily" ? (
+              <>
+                {/* 每日推荐曲目视图 */}
+                <HStack spacing={2} mb={3} flexShrink={0}>
+                  <Tooltip label="返回推荐歌单">
+                    <IconButton
+                      aria-label="Back"
+                      icon={<ArrowLeft size={16} />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleBackToRecommendations}
+                      sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                    />
+                  </Tooltip>
+                  <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
+                    每日推荐
+                  </Text>
+                  <Text color={subTextColor} fontSize="xs" flexShrink={0}>
+                    ({recommendSongs.length} 首)
+                  </Text>
+                </HStack>
+                <VirtualList
+                  items={recommendSongs}
+                  itemHeight={60}
+                  renderItem={renderDailyTrackItem}
+                  getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
+                  loading={false}
+                  loadingText="加载推荐中..."
+                  emptyText="每日推荐无法获取（请确认已登录网易云）"
+                  resetKey="daily"
+                  scrollbarSx={memoScrollbarSx}
+                  hasMore={false}
+                />
+              </>
+            ) : rightPanelView === "tracks" ? (
               <>
                 {/* 推荐歌单曲目视图 */}
                 <HStack spacing={2} mb={3} flexShrink={0}>
@@ -3081,17 +3155,7 @@ setRightPanelView("tracks");
               </>
             ) : (
               <>
-                {/* QQ 音乐: 榜单和推荐不可用，显示提示 */}
-                {playbackSource === "qqmusic" && loginInfo?.logged_in ? (
-                  <VStack py={8} spacing={3} flex={1} justify="center">
-                    <TrendingUp size={32} color={subTextColor} />
-                    <Text color={subTextColor} fontSize="sm" textAlign="center">
-                      QQ音乐暂时无法获取榜单和推荐
-                    </Text>
-                  </VStack>
-                ) : (
-                <>
-                {loginInfo?.logged_in && playbackSource !== "kugou" && (
+                {loginInfo?.logged_in && playbackSource !== "kugou" && playbackSource !== "qqmusic" && (
                   <>
                 <HStack justify="space-between" mb={3} flexShrink={0}>
                   <HStack spacing={2}>
@@ -3114,13 +3178,13 @@ setRightPanelView("tracks");
 
                 {/* 官方榜单 */}
                 {loginInfo?.logged_in && (
-                <VStack spacing={2} align="stretch" mb={2} flexShrink={playbackSource === "kugou" ? undefined : 0} flex={playbackSource === "kugou" ? 1 : undefined} overflowY={playbackSource === "kugou" ? "auto" : undefined} sx={playbackSource === "kugou" ? memoScrollbarSx : undefined}>
+                <VStack spacing={2} align="stretch" mb={2} flexShrink={chartIsGrid ? undefined : 0} flex={chartIsGrid ? 1 : undefined} overflowY={chartIsGrid ? "auto" : undefined} sx={chartIsGrid ? memoScrollbarSx : undefined}>
                   <HStack spacing={1.5}>
                     <TrendingUp size={13} color={activeColor} />
                     <Text fontSize="2xs" fontWeight="bold" color={subTextColor}>官方榜单</Text>
                   </HStack>
-                  {playbackSource === "kugou" ? (
-                    /* 酷狗: 网格布局铺满面板 */
+                  {chartIsGrid ? (
+                    /* 酷狗/QQ: 网格布局铺满面板 */
                     <Box>
                       <SimpleGrid columns={3} spacing={2}>
                         {officialCharts.length > 0 ? officialCharts.map((chart) => (
@@ -3128,7 +3192,7 @@ setRightPanelView("tracks");
                             key={chart.id}
                             spacing={0.5}
                             cursor="pointer"
-                            onClick={() => handleRecPlaylistClick(chart)}
+                            onClick={() => playbackSource === "qqmusic" ? handleChartClick(chart) : handleRecPlaylistClick(chart)}
                             _hover={{ transform: "scale(1.04)" }}
                             transition="transform 0.15s"
                           >
@@ -3171,6 +3235,40 @@ setRightPanelView("tracks");
                         e.currentTarget.scrollLeft += e.deltaY;
                       }}
                     >
+                    {/* 每日推荐入口（网易云） */}
+                    {playbackSource === "netease" && (
+                      <VStack
+                        spacing={0.5}
+                        cursor="pointer"
+                        minW="60px"
+                        maxW="70px"
+                        flexShrink={0}
+                        onClick={handleDailyRecommendClick}
+                        _hover={{ transform: "scale(1.04)" }}
+                        transition="transform 0.15s"
+                      >
+                        <Box
+                          w="100%"
+                          borderRadius="lg"
+                          overflow="hidden"
+                          sx={{ aspectRatio: "1 / 1" }}
+                        >
+                          <Box
+                            w="100%"
+                            h="100%"
+                            bgGradient="linear(135deg, #f6b26b 0%, #e06666 100%)"
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <Sparkles size={16} color="#fff" />
+                          </Box>
+                        </Box>
+                        <Text color={textColor} fontSize="xs" fontWeight="medium" noOfLines={1} textAlign="center">
+                          每日推荐
+                        </Text>
+                      </VStack>
+                    )}
                     {officialCharts.length > 0 ? officialCharts.map((chart) => (
                       <VStack
                         key={chart.id}
@@ -3179,7 +3277,7 @@ setRightPanelView("tracks");
                         minW="60px"
                         maxW="70px"
                         flexShrink={0}
-                        onClick={() => handleRecPlaylistClick(chart)}
+                        onClick={() => handleChartClick(chart)}
                         _hover={{ transform: "scale(1.04)" }}
                         transition="transform 0.15s"
                       >
@@ -3225,21 +3323,19 @@ setRightPanelView("tracks");
                       <MusicIcon size={32} color={subTextColor} />
                       <Text color={subTextColor} fontSize="sm" textAlign="center">登录后查看推荐内容</Text>
                     </VStack>
-                  ) : recommendations.length === 0 ? (
+                  ) : dailyRecommendPlaylists.length === 0 ? (
                     <VStack py={8} spacing={3}>
                       <Sparkles size={32} color={subTextColor} />
                       <Text color={subTextColor} fontSize="sm" textAlign="center">点击刷新加载推荐</Text>
                     </VStack>
                   ) : (
                     <motion.div variants={listContainerVariants} initial="hidden" animate="visible" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {recommendations.map((pl) => (
+                      {dailyRecommendPlaylists.map((pl) => (
                         <motion.div key={`rec-${pl.id}`} variants={listItemVariants}>{renderPlaylistRow(pl, "rec-", handleRecPlaylistClick)}</motion.div>
                       ))}
                     </motion.div>
                   )}
                 </Box>
-                )}
-                </>
                 )}
               </>
             )}

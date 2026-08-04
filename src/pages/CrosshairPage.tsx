@@ -164,9 +164,18 @@ export default function CrosshairPage() {
 
   const [settings, setSettings] = useState<CrosshairSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
-  const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(
-    localStorage.getItem("nexbox_auto_crosshair") === "true"
-  );
+  const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      let v = await store.get<boolean>("nexbox_auto_crosshair");
+      if (v !== null && v !== undefined) {
+        setAutoApplyOnStartup(v);
+      } else {
+        setAutoApplyOnStartup(localStorage.getItem("nexbox_auto_crosshair") === "true");
+      }
+    })();
+  }, []);
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [editingAxis, setEditingAxis] = useState<'x' | 'y' | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -422,6 +431,7 @@ export default function CrosshairPage() {
                     const val = e.target.checked;
                     setAutoApplyOnStartup(val);
                     localStorage.setItem("nexbox_auto_crosshair", val ? "true" : "false");
+                    store.set("nexbox_auto_crosshair", val).then(() => store.save());
                   }}
                   isDisabled={isLoading}
                 />

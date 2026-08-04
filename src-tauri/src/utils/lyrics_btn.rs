@@ -26,16 +26,17 @@ pub fn show_lyrics_unlock_btn(app_handle: tauri::AppHandle) -> Result<(), String
         .map_err(|e| format!("Failed to get lyrics window size: {}", e))?;
 
     // 计算按钮位置：窗口顶部中央
-    let btn_size = 48.0_f64;
-    let x = pos.x as f64 + (size.width as f64 - btn_size) / 2.0;
-    let y = pos.y as f64;
+    // 注意：outer_position/outer_size 返回物理像素，所以必须用 PhysicalPosition/PhysicalSize
+    let btn_size = 48_u32;
+    let x = pos.x + (size.width as i32 - btn_size as i32) / 2;
+    let y = pos.y;
 
     // 设置按钮窗口位置和大小
     btn_win
-        .set_position(tauri::LogicalPosition::new(x, y))
+        .set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)))
         .map_err(|e| format!("Failed to set button position: {}", e))?;
     btn_win
-        .set_size(tauri::LogicalSize::new(btn_size, btn_size))
+        .set_size(tauri::Size::Physical(tauri::PhysicalSize::new(btn_size, btn_size)))
         .map_err(|e| format!("Failed to set button size: {}", e))?;
 
     // 显示按钮

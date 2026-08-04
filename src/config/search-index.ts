@@ -205,6 +205,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["EQ", "调音", "均衡器", "音频", "声卡", "equalizer", "audio", "fxsound", "音效"],
   },
   {
+    id: "nvidia-driver-download",
+    nameKey: "sidebar.nvidiaDriverDownload",
+    path: "/nvidia-driver-download",
+    icon: Download,
+    category: "builtin-tool",
+    keywords: ["nvidia", "驱动下载", "显卡驱动", "下载驱动", "下载", "历史版本", "geforce", "driver", "download", "英伟达"],
+  },
+  {
     id: "memory-limit",
     nameKey: "optimization.memoryLimit.title",
     path: "/optimize/memory-limit",

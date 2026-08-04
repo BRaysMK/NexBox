@@ -1305,6 +1305,143 @@ pub async fn switch_steam_account(account_name: String) -> Result<(), String> {
     Ok(())
 }
 
+/// 从 loginusers.vdf 中删除指定账户的用户块（按行重建，保留其他内容）
+fn remove_user_from_vdf(vdf_path: &str, steam_id64: &str) -> Result<(), String> {
+    let content = fs::read_to_string(vdf_path)
+        .map_err(|e| format!("读取 loginusers.vdf 失败: {}", e))?;
+
+    let mut result = String::new();
+    let mut in_users_block = false;
+    let mut depth = 0usize;
+    let mut skip_block = false;
+    let mut removed = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("\"users\"") {
+            in_users_block = true;
+            result.push_str(line);
+            result.push('\n');
+            continue;
+        }
+
+        if in_users_block && trimmed == "{" {
+            depth += 1;
+            if !skip_block {
+                result.push_str(line);
+                result.push('\n');
+            }
+            continue;
+        }
+
+        if in_users_block && trimmed == "}" {
+            if skip_block {
+                depth -= 1;
+                if depth == 1 {
+                    // 用户块结束，停止跳过
+                    skip_block = false;
+                    removed = true;
+                }
+                continue;
+            }
+            depth -= 1;
+            if depth == 0 {
+                in_users_block = false;
+            }
+            result.push_str(line);
+            result.push('\n');
+            continue;
+        }
+
+        // depth == 1 时是 steam64 ID 行，判断是否为要删除的账户
+        if in_users_block && depth == 1 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+            let id = trimmed.trim_matches('"').to_string();
+            if id.eq_ignore_ascii_case(steam_id64) {
+                skip_block = true;
+                continue; // 跳过整个用户块
+            }
+            result.push_str(line);
+            result.push('\n');
+            continue;
+        }
+
+        if !skip_block {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    if !removed {
+        return Err(format!("未在 loginusers.vdf 中找到账户: {}", steam_id64));
+    }
+
+    fs::write(vdf_path, &result)
+        .map_err(|e| format!("写入 loginusers.vdf 失败: {}", e))?;
+
+    log::info!("[Steam] Removed user {} from loginusers.vdf", steam_id64);
+    Ok(())
+}
+
+/// 删除本机记住的 Steam 账户（从 loginusers.vdf 移除，并清理注册表与头像缓存）
+#[tauri::command]
+pub async fn delete_steam_account(steam_id64: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let steam_dir = get_steam_path().ok_or("未找到 Steam 安装路径")?;
+        let vdf_path = format!("{}\\config\\loginusers.vdf", steam_dir);
+
+        // 提前记录该账户的 AccountName，用于清理注册表 AutoLoginUser
+        let target_account = parse_login_users(&steam_dir, is_steam_running())
+            .into_iter()
+            .find(|u| u.steam_id64 == steam_id64)
+            .map(|u| u.account_name)
+            .unwrap_or_default();
+
+        // 1. 若 Steam 正在运行，先关闭（否则 Steam 退出时会重写覆盖 vdf）
+        if is_steam_running() {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            let _ = std::process::Command::new("taskkill")
+                .args(["/IM", "steam.exe", "/F"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+
+        // 2. 从 loginusers.vdf 中删除该账户
+        remove_user_from_vdf(&vdf_path, &steam_id64)?;
+
+        // 3. 若注册表 AutoLoginUser 指向该账户，一并清除
+        if !target_account.is_empty() {
+            if let Ok(hkcu) = RegKey::predef(HKEY_CURRENT_USER)
+                .open_subkey_with_flags("Software\\Valve\\Steam", KEY_SET_VALUE)
+            {
+                if let Ok(current) = hkcu.get_value::<String, _>("AutoLoginUser") {
+                    if current.eq_ignore_ascii_case(&target_account) {
+                        let _ = hkcu.delete_value("AutoLoginUser");
+                        log::info!("[Steam] Cleared AutoLoginUser registry value");
+                    }
+                }
+            }
+        }
+
+        // 4. 清理本地头像缓存
+        let avatar_path = format!("{}\\config\\avatarcache\\{}.png", steam_dir, steam_id64);
+        if Path::new(&avatar_path).exists() {
+            let _ = fs::remove_file(&avatar_path);
+        }
+
+        log::info!("[Steam] Deleted local account: {}", steam_id64);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = steam_id64;
+        return Err("Not supported on this platform".into());
+    }
+    Ok(())
+}
+
 /// 卸载 Steam 游戏（通过 Steam 协议）
 #[tauri::command]
 pub async fn uninstall_steam_game(app_id: u32) -> Result<(), String> {

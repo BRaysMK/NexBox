@@ -31,6 +31,7 @@ import {
   Download,
   Trash2,
   ChevronDown,
+  Activity,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -719,6 +720,15 @@ export default function HardwarePage() {
           {t("hardware.title")}
         </Heading>
         <HStack gap={2}>
+          <Button
+            size="sm"
+            variant="outline"
+            colorScheme="blue"
+            leftIcon={<Activity size={15} />}
+            onClick={() => invoke("open_sensor_monitor")}
+          >
+            全部传感器状态
+          </Button>
           <Button
             size="sm"
             variant="outline"

@@ -51,6 +51,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useNavigate } from "react-router-dom";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { store } from "@/lib/store";
 
 interface FilterSettings {
   temperature: number;
@@ -105,6 +106,18 @@ interface DisplayInfo {
   is_primary: boolean;
   width: number;
   height: number;
+}
+
+interface GameEntry {
+  id: string;
+  name: string;
+  process_names: string[];
+  is_builtin: boolean;
+}
+
+interface GameFilterStatus {
+  enabled: boolean;
+  games: GameEntry[];
 }
 
 // Reverse mapping: builtin ICC id → filter preset id (for startup highlight)
@@ -173,9 +186,18 @@ export default function DisplayFilterPage() {
   });
   const [presets, setPresets] = useState<FilterPreset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(
-    localStorage.getItem("nexbox_auto_apply") === "true"
-  );
+  const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      let v = await store.get<boolean>("nexbox_auto_apply");
+      if (v !== null && v !== undefined) {
+        setAutoApplyOnStartup(v);
+      } else {
+        setAutoApplyOnStartup(localStorage.getItem("nexbox_auto_apply") === "true");
+      }
+    })();
+  }, []);
   const [activePresetId, setActivePresetId] = useState<string>("");
   const [savedCustom, setSavedCustom] = useState<{
     temperature: number;
@@ -204,6 +226,11 @@ export default function DisplayFilterPage() {
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [activeDisplayIndex, setActiveDisplayIndex] = useState<number>(0);
   const activeDisplayIndexRef = useRef(0);
+  // 游戏启动时自动应用滤镜
+  const [gameFilterEnabled, setGameFilterEnabled] = useState(false);
+  const [gameFilterGames, setGameFilterGames] = useState<GameEntry[]>([]);
+  const [isGameFilterBusy, setIsGameFilterBusy] = useState(false);
+  const [isGameFilterListOpen, setIsGameFilterListOpen] = useState(false);
   
   // 滤镜预览相关
   const [splitPosition, setSplitPosition] = useState(50);
@@ -355,6 +382,35 @@ export default function DisplayFilterPage() {
     }
   }, []);
 
+  const loadGameFilterStatus = useCallback(async () => {
+    try {
+      const result: GameFilterStatus = await invoke("get_game_filter_status");
+      setGameFilterEnabled(result.enabled);
+      setGameFilterGames(result.games);
+    } catch (error) {
+      console.error("Failed to load game filter status:", error);
+    }
+  }, []);
+
+  const handleToggleGameFilter = useCallback(async (enabled: boolean) => {
+    setIsGameFilterBusy(true);
+    try {
+      await invoke("set_game_filter_enabled", { enabled });
+      setGameFilterEnabled(enabled);
+    } catch (error) {
+      console.error("Failed to set game filter enabled:", error);
+      toast({
+        title: t("displayFilter.gameFilterError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsGameFilterBusy(false);
+    }
+  }, [toast, t]);
+
   useEffect(() => {
     activeDisplayIndexRef.current = activeDisplayIndex;
   }, [activeDisplayIndex]);
@@ -367,8 +423,9 @@ export default function DisplayFilterPage() {
     loadCustomSettings();
     loadIccPresets();
     loadUserFilterPresets();
+    loadGameFilterStatus();
     return () => clearTimeout(timer);
-  }, [loadDisplays, loadSettings, loadPresets, loadCustomSettings, loadIccPresets, loadUserFilterPresets]);
+  }, [loadDisplays, loadSettings, loadPresets, loadCustomSettings, loadIccPresets, loadUserFilterPresets, loadGameFilterStatus]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -1644,26 +1701,56 @@ export default function DisplayFilterPage() {
               </HStack>
             </HStack>
           </HStack>
-          <HStack
-            bg={autoApplyOnStartup ? hexToRgba(primaryColor, 0.15) : sliderBg}
-            px={4}
-            py={2}
-            borderRadius="xl"
-            border="1px solid"
-            borderColor={autoApplyOnStartup ? primaryColor : "transparent"}
-          >
-            <Text color={textColor} fontSize="xs" fontWeight="500">
-              启动新境盒时自动启用选中滤镜
-            </Text>
-            <ThemeSwitch
-              isChecked={autoApplyOnStartup}
-              onChange={(e) => {
-                const val = e.target.checked;
-                setAutoApplyOnStartup(val);
-                localStorage.setItem("nexbox_auto_apply", val ? "true" : "false");
-              }}
-              isDisabled={isLoading}
-            />
+          <HStack spacing={2} flexWrap="wrap">
+            <HStack
+              bg={gameFilterEnabled ? hexToRgba(primaryColor, 0.15) : sliderBg}
+              px={4}
+              py={2}
+              borderRadius="xl"
+              border="1px solid"
+              borderColor={gameFilterEnabled ? primaryColor : "transparent"}
+            >
+              <Text color={textColor} fontSize="xs" fontWeight="500">
+                {t("displayFilter.gameFilterTitle")}
+              </Text>
+              <Text
+                color={primaryColor}
+                fontSize="xs"
+                fontWeight="600"
+                cursor="pointer"
+                onClick={() => setIsGameFilterListOpen(true)}
+                _hover={{ textDecoration: "underline" }}
+              >
+                {t("displayFilter.gameFilterSupportedTitle")} ({gameFilterGames.length})
+              </Text>
+              <ThemeSwitch
+                isChecked={gameFilterEnabled}
+                onChange={(e) => handleToggleGameFilter(e.target.checked)}
+                isDisabled={isGameFilterBusy}
+              />
+            </HStack>
+            <HStack
+              bg={autoApplyOnStartup ? hexToRgba(primaryColor, 0.15) : sliderBg}
+              px={4}
+              py={2}
+              borderRadius="xl"
+              border="1px solid"
+              borderColor={autoApplyOnStartup ? primaryColor : "transparent"}
+            >
+              <Text color={textColor} fontSize="xs" fontWeight="500">
+                启动新境盒时自动启用选中滤镜
+              </Text>
+              <ThemeSwitch
+                isChecked={autoApplyOnStartup}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setAutoApplyOnStartup(val);
+                  localStorage.setItem("nexbox_auto_apply", val ? "true" : "false");
+                  store.set("nexbox_auto_apply", val).then(() => store.save());
+                }}
+                isDisabled={isLoading}
+              />
+            </HStack>
           </HStack>
         </VStack>
       </HStack>
@@ -2449,6 +2536,31 @@ export default function DisplayFilterPage() {
 
   return (
     <Box pt={8}>
+      {/* 已支持的游戏名单 */}
+      <Modal isOpen={isGameFilterListOpen} onClose={() => setIsGameFilterListOpen(false)} scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent bg={cardBg}>
+          <ModalHeader color={textColor}>{t("displayFilter.gameFilterSupportedTitle")}</ModalHeader>
+          <ModalCloseButton color={subTextColor} />
+          <ModalBody pb={4}>
+            <SimpleGrid columns={{ base: 2, sm: 3 }} spacing={2}>
+              {gameFilterGames.map((game) => (
+                <Text
+                  key={game.id}
+                  color={textColor}
+                  fontSize="sm"
+                  fontWeight="500"
+                  noOfLines={1}
+                  title={game.name}
+                >
+                  {game.name}
+                </Text>
+              ))}
+            </SimpleGrid>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
       {/* Save Preset Dialog */}
       <Modal isOpen={showSavePresetDialog} onClose={() => setShowSavePresetDialog(false)}>
         <ModalOverlay />

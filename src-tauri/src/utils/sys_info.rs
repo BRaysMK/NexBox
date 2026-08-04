@@ -93,3 +93,24 @@ pub fn get_mapped_locale() -> String {
 pub fn get_system_locale() -> String {
     get_mapped_locale()
 }
+
+#[tauri::command]
+pub fn get_system_username() -> String {
+    // 用 var_os + to_string_lossy：Windows 环境变量为 UTF-16，
+    // 中文用户名经 Rust 转 UTF-8 不会乱码；非 UTF-8 时也安全降级
+    #[cfg(target_os = "windows")]
+    {
+        std::env::var_os("USERNAME")
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::env::var_os("USER")
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    }
+}

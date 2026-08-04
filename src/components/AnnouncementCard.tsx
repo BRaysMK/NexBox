@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
+import { store } from "@/lib/store";
 
 interface Announcement {
   title: string;
@@ -21,10 +22,15 @@ export function useAnnouncementEnabled() {
   const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
-    const saved = localStorage.getItem("nexbox_announcement_enabled");
-    if (saved !== null) {
-      setEnabled(saved === "true");
-    }
+    (async () => {
+      const saved = await store.get<boolean>("nexbox_announcement_enabled");
+      if (saved !== null && saved !== undefined) {
+        setEnabled(saved);
+      } else {
+        const ls = localStorage.getItem("nexbox_announcement_enabled");
+        if (ls !== null) setEnabled(ls === "true");
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -53,12 +59,17 @@ export function AnnouncementCard() {
   const modalBg = useColorModeValue("white", "#1a1a1a");
 
   useEffect(() => {
-    const lastReadTime = localStorage.getItem("nexbox_announcement_last_read");
     const fetchAnnouncements = async () => {
       try {
         const response = await invoke<AnnouncementResponse>("get_announcements");
         setAnnouncements(response.announce_list);
-        
+
+        // 优先从 store 读取，兼容旧 localStorage
+        let lastReadTime = await store.get<string>("nexbox_announcement_last_read");
+        if (!lastReadTime) {
+          lastReadTime = localStorage.getItem("nexbox_announcement_last_read");
+        }
+
         if (response.announce_list.length > 0 && lastReadTime) {
           const lastRead = new Date(lastReadTime);
           const hasNew = response.announce_list.some(a => new Date(a.create_time) > lastRead);
@@ -79,7 +90,10 @@ export function AnnouncementCard() {
     try {
       const response = await invoke<AnnouncementResponse>("get_announcements");
       setAnnouncements(response.announce_list);
-      localStorage.setItem("nexbox_announcement_last_read", new Date().toISOString());
+      const now = new Date().toISOString();
+      localStorage.setItem("nexbox_announcement_last_read", now);
+      await store.set("nexbox_announcement_last_read", now);
+      await store.save();
       setHasUnread(false);
     } catch (e) {
       console.error("Failed to fetch announcements:", e);

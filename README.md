@@ -5,7 +5,7 @@
 <h1 align="center">NexBox <sub>新境盒</sub></h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v6.6.5-2dd4bf?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v6.8.9-2dd4bf?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/Tauri-2.10-ffc131?style=flat-square&logo=tauri" alt="Tauri" />
   <img src="https://img.shields.io/badge/React-19.0-61dafb?style=flat-square&logo=react" alt="React" />
   <img src="https://img.shields.io/badge/Rust-1.77.2-dea584?style=flat-square&logo=rust" alt="Rust" />

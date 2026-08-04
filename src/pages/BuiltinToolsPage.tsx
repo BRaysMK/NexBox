@@ -28,9 +28,11 @@ import { ViewGrid } from "@/components/special/view-grid";
 import { ViewList } from "@/components/special/view-list";
 import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { store } from "@/lib/store";
 import type { ViewItem } from "@/components/special/view-types";
 
-const STORAGE_KEY = "nexbox_builtin_tools_order";
+const STORE_KEY = "nexbox_builtin_tools_order";
+const LS_KEY = "nexbox_builtin_tools_order";
 
 const defaultTools: ViewItem[] = [
   {
@@ -107,11 +109,20 @@ const defaultTools: ViewItem[] = [
     color: "#E74C3C",
     beta: true,
   },
+  {
+    id: "nvidia-driver-download",
+    path: "/nvidia-driver-download",
+    icon: NvidiaLogo,
+    titleKey: "sidebar.nvidiaDriverDownload",
+    descriptionKey: "builtinTools.nvidiaDriverDownloadDesc",
+    color: "#76B900",
+    beta: true,
+  },
 ];
 
 function loadOrder(): string[] | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const ids: string[] = JSON.parse(raw);
       if (Array.isArray(ids) && ids.length > 0) return ids;
@@ -122,7 +133,8 @@ function loadOrder(): string[] | null {
 
 function saveOrder(ids: string[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+    localStorage.setItem(LS_KEY, JSON.stringify(ids));
+    store.set(STORE_KEY, ids).then(() => store.save());
   } catch { /* ignore */ }
 }
 

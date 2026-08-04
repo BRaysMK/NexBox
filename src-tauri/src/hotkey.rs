@@ -1,6 +1,17 @@
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
+
+/// 全部热键总开关（默认开启）
+static HOTKEYS_ENABLED: AtomicBool = AtomicBool::new(true);
+
+pub fn set_hotkeys_enabled(enabled: bool) {
+    HOTKEYS_ENABLED.store(enabled, Ordering::SeqCst);
+}
+
+pub fn is_hotkeys_enabled() -> bool {
+    HOTKEYS_ENABLED.load(Ordering::SeqCst)
+}
 
 static OVERLAY_SHORTCUT: Mutex<Option<String>> = Mutex::new(None);
 static OVERLAY_SHORTCUT_ID: AtomicU32 = AtomicU32::new(0);
@@ -253,6 +264,21 @@ pub fn get_filter_hotkey() -> String {
 #[tauri::command]
 pub fn set_filter_hotkey(app_handle: tauri::AppHandle, shortcut: String) -> Result<(), String> {
     update_filter(&app_handle, &shortcut)
+}
+
+#[tauri::command]
+pub fn set_hotkeys_enabled_cmd(enabled: bool) -> Result<(), String> {
+    set_hotkeys_enabled(enabled);
+    log::info!(
+        "全部热键总开关: {}",
+        if enabled { "开启" } else { "关闭" }
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_hotkeys_enabled_cmd() -> bool {
+    is_hotkeys_enabled()
 }
 
 

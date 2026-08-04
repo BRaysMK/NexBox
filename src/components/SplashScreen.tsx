@@ -2,6 +2,7 @@ import { useAppStartup } from "@/contexts/app-startup-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { Box } from "@chakra-ui/react";
 import { useEffect, useState } from "react";
+import { store } from "@/lib/store";
 
 const DEFAULT_LOGO = "/logo/Chinesew.png";
 
@@ -12,10 +13,16 @@ export function SplashScreen() {
   const [logoSrc, setLogoSrc] = useState(DEFAULT_LOGO);
 
   useEffect(() => {
-    const customLogo = localStorage.getItem("nexbox_splash_logo");
-    if (customLogo) {
-      setLogoSrc(customLogo);
-    }
+    (async () => {
+      const customLogo = await store.get<string>("nexbox_splash_logo");
+      if (customLogo) {
+        setLogoSrc(customLogo);
+      } else {
+        // 兼容旧 localStorage
+        const ls = localStorage.getItem("nexbox_splash_logo");
+        if (ls) setLogoSrc(ls);
+      }
+    })();
   }, []);
 
   return (

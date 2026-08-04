@@ -14,17 +14,12 @@
   IconButton,
   Tooltip,
 } from "@chakra-ui/react";
-import { AnimatePresence, motion } from "framer-motion";
-import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
-import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { LiquidGlassToolCard } from "@/components/special/liquid-glass-tool-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useBackground } from "@/contexts/background-context";
 import {
   Cpu,
   Zap,
   Wrench,
-  Layers,
   Network,
   TrendingUp,
   Play,
@@ -39,7 +34,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { Image } from "@chakra-ui/react";
@@ -87,13 +82,6 @@ interface ToolCard {
 }
 
 const getTools = (t: (key: string) => string): ToolCard[] => [
-];
-
-const getMenuItems = (t: (key: string) => string) => [
-  { id: "hardware", label: t("tools.hardware"), icon: Wrench },
-  { id: "assistant", label: t("tools.assistant"), icon: Layers },
-  { id: "network", label: t("tools.network"), icon: Network },
-  { id: "optimization", label: t("tools.optimization"), icon: TrendingUp },
 ];
 
 const getCategoryLabels = (t: (key: string) => string): Record<string, string> => ({
@@ -1170,70 +1158,19 @@ function ThirdPartyToolSection({
 }
 
 export default function ToolsPage() {
-  const [activeCategory, setActiveCategory] = useState<string>("all");
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const { config } = useThemeColor();
-  const { jellyBounceEnabled } = useBackground();
-  const isFirstRender = useRef(true);
-
-  // 第三方页面子菜单切换时触发果冻弹跳动画（跳过首次挂载）
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    if (!jellyBounceEnabled) return;
-    document.body.classList.remove("jelly-bounce-active");
-    void document.body.offsetWidth;
-    document.body.classList.add("jelly-bounce-active");
-    const timer = setTimeout(() => {
-      document.body.classList.remove("jelly-bounce-active");
-    }, 700);
-    return () => {
-      clearTimeout(timer);
-      document.body.classList.remove("jelly-bounce-active");
-    };
-  }, [activeCategory, jellyBounceEnabled]);
 
   const tools = getTools(t);
-  const menuItems = getMenuItems(t);
   const categoryLabels = getCategoryLabels(t);
 
   const builtinTools = tools.filter((tool) => tool.type === "builtin");
-  const transitionMode = useTransitionMode();
 
   return (
     <Flex gap={6} pt={8}>
-      <Box w="180px" flexShrink={0} position="sticky" top={8} alignSelf="flex-start">
-        <VStack spacing={0.5} align="stretch">
-          <LiquidGlassMenuItem
-            isActive={activeCategory === "all"}
-            onClick={() => setActiveCategory("all")}
-            icon={Layers}
-          >
-            {t("tools.all")}
-          </LiquidGlassMenuItem>
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeCategory === item.id;
-
-            return (
-              <LiquidGlassMenuItem
-                key={item.id}
-                isActive={isActive}
-                onClick={() => setActiveCategory(item.id)}
-                icon={Icon}
-              >
-                {item.label}
-              </LiquidGlassMenuItem>
-            );
-          })}
-        </VStack>
-      </Box>
-
-      <Box 
-        flex={1} 
+      <Box
+        flex={1}
         overflowY="auto"
         overflowX="hidden"
         sx={{
@@ -1256,57 +1193,23 @@ export default function ToolsPage() {
           },
         }}
       >
-        <AnimatePresence mode="wait">
-          {transitionMode !== "off" ? (
-            <motion.div
-              key={activeCategory}
-              initial="initial"
-              animate="enter"
-              exit="exit"
-              variants={getVariants(transitionMode)}
-              transition={getTransitionConfig(transitionMode)}
-              style={{ position: 'relative', zIndex: 1 }}
-            >
-              <Heading size="lg" color={headingColor} mb={6}>
-                {t("tools.title")}
-              </Heading>
+        <Heading size="lg" color={headingColor} mb={6}>
+          {t("tools.title")}
+        </Heading>
 
-              <OfficialToolSection activeCategory={activeCategory} />
+        <OfficialToolSection activeCategory="all" />
 
-              <ToolSection
-                title={t("tools.builtinTools")}
-                tools={builtinTools}
-                activeCategory={activeCategory}
-                categoryLabels={categoryLabels}
-              />
-              <ThirdPartyToolSection
-                title={t("tools.thirdpartyTools")}
-                activeCategory={activeCategory}
-                categoryLabels={categoryLabels}
-              />
-            </motion.div>
-          ) : (
-            <div key={activeCategory} style={{ position: 'relative', zIndex: 1 }}>
-              <Heading size="lg" color={headingColor} mb={6}>
-                {t("tools.title")}
-              </Heading>
-
-              <OfficialToolSection activeCategory={activeCategory} />
-
-              <ToolSection
-                title={t("tools.builtinTools")}
-                tools={builtinTools}
-                activeCategory={activeCategory}
-                categoryLabels={categoryLabels}
-              />
-              <ThirdPartyToolSection
-                title={t("tools.thirdpartyTools")}
-                activeCategory={activeCategory}
-                categoryLabels={categoryLabels}
-              />
-            </div>
-          )}
-        </AnimatePresence>
+        <ToolSection
+          title={t("tools.builtinTools")}
+          tools={builtinTools}
+          activeCategory="all"
+          categoryLabels={categoryLabels}
+        />
+        <ThirdPartyToolSection
+          title={t("tools.thirdpartyTools")}
+          activeCategory="all"
+          categoryLabels={categoryLabels}
+        />
       </Box>
     </Flex>
   );

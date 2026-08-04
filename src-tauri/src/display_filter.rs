@@ -294,7 +294,7 @@ fn enumerate_displays_inner() -> Vec<DisplayInfo> {
 // ─── Per-display state ───
 
 #[derive(Clone)]
-struct DisplayState {
+pub(crate) struct DisplayState {
     temperature: i32,
     brightness: i32,
     contrast: i32,
@@ -359,7 +359,7 @@ fn display_state_from_persisted(saved: &HashMap<usize, PersistentFilterState>, i
 /// lazily enumerate displays here and (re)size the state vector to the real
 /// display count, preserving in-memory state for indexes that persist and only
 /// defaulting for newly-added indexes.
-fn ensure_display_states() {
+pub(crate) fn ensure_display_states() {
     // Lazily enumerate displays so we know how many per-display states to keep.
     {
         let dev_lock = DISPLAY_DEVICES.lock().unwrap();
@@ -401,7 +401,7 @@ fn ensure_display_states() {
     }
 }
 
-fn with_display_state<F, R>(idx: usize, f: F) -> R
+pub(crate) fn with_display_state<F, R>(idx: usize, f: F) -> R
 where F: FnOnce(&mut DisplayState) -> R {
     ensure_display_states();
     let lock = DISPLAY_STATES.lock().unwrap();
@@ -411,7 +411,17 @@ where F: FnOnce(&mut DisplayState) -> R {
     f(&mut *state)
 }
 
-fn get_active_index() -> usize {
+/// 读取指定显示器的滤镜是否开启（供 game_filter 模块使用）
+pub(crate) fn is_filter_active(idx: usize) -> bool {
+    with_display_state(idx, |state| state.filter_active)
+}
+
+/// 设置指定显示器的滤镜开关状态（供 game_filter 模块使用）
+pub(crate) fn set_filter_active(idx: usize, active: bool) {
+    with_display_state(idx, |state| state.filter_active = active);
+}
+
+pub(crate) fn get_active_index() -> usize {
     let idx = ACTIVE_DISPLAY_INDEX.load(Ordering::SeqCst);
     ensure_display_states();
     let lock = DISPLAY_STATES.lock().unwrap();
@@ -1415,7 +1425,7 @@ pub async fn get_filter_settings(display_index: Option<usize>) -> Result<FilterS
 }
 
 /// Apply filter: generates ICC from params (via icc_gen or build_icc_profile) and applies via xcalib.
-fn apply_filter_to_display(idx: usize) -> Result<(), String> {
+pub(crate) fn apply_filter_to_display(idx: usize) -> Result<(), String> {
     let (icc_active, temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, mode, _icc_ramp_opt) =
         with_display_state(idx, |state| {
             (state.icc_active, state.temperature, state.brightness, state.contrast,
@@ -1484,7 +1494,7 @@ fn apply_filter_to_display(idx: usize) -> Result<(), String> {
 }
 
 /// Restore display to default: clear the gamma ramp via xcalib (-c).
-fn restore_display_default(idx: usize) -> Result<(), String> {
+pub(crate) fn restore_display_default(idx: usize) -> Result<(), String> {
     log::info!("restore_display_default[{}]: clearing gamma ramp via xcalib", idx);
     clear_gamma_ramp_via_xcalib(idx)
 }

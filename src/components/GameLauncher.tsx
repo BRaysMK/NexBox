@@ -23,6 +23,7 @@ import { Gamepad2, Plus, X, FolderOpen, GripVertical } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { store } from "@/lib/store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import {
@@ -239,9 +240,14 @@ interface GameShortcut {
   isDefault?: boolean;
 }
 
-const STORAGE_KEY = "nexbox_game_launcher_games";
-const ICON_CACHE_KEY = "nexbox_game_icons";
-const SIZE_KEY = "nexbox_game_launcher_size";
+const STORE_KEY_GAMES = "nexbox_game_launcher_games";
+const STORE_KEY_ICONS = "nexbox_game_launcher_icons";
+const STORE_KEY_SIZE = "nexbox_game_launcher_size";
+const LS_KEY_GAMES = "nexbox_game_launcher_games";
+const LS_KEY_ICONS = "nexbox_game_icons";
+const LS_KEY_SIZE = "nexbox_game_launcher_size";
+const LS_KEY_GAME_NAME_DRAFT = "nexbox_game_launcher_draft_name";
+const LS_KEY_GAME_PATH_DRAFT = "nexbox_game_launcher_draft_path";
 
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 600;
@@ -259,13 +265,7 @@ export default function GameLauncher() {
   const [newGameName, setNewGameName] = useState("");
   const [newGamePath, setNewGamePath] = useState("");
 
-  const [cardSize, setCardSize] = useState<{ width: number; height: number }>(() => {
-    try {
-      const saved = localStorage.getItem(SIZE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return { width: 220, height: MIN_HEIGHT };
-  });
+  const [cardSize, setCardSize] = useState<{ width: number; height: number }>({ width: 220, height: MIN_HEIGHT });
   const resizeRef = useRef<{
     edge: "left" | "top" | "corner";
     startX: number;
@@ -276,7 +276,7 @@ export default function GameLauncher() {
 
   const updateCardSize = useCallback((size: { width: number; height: number }) => {
     setCardSize(size);
-    localStorage.setItem(SIZE_KEY, JSON.stringify(size));
+    store.set(STORE_KEY_SIZE, size).then(() => store.save());
   }, []);
 
   const onResizeStart = useCallback(
@@ -338,18 +338,62 @@ export default function GameLauncher() {
 
   useEffect(() => {
     loadGames();
+    loadCardSize();
   }, []);
+
+  // 恢复上次未确认的添加草稿，取消后内容仍保留
+  useEffect(() => {
+    const name = localStorage.getItem(LS_KEY_GAME_NAME_DRAFT);
+    const path = localStorage.getItem(LS_KEY_GAME_PATH_DRAFT);
+    if (name !== null) setNewGameName(name);
+    if (path !== null) setNewGamePath(path);
+  }, []);
+
+  // 输入时实时保存草稿
+  useEffect(() => {
+    localStorage.setItem(LS_KEY_GAME_NAME_DRAFT, newGameName);
+  }, [newGameName]);
+
+  useEffect(() => {
+    localStorage.setItem(LS_KEY_GAME_PATH_DRAFT, newGamePath);
+  }, [newGamePath]);
+
+  const loadCardSize = async () => {
+    // 优先从 store 读取，兼容旧 localStorage 数据
+    let saved = await store.get<{ width: number; height: number }>(STORE_KEY_SIZE);
+    if (!saved) {
+      try {
+        const ls = localStorage.getItem(LS_KEY_SIZE);
+        if (ls) saved = JSON.parse(ls);
+      } catch {}
+    }
+    if (saved) {
+      setCardSize(saved);
+    }
+  };
 
   const loadGames = async () => {
     setIsLoading(true);
     try {
-      const savedGames = localStorage.getItem(STORAGE_KEY);
-      const gameList: GameShortcut[] = savedGames ? JSON.parse(savedGames) : [];
+      // 优先从 store 读取，兼容旧 localStorage 数据
+      let gameList: GameShortcut[] = await store.get<GameShortcut[]>(STORE_KEY_GAMES) || [];
+      if (gameList.length === 0) {
+        try {
+          const ls = localStorage.getItem(LS_KEY_GAMES);
+          if (ls) gameList = JSON.parse(ls);
+        } catch {}
+      }
 
       // 加载缓存的图标
-      const savedIcons = localStorage.getItem(ICON_CACHE_KEY);
+      let savedIcons: Record<string, string> | null = await store.get<Record<string, string>>(STORE_KEY_ICONS);
+      if (!savedIcons) {
+        try {
+          const ls = localStorage.getItem(LS_KEY_ICONS);
+          if (ls) savedIcons = JSON.parse(ls);
+        } catch {}
+      }
       if (savedIcons) {
-        try { setIcons(JSON.parse(savedIcons)); } catch {}
+        setIcons(savedIcons);
       }
 
       setGames(gameList);
@@ -374,8 +418,8 @@ export default function GameLauncher() {
       const dataUri = await invoke<string>("get_file_icon", { filePath: game.path });
       setIcons((prev) => {
         const next = { ...prev, [game.id]: dataUri };
-        // 缓存到 localStorage
-        localStorage.setItem(ICON_CACHE_KEY, JSON.stringify(next));
+        // 缓存到 store
+        store.set(STORE_KEY_ICONS, next).then(() => store.save());
         return next;
       });
     } catch (error) {
@@ -385,7 +429,7 @@ export default function GameLauncher() {
 
   const saveGames = (gameList: GameShortcut[]) => {
     const userGames = gameList.filter((g) => !g.isDefault);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(userGames));
+    store.set(STORE_KEY_GAMES, userGames).then(() => store.save());
   };
 
   const handleLaunch = async (game: GameShortcut) => {
@@ -426,7 +470,9 @@ export default function GameLauncher() {
 
     const reordered = arrayMove(games, oldIndex, newIndex);
     setGames(reordered);
-    saveGames(reordered);
+    // 保存到 store
+    const userGames = reordered.filter((g) => !g.isDefault);
+    store.set(STORE_KEY_GAMES, userGames).then(() => store.save());
   }, [games]);
 
   const handleSelectPath = async () => {
@@ -444,6 +490,13 @@ export default function GameLauncher() {
     }
   };
 
+  const handleClearDraft = () => {
+    setNewGameName("");
+    setNewGamePath("");
+    localStorage.removeItem(LS_KEY_GAME_NAME_DRAFT);
+    localStorage.removeItem(LS_KEY_GAME_PATH_DRAFT);
+  };
+
   const handleAddGame = () => {
     if (!newGameName.trim() || !newGamePath.trim()) return;
 
@@ -459,6 +512,8 @@ export default function GameLauncher() {
     saveGames(newGames);
     setNewGameName("");
     setNewGamePath("");
+    localStorage.removeItem(LS_KEY_GAME_NAME_DRAFT);
+    localStorage.removeItem(LS_KEY_GAME_PATH_DRAFT);
     onClose();
   };
 
@@ -666,6 +721,11 @@ export default function GameLauncher() {
             </VStack>
           </ModalBody>
           <ModalFooter>
+            {(newGameName || newGamePath) && (
+              <Button variant="ghost" mr={3} colorScheme="red" onClick={handleClearDraft}>
+                {t("gameLauncher.clearContent")}
+              </Button>
+            )}
             <Button variant="ghost" mr={3} onClick={onClose}>
               {t("common.cancel")}
             </Button>

@@ -1,8 +1,9 @@
-use std::collections::HashMap;
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 use std::{env, path::Path};
 use crate::optimization::{run_simple_feature, PerfTweakResult, CREATE_NO_WINDOW};
+use encoding_rs::GBK;
+use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
 
 fn get_powershell_path() -> String {
     if let Ok(sysroot) = env::var("SystemRoot") {
@@ -196,7 +197,31 @@ Write-Output 'OK'
 "#)
 }
 
-// === 6. 状态检测 ===
+/// 清理 DNS 解析缓存（ipconfig /flushdns，无需 PowerShell）
+#[tauri::command]
+pub async fn clear_dns_cache() -> Result<PerfTweakResult, String> {
+    let result = Command::new("ipconfig")
+        .arg("/flushdns")
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行清理 DNS 缓存失败: {}", e))?;
+
+    if result.status.success() {
+        Ok(PerfTweakResult { success: true, message: "DNS 缓存已清理".to_string() })
+    } else {
+        let stderr = decode_console(result.stderr);
+        let stdout = decode_console(result.stdout);
+        let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else { stdout.trim().to_string() };
+        let lower = err_msg.to_lowercase();
+        if lower.contains("access denied") || lower.contains("denied") || lower.contains("拒绝访问") || lower.contains("权限不足") {
+            Err("需要管理员权限，请以管理员身份运行 NexBox".to_string())
+        } else {
+            Err(format!("清理 DNS 缓存失败: {}", err_msg))
+        }
+    }
+}
+
+// === 6. 状态检测（纯 Rust 实现，不启动 PowerShell，毫秒级） ===
 
 #[derive(serde::Serialize)]
 pub struct NetworkTweakState {
@@ -208,103 +233,135 @@ pub struct NetworkTweakState {
     pub dns_secondary: String,
 }
 
+/// 解码控制台输出（中文 Windows 的 netsh 输出为 CP936/GBK 编码）
+fn decode_console(bytes: Vec<u8>) -> String {
+    let (cow, _, _) = GBK.decode(&bytes);
+    cow.into_owned()
+}
+
+/// 直接运行 netsh，返回解码后的输出（无 PowerShell 包装）
+fn run_netsh(args: &[&str]) -> String {
+    let out = Command::new("netsh")
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    match out {
+        Ok(o) => {
+            if !o.stdout.is_empty() {
+                decode_console(o.stdout)
+            } else {
+                decode_console(o.stderr)
+            }
+        }
+        Err(_) => String::new(),
+    }
+}
+
+fn is_chimney_disabled(output: &str) -> bool {
+    let has_chimney = output.contains("Chimney Offload State") || output.contains("Chimney 卸载状态");
+    has_chimney && (output.to_lowercase().contains("disabled") || output.contains("禁用"))
+}
+
+/// Nagle：读取有 IPAddress 的接口中是否存在 TCPNoDelay=1
+fn check_nagle() -> bool {
+    let Ok(interfaces) = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces")
+    else {
+        return false;
+    };
+    for name in interfaces.enum_keys().flatten() {
+        let Ok(key) = interfaces.open_subkey(&name) else { continue };
+        let has_ip = key.get_value::<Vec<String>, _>("IPAddress").is_ok()
+            || key.get_value::<String, _>("IPAddress").is_ok();
+        if !has_ip {
+            continue;
+        }
+        if key.get_value::<u32, _>("TCPNoDelay").ok() == Some(1) {
+            return true;
+        }
+    }
+    false
+}
+
+/// 网卡省电：网卡设备注册表 PnPCapabilities 含 0x100 位表示已禁用省电
+fn check_power_saving() -> bool {
+    let Ok(adapters) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(
+        r"SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}",
+    ) else {
+        return false;
+    };
+    for name in adapters.enum_keys().flatten() {
+        let Ok(key) = adapters.open_subkey(&name) else { continue };
+        if key
+            .get_value::<u32, _>("PnPCapabilities")
+            .ok()
+            .is_some_and(|v| v & 0x100 != 0)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// DNS：优先读 NameServer（手动设置），否则读 DhcpNameServer（DHCP 分配）
+fn read_dns() -> (String, String) {
+    let Ok(interfaces) = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces")
+    else {
+        return (String::new(), String::new());
+    };
+    for name in interfaces.enum_keys().flatten() {
+        let Ok(key) = interfaces.open_subkey(&name) else { continue };
+        let has_ip = key.get_value::<Vec<String>, _>("IPAddress").is_ok()
+            || key.get_value::<String, _>("IPAddress").is_ok();
+        if !has_ip {
+            continue;
+        }
+        let servers = key
+            .get_value::<String, _>("NameServer")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| key.get_value::<String, _>("DhcpNameServer").ok())
+            .filter(|s| !s.trim().is_empty());
+        if let Some(s) = servers {
+            let parts: Vec<&str> = s
+                .split(|c: char| c == ',' || c.is_whitespace())
+                .filter(|x| !x.is_empty())
+                .collect();
+            if let Some(primary) = parts.first() {
+                let secondary = parts.get(1).copied().unwrap_or_default();
+                return (primary.to_string(), secondary.to_string());
+            }
+        }
+    }
+    (String::new(), String::new())
+}
+
 #[tauri::command]
 pub async fn check_network_tweak_states() -> Result<NetworkTweakState, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let script = r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$r = @{}
+    // 两个 netsh 查询并行执行（每个约 0.3~1s），避免串行等待
+    let supp = tokio::task::spawn_blocking(|| run_netsh(&["int", "tcp", "show", "supplemental"]));
+    let global = tokio::task::spawn_blocking(|| run_netsh(&["int", "tcp", "show", "global"]));
+    let supp_out = supp.await.unwrap_or_default();
+    let global_out = global.await.unwrap_or_default();
 
-# TCP Congestion
-try {
-    $supp = netsh int tcp show supplemental 2>$null | Out-String
-    $r['tcp_congestion'] = ($supp -match "CTCP" -or $supp -match "CUBIC")
-} catch { $r['tcp_congestion'] = $false }
-
-# Chimney Offload
-try {
-    $global = netsh int tcp show global 2>$null | Out-String
-    $r['chimney'] = ($global -match "Chimney Offload State.*disabled" -or $global -match "Chimney 卸载状态.*禁用")
-} catch { $r['chimney'] = $false }
-
-# Nagle (check registry)
-try {
-    $firstIface = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces" -ErrorAction SilentlyContinue |
-        Where-Object { (Get-ItemProperty $_.PSPath -Name "IPAddress" -EA 0).IPAddress } |
-        Select-Object -First 1
-    if ($firstIface) {
-        $tcpNoDelay = (Get-ItemProperty $firstIface.PSPath -Name "TCPNoDelay" -EA 0).TCPNoDelay
-        $r['nagle'] = ($tcpNoDelay -eq 1)
-    } else {
-        $r['nagle'] = $false
-    }
-} catch { $r['nagle'] = $false }
-
-# Adapter Power Saving
-try {
-    $powerMgmtDisabled = Get-NetAdapter -Physical -EA 0 | Where-Object { $_.PowerManagementEnabled -eq $false }
-    $r['powerSaving'] = ($powerMgmtDisabled.Count -gt 0)
-} catch { $r['powerSaving'] = $false }
-
-# DNS
-try {
-    $dnsAdapter = Get-DnsClientServerAddress -AddressFamily IPv4 -EA 0 | Where-Object { $_.ServerAddresses -ne $null } | Select-Object -First 1
-    if ($dnsAdapter -and $dnsAdapter.ServerAddresses) {
-        $addrs = $dnsAdapter.ServerAddresses
-        $r['dns_primary'] = $addrs[0]
-        $r['dns_secondary'] = if ($addrs.Count -gt 1) { $addrs[1] } else { "" }
-    } else {
-        $r['dns_primary'] = ""
-        $r['dns_secondary'] = ""
-    }
-} catch {
-    $r['dns_primary'] = ""
-    $r['dns_secondary'] = ""
-}
-
-# 始终输出所有 key，确保前端能解析到
-@("tcp_congestion","chimney","nagle","powerSaving","dns_primary","dns_secondary") | ForEach-Object {
-    Write-Host "$($_):$($r[$_])"
-}
-"#;
-
-    let ps_path = get_powershell_path();
-    let result = Command::new(&ps_path)
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行检测命令失败: {}", e))?;
-
-    if !result.status.success() {
-        return Err("检测状态失败".to_string());
-    }
-
-    let stdout = String::from_utf8_lossy(&result.stdout);
-    let mut state = HashMap::new();
-
-    for line in stdout.lines() {
-        if let Some(pos) = line.find(':') {
-            let key = line[..pos].trim().to_string();
-            let value = line[pos + 1..].trim().to_string();
-            state.insert(key, value);
-        }
-    }
-
-    let tcp_congestion = state.get("tcp_congestion").map(|v| v == "True").unwrap_or(false);
-    let chimney = state.get("chimney").map(|v| v == "True").unwrap_or(false);
-    let nagle = state.get("nagle").map(|v| v == "True").unwrap_or(false);
-    let power_saving = state.get("powerSaving").map(|v| v == "True").unwrap_or(false);
-    let dns_primary = state.get("dns_primary").cloned().unwrap_or_default();
-    let dns_secondary = state.get("dns_secondary").cloned().unwrap_or_default();
+    // 以下均为注册表读取，毫秒级
+    let supp_lower = supp_out.to_lowercase();
+    let tcp_congestion_optimized = supp_lower.contains("ctcp") || supp_lower.contains("cubic");
+    let chimney_offload = is_chimney_disabled(&global_out);
+    let nagle_optimized = check_nagle();
+    let adapter_power_saving_off = check_power_saving();
+    let (dns_primary, dns_secondary) = read_dns();
 
     Ok(NetworkTweakState {
-        tcp_congestion_optimized: tcp_congestion,
-        chimney_offload: chimney,
-        nagle_optimized: nagle,
-        adapter_power_saving_off: power_saving,
+        tcp_congestion_optimized,
+        chimney_offload,
+        nagle_optimized,
+        adapter_power_saving_off,
         dns_primary,
         dns_secondary,
     })

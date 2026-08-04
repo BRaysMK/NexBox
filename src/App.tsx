@@ -30,12 +30,14 @@ import PeripheralOptimizePage from "./pages/PeripheralOptimizePage";
 import WindowsUpdatePage from "./pages/WindowsUpdatePage";
 import DLSSPresetPage from "./pages/DLSSPresetPage";
 import NvidiaDriverPage from "./pages/NvidiaDriverPage";
+import NvidiaDriverDownloadPage from "./pages/NvidiaDriverDownloadPage";
 import EpicFreePage from "./pages/EpicFreePage";
 import SteamPage from "./pages/SteamPage";
 import TrayMenuPage from "./pages/TrayMenuPage";
 import DesktopLyricsPage from "./pages/DesktopLyricsPage";
 import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
+import SensorMonitorPage from "./pages/SensorMonitorPage";
 import AudioEqPage from "./pages/AudioEqPage";
 import CpuSchedulerPage from "./pages/CpuSchedulerPage";
 import CustomPage from "./pages/CustomPage";
@@ -70,7 +72,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "v6.6.5";
+const CURRENT_VERSION = "v6.8.9";
 
 function App() {
   const { t } = useTranslation();
@@ -97,6 +99,11 @@ function App() {
   // Vertical overlay window: standalone, no main layout
   if (location.pathname === "/vertical-overlay") {
     return <VerticalOverlayPage />;
+  }
+
+  // Sensor monitor window: standalone, no main layout
+  if (location.pathname === "/sensor-monitor") {
+    return <SensorMonitorPage />;
   }
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -296,6 +303,7 @@ function App() {
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
+              <Route path="/nvidia-driver-download" element={<AnimatedPage><NvidiaDriverDownloadPage /></AnimatedPage>} />
             <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
@@ -334,6 +342,7 @@ function App() {
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
+              <Route path="/nvidia-driver-download" element={<AnimatedPage><NvidiaDriverDownloadPage /></AnimatedPage>} />
               <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />

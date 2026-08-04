@@ -3,7 +3,6 @@ import {
   Flex,
   HStack,
   Text,
-  Switch,
   Badge,
   VStack,
   Divider,
@@ -90,6 +89,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Download } from "lucide-react";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
+import { store } from "@/lib/store";
 
 /** 限制导航栏拖拽只能沿竖直方向移动，禁止左右（向右）拖动 */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({
@@ -198,6 +198,7 @@ function GeneralSettings() {
   const [randomQuoteEnabled, setRandomQuoteEnabled] = useState(true);
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
+  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
@@ -274,109 +275,189 @@ function GeneralSettings() {
     const savedLang = i18n.language || "zh";
     setLanguage(savedLang);
 
-    const savedTodayPopularity = localStorage.getItem("nexbox_today_popularity_enabled");
-    if (savedTodayPopularity !== null) {
-      setTodayPopularityEnabled(savedTodayPopularity === "true");
-    }
-
-    const savedAnnouncement = localStorage.getItem("nexbox_announcement_enabled");
-    if (savedAnnouncement !== null) {
-      setAnnouncementEnabled(savedAnnouncement === "true");
-    }
-
-    const savedRandomQuote = localStorage.getItem("nexbox_random_quote_enabled");
-    if (savedRandomQuote !== null) {
-      setRandomQuoteEnabled(savedRandomQuote === "true");
-    }
-
-    const savedSearchBar = localStorage.getItem("nexbox_search_bar_enabled");
-    if (savedSearchBar !== null) {
-      setSearchBarEnabled(savedSearchBar === "true");
-    }
-
-    const savedGameLauncher = localStorage.getItem("nexbox_game_launcher_enabled");
-    if (savedGameLauncher !== null) {
-      setGameLauncherEnabled(savedGameLauncher === "true");
-    }
-
-    const savedHomeHardwareModel = localStorage.getItem("nexbox_home_hardware_model_enabled");
-    if (savedHomeHardwareModel !== null) {
-      setHomeHardwareModelEnabled(savedHomeHardwareModel === "true");
-    }
-
-    const savedFeedback = localStorage.getItem("nexbox_feedback_enabled");
-    if (savedFeedback !== null) {
-      setFeedbackEnabled(savedFeedback === "true");
-    }
-
-    const savedSplashLogo = localStorage.getItem("nexbox_splash_logo");
-    if (savedSplashLogo) {
-      setSplashLogo(savedSplashLogo);
-    }
-
-    const savedCloseBehavior = localStorage.getItem("nexbox_close_behavior");
-    if (savedCloseBehavior) {
-      setCloseBehavior(savedCloseBehavior);
-    }
-
-    const savedSidebarShowLabel = localStorage.getItem("nexbox_sidebar_show_label");
-    if (savedSidebarShowLabel !== null) {
-      setSidebarShowLabel(savedSidebarShowLabel === "true");
-    }
-
-    const visibilityMap: Record<string, boolean> = {};
-    for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"]) {
-      const key = `nexbox_nav_visible_${p.replace(/\//g, "").replace(/-/g, "_")}`;
-      if (p === "/custom") {
-        visibilityMap[p] = localStorage.getItem(key) === "true";
+    (async () => {
+      // 今日人气
+      let v = await store.get<boolean>("nexbox_today_popularity_enabled");
+      if (v !== null && v !== undefined) {
+        setTodayPopularityEnabled(v);
       } else {
-        visibilityMap[p] = localStorage.getItem(key) !== "false";
+        const ls = localStorage.getItem("nexbox_today_popularity_enabled");
+        if (ls !== null) setTodayPopularityEnabled(ls === "true");
       }
-    }
-    setNavVisibility(visibilityMap);
 
-    // 读取导航栏排序
-    try {
-      const savedOrder = localStorage.getItem(NAV_ORDER_KEY);
-      if (savedOrder) {
-        const parsed = JSON.parse(savedOrder) as string[];
-        // 补充缺失的新条目
-        let changed = false;
-        for (const p of defaultNavOrder) {
-          if (!parsed.includes(p)) { parsed.push(p); changed = true; }
+      // 公告
+      v = await store.get<boolean>("nexbox_announcement_enabled");
+      if (v !== null && v !== undefined) {
+        setAnnouncementEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_announcement_enabled");
+        if (ls !== null) setAnnouncementEnabled(ls === "true");
+      }
+
+      // 随机引用
+      v = await store.get<boolean>("nexbox_random_quote_enabled");
+      if (v !== null && v !== undefined) {
+        setRandomQuoteEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_random_quote_enabled");
+        if (ls !== null) setRandomQuoteEnabled(ls === "true");
+      }
+
+      // 搜索栏
+      v = await store.get<boolean>("nexbox_search_bar_enabled");
+      if (v !== null && v !== undefined) {
+        setSearchBarEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_search_bar_enabled");
+        if (ls !== null) setSearchBarEnabled(ls === "true");
+      }
+
+      // 游戏启动器
+      v = await store.get<boolean>("nexbox_game_launcher_enabled");
+      if (v !== null && v !== undefined) {
+        setGameLauncherEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_game_launcher_enabled");
+        if (ls !== null) setGameLauncherEnabled(ls === "true");
+      }
+
+      // 硬件模型
+      v = await store.get<boolean>("nexbox_home_hardware_model_enabled");
+      if (v !== null && v !== undefined) {
+        setHomeHardwareModelEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_home_hardware_model_enabled");
+        if (ls !== null) setHomeHardwareModelEnabled(ls === "true");
+      }
+
+      // 游戏时禁用 Win 键卡片显示（store 持久化，默认显示）
+      v = await store.get<boolean>("nexbox_game_win_key_card_enabled");
+      if (v !== null && v !== undefined) {
+        setGameWinKeyCardEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_game_win_key_card_enabled");
+        if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
+      }
+
+      // 反馈
+      v = await store.get<boolean>("nexbox_feedback_enabled");
+      if (v !== null && v !== undefined) {
+        setFeedbackEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_feedback_enabled");
+        if (ls !== null) setFeedbackEnabled(ls === "true");
+      }
+
+      // 侧边栏标签
+      v = await store.get<boolean>("nexbox_sidebar_show_label");
+      if (v !== null && v !== undefined) {
+        setSidebarShowLabel(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_sidebar_show_label");
+        if (ls !== null) setSidebarShowLabel(ls === "true");
+      }
+
+      // 导航位置
+      let nv = await store.get<string>("nexbox_nav_position");
+      if (nv === "top" || nv === "left") {
+        setNavPosition(nv);
+      } else {
+        const ls = localStorage.getItem("nexbox_nav_position");
+        if (ls === "top") setNavPosition("top");
+      }
+
+      // 过渡动画
+      let pm = await store.get<string>("nexbox_page_transition");
+      if (pm === "slide" || pm === "fade" || pm === "off") {
+        setPageTransitionMode(pm);
+      } else {
+        const ls = localStorage.getItem("nexbox_page_transition") as "slide" | "fade" | "off" | null;
+        if (ls) setPageTransitionMode(ls);
+      }
+
+      // 关闭行为
+      let cb = await store.get<string>("nexbox_close_behavior");
+      if (cb) {
+        setCloseBehavior(cb);
+      } else {
+        const ls = localStorage.getItem("nexbox_close_behavior");
+        if (ls) setCloseBehavior(ls);
+      }
+
+      // 启动 Logo
+      let logo = await store.get<string>("nexbox_splash_logo");
+      if (logo) {
+        setSplashLogo(logo);
+      } else {
+        const ls = localStorage.getItem("nexbox_splash_logo");
+        if (ls) setSplashLogo(ls);
+      }
+
+      // 导航可见性
+      const visibilityMap: Record<string, boolean> = {};
+      for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"]) {
+        const key = `nexbox_nav_visible_${p.replace(/\//g, "").replace(/-/g, "_")}`;
+        let vis = await store.get<boolean>(key);
+        if (vis === null || vis === undefined) {
+          if (p === "/custom") {
+            vis = localStorage.getItem(key) === "true";
+          } else {
+            vis = localStorage.getItem(key) !== "false";
+          }
         }
-        // 按默认顺序排序，新条目自动归位
-        if (changed) {
-          parsed.sort((a, b) => defaultNavOrder.indexOf(a) - defaultNavOrder.indexOf(b));
-          localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(parsed));
+        visibilityMap[p] = vis;
+      }
+      setNavVisibility(visibilityMap);
+
+      // 导航栏排序
+      let orderStr = await store.get<string>("nexbox_nav_order");
+      if (orderStr) {
+        try {
+          const parsed = JSON.parse(orderStr) as string[];
+          let changed = false;
+          for (const p of defaultNavOrder) {
+            if (!parsed.includes(p)) { parsed.push(p); changed = true; }
+          }
+          if (changed) {
+            parsed.sort((a, b) => defaultNavOrder.indexOf(a) - defaultNavOrder.indexOf(b));
+            await store.set("nexbox_nav_order", JSON.stringify(parsed));
+            await store.save();
+          }
+          setNavOrder(parsed);
+        } catch {}
+      } else {
+        const ls = localStorage.getItem(NAV_ORDER_KEY);
+        if (ls) {
+          try {
+            const parsed = JSON.parse(ls) as string[];
+            let changed = false;
+            for (const p of defaultNavOrder) {
+              if (!parsed.includes(p)) { parsed.push(p); changed = true; }
+            }
+            if (changed) {
+              parsed.sort((a, b) => defaultNavOrder.indexOf(a) - defaultNavOrder.indexOf(b));
+              localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(parsed));
+            }
+            setNavOrder(parsed);
+          } catch {}
         }
-        setNavOrder(parsed);
       }
-    } catch {}
-
-    const savedNavPosition = localStorage.getItem("nexbox_nav_position");
-    if (savedNavPosition === "top") {
-      setNavPosition("top");
-    }
-
-    const mode = localStorage.getItem("nexbox_page_transition") as "slide" | "fade" | "off" | null;
-    if (mode && ["slide", "fade", "off"].includes(mode)) {
-      setPageTransitionMode(mode);
-    } else {
-      const oldVal = localStorage.getItem("nexbox_page_transition_enabled");
-      if (oldVal !== null) {
-        const newMode = oldVal === "true" ? "slide" : "off";
-        setPageTransitionMode(newMode);
-        localStorage.setItem("nexbox_page_transition", newMode);
-        localStorage.removeItem("nexbox_page_transition_enabled");
-      }
-    }
+    })();
 
     invoke<boolean>("check_nexbox_auto_start")
       .then((enabled) => setAutoStart(enabled))
       .catch(() => {})
       .finally(() => setAutoStartLoading(false));
-  }, [i18n.language]);
+
+    // 监听主页卡片显示变化，保持同步
+    const handleWinKeyCardSync = (e: CustomEvent) => {
+      setGameWinKeyCardEnabled(e.detail);
+    };
+    window.addEventListener("game-win-key-card-setting-changed", handleWinKeyCardSync as EventListener);
+    return () => {
+      window.removeEventListener("game-win-key-card-setting-changed", handleWinKeyCardSync as EventListener);
+    };
+  }, []);
 
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
@@ -387,13 +468,14 @@ function GeneralSettings() {
   const handleTodayPopularityToggle = () => {
     const newValue = !todayPopularityEnabled;
     setTodayPopularityEnabled(newValue);
-    localStorage.setItem("nexbox_today_popularity_enabled", String(newValue));
+    store.set("nexbox_today_popularity_enabled", newValue).then(() => store.save());
     window.dispatchEvent(new CustomEvent("today-popularity-setting-changed", { detail: newValue }));
   };
 
   const handleAnnouncementToggle = () => {
     const newValue = !announcementEnabled;
     setAnnouncementEnabled(newValue);
+    store.set("nexbox_announcement_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_announcement_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("announcement-setting-changed", { detail: newValue }));
   };
@@ -401,6 +483,7 @@ function GeneralSettings() {
   const handleRandomQuoteToggle = () => {
     const newValue = !randomQuoteEnabled;
     setRandomQuoteEnabled(newValue);
+    store.set("nexbox_random_quote_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_random_quote_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("random-quote-setting-changed", { detail: newValue }));
   };
@@ -408,20 +491,38 @@ function GeneralSettings() {
   const handleGameLauncherToggle = () => {
     const newValue = !gameLauncherEnabled;
     setGameLauncherEnabled(newValue);
-    localStorage.setItem("nexbox_game_launcher_enabled", String(newValue));
+    store.set("nexbox_game_launcher_enabled", newValue).then(() => store.save());
     window.dispatchEvent(new CustomEvent("game-launcher-setting-changed", { detail: newValue }));
   };
 
   const handleHomeHardwareModelToggle = () => {
     const newValue = !homeHardwareModelEnabled;
     setHomeHardwareModelEnabled(newValue);
+    store.set("nexbox_home_hardware_model_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_home_hardware_model_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("home-hardware-model-setting-changed", { detail: newValue }));
+  };
+
+  const handleGameWinKeyCardToggle = async () => {
+    const newValue = !gameWinKeyCardEnabled;
+    setGameWinKeyCardEnabled(newValue);
+    store.set("nexbox_game_win_key_card_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_game_win_key_card_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("game-win-key-card-setting-changed", { detail: newValue }));
+    // 卡片隐藏时功能同步关闭，保持显示与功能一致
+    if (!newValue) {
+      try {
+        await invoke("set_game_win_key_enabled", { enabled: false });
+      } catch {
+        // ignore
+      }
+    }
   };
 
   const handleSearchBarToggle = () => {
     const newValue = !searchBarEnabled;
     setSearchBarEnabled(newValue);
+    store.set("nexbox_search_bar_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_search_bar_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("search-bar-setting-changed", { detail: newValue }));
   };
@@ -429,6 +530,7 @@ function GeneralSettings() {
   const handleFeedbackToggle = () => {
     const newValue = !feedbackEnabled;
     setFeedbackEnabled(newValue);
+    store.set("nexbox_feedback_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_feedback_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("feedback-setting-changed", { detail: newValue }));
   };
@@ -441,6 +543,7 @@ function GeneralSettings() {
         const result = reader.result as string;
         setSplashLogo(result);
         localStorage.setItem("nexbox_splash_logo", result);
+        store.set("nexbox_splash_logo", result).then(() => store.save());
       };
       reader.readAsDataURL(file);
     }
@@ -450,11 +553,13 @@ function GeneralSettings() {
   const handleSplashLogoReset = () => {
     setSplashLogo(null);
     localStorage.removeItem("nexbox_splash_logo");
+    store.delete("nexbox_splash_logo").then(() => store.save());
   };
 
   const handleCloseBehaviorChange = (value: string) => {
     setCloseBehavior(value);
     localStorage.setItem("nexbox_close_behavior", value);
+    store.set("nexbox_close_behavior", value).then(() => store.save());
     window.dispatchEvent(new CustomEvent("close-behavior-changed"));
   };
 
@@ -462,6 +567,7 @@ function GeneralSettings() {
     const newValue = value === "true";
     setSidebarShowLabel(newValue);
     localStorage.setItem("nexbox_sidebar_show_label", String(newValue));
+    store.set("nexbox_sidebar_show_label", newValue).then(() => store.save());
     window.dispatchEvent(new CustomEvent("sidebar-show-label-changed", { detail: newValue }));
   };
 
@@ -470,6 +576,7 @@ function GeneralSettings() {
     const newValue = !navVisibility[path];
     setNavVisibility(prev => ({ ...prev, [path]: newValue }));
     localStorage.setItem(key, String(newValue));
+    store.set(key, newValue).then(() => store.save());
     window.dispatchEvent(new CustomEvent("nav-visibility-changed", { detail: { path, visible: newValue } }));
   };
 
@@ -481,7 +588,9 @@ function GeneralSettings() {
     if (oldIndex === -1 || newIndex === -1) return;
     const newOrder = arrayMove(navOrder, oldIndex, newIndex);
     setNavOrder(newOrder);
-    localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(newOrder));
+    const str = JSON.stringify(newOrder);
+    localStorage.setItem(NAV_ORDER_KEY, str);
+    store.set("nexbox_nav_order", str).then(() => store.save());
     window.dispatchEvent(new CustomEvent("nav-order-changed"));
   }, [navOrder]);
 
@@ -489,6 +598,7 @@ function GeneralSettings() {
     const newValue = value as "left" | "top";
     setNavPosition(newValue);
     localStorage.setItem("nexbox_nav_position", newValue);
+    store.set("nexbox_nav_position", newValue).then(() => store.save());
     window.dispatchEvent(new CustomEvent("nav-position-changed", { detail: newValue }));
   };
 
@@ -529,6 +639,7 @@ function GeneralSettings() {
   const handlePageTransitionChange = (newMode: "slide" | "fade" | "off") => {
     setPageTransitionMode(newMode);
     localStorage.setItem("nexbox_page_transition", newMode);
+    store.set("nexbox_page_transition", newMode).then(() => store.save());
     window.dispatchEvent(new CustomEvent("page-transition-setting-changed", { detail: newMode }));
   };
 
@@ -589,12 +700,12 @@ function GeneralSettings() {
               value={language}
               onChange={handleLanguageChange}
               options={[
-                { value: "zh", label: t("settings.generalSettings.languages.zh") },
-                { value: "zh-TW", label: t("settings.generalSettings.languages.zh-TW") },
-                { value: "en", label: t("settings.generalSettings.languages.en") },
-                { value: "fr", label: t("settings.generalSettings.languages.fr") },
-                { value: "ja", label: t("settings.generalSettings.languages.ja") },
-                { value: "de", label: t("settings.generalSettings.languages.de") },
+                { value: "zh", label: "简体中文" },
+                { value: "zh-TW", label: "繁體中文" },
+                { value: "en", label: "English" },
+                { value: "fr", label: "Français" },
+                { value: "ja", label: "日本語" },
+                { value: "de", label: "Deutsch" },
               ]}
               width="180px"
             />
@@ -692,6 +803,22 @@ function GeneralSettings() {
                 size="md"
                 isChecked={homeHardwareModelEnabled}
                 onChange={handleHomeHardwareModelToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.gameWinKeyLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.gameWinKeyDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={gameWinKeyCardEnabled}
+                onChange={handleGameWinKeyCardToggle}
               />
             </HStack>
             <Divider />
@@ -2595,7 +2722,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "6.6.5";
+  const currentVersion = "6.8.9";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
@@ -3044,7 +3171,7 @@ function AboutSettings() {
 
 function HotkeySettings() {
   const { t } = useTranslation();
-  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey } = useAppStartup();
+  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
   const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
@@ -3055,6 +3182,27 @@ function HotkeySettings() {
       <Text fontSize="lg" fontWeight="bold" mb={6} color={titleColor}>
         {t("hotkeySettings.title") || "热键设置"}
       </Text>
+
+      {/* 全部热键总开关 */}
+      <Box mb={6}>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between">
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("hotkeySettings.masterToggle") || "全部热键总开关"}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("hotkeySettings.masterToggleDesc") || "关闭后所有全局热键将不生效"}
+              </Text>
+            </Box>
+            <ThemeSwitch
+              isChecked={hotkeysEnabled}
+              onChange={(e) => saveHotkeysEnabled(e.target.checked)}
+              size="lg"
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box>
 
       <Box mb={6}>
         <Text

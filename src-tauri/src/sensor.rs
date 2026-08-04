@@ -314,7 +314,15 @@ pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
             }
             // 重启成功或进程正常，重置计数
             RESTART_ATTEMPT_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
-            bridge.read_sensors()
+            let mut response = bridge.read_sensors()?;
+            // 过滤掉虚拟内存传感器（"全部传感器"列表中不展示）
+            response.sensors.retain(|s| {
+                let name = s.name.to_lowercase();
+                let hw = s.hardware.to_lowercase();
+                let hw_type = s.hardware_type.to_lowercase();
+                !(name.contains("virtual") || hw.contains("virtual") || hw_type.contains("virtual"))
+            });
+            Ok(response)
         }
         None => {
             // 尝试启动

@@ -6,6 +6,7 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
+import { store } from "@/lib/store";
 import deltaForceIcon from "@/assets/deltaforce.png";
 import epicGamesIcon from "@/assets/epic-games.png";
 import steamIcon from "@/assets/tools/Steam.png";
@@ -177,13 +178,25 @@ export function Sidebar() {
   const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, jellyBounceEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
-  const [showLabel, setShowLabel] = useState(() => {
-    return localStorage.getItem("nexbox_sidebar_show_label") === "true";
-  });
-  const [navPosition, setNavPosition] = useState<"left" | "top">(() => {
-    const saved = localStorage.getItem("nexbox_nav_position");
-    return saved === "top" ? "top" : "left";
-  });
+  const [showLabel, setShowLabel] = useState(false);
+  const [navPosition, setNavPosition] = useState<"left" | "top">("left");
+
+  useEffect(() => {
+    (async () => {
+      let v = await store.get<boolean>("nexbox_sidebar_show_label");
+      if (v !== null && v !== undefined) {
+        setShowLabel(v);
+      } else {
+        setShowLabel(localStorage.getItem("nexbox_sidebar_show_label") === "true");
+      }
+      let nv = await store.get<string>("nexbox_nav_position");
+      if (nv === "top" || nv === "left") {
+        setNavPosition(nv);
+      } else {
+        setNavPosition(localStorage.getItem("nexbox_nav_position") === "top" ? "top" : "left");
+      }
+    })();
+  }, []);
 
   // 果冻弹跳效果：当导航栏状态切换（位置/标签/可见性）时触发
   const sidebarContentRef = useRef<HTMLDivElement>(null);
@@ -234,46 +247,75 @@ export function Sidebar() {
   const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
   const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
 
-  const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    for (const path of hideableNavPaths) {
-      if (path === "/custom") {
-        // 自定义页面默认关闭
-        initial[path] = localStorage.getItem(getNavStorageKey(path)) === "true";
-      } else {
-        initial[path] = localStorage.getItem(getNavStorageKey(path)) !== "false";
-      }
-    }
-    return initial;
-  });
+  const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
+  const [navOrder, setNavOrder] = useState<string[] | null>(null);
 
-  // 读取导航栏排序（拖拽在设置页面进行）
-  const [navOrder, setNavOrder] = useState<string[] | null>(() => {
-    try {
-      const saved = localStorage.getItem(NAV_ORDER_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as string[];
-        const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
-        let changed = false;
-        for (const p of allPaths) {
-          if (!parsed.includes(p)) { parsed.push(p); changed = true; }
+  useEffect(() => {
+    (async () => {
+      const initial: Record<string, boolean> = {};
+      for (const path of hideableNavPaths) {
+        const key = getNavStorageKey(path);
+        let vis = await store.get<boolean>(key);
+        if (vis === null || vis === undefined) {
+          if (path === "/custom") {
+            vis = localStorage.getItem(key) === "true";
+          } else {
+            vis = localStorage.getItem(key) !== "false";
+          }
         }
-        if (changed) {
-          parsed.sort((a: string, b: string) => allPaths.indexOf(a) - allPaths.indexOf(b));
-          localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(parsed));
-        }
-        return parsed;
+        initial[path] = vis;
       }
-      return null;
-    } catch { return null; }
-  });
+      setNavVisibility(initial);
+
+      // 读取导航栏排序
+      let orderStr = await store.get<string>("nexbox_nav_order");
+      if (orderStr) {
+        try {
+          const parsed = JSON.parse(orderStr) as string[];
+          const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
+          let changed = false;
+          for (const p of allPaths) {
+            if (!parsed.includes(p)) { parsed.push(p); changed = true; }
+          }
+          if (changed) {
+            parsed.sort((a: string, b: string) => allPaths.indexOf(a) - allPaths.indexOf(b));
+            await store.set("nexbox_nav_order", JSON.stringify(parsed));
+            await store.save();
+          }
+          setNavOrder(parsed);
+        } catch { setNavOrder(null); }
+      } else {
+        try {
+          const saved = localStorage.getItem(NAV_ORDER_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved) as string[];
+            const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
+            let changed = false;
+            for (const p of allPaths) {
+              if (!parsed.includes(p)) { parsed.push(p); changed = true; }
+            }
+            if (changed) {
+              parsed.sort((a: string, b: string) => allPaths.indexOf(a) - allPaths.indexOf(b));
+              localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(parsed));
+            }
+            setNavOrder(parsed);
+          }
+        } catch {}
+      }
+    })();
+  }, []);
 
   // 监听排序变化
   useEffect(() => {
-    const handler = () => {
+    const handler = async () => {
       try {
-        const saved = localStorage.getItem(NAV_ORDER_KEY);
-        setNavOrder(saved ? JSON.parse(saved) : null);
+        let saved = await store.get<string>("nexbox_nav_order");
+        if (saved) {
+          setNavOrder(JSON.parse(saved));
+        } else {
+          const ls = localStorage.getItem(NAV_ORDER_KEY);
+          setNavOrder(ls ? JSON.parse(ls) : null);
+        }
       } catch { setNavOrder(null); }
     };
     window.addEventListener("nav-order-changed", handler as EventListener);

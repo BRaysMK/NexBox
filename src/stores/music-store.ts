@@ -16,6 +16,10 @@ import type {
 } from "@/types/music";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 
+// 模块级：无版权自动跳过控制
+let isAutoSkipping = false;
+let unplayableSkipCount = 0;
+
 interface MusicState {
   // 播放状态
   currentSong: Song | null;
@@ -36,6 +40,7 @@ interface MusicState {
   // 数据
   searchResults: Song[];
   userPlaylists: Playlist[];
+  userPlaylistsError: string;
   // 左侧「我的歌单」面板的曲目
   leftPlaylistTracks: Song[];
   leftPlaylistMeta: Playlist | null;
@@ -51,6 +56,7 @@ interface MusicState {
   currentLyrics: Lyrics | null;
   recommendations: Playlist[];
   recommendSongs: Song[];
+  dailyRecommendPlaylists: Playlist[];
 
   // 歌手搜索
   artistSearchResults: Artist[];
@@ -153,6 +159,7 @@ interface MusicState {
   loadLeftPlaylistTracks: (id: string) => Promise<void>;
   loadMoreLeftPlaylistTracks: () => Promise<void>;
   loadRightPlaylistTracks: (id: string) => Promise<void>;
+  loadRightRankTracks: (rankId: string) => Promise<void>;
   loadMoreRightPlaylistTracks: () => Promise<void>;
   loadLikedList: () => Promise<void>;
   toggleLike: (songId: string) => Promise<void>;
@@ -297,6 +304,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   searchResults: [],
   userPlaylists: [],
+  userPlaylistsError: "",
   leftPlaylistTracks: [],
   leftPlaylistMeta: null,
   rightPlaylistTracks: [],
@@ -309,6 +317,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   currentLyrics: null,
   recommendations: [],
   recommendSongs: [],
+  dailyRecommendPlaylists: [],
 
   artistSearchResults: [],
   artistSongs: [],
@@ -679,7 +688,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (idx >= 0) set({ currentIndex: idx });
     }
 
-    set({ currentSong: song, currentTime: 0, duration: 0, isPlaying: false, currentLyrics: null });
+    // 参考 Mineradio: 在 URL 获取之前就 dispatch 歌词加载（与 URL 获取并行）
+    // 不立即清空 currentLyrics，保留旧歌词避免闪烁，新歌词加载完成后自动替换
+    // 用户手动点击时重置跳过计数
+    if (!isAutoSkipping) {
+      unplayableSkipCount = 0;
+    }
+    set({ currentSong: song, currentTime: 0, duration: 0, isPlaying: false });
+    get().loadLyricsForSong(song);
 
     try {
       // 根据歌曲 provider 调用对应 API
@@ -710,6 +726,37 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (!result.playable || !result.url) {
         console.warn("Cannot play:", result.message);
         set({ isPlaying: false });
+
+        // 检查是否因版权/会员限制无法播放，自动跳过
+        if (unplayableSkipCount < 10) {
+          unplayableSkipCount++;
+          isAutoSkipping = true;
+          // 判断是否版权相关
+          const msg = result.message || "";
+          const isCopyright = msg.includes("版权") || msg.includes("会员") || msg.includes("copyright") || result.reason === "QQ_URL_UNAVAILABLE";
+          set({
+            musicToast: {
+              type: "warning",
+              message: isCopyright ? "该音乐暂无版权" : (result.message || "无法播放，已自动跳过"),
+            },
+          });
+          // 延迟跳转，让 toast 可见
+          setTimeout(() => {
+            if (get().playQueue.length > 1) {
+              get().nextTrack();
+            }
+          }, 800);
+        } else {
+          // 连续跳过太多，停下
+          isAutoSkipping = false;
+          unplayableSkipCount = 0;
+          set({
+            musicToast: {
+              type: "warning",
+              message: "当前队列中多首歌曲无法播放，已停止自动切换",
+            },
+          });
+        }
         return;
       }
 
@@ -729,8 +776,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         get().emitDesktopLyricsData();
         emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
       }
-      // 异步加载歌词（不阻塞播放）
-      get().loadLyricsForSong(song);
+      // 歌词已在 playSong 开始时并行加载，此处不再重复调用
     } catch (e) {
       if (mySeq !== playSongSeq) return;
       console.error("Play failed:", e);
@@ -1153,7 +1199,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // 更新 loginInfo 为当前平台的登录状态
     const info = get().loginInfos[provider];
     // 切换平台时立即清空榜单/推荐，避免旧平台数据残留闪烁
-    set({ loginInfo: info, userPlaylists: [], officialCharts: [], recommendations: [], recommendSongs: [] });
+    set({ loginInfo: info, userPlaylists: [], userPlaylistsError: "", officialCharts: [], recommendations: [], recommendSongs: [], dailyRecommendPlaylists: [] });
     // 重新加载当前平台的歌单
     if (info?.logged_in) {
       get().loadUserPlaylists();
@@ -1177,15 +1223,20 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   loadUserPlaylistsFor: async (provider) => {
-    set({ loadingPlaylists: true });
+    set({ loadingPlaylists: true, userPlaylistsError: "" });
     try {
       const cmd = provider === "kugou" ? "kugou_user_playlists"
         : provider === "qqmusic" ? "qq_user_playlists"
         : "music_user_playlist";
       const playlists = await invoke<Playlist[]>(cmd);
-      set({ userPlaylists: playlists });
-    } catch {
-      set({ userPlaylists: [] });
+      set({ userPlaylists: playlists, userPlaylistsError: "" });
+    } catch (e) {
+      const msg = typeof e === "string" && e ? e : "歌单获取失败，登录可能已过期";
+      set({ userPlaylists: [], userPlaylistsError: msg });
+      // 酷狗/QQ 登录态失效时刷新登录状态，让界面提示重新登录
+      if (provider === "kugou" || provider === "qqmusic") {
+        get().loginStatusFor(provider);
+      }
     } finally {
       set({ loadingPlaylists: false });
     }
@@ -1263,6 +1314,19 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (provider === "netease") {
         batchLoadToQueue(id, songs, meta.track_count);
       }
+    } catch {
+      set({ rightPlaylistTracks: [] });
+    } finally {
+      set({ loadingRightTracks: false });
+    }
+  },
+
+  // QQ 榜单歌曲加载 (榜单不是普通歌单, 走 qq_rank_songs; meta 由前端提供)
+  loadRightRankTracks: async (rankId) => {
+    set({ loadingRightTracks: true, rightPlaylistTracks: [] });
+    try {
+      const songs = await invoke<Song[]>("qq_rank_songs", { rankId, limit: 99999 });
+      set({ rightPlaylistTracks: songs });
     } catch {
       set({ rightPlaylistTracks: [] });
     } finally {
@@ -1452,14 +1516,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
       const provider = get().playbackSource;
       if (provider === "kugou" || provider === "qqmusic") {
-        // 酷狗/QQ 没有推荐歌单 API, 清空推荐
-        set({ recommendations: [], recommendSongs: [] });
+        // 酷狗/QQ 不显示推荐歌单 (QQ 推荐歌单接口受限, 与酷狗一致只显示榜单)
+        set({ recommendations: [], recommendSongs: [], dailyRecommendPlaylists: [] });
       } else {
-        const [playlists, songs] = await Promise.all([
-          invoke<Playlist[]>("music_personalized"),
+        const [songs, dailyPlaylists] = await Promise.all([
           invoke<Song[]>("music_recommend_songs").catch(() => []),
+          invoke<Playlist[]>("music_recommend_resource").catch(() => []),
         ]);
-        set({ recommendations: playlists, recommendSongs: songs });
+        set({ recommendations: [], recommendSongs: songs, dailyRecommendPlaylists: dailyPlaylists });
       }
     } catch {
       // ignore
@@ -1483,9 +1547,20 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       }
       return;
     }
-    // QQ 音乐: 榜单 API 已失效，直接显示空
+    // QQ 音乐: 使用预设榜单 (榜单列表接口已失效, 后端返回实测可用的 topid)
     if (get().playbackSource === "qqmusic") {
-      set({ officialCharts: [] });
+      try {
+        const charts = await invoke<Playlist[]>("qq_rank_list").catch(() => []);
+        set({ officialCharts: charts });
+        // 持久化缓存
+        try {
+          const s = await getStore();
+          await s.set("officialCharts", charts);
+          await s.save();
+        } catch {}
+      } catch {
+        set({ officialCharts: [] });
+      }
       return;
     }
     const chartIds = [
@@ -1544,6 +1619,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           ({ ...pl, subscribed: subscribedIds.has(pl.id) })
         ),
         recommendations: state.recommendations.map((pl) =>
+          ({ ...pl, subscribed: subscribedIds.has(pl.id) })
+        ),
+        dailyRecommendPlaylists: state.dailyRecommendPlaylists.map((pl) =>
           ({ ...pl, subscribed: subscribedIds.has(pl.id) })
         ),
         officialCharts: state.officialCharts.map((pl) =>

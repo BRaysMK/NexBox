@@ -4,9 +4,10 @@ import { Box, Flex, HStack, IconButton, Image, useColorModeValue } from "@chakra
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { LuMinus, LuX } from "react-icons/lu";
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { GlobalSearch } from "./global-search";
 import { CloseConfirmDialog } from "../CloseConfirmDialog";
+import { store } from "@/lib/store";
 
 export function TitleBar() {
   const iconColor = useColorModeValue("gray.600", "gray.400");
@@ -18,15 +19,29 @@ export function TitleBar() {
   const logoSrc = useColorModeValue("/logo/NexBoxW.png", "/logo/NexBoxB.png");
 
   const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const [searchBarVisible, setSearchBarVisible] = useState(() => {
-    const saved = localStorage.getItem("nexbox_search_bar_enabled");
-    return saved === null ? true : saved === "true";
-  });
+  const [searchBarVisible, setSearchBarVisible] = useState(true);
+  const [navPosition, setNavPosition] = useState<"left" | "top">("left");
 
-  const [navPosition, setNavPosition] = useState<"left" | "top">(() => {
-    const saved = localStorage.getItem("nexbox_nav_position");
-    return saved === "top" ? "top" : "left";
-  });
+  useEffect(() => {
+    (async () => {
+      // nexbox_search_bar_enabled
+      let sv = await store.get<boolean>("nexbox_search_bar_enabled");
+      if (sv !== null && sv !== undefined) {
+        setSearchBarVisible(sv);
+      } else {
+        const ls = localStorage.getItem("nexbox_search_bar_enabled");
+        setSearchBarVisible(ls === null ? true : ls === "true");
+      }
+      // nexbox_nav_position
+      let nv = await store.get<string>("nexbox_nav_position");
+      if (nv === "top" || nv === "left") {
+        setNavPosition(nv);
+      } else {
+        const ls = localStorage.getItem("nexbox_nav_position");
+        setNavPosition(ls === "top" ? "top" : "left");
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const handler = (e: CustomEvent) => {
@@ -48,8 +63,20 @@ export function TitleBar() {
     };
   }, []);
 
-  const getCloseBehavior = useCallback(() => {
-    return localStorage.getItem("nexbox_close_behavior") || "ask";
+  const getCloseBehavior = useCallback((): string => {
+    return "ask"; // 默认值，实际值在 useEffect 中异步加载
+  }, []);
+
+  // 存储 close_behavior 的引用，供 handleClose 使用
+  const closeBehaviorRef = useRef<string>("ask");
+  useEffect(() => {
+    (async () => {
+      let cb = await store.get<string>("nexbox_close_behavior");
+      if (!cb) {
+        cb = localStorage.getItem("nexbox_close_behavior") || "ask";
+      }
+      closeBehaviorRef.current = cb;
+    })();
   }, []);
 
   const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
@@ -75,7 +102,7 @@ export function TitleBar() {
   };
 
   const handleClose = async () => {
-    const behavior = getCloseBehavior();
+    const behavior = closeBehaviorRef.current;
     switch (behavior) {
       case "close":
         await performClose();
@@ -93,6 +120,9 @@ export function TitleBar() {
   const performMinimizeToTray = async (savePreference: boolean = false) => {
     if (savePreference) {
       localStorage.setItem("nexbox_close_behavior", "minimize");
+      await store.set("nexbox_close_behavior", "minimize");
+      await store.save();
+      closeBehaviorRef.current = "minimize";
     }
     try {
       await invoke("minimize_to_tray");
@@ -105,6 +135,9 @@ export function TitleBar() {
   const performClose = async (savePreference: boolean = false) => {
     if (savePreference) {
       localStorage.setItem("nexbox_close_behavior", "close");
+      await store.set("nexbox_close_behavior", "close");
+      await store.save();
+      closeBehaviorRef.current = "close";
     }
     try {
       await invoke("exit_app");

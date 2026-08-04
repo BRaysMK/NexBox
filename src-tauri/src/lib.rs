@@ -12,7 +12,9 @@ mod display_cache;
 mod display_filter;
 mod downloader;
 mod game_fps;
+mod game_filter;
 mod game_launcher;
+mod game_win_key;
 mod game_ping;
 mod gpu_rename;
 mod hardware;
@@ -24,11 +26,13 @@ mod network_optimize;
 #[allow(dead_code, unused_imports)]
 mod netease_lyrics;
 mod nvapi;
+mod nvidia_driver_download;
 mod optimization;
 mod overlay_panel;
 mod vertical_overlay;
 
 mod sensor;
+mod sensor_monitor;
 mod shader_cache;
 mod pawnio_driver;
 mod sponsor;
@@ -179,6 +183,10 @@ pub fn run() {
                 .with_handler(|app, shortcut, event| {
                     use tauri_plugin_global_shortcut::ShortcutState;
                     if event.state == ShortcutState::Pressed {
+                        // 全部热键总开关关闭时，忽略所有全局热键
+                        if !hotkey::is_hotkeys_enabled() {
+                            return;
+                        }
                         if shortcut.id() == hotkey::get_overlay_shortcut_id() {
                             let _ = overlay_panel::toggle_overlay(app);
                         } else if shortcut.id() == hotkey::get_crosshair_shortcut_id() {
@@ -252,6 +260,18 @@ pub fn run() {
             let app_handle_for_rules = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 cpu_scheduler::apply_all_saved_rules(&app_handle_for_rules).await;
+            });
+
+            // 初始化游戏滤镜自动应用（读取持久化配置并启动后台轮询）
+            let app_handle_for_game_filter = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = game_filter::init(app_handle_for_game_filter).await;
+            });
+
+            // 初始化游戏启动时禁用 Win 键（读取持久化配置并启动后台轮询）
+            let app_handle_for_game_win_key = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = game_win_key::init(app_handle_for_game_win_key).await;
             });
 
             // Main window: intercept taskbar Close / Alt+F4 → hide instead of destroy，
@@ -336,6 +356,7 @@ pub fn run() {
         music_api::music_lyric,
         music_api::music_personalized,
         music_api::music_recommend_songs,
+        music_api::music_recommend_resource,
         music_api::music_artist_search,
         music_api::music_artist_songs,
         music_api::music_playlist_search,
@@ -373,6 +394,7 @@ pub fn run() {
         music_api::qq_playlist_search,
         music_api::qq_rank_list,
         music_api::qq_rank_songs,
+        music_api::music_qq_recommend_playlists,
         music_api::qq_liked_hashes,
         music_api::qq_like_toggle,
         // === 多平台管理 ===
@@ -443,6 +465,7 @@ pub fn run() {
         network_optimize::restore_adapter_power_saving,
         network_optimize::set_dns_servers,
         network_optimize::restore_dns_servers,
+        network_optimize::clear_dns_cache,
         network_optimize::check_network_tweak_states,
         network_optimize::batch_network_enable,
         network_optimize::batch_network_disable,
@@ -474,6 +497,12 @@ pub fn run() {
         display_filter::delete_icc_preset,
         display_filter::export_preset_as_icc,
         display_filter::restore_filter_state,
+        game_filter::get_game_filter_status,
+        game_filter::set_game_filter_enabled,
+        game_filter::add_custom_game,
+        game_filter::remove_custom_game,
+        game_win_key::get_game_win_key_status,
+        game_win_key::set_game_win_key_enabled,
         // === EQ 调音命令 ===
         audio_eq::check_virtual_audio_driver,
         audio_eq::install_virtual_audio_driver,
@@ -530,6 +559,8 @@ pub fn run() {
         sensor::get_lhm_cpu_status,
         sensor::get_lhm_gpu_status,
         sensor::restart_monitor_process,
+        sensor_monitor::open_sensor_monitor,
+        sensor_monitor::get_all_sensors,
 
         game_ping::get_current_ping,
         hotkey::get_overlay_hotkey,
@@ -538,6 +569,8 @@ pub fn run() {
         hotkey::set_crosshair_hotkey,
         hotkey::get_filter_hotkey,
         hotkey::set_filter_hotkey,
+        hotkey::set_hotkeys_enabled_cmd,
+        hotkey::get_hotkeys_enabled_cmd,
         crosshair::toggle_crosshair,
         crosshair::get_crosshair_status,
         crosshair::update_crosshair_settings,
@@ -581,10 +614,14 @@ pub fn run() {
         nvapi::set_nvidia_display_resolution,
         nvapi::get_injected_resolutions,
         nvapi::remove_injected_resolution,
+        // === NVIDIA 驱动下载 ===
+        nvidia_driver_download::fetch_nvidia_drivers,
+        nvidia_driver_download::detect_current_nvidia_gpu,
             storage_clean::scan_storage_items,
             storage_clean::clean_storage_items,
             storage_clean::empty_recycle_bin_cmd,
             utils::sys_info::get_system_locale,
+            utils::sys_info::get_system_username,
             tray::minimize_to_tray,
             tray::show_window,
             tray::get_close_behavior,
@@ -622,6 +659,7 @@ pub fn run() {
         steam::open_steam_store_page,
         steam::open_game_folder,
         steam::switch_steam_account,
+        steam::delete_steam_account,
         steam::uninstall_steam_game,
         steam::format_file_size,
         steam::get_steam_stats,
@@ -647,6 +685,7 @@ pub fn run() {
                 sensor::stop_sensor_process(app_handle);
                 hardware::cleanup_hardware_cache();
                 overlay_panel::cleanup(); // 先停后台轮询线程(FPS/传感器)，再恢复 Gamma
+                game_win_key::cleanup();
                 display_filter::cleanup();
                 vertical_overlay::cleanup(app_handle);
                 crosshair::cleanup();

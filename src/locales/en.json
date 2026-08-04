@@ -51,6 +51,7 @@
     "dlssPreset": "Delta Force DLSS Settings",
     "steam": "Steam Manager",
     "epicFree": "Epic Free Games",
+    "nvidiaDriverDownload": "NVIDIA Driver Download",
     "diskHealth": "Disk Health",
     "screenRecord": "Screen Record",
     "audioEq": "EQ Tuner",
@@ -106,7 +107,13 @@
     "refresh": "Refresh",
     "debug": "Debug Info",
     "noAccounts": "No saved Steam accounts found. Please login in Steam client and check \"Remember password\"",
-    "noLibraries": "No library folders found. Steam data may not be loaded"
+    "noLibraries": "No library folders found. Steam data may not be loaded",
+    "deleteAccount": "Delete Account",
+    "deleteAccountTitle": "Confirm Delete Account",
+    "deleteAccountConfirm": "Are you sure you want to delete account \"{{name}}\"? This will remove its login info from this device only and won't affect Steam cloud data. You'll need to enter the password again next login.",
+    "deleteAccountSuccess": "Account deleted",
+    "deleteAccountError": "Failed to delete account",
+    "deleteAccountCloseSteam": "Steam is running and will be closed automatically before deletion"
   },
   "optimization": {
     "pageTitle": "Optimize",
@@ -256,6 +263,14 @@
       "dnsApplied": "DNS Applied",
       "dnsRestored": "DNS restored to auto",
       "applyError": "DNS apply failed",
+      "dnsCacheCleared": "DNS cache cleared",
+      "clearDnsError": "Failed to clear DNS cache",
+      "dnsCache": {
+        "title": "Clear DNS Cache",
+        "description": "Flush the system DNS resolver cache to fix domain resolution issues",
+        "clear": "Clear now",
+        "clearing": "Clearing..."
+      },
       "tcpCongestion": {
         "title": "TCP Congestion Control",
         "description": "Set TCP congestion control to CTCP/CUBIC for better throughput"
@@ -532,7 +547,7 @@
       "processes": "processes",
       "warning": "Warning",
       "warningText": "Modifying core affinity may affect process performance. Use with caution. System processes should not be modified.",
-      "hybridNotSupported": "Current CPU does not support P-core/E-core distinction, all cores will be shown uniformly",
+      "hybridNotSupported": "Non-hybrid architecture CPU, all cores displayed as P-cores",
       "error": "Operation failed"
     }
   },
@@ -548,7 +563,12 @@
     "noAnnouncement": "No announcements",
     "important": "Important",
     "importantAnnouncement": "Important Announcement",
-    "confirmAnnouncement": "OK"
+    "confirmAnnouncement": "OK",
+    "gameWinKey": {
+      "loading": "Loading...",
+      "title": "Disable Win key while gaming",
+      "subtitle": "Automatically blocks the Win key when a listed game is running"
+    }
   },
   "gameLauncher": {
     "title": "Quick Launch",
@@ -556,7 +576,8 @@
     "gameName": "Game Name",
     "gameNamePlaceholder": "Enter game name",
     "gamePath": "Game Path",
-    "gamePathPlaceholder": "Select game executable"
+    "gamePathPlaceholder": "Select game executable",
+    "clearContent": "Clear Content"
   },
   "hardware": {
     "title": "Hardware Info",
@@ -779,7 +800,10 @@
     "deletePreset": "Delete Preset",
     "deletePresetConfirm": "Delete this preset?",
     "deletePresetSuccess": "Preset deleted",
-    "save": "Save"
+    "save": "Save",
+    "gameFilterTitle": "Auto-apply filter when a game starts",
+    "gameFilterSupportedTitle": "Supported Games",
+    "gameFilterError": "Operation failed"
   },
   "floatingNav": {
     "title": "Floating Navigation Box",
@@ -1082,7 +1106,8 @@
     "dlssPresetDesc": "Switch DLSS model presets to optimize game graphics",
     "diskHealthDesc": "Check disk health status and SMART information",
     "screenRecordDesc": "High-performance screen recording (hardware encoding)",
-    "audioEqDesc": "System-level audio equalizer tuning"
+    "audioEqDesc": "System-level audio equalizer tuning",
+    "nvidiaDriverDownloadDesc": "Search and download NVIDIA GPU drivers (including older versions)"
   },
   "gpuRename": {
     "title": "GPU Rename",
@@ -1157,6 +1182,8 @@
       "gameLauncherDesc": "Show quick launch card on homepage",
       "homeHardwareModelLabel": "Hardware Model",
       "homeHardwareModelDesc": "Show a brief summary of CPU/GPU/RAM/Motherboard/Storage on the homepage",
+      "gameWinKeyLabel": "Win Key Disable Card",
+      "gameWinKeyDesc": "Show the disable Win key while gaming card on the homepage",
       "searchBarLabel": "Search Bar",
       "searchBarDesc": "Show the global search bar in the title bar",
       "feedbackLabel": "Image Carousel",
@@ -1374,6 +1401,9 @@
   "systemOptimizer": {
     "pageTitle": "System Optimizer",
     "pageDesc": "Toggle system optimizations for better performance and privacy",
+    "noticeTitle": "Friendly Reminder",
+    "noticeContent": "The optimizations on this page involve system-level modifications. Please review each feature carefully before use, do not blindly apply all of them, and choose the ones suitable for your device.\n\nIf you don't understand it, don't optimize! If you don't understand it, don't optimize! If you don't understand it, don't optimize!\n\nIf your FPS drops after optimization, we are not responsible.",
+    "noticeAgree": "I understand, let's start",
     "credits": "Powered by 1U Toolbox system optimization",
     "loading": "Loading...",
     "category": {
@@ -1667,7 +1697,9 @@
     "filter": "Filter",
     "filterToggle": "Toggle Display Filter",
     "filterToggleDesc": "Use shortcut to enable or disable the display filter",
-    "saved": "Hotkey saved"
+    "saved": "Hotkey saved",
+    "masterToggle": "Master Hotkey Switch",
+    "masterToggleDesc": "When off, all global hotkeys will not work"
   },
   "diskHealth": {
     "title": "Disk Health",
@@ -1792,5 +1824,29 @@
     "deleteFailed": "Delete failed",
     "deleteConfirm": "Are you sure you want to delete \"{name}\"?",
     "noImported": "No imported presets"
+  },
+  "nvidiaDriverDownload": {
+    "title": "NVIDIA Driver Download",
+    "type": "Type",
+    "desktop": "Desktop",
+    "laptop": "Laptop",
+    "driverList": "Driver List",
+    "searchPlaceholder": "Search version...",
+    "openDetail": "Open Detail Page",
+    "loading": "Fetching driver list...",
+    "noDrivers": "No drivers found",
+    "noSearchResults": "No matching drivers found",
+    "totalDrivers": "{{count}} drivers available",
+    "errorTitle": "Query Failed",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "tip": "Click the Desktop / Laptop button to open the corresponding NVIDIA driver download page",
+    "selectHint": "Drivers are shared across all GeForce GPUs. Use the Desktop / Laptop button on each row to open the matching download page.",
+    "detected": "Detected",
+    "detecting": "Detecting GPU...",
+    "currentDriver": "Current Driver",
+    "unknown": "Unknown",
+    "openFailed": "Failed to open link",
+    "latest": "Latest"
   }
 }

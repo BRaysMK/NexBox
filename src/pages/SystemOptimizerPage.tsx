@@ -15,6 +15,12 @@ import {
   Spinner,
   Tooltip,
   Badge,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
 } from "@chakra-ui/react";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -33,6 +39,8 @@ import {
 } from "@/config/system-optimizer";
 
 const STORE_KEY = "system_optimizer_states";
+const NOTICE_KEY = "system_optimizer_notice_agreed";
+const NOTICE_COUNTDOWN_SECONDS = 5;
 
 export default function SystemOptimizerPage() {
   const { t } = useTranslation();
@@ -45,6 +53,8 @@ export default function SystemOptimizerPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isBatchOptimizing, setIsBatchOptimizing] = useState(false);
   const [togglingItems, setTogglingItems] = useState<Set<string>>(new Set());
+  const [showNotice, setShowNotice] = useState(false);
+  const [noticeCountdown, setNoticeCountdown] = useState(NOTICE_COUNTDOWN_SECONDS);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#888888");
@@ -62,11 +72,18 @@ export default function SystemOptimizerPage() {
       const startTime = Date.now();
       const savedResult = await Promise.allSettled([
         store.get<Record<string, boolean>>(STORE_KEY),
+        store.get<boolean>(NOTICE_KEY),
       ]);
       if (cancelled) return;
       const saved = savedResult[0].status === "fulfilled" && savedResult[0].value
         ? savedResult[0].value
         : {};
+      // 未确认过提示则弹出（保存到 appdata，确认一次后不再弹出）
+      const noticeAgreed = savedResult[1].status === "fulfilled" && savedResult[1].value;
+      if (!noticeAgreed) {
+        setShowNotice(true);
+        setNoticeCountdown(NOTICE_COUNTDOWN_SECONDS);
+      }
       // 确保 loading 至少显示 400ms
       const remaining = Math.max(0, 400 - (Date.now() - startTime));
       if (remaining > 0) {
@@ -81,6 +98,23 @@ export default function SystemOptimizerPage() {
       cancelled = true;
     };
   }, []);
+
+  // 5 秒倒计时
+  useEffect(() => {
+    if (!showNotice || noticeCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setNoticeCountdown((c) => Math.max(0, c - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [showNotice, noticeCountdown]);
+
+  const handleNoticeConfirm = async () => {
+    try {
+      await store.set(NOTICE_KEY, true);
+      await store.save();
+    } catch {}
+    setShowNotice(false);
+  };
 
   // 保存状态到持久化存储
   const persistStates = useCallback(async (states: Record<string, boolean>) => {
@@ -417,6 +451,44 @@ export default function SystemOptimizerPage() {
           {t("systemOptimizer.credits")}
         </Text>
       </Box>
+
+      {/* 温馨提示弹窗 */}
+      <Modal
+        isOpen={showNotice}
+        onClose={() => {}}
+        isCentered
+        closeOnOverlayClick={false}
+        closeOnEsc={false}
+      >
+        <ModalOverlay />
+        <ModalContent bg={cardBg} borderRadius="xl" borderWidth="1px" borderColor={cardBorder}>
+          <ModalHeader color={headingColor} fontSize="lg">
+            {t("systemOptimizer.noticeTitle")}
+          </ModalHeader>
+          <ModalBody>
+            <Text
+              color={subTextColor}
+              fontSize="sm"
+              lineHeight="taller"
+              whiteSpace="pre-line"
+            >
+              {t("systemOptimizer.noticeContent")}
+            </Text>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              bg={activeColor}
+              color={contrastText}
+              isDisabled={noticeCountdown > 0}
+              onClick={handleNoticeConfirm}
+              _hover={{ opacity: 0.9 }}
+            >
+              {t("systemOptimizer.noticeAgree")}
+              {noticeCountdown > 0 ? ` (${noticeCountdown}s)` : ""}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </VStack>
   );
 

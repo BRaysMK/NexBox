@@ -20,7 +20,7 @@ interface EpicGame {
 }
 
 interface EpicResponse {
-  code: number;
+  code?: number;
   message: string;
   data: EpicGame[];
 }
@@ -146,10 +146,13 @@ export default function EpicFreePage() {
         setLoading(true);
         setError(null);
         
-        const response = await fetch("https://api.nxvav.cn/api/epic/");
+        const response = await fetch("https://uapis.cn/api/v1/game/epic-free");
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const data: EpicResponse = await response.json();
         
-        if (data.code === 200 && data.data) {
+        if (data.data && data.data.length > 0) {
           const freeGames = data.data.filter((game) => game.is_free_now === true);
           setGames(freeGames);
         } else {

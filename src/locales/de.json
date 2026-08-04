@@ -231,6 +231,14 @@
         "restore": "Automatischen DNS wiederherstellen"
       },
       "dnsRequired": "Bitte geben Sie mindestens die primäre DNS-Adresse ein",
+      "dnsCacheCleared": "DNS-Cache geleert",
+      "clearDnsError": "DNS-Cache konnte nicht geleert werden",
+      "dnsCache": {
+        "title": "DNS-Cache leeren",
+        "description": "Den DNS-Auflöser-Cache des Systems leeren, um Domänenauflösungsprobleme zu beheben",
+        "clear": "Jetzt leeren",
+        "clearing": "Wird geleert..."
+      },
       "batch": {
         "title": "Batch-Optimierung",
         "description": "Alle Netzwerkoptimierungen auf einmal anwenden/wiederherstellen",
@@ -441,7 +449,12 @@
     "noAnnouncement": "Keine Ankündigungen",
     "important": "Wichtig",
     "importantAnnouncement": "Wichtige Ankündigung",
-    "confirmAnnouncement": "OK"
+    "confirmAnnouncement": "OK",
+    "gameWinKey": {
+      "loading": "Wird geladen...",
+      "title": "Win-Taste beim Spielen deaktivieren",
+      "subtitle": "Blockiert die Win-Taste automatisch, wenn ein gelistetes Spiel läuft"
+    }
   },
   "hardware": {
     "title": "Hardware-Informationen",
@@ -612,7 +625,10 @@
     "deletePreset": "Voreinstellung löschen",
     "deletePresetConfirm": "Diese Voreinstellung löschen?",
     "deletePresetSuccess": "Voreinstellung gelöscht",
-    "save": "Speichern"
+    "save": "Speichern",
+    "gameFilterTitle": "Filter beim Start eines Spiels automatisch anwenden",
+    "gameFilterSupportedTitle": "Unterstützte Spiele",
+    "gameFilterError": "Vorgang fehlgeschlagen"
   },
 "floatingNav": {
     "title": "Schwebendes Navigationsfeld",
@@ -994,6 +1010,8 @@
       "gameLauncherDesc": "Schnellstart-Karte auf der Startseite anzeigen",
       "feedbackLabel": "Bilderkarussell",
       "feedbackDesc": "Bilderkarussell auf der Startseite anzeigen",
+      "gameWinKeyLabel": "Win-Taste-Deaktivierungskarte",
+      "gameWinKeyDesc": "Karte zur Deaktivierung der Win-Taste beim Spielen auf der Startseite anzeigen",
       "splash": "Animation",
       "splashLogoLabel": "Startlogo",
       "splashLogoDesc": "Passen Sie das beim Start angezeigte Logo an",
@@ -1226,7 +1244,9 @@
     "filter": "Filter",
     "filterToggle": "Filter umschalten",
     "filterToggleDesc": "Tastenkürzel zum Ein- und Ausschalten des Anzeigefilters",
-    "saved": "Tastenkürzel gespeichert"
+    "saved": "Tastenkürzel gespeichert",
+    "masterToggle": "Globaler Hotkey-Schalter",
+    "masterToggleDesc": "Wenn ausgeschaltet, funktionieren keine globalen Hotkeys"
   },
   "diskHealth": {
     "title": "Festplatten-Gesundheit",

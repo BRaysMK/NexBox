@@ -93,69 +93,99 @@ fn find_gpu_registry_keys() -> Result<Vec<(RegKey, String)>, String> {
     
     let mut gpu_keys = Vec::new();
     
+    // 支持的显卡厂商 PCI Vendor ID: NVIDIA(10DE)、AMD(1002)
+    let supported_vendors = ["VEN_10DE", "VEN_1002"];
+    // 排除关键词：USB控制器等非显卡设备
+    let exclude_keywords = ["usb", "controller", "控制器", "host", "xhci", "ehci", "uhci", "chipset", "smbus", "audio", "sound"];
+    // 显卡名称关键词（NVIDIA / AMD）
+    let gpu_keywords = ["nvidia", "geforce", "gtx", "rtx", "amd", "radeon"];
+    
     for vendor_result in enum_key.enum_keys() {
-        let vendor_key_name = vendor_result.map_err(|e| format!("枚举厂商键失败: {}", e))?;
-        let vendor_key = enum_key.open_subkey(&vendor_key_name)
-            .map_err(|e| format!("打开厂商键失败: {}", e))?;
+        let vendor_key_name = match vendor_result {
+            Ok(name) => name,
+            Err(_) => continue,
+        };
+        let vendor_key = match enum_key.open_subkey(&vendor_key_name) {
+            Ok(key) => key,
+            Err(_) => continue,
+        };
+        
+        // 只处理 NVIDIA / AMD 厂商
+        let vendor_upper = vendor_key_name.to_uppercase();
+        if !supported_vendors.iter().any(|v| vendor_upper.contains(v)) {
+            continue;
+        }
         
         for device_result in vendor_key.enum_keys() {
-            let device_key_name = device_result.map_err(|e| format!("枚举设备键失败: {}", e))?;
-            let device_key = vendor_key.open_subkey(&device_key_name)
-                .map_err(|e| format!("打开设备键失败: {}", e))?;
+            let device_key_name = match device_result {
+                Ok(name) => name,
+                Err(_) => continue,
+            };
+            let device_key = match vendor_key.open_subkey(&device_key_name) {
+                Ok(key) => key,
+                Err(_) => continue,
+            };
             let key_path = vendor_key_name.clone() + "\\" + &device_key_name;
             
-            // 排除 USB 控制器等其他带 NVIDIA 标识的非显卡设备
-            // 路径格式：VEN_10DE&DEV_XXXX...，10DE 是 NVIDIA 的 PCI 厂商 ID
-            if !vendor_key_name.to_uppercase().contains("VEN_10DE") {
-                continue;
-            }
-            
-            // 排除关键词：USB控制器等非显卡设备即使带 NVIDIA 标识也要跳过
-            let exclude_keywords = ["usb", "controller", "控制器", "host", "xhci", "ehci", "uhci"];
-            
-            let mut is_nvidia_gpu = false;
+            // 排除 USB 控制器等非显卡设备
             let mut is_excluded = false;
-            
             if let Ok(device_desc) = device_key.get_value::<String, _>("DeviceDesc") {
-                let device_desc_lower = device_desc.to_lowercase();
-                // 先检查是否命中排除词
-                for &kw in &exclude_keywords {
-                    if device_desc_lower.contains(kw) {
-                        is_excluded = true;
-                        break;
-                    }
-                }
-                if !is_excluded && (device_desc_lower.contains("nvidia") || 
-                   device_desc_lower.contains("geforce") || 
-                   device_desc_lower.contains("gtx") ||
-                   device_desc_lower.contains("rtx")) {
-                    is_nvidia_gpu = true;
+                let lower = device_desc.to_lowercase();
+                if exclude_keywords.iter().any(|kw| lower.contains(kw)) {
+                    is_excluded = true;
                 }
             }
-            
-            if !is_nvidia_gpu && !is_excluded {
+            if !is_excluded {
                 if let Ok(friendly_name) = device_key.get_value::<String, _>("FriendlyName") {
-                    let friendly_name_lower = friendly_name.to_lowercase();
-                    for &kw in &exclude_keywords {
-                        if friendly_name_lower.contains(kw) {
-                            is_excluded = true;
-                            break;
-                        }
-                    }
-                    if !is_excluded && (friendly_name_lower.contains("nvidia") || 
-                       friendly_name_lower.contains("geforce") || 
-                       friendly_name_lower.contains("gtx") ||
-                       friendly_name_lower.contains("rtx")) {
-                        is_nvidia_gpu = true;
+                    let lower = friendly_name.to_lowercase();
+                    if exclude_keywords.iter().any(|kw| lower.contains(kw)) {
+                        is_excluded = true;
                     }
                 }
             }
-            
             if is_excluded {
                 continue;
             }
             
-            if is_nvidia_gpu {
+            // 判断是否为显卡：
+            // 1. 优先按 ClassGUID（显卡类 {4d36e968-...}）判断，NVIDIA / AMD 通用
+            // 2. 回退按名称关键词判断（AMD 的 DeviceDesc 通常是硬件路径，需靠 FriendlyName 兜底）
+            let mut is_gpu = false;
+            if let Ok(class_guid) = device_key.get_value::<String, _>("ClassGUID") {
+                let normalized = class_guid
+                    .trim()
+                    .trim_start_matches('{')
+                    .trim_end_matches('}')
+                    .to_uppercase();
+                if normalized == "4D36E968-E325-11CE-BFC1-08002BE10318" {
+                    is_gpu = true;
+                }
+            }
+            if !is_gpu {
+                if let Ok(class) = device_key.get_value::<String, _>("Class") {
+                    if class.eq_ignore_ascii_case("Display") {
+                        is_gpu = true;
+                    }
+                }
+            }
+            if !is_gpu {
+                if let Ok(device_desc) = device_key.get_value::<String, _>("DeviceDesc") {
+                    let lower = device_desc.to_lowercase();
+                    if gpu_keywords.iter().any(|kw| lower.contains(kw)) {
+                        is_gpu = true;
+                    }
+                }
+            }
+            if !is_gpu {
+                if let Ok(friendly_name) = device_key.get_value::<String, _>("FriendlyName") {
+                    let lower = friendly_name.to_lowercase();
+                    if gpu_keywords.iter().any(|kw| lower.contains(kw)) {
+                        is_gpu = true;
+                    }
+                }
+            }
+            
+            if is_gpu {
                 gpu_keys.push((device_key, key_path));
             }
         }
@@ -171,19 +201,41 @@ fn get_current_gpu_name() -> Result<String, String> {
         return Err("未找到显卡注册表信息".to_string());
     }
     
-    let (key, _) = &gpu_keys[0];
-    if let Ok(name) = key.get_value::<String, _>("FriendlyName") {
-        return Ok(name);
-    }
-    if let Ok(name) = key.get_value::<String, _>("DeviceDesc") {
-        let parts: Vec<&str> = name.split(';').collect();
-        if parts.len() > 1 {
-            return Ok(parts[1].to_string());
+    // 从注册表键读取显卡名称（FriendlyName 优先，回退 DeviceDesc）
+    let read_gpu_name = |key: &RegKey| -> Option<String> {
+        if let Ok(name) = key.get_value::<String, _>("FriendlyName") {
+            return Some(name);
         }
-        return Ok(name);
+        if let Ok(name) = key.get_value::<String, _>("DeviceDesc") {
+            let parts: Vec<&str> = name.split(';').collect();
+            return Some(if parts.len() > 1 { parts[1].to_string() } else { name });
+        }
+        None
+    };
+    
+    // 多显卡（如 AMD APU 核显 + 独立显卡）时，优先选择独立显卡：
+    // 名称含 Radeon/GeForce/GTX/RTX 等独显特征，且不含 "Graphics"（核显常见后缀）
+    let mut fallback: Option<String> = None;
+    for (key, _) in &gpu_keys {
+        let Some(name) = read_gpu_name(key) else {
+            continue;
+        };
+        if fallback.is_none() {
+            fallback = Some(name.clone());
+        }
+        let lower = name.to_lowercase();
+        let is_core_gpu = lower.contains("graphics") || lower.contains("核显");
+        let is_discrete = lower.contains("radeon")
+            || lower.contains("geforce")
+            || lower.contains("gtx")
+            || lower.contains("rtx")
+            || lower.contains("amd");
+        if is_discrete && !is_core_gpu {
+            return Ok(name);
+        }
     }
     
-    Err("无法获取显卡名称".to_string())
+    fallback.ok_or_else(|| "无法获取显卡名称".to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -214,22 +266,26 @@ try {{
     if (Test-Path $pciPath) {{
         $vendors = Get-ChildItem $pciPath
         foreach ($vendor in $vendors) {{
-            # 只处理 NVIDIA 设备（VEN_10DE），排除 USB 控制器等其他带 NVIDIA 标识的设备
-            if ($vendor.PSChildName -notmatch "VEN_10DE") {{
+            # 只处理 NVIDIA(VEN_10DE) / AMD(VEN_1002) 设备，排除 USB 控制器等其他非显卡设备
+            if ($vendor.PSChildName -notmatch "VEN_10DE|VEN_1002") {{
                 continue
             }}
             $devices = Get-ChildItem $vendor.PSPath
             foreach ($device in $devices) {{
-                $isNvidia = $false
+                $isGpu = $false
                 $isExcluded = $false
                 $keyPath = $device.PSPath
                 
                 # 排除关键词：USB控制器等非显卡设备
-                $excludeKeywords = @("usb", "controller", "host", "xhci", "ehci", "uhci")
+                $excludeKeywords = @("usb", "controller", "host", "xhci", "ehci", "uhci", "chipset", "smbus", "audio", "sound")
                 
                 try {{
-                    $deviceDesc = (Get-ItemProperty -Path $keyPath -Name "DeviceDesc" -ErrorAction SilentlyContinue).DeviceDesc
-                    # 先检查排除词
+                    $props = Get-ItemProperty -Path $keyPath -ErrorAction SilentlyContinue
+                    $deviceDesc = $props.DeviceDesc
+                    $friendlyName = $props.FriendlyName
+                    $classGuid = $props.ClassGUID
+                    
+                    # 先检查排除词（DeviceDesc / FriendlyName）
                     if ($deviceDesc) {{
                         foreach ($kw in $excludeKeywords) {{
                             if ($deviceDesc -match [regex]::Escape($kw)) {{
@@ -238,24 +294,26 @@ try {{
                             }}
                         }}
                     }}
-                    if (-not $isExcluded -and $deviceDesc -and ($deviceDesc -match "NVIDIA|GeForce|GTX|RTX")) {{
-                        $isNvidia = $true
-                        Write-Host "找到NVIDIA显卡(DeviceDesc): $($device.PSChildName)"
-                    }}
-                    
-                    if (-not $isNvidia -and -not $isExcluded) {{
-                        $friendlyName = (Get-ItemProperty -Path $keyPath -Name "FriendlyName" -ErrorAction SilentlyContinue).FriendlyName
-                        if ($friendlyName) {{
-                            foreach ($kw in $excludeKeywords) {{
-                                if ($friendlyName -match [regex]::Escape($kw)) {{
-                                    $isExcluded = $true
-                                    break
-                                }}
+                    if (-not $isExcluded -and $friendlyName) {{
+                        foreach ($kw in $excludeKeywords) {{
+                            if ($friendlyName -match [regex]::Escape($kw)) {{
+                                $isExcluded = $true
+                                break
                             }}
                         }}
-                        if (-not $isExcluded -and $friendlyName -and ($friendlyName -match "NVIDIA|GeForce|GTX|RTX")) {{
-                            $isNvidia = $true
-                            Write-Host "找到NVIDIA显卡(FriendlyName): $($device.PSChildName)"
+                    }}
+                    
+                    # 判断是否为显示设备：优先按显卡 ClassGUID（NVIDIA/AMD 通用）
+                    $isDisplay = $false
+                    if ($classGuid -and $classGuid -match "4d36e968-e325-11ce-bfc1-08002be10318") {{
+                        $isDisplay = $true
+                    }}
+                    
+                    if (-not $isExcluded) {{
+                        $descText = "$deviceDesc $friendlyName"
+                        if ($isDisplay -or $descText -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon") {{
+                            $isGpu = $true
+                            Write-Host "找到显卡: $($device.PSChildName)"
                         }}
                     }}
                     
@@ -264,7 +322,7 @@ try {{
                         continue
                     }}
                     
-                    if ($isNvidia) {{
+                    if ($isGpu) {{
                         Write-Host "正在修改: $keyPath"
                         
                         # 修改 FriendlyName
@@ -312,7 +370,7 @@ try {{
                 $keyPath = $subkey.PSPath
                 try {{
                     $driverDesc = (Get-ItemProperty -Path $keyPath -Name "DriverDesc" -ErrorAction SilentlyContinue).DriverDesc
-                    if ($driverDesc -and ($driverDesc -match "NVIDIA|GeForce|GTX|RTX")) {{
+                    if ($driverDesc -and ($driverDesc -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon")) {{
                         Write-Host "找到显卡Class键: $($subkey.PSChildName) DriverDesc: $driverDesc"
                         Set-ItemProperty -Path $keyPath -Name "DriverDesc" -Value "{}"
                         Write-Host "成功修改 DriverDesc"
@@ -343,7 +401,7 @@ try {{
                     $description = (Get-ItemProperty -Path $keyPath -Name "Description" -ErrorAction SilentlyContinue).Description
                     
                     $checkText = @($driverDesc, $deviceDesc, $description) -join " "
-                    if ($checkText -match "NVIDIA|GeForce|GTX|RTX") {{
+                    if ($checkText -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon") {{
                         Write-Host "找到Video键: $($videoKey.PSChildName)\$($subkey.PSChildName)"
                         
                         foreach ($name in @("DriverDesc", "DeviceDesc", "Description", "FriendlyName")) {{
@@ -428,7 +486,7 @@ pub async fn get_gpu_info() -> Result<GpuInfo, String> {
 #[tauri::command]
 pub async fn get_gpu_options() -> Result<Vec<GpuOption>, String> {
     Ok(vec![
-        // 低端显卡
+        // 低端显卡（NVIDIA）
         GpuOption {
             id: "gtx650".to_string(),
             name: "NVIDIA GeForce GTX 650".to_string(),
@@ -449,6 +507,12 @@ pub async fn get_gpu_options() -> Result<Vec<GpuOption>, String> {
             name: "NVIDIA GeForce GTX 1050".to_string(),
             category: "low-end".to_string(),
         },
+        // 低端显卡（AMD）
+        GpuOption {
+            id: "r7240".to_string(),
+            name: "AMD Radeon R7 240".to_string(),
+            category: "low-end".to_string(),
+        },
         GpuOption {
             id: "rx460".to_string(),
             name: "AMD Radeon RX 460".to_string(),
@@ -460,11 +524,46 @@ pub async fn get_gpu_options() -> Result<Vec<GpuOption>, String> {
             category: "low-end".to_string(),
         },
         GpuOption {
-            id: "r7240".to_string(),
-            name: "AMD Radeon R7 240".to_string(),
+            id: "rx550".to_string(),
+            name: "AMD Radeon RX 550".to_string(),
             category: "low-end".to_string(),
         },
-        // 高端显卡
+        GpuOption {
+            id: "rx570".to_string(),
+            name: "AMD Radeon RX 570".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "rx580".to_string(),
+            name: "AMD Radeon RX 580".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "rx590".to_string(),
+            name: "AMD Radeon RX 590".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "rx6400".to_string(),
+            name: "AMD Radeon RX 6400".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "rx6500xt".to_string(),
+            name: "AMD Radeon RX 6500 XT".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "rx6600".to_string(),
+            name: "AMD Radeon RX 6600".to_string(),
+            category: "low-end".to_string(),
+        },
+        GpuOption {
+            id: "rx6650xt".to_string(),
+            name: "AMD Radeon RX 6650 XT".to_string(),
+            category: "low-end".to_string(),
+        },
+        // 高端显卡（NVIDIA）
         GpuOption {
             id: "rtx4080".to_string(),
             name: "NVIDIA GeForce RTX 4080".to_string(),
@@ -485,9 +584,70 @@ pub async fn get_gpu_options() -> Result<Vec<GpuOption>, String> {
             name: "NVIDIA GeForce RTX 5090".to_string(),
             category: "high-end".to_string(),
         },
+        // 高端显卡（AMD）
+        GpuOption {
+            id: "rx6700xt".to_string(),
+            name: "AMD Radeon RX 6700 XT".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx6750gre".to_string(),
+            name: "AMD Radeon RX 6750 GRE".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx6800".to_string(),
+            name: "AMD Radeon RX 6800".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx6800xt".to_string(),
+            name: "AMD Radeon RX 6800 XT".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx6900xt".to_string(),
+            name: "AMD Radeon RX 6900 XT".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx7600".to_string(),
+            name: "AMD Radeon RX 7600".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx7700xt".to_string(),
+            name: "AMD Radeon RX 7700 XT".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx7800xt".to_string(),
+            name: "AMD Radeon RX 7800 XT".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx7900gre".to_string(),
+            name: "AMD Radeon RX 7900 GRE".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx7900xt".to_string(),
+            name: "AMD Radeon RX 7900 XT".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx7900xtx".to_string(),
+            name: "AMD Radeon RX 7900 XTX".to_string(),
+            category: "high-end".to_string(),
+        },
         GpuOption {
             id: "rx9060xt".to_string(),
             name: "AMD Radeon RX 9060 XT".to_string(),
+            category: "high-end".to_string(),
+        },
+        GpuOption {
+            id: "rx9070xt".to_string(),
+            name: "AMD Radeon RX 9070 XT".to_string(),
             category: "high-end".to_string(),
         },
     ])

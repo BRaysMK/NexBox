@@ -231,6 +231,14 @@
         "restore": "Restaurer DNS automatique"
       },
       "dnsRequired": "Veuillez entrer au moins l'adresse DNS principale",
+      "dnsCacheCleared": "Cache DNS vidé",
+      "clearDnsError": "Échec de la vidange du cache DNS",
+      "dnsCache": {
+        "title": "Vider le cache DNS",
+        "description": "Vider le cache du résolveur DNS système pour corriger les problèmes de résolution de domaine",
+        "clear": "Vider maintenant",
+        "clearing": "Vidange en cours..."
+      },
       "batch": {
         "title": "Optimisation par lot",
         "description": "Appliquer ou restaurer toutes les optimisations réseau",
@@ -441,7 +449,12 @@
     "noAnnouncement": "Aucune annonce",
     "important": "Important",
     "importantAnnouncement": "Annonce importante",
-    "confirmAnnouncement": "OK"
+    "confirmAnnouncement": "OK",
+    "gameWinKey": {
+      "loading": "Chargement...",
+      "title": "Désactiver la touche Win en jeu",
+      "subtitle": "Bloque automatiquement la touche Win lorsqu'un jeu de la liste est en cours d'exécution"
+    }
   },
   "hardware": {
     "title": "Informations matérielles",
@@ -612,7 +625,10 @@
     "deletePreset": "Supprimer le préréglage",
     "deletePresetConfirm": "Supprimer ce préréglage ?",
     "deletePresetSuccess": "Préréglage supprimé",
-    "save": "Enregistrer"
+    "save": "Enregistrer",
+    "gameFilterTitle": "Appliquer automatiquement le filtre au lancement d'un jeu",
+    "gameFilterSupportedTitle": "Jeux pris en charge",
+    "gameFilterError": "Échec de l'opération"
   },
 "floatingNav": {
     "title": "Boîte de navigation flottante",
@@ -994,6 +1010,8 @@
       "gameLauncherDesc": "Afficher la carte de lancement rapide sur la page d'accueil",
       "feedbackLabel": "Carrousel d'images",
       "feedbackDesc": "Afficher le carrousel d'images sur la page d'accueil",
+      "gameWinKeyLabel": "Carte désactivation touche Win",
+      "gameWinKeyDesc": "Afficher la carte de désactivation de la touche Win en jeu sur la page d'accueil",
       "splash": "Animation",
       "splashLogoLabel": "Logo de démarrage",
       "splashLogoDesc": "Personnalisez l'image du logo affichée au démarrage",
@@ -1227,7 +1245,9 @@
     "filter": "Filtre",
     "filterToggle": "Activer/Désactiver le filtre",
     "filterToggleDesc": "Utiliser un raccourci pour activer ou désactiver le filtre d'affichage",
-    "saved": "Raccourci enregistré"
+    "saved": "Raccourci enregistré",
+    "masterToggle": "Interrupteur global des raccourcis",
+    "masterToggleDesc": "Une fois désactivé, aucun raccourci global ne fonctionnera"
   },
   "diskHealth": {
     "title": "Santé du disque",

@@ -177,9 +177,13 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
                 }
             }
 
+            // EfficiencyClass 含义：值越小性能越高，值越大能效越高
+            //   1  = 最高性能核心 (P-core / Performance)
+            //   >=2 = 能效核心 (E-core / Efficiency)
+            //   参考: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-processor_relationship
             let core_type = match efficiency_class {
-                1 => { has_efficiency = true; CoreType::Efficiency }
-                0 => CoreType::Performance,
+                1 => CoreType::Performance,                          // P核：最高性能等级
+                ec if ec >= 2 => { has_efficiency = true; CoreType::Efficiency }, // E核：更高的能效等级
                 _ => CoreType::Unknown,
             };
 
@@ -207,6 +211,15 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
 
     if physical_cores.is_empty() {
         return Err("未能解析到任何物理核心信息".to_string());
+    }
+
+    // 非混合架构（无 E核，如 AMD）: 所有 Unknown 核心视为 Performance 核心
+    if !has_efficiency {
+        for core in &mut physical_cores {
+            if core.core_type == CoreType::Unknown {
+                core.core_type = CoreType::Performance;
+            }
+        }
     }
 
     Ok(CpuTopology {

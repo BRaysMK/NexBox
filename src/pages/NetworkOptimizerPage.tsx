@@ -53,6 +53,7 @@ export default function NetworkOptimizerPage() {
   });
   const [applyingDnsId, setApplyingDnsId] = useState<string | null>(null);
   const [isRestoringDns, setIsRestoringDns] = useState(false);
+  const [isClearingDns, setIsClearingDns] = useState(false);
   const [customPrimary, setCustomPrimary] = useState("");
   const [customSecondary, setCustomSecondary] = useState("");
   const [isApplyingCustomDns, setIsApplyingCustomDns] = useState(false);
@@ -368,6 +369,30 @@ export default function NetworkOptimizerPage() {
       setIsRestoringDns(false);
     }
   }, [toast, t, persistDns]);
+
+  // 清理 DNS 缓存
+  const handleClearDnsCache = useCallback(async () => {
+    setIsClearingDns(true);
+    try {
+      await invoke("clear_dns_cache");
+      toast({
+        title: t("networkOptimize.dnsCacheCleared"),
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: t("networkOptimize.clearDnsError"),
+        description: String(err),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsClearingDns(false);
+    }
+  }, [toast, t]);
 
   // 应用自定义 DNS
   const handleApplyCustomDns = useCallback(async () => {
@@ -775,6 +800,43 @@ export default function NetworkOptimizerPage() {
           return (
             <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4}>
               {customDnsContent}
+            </Box>
+          );
+        })()}
+
+        {/* 清理 DNS 缓存 */}
+        {(() => {
+          const clearDnsContent = (
+            <HStack justify="space-between" align="center" gap={3} flexWrap="wrap">
+              <VStack align="start" spacing={1} flex={1} minW={0}>
+                <Text fontSize="sm" fontWeight="bold" color={headingColor}>
+                  {t("networkOptimize.dnsCache.title")}
+                </Text>
+                <Text fontSize="xs" color={subTextColor}>
+                  {t("networkOptimize.dnsCache.description")}
+                </Text>
+              </VStack>
+              <Button
+                size="sm"
+                onClick={handleClearDnsCache}
+                isLoading={isClearingDns}
+                loadingText={t("networkOptimize.dnsCache.clearing")}
+                bg={activeColor}
+                color={contrastText}
+                _hover={{ opacity: 0.9 }}
+                _active={{ transform: "scale(0.97)" }}
+                flexShrink={0}
+              >
+                {t("networkOptimize.dnsCache.clear")}
+              </Button>
+            </HStack>
+          );
+          if (liquidGlassEnabled) {
+            return <LiquidGlassCard w="full" p={4} mt={3}>{clearDnsContent}</LiquidGlassCard>;
+          }
+          return (
+            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4} mt={3}>
+              {clearDnsContent}
             </Box>
           );
         })()}
