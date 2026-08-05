@@ -61,7 +61,7 @@ export function HotkeyRecorder({
   const [isRecording, setIsRecording] = useState(false);
   const [displayText, setDisplayText] = useState("");
   const pendingRef = useRef<string[]>([]);
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const recordBg = useColorModeValue("teal.50", "rgba(0,150,136,0.1)");
   const recordBorder = useColorModeValue("teal.400", "teal.300");

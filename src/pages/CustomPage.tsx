@@ -135,7 +135,7 @@ function AddToolModal({
   const hoverBg = useColorModeValue("gray.100", "#2a2a2a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const iconColor = useColorModeValue("gray.700", "gray.300");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
   const badgeBg = useColorModeValue("green.100", "rgba(72,187,120,0.15)");
   const badgeColor = useColorModeValue("green.600", "green.300");
   const modalBg = useColorModeValue("white", "#111111");
@@ -262,7 +262,7 @@ function DraggableCard({
   const borderColor = useColorModeValue("rgba(200,200,200,0.3)", "rgba(51,51,51,0.5)");
   const glassBorder = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
   const iconColor = useColorModeValue("rgba(0,0,0,0.75)", "rgba(255,255,255,0.8)");
-  const textColor = useColorModeValue("gray.700", "gray.200");
+  const textColor = useColorModeValue("gray.700", "#ffffff");
   const resizeHandleColor = useColorModeValue("rgba(0,0,0,0.3)", "rgba(255,255,255,0.3)");
   const popoverBg = useColorModeValue("white", "#1a1a1a");
   const settingBtnBg = useColorModeValue("rgba(255,255,255,0.7)", "rgba(0,0,0,0.5)");
@@ -458,7 +458,7 @@ export default function CustomPage() {
   }, []);
 
   const headerColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const emptyIconColor = useColorModeValue("gray.300", "gray.600");
   const scrollbarColor = useColorModeValue("rgba(0,0,0,0.15)", "rgba(255,255,255,0.1)");
 

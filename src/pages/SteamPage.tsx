@@ -195,7 +195,7 @@ function UserCard({
   const { colorMode } = useColorMode();
   const { getActiveColor } = useThemeColor();
   const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const activeColor = getActiveColor();
@@ -319,7 +319,7 @@ function UserCard({
 // 分离的游戏封面组件
 const GameCover = memo(function GameCover({ appId, name }: { appId: number; name: string }) {
   const [imgError, setImgError] = useState(false);
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const placeholderBg = useColorModeValue("gray.100", "#0a0a0a");
 
   return (
@@ -432,7 +432,7 @@ const GameCard = memo(function GameCard({
   const { getActiveColor } = useThemeColor();
   const { colorMode } = useColorMode();
   const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const activeColor = getActiveColor();
@@ -531,7 +531,7 @@ function LibraryCard({ lib, gameCount, gameSize }: { lib: SteamLibrary; gameCoun
   const { getActiveColor } = useThemeColor();
   const { colorMode } = useColorMode();
   const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const progressBg = useColorModeValue("gray.100", "#333");
@@ -622,7 +622,7 @@ export default function SteamPage() {
   const borderColorTheme = getBorderColor();
   const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
   const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const inputBg = useColorModeValue("white", "#1a1a1a");

@@ -97,7 +97,8 @@ export function useDesktopLyricsSync() {
           // 使用主窗口传来的当前播放时间，避免重置为 0 导致闪烁
           audioTimeRef.current = e.payload.currentTime;
           setEstimatedTime(e.payload.currentTime);
-          isPlayingRef.current = e.payload.isPlaying;
+          // 注意：不更新 isPlayingRef.current，播放状态由 desktop-lyrics:state / desktop-lyrics:time 管理
+          // 如果在这里设置为 false，会永久停止 RAF 插值循环（tick 检查 !isPlayingRef.current 后不再调度下一帧）
           lastSyncRef.current = performance.now();
           hasDataRef.current = true;
         })

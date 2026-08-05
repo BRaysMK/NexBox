@@ -131,7 +131,7 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
     //
     // PROCESSOR_RELATIONSHIP (从 entry+8 开始):
     //   +0  Flags           BYTE   (1)
-    //   +1  EfficiencyClass BYTE   (1)
+    //   +1  EfficiencyClass BYTE   (1)  (未使用，改用线程数判定)
     //   +2  Reserved        BYTE[20] (20)
     //   +22 GroupCount      WORD   (2)
     //   +24 GroupMask[]     GROUP_AFFINITY[] (每个 16 bytes)
@@ -160,7 +160,6 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
         if rel == 0 {
             let p = offset + 8; // union 起点
 
-            let efficiency_class = buf[p + 1];
             let group_count = read_u16(buf, p + 22) as usize;
 
             // 读取该核心的逻辑处理器掩码
@@ -177,16 +176,6 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
                 }
             }
 
-            // EfficiencyClass 含义：值越小性能越高，值越大能效越高
-            //   1  = 最高性能核心 (P-core / Performance)
-            //   >=2 = 能效核心 (E-core / Efficiency)
-            //   参考: https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-processor_relationship
-            let core_type = match efficiency_class {
-                1 => CoreType::Performance,                          // P核：最高性能等级
-                ec if ec >= 2 => { has_efficiency = true; CoreType::Efficiency }, // E核：更高的能效等级
-                _ => CoreType::Unknown,
-            };
-
             // 从掩码中提取逻辑处理器编号
             let mut logical_processors: Vec<u32> = Vec::new();
             for bit in 0..64u32 {
@@ -194,6 +183,15 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
                     logical_processors.push(bit);
                 }
             }
+
+            // 核心类型判定：根据逻辑处理器（线程）数量
+            //   P-cores (Performance) 支持超线程 → 2个逻辑处理器
+            //   E-cores (Efficiency)   不支持超线程 → 1个逻辑处理器
+            let core_type = match logical_processors.len() {
+                2 => CoreType::Performance,
+                1 => { has_efficiency = true; CoreType::Efficiency },
+                _ => CoreType::Unknown,
+            };
 
             total_logical += logical_processors.len() as u32;
             system_mask |= core_mask;

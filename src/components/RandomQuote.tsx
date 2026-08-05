@@ -101,8 +101,8 @@ export function RandomQuote() {
 
   const [quote, setQuote] = useState(() => getRandomQuote());
 
-  const labelColor = useColorModeValue("gray.500", "#cccccc");
-  const textColor = useColorModeValue("gray.700", "#e0e0e0");
+  const labelColor = useColorModeValue("gray.500", "#ffffff");
+  const textColor = useColorModeValue("gray.700", "#ffffff");
   const authorColor = useColorModeValue("gray.400", "#888888");
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");

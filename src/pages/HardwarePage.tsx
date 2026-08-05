@@ -376,8 +376,8 @@ export default function HardwarePage() {
   
   const cardBg = useColorModeValue("white", "#111111");
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const btnBorderColor = useColorModeValue("gray.300", "#333333");
 
   const [cpuLoad, setCpuLoad] = useState<number | null>(null);

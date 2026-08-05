@@ -78,8 +78,8 @@ export function MusicPlayer() {
 
   const bgColor = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const progressBg = useColorModeValue("gray.200", "#333333");
 
   useEffect(() => {

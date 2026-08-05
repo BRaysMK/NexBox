@@ -33,7 +33,7 @@ export function CustomSelect({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const scrollTopRef = useRef(0);
   
-  const textColor = useColorModeValue("gray.700", "#e0e0e0");
+  const textColor = useColorModeValue("gray.700", "#ffffff");
   const iconColor = useColorModeValue("gray.500", "#999999");
   const dropdownBg = useColorModeValue("white", "#111111");
   const dropdownBorder = useColorModeValue("gray.200", "#333333");

@@ -39,8 +39,8 @@ export function ImportantAnnouncementModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [currentAnnouncement, setCurrentAnnouncement] = useState<Announcement | null>(null);
 
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const modalBg = useColorModeValue("white", "#1a1a1a");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 

@@ -75,7 +75,7 @@ function SortableItem({
   onSettingsClick?: () => void;
   onInstallClick?: () => void;
 }) {
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
   const iconColor = useColorModeValue("gray.500", "#999999");
   const hoverBg = useColorModeValue("gray.50", "#1a1a1a");
   const dragBg = useColorModeValue("gray.100", "#222222");

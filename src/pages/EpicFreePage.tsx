@@ -137,7 +137,7 @@ export default function EpicFreePage() {
   const [error, setError] = useState<string | null>(null);
 
   const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const bgColor = useColorModeValue("gray.50", "#0a0a0a");
 
   useEffect(() => {

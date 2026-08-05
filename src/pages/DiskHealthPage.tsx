@@ -125,8 +125,8 @@ export default function DiskHealthPage() {
   const [error, setError] = useState<string | null>(null);
 
   const headingColor = useColorModeValue("black", "#ffffff");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
   const fetchHealth = useCallback(async () => {
     setLoading(true);

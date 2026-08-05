@@ -35,8 +35,8 @@ export default function WindowsUpdatePage() {
   const navigate = useNavigate();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
-  const descColor = useColorModeValue("gray.600", "rgba(200,200,200,0.85)");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const descColor = useColorModeValue("gray.600", "#ffffff");
   const warningBg = useColorModeValue(
     "rgba(229,62,62,0.05)",
     "rgba(229,62,62,0.1)"

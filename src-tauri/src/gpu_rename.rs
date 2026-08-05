@@ -86,7 +86,7 @@ fn load_backup() -> Result<Option<GpuInfo>, String> {
 }
 
 #[cfg(target_os = "windows")]
-fn find_gpu_registry_keys() -> Result<Vec<(RegKey, String)>, String> {
+fn find_gpu_registry_keys() -> Result<Vec<(RegKey, String, bool)>, String> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let enum_key = hklm.open_subkey("SYSTEM\\CurrentControlSet\\Enum\\PCI")
         .map_err(|e| format!("打开注册表键失败: {}", e))?;
@@ -186,12 +186,47 @@ fn find_gpu_registry_keys() -> Result<Vec<(RegKey, String)>, String> {
             }
             
             if is_gpu {
-                gpu_keys.push((device_key, key_path));
+                // 通过 LocationInformation 判断是否为核显（集成显卡）
+                // 核显的 LocationInformation 通常包含 "Internal Graphics" 或 "on board"
+                let is_integrated = check_is_integrated(&device_key, &key_path);
+                log::debug!(
+                    "显卡注册表: {} is_integrated={}",
+                    key_path, is_integrated
+                );
+                gpu_keys.push((device_key, key_path, is_integrated));
             }
         }
     }
     
     Ok(gpu_keys)
+}
+
+/// 检查 GPU 是否为核显（集成显卡）
+/// 通过读取设备实例子键下的 LocationInformation 注册表值判断
+#[cfg(target_os = "windows")]
+fn check_is_integrated(device_key: &RegKey, key_path: &str) -> bool {
+    // 枚举设备实例子键（如 "4&38d6c93&0&0008"）
+    for instance_result in device_key.enum_keys() {
+        let instance_name = match instance_result {
+            Ok(name) => name,
+            Err(_) => continue,
+        };
+        if let Ok(instance_key) = device_key.open_subkey(&instance_name) {
+            // LocationInformation 值包含显卡的物理位置信息
+            // 核显通常是 "Internal Graphics" 或 "on board"
+            if let Ok(location) = instance_key.get_value::<String, _>("LocationInformation") {
+                let lower = location.to_lowercase();
+                if lower.contains("internal") || lower.contains("on board") || lower.contains("bus 0") {
+                    log::debug!(
+                        "检测到核显: {} LocationInformation={}",
+                        key_path, location
+                    );
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 #[cfg(target_os = "windows")]
@@ -214,27 +249,44 @@ fn get_current_gpu_name() -> Result<String, String> {
     };
     
     // 多显卡（如 AMD APU 核显 + 独立显卡）时，优先选择独立显卡：
-    // 名称含 Radeon/GeForce/GTX/RTX 等独显特征，且不含 "Graphics"（核显常见后缀）
+    // 1. 通过 LocationInformation 注册表值判断核显（最可靠）
+    // 2. NVIDIA 设备一定是独显
+    // 3. 名称不含 "Graphics" 的 AMD 设备优先
     let mut fallback: Option<String> = None;
-    for (key, _) in &gpu_keys {
+    for (key, _, is_integrated) in &gpu_keys {
         let Some(name) = read_gpu_name(key) else {
             continue;
         };
         if fallback.is_none() {
             fallback = Some(name.clone());
         }
+        // 跳过 LocationInformation 标记为核显的设备
+        if *is_integrated {
+            log::info!("跳过核显(注册表标记): {}", name);
+            continue;
+        }
+        // 跳过名称含 "Graphics" 或 "核显" 的 AMD 设备（核显常见后缀）
         let lower = name.to_lowercase();
-        let is_core_gpu = lower.contains("graphics") || lower.contains("核显");
-        let is_discrete = lower.contains("radeon")
-            || lower.contains("geforce")
-            || lower.contains("gtx")
-            || lower.contains("rtx")
-            || lower.contains("amd");
-        if is_discrete && !is_core_gpu {
+        if lower.contains("graphics") || lower.contains("核显") {
+            log::info!("跳过核显(名称标记): {}", name);
+            continue;
+        }
+        // 到达此处的 GPU 为非核显，直接返回
+        return Ok(name);
+    }
+    
+    // 如果所有 GPU 都被标记为核显，回退到第一个 NVIDIA 设备（NVIDIA 不做核显）
+    for (key, _, _) in &gpu_keys {
+        let Some(name) = read_gpu_name(key) else {
+            continue;
+        };
+        let lower = name.to_lowercase();
+        if lower.contains("nvidia") || lower.contains("geforce") || lower.contains("gtx") || lower.contains("rtx") {
             return Ok(name);
         }
     }
     
+    // 最后兜底返回第一个
     fallback.ok_or_else(|| "无法获取显卡名称".to_string())
 }
 

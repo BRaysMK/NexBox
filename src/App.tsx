@@ -72,7 +72,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "v6.8.9";
+const CURRENT_VERSION = "v6.9.4";
 
 function App() {
   const { t } = useTranslation();
@@ -113,8 +113,8 @@ function App() {
   const [downloadedFilePath, setDownloadedFilePath] = useState<string>("");
   const [pageTransitionMode, setPageTransitionMode] = useState<TransitionMode>("fade");
 
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 

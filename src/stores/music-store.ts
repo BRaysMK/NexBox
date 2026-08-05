@@ -771,9 +771,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (mySeq !== playSongSeq) return;
 
       set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort, currentQuality: result.quality, currentBitrate: result.br });
-      // 推送歌曲数据到桌面歌词
+      // 推送桌面歌词状态
+      // 歌词数据已由 loadLyricsForSong 并行加载完成后自动 emit，此处不再重复 emitDesktopLyricsData
+      // 避免 loadLyricsForSong 未完成时推送旧歌词
       if (get().desktopLyricsVisible) {
-        get().emitDesktopLyricsData();
         emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
       }
       // 歌词已在 playSong 开始时并行加载，此处不再重复调用

@@ -221,8 +221,8 @@ function GeneralSettings() {
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
   const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const splashLogoHoverBorder = useColorModeValue("blue.400", "blue.300");
   const segmentedControlBg = useColorModeValue(
@@ -1162,8 +1162,8 @@ function ThemeColorSettings() {
     resetToDefault,
   } = useThemeColor();
   
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const presetBorderColor = useColorModeValue("gray.200", "#444444");
   const presetActiveBorderColor = useColorModeValue("gray.400", "#666666");
@@ -1272,8 +1272,8 @@ function AppearanceSettings() {
   const videoPreviewSrc = useMemo(() => dynamicBgVideo ? convertFileSrc(dynamicBgVideo) : null, [dynamicBgVideo]);
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const emptySlotBg = useColorModeValue("gray.100", "#1a1a1a");
   const emptySlotBorder = useColorModeValue("gray.200", "#333333");
   const activeSlotBorder = useColorModeValue("blue.400", "blue.300");
@@ -1986,8 +1986,8 @@ function AppearanceSettings() {
 function NetworkSettings() {
   const { t } = useTranslation();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const inputBg = useColorModeValue("white", "#1a1a1a");
   const inputBorder = useColorModeValue("gray.200", "#333333");
 
@@ -2303,8 +2303,8 @@ const CONTRIBUTORS: ContributorItem[] = [
 function ContributorSettings() {
   const { t } = useTranslation();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
   // 优先展示远程最新名单，拉取失败时回退到内置硬编码名单
   const [contributors, setContributors] = useState<ContributorItem[]>(CONTRIBUTORS);
@@ -2460,8 +2460,8 @@ interface SponsorItem {
 function SponsorSettings() {
   const { t } = useTranslation();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const [sponsors, setSponsors] = useState<SponsorItem[]>([]);
@@ -2606,8 +2606,8 @@ function PawnioSettings() {
   const { t } = useTranslation();
   const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const dividerColor = useColorModeValue("gray.200", "#333333");
 
   const [status, setStatus] = useState<{ installed: boolean; version?: string } | null>(null);
@@ -2713,16 +2713,16 @@ function AboutSettings() {
   const { t } = useTranslation();
   const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const dividerColor = useColorModeValue("gray.200", "#333333");
-  const appNameColor = useColorModeValue("gray.400", "#888888");
+  const appNameColor = useColorModeValue("gray.400", "#ffffff");
   const graphicLogoSrc = useColorModeValue("/logo/NBB.png", "/logo/NBW.png");
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "6.8.9";
+  const currentVersion = "6.9.4";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
@@ -3174,8 +3174,8 @@ function HotkeySettings() {
   const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
   const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
 
   return (
     <Box>

@@ -258,8 +258,8 @@ export default function DisplayFilterPage() {
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.700", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const sliderBg = useColorModeValue("gray.100", "#222222");
   const infoBg = useColorModeValue("gray.50", "#1a1a1a");
   const inputBg = useColorModeValue("white", "#1a1a1a");

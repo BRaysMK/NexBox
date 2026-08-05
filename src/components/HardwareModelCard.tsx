@@ -60,7 +60,7 @@ export default function HardwareModelCard() {
     detectOs();
   }, [detectOs]);
 
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
   const valueColor = useColorModeValue("gray.800", "#e6e6e6");
 
   const renderMemorySummary = () => {

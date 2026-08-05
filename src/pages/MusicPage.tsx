@@ -460,8 +460,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   const bgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
 
   // 文字颜色覆写（现代模式）
@@ -1303,8 +1303,8 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
   const hoverBg = getHoverColor(false);
 
   const borderColor = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const dropdownBg = useColorModeValue("white", "#1a1a1a");
   const sliderTrackBg = useColorModeValue("rgba(255,255,255,0.9)", "#333333");
 
@@ -1790,8 +1790,8 @@ const SearchBox = memo(function SearchBox({
 
   const bgColor = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const itemHoverBg = useColorModeValue("gray.50", "rgba(255,255,255,0.05)");
   const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
   const dropdownBg = useColorModeValue("white", "#1a1a1a");
@@ -2107,8 +2107,8 @@ export default function MusicPage() {
   const hoverBg = getHoverColor(false);
 
   const borderColor = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const itemHoverBg = useColorModeValue("gray.50", "rgba(255,255,255,0.05)");
   const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
 

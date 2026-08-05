@@ -50,8 +50,8 @@ export function BleDeviceDialog({ isOpen, onClose }: BleDeviceDialogProps) {
     connection_status: "Disconnected",
   });
 
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#999999");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const cardBg = useColorModeValue("gray.50", "#1a1a1a");
   const toast = useToast();

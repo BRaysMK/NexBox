@@ -99,8 +99,8 @@ function OptionRow({
 }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const iconBg = useColorModeValue("white", "#222222");
   const rowBg = useColorModeValue("gray.50", "#1a1a1a");

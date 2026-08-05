@@ -56,7 +56,7 @@ export default function HardwareDetailModal({
   const overlayBg = useColorModeValue("blackAlpha.600", "blackAlpha.700");
   const contentBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#2a2a2a");
-  const labelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.500", "#ffffff");
   const valueColor = useColorModeValue("gray.800", "#e0e0e0");
   const headerColor = useColorModeValue("gray.800", "#e0e0e0");
 

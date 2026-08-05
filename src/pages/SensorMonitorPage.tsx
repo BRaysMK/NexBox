@@ -462,7 +462,7 @@ export default function SensorMonitorPage() {
   const visibleRef = useRef(true);
 
   const bg = useColorModeValue("#111111", "#0a0a0a");
-  const textColor = useColorModeValue("#e0e0e0", "#e0e0e0");
+  const textColor = useColorModeValue("#e0e0e0", "#ffffff");
 
   const toggleGroup = useCallback((groupKey: string) => {
     setExpandedGroups((prev) => {

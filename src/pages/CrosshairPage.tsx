@@ -183,8 +183,8 @@ export default function CrosshairPage() {
   const lastProceduralStyle = useRef<string>("Cross");
 
   const headingColor = useColorModeValue("black", "#ffffff");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const sliderBg = useColorModeValue("gray.200", "gray.600");
   const hoverBg = useColorModeValue("gray.100", "#252525");

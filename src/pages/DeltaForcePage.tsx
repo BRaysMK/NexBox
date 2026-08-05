@@ -114,8 +114,8 @@ function PasswordCard() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#888888");
-  const textColor = useColorModeValue("#000000", "#e0e0e0");
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
+  const textColor = useColorModeValue("#000000", "#ffffff");
   const cardItemBg = useColorModeValue("gray.50", "#1a1a1a");
   const cardItemHoverBg = useColorModeValue("gray.100", "#222222");
   const { liquidGlassEnabled } = useBackground();
@@ -233,12 +233,12 @@ function MoreGunCodesCard() {
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#888888");
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
   const cardBg = useColorModeValue("gray.50", "#1a1a1a");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#e0e0e0");
+  const textColor = useColorModeValue("#000000", "#ffffff");
 
   const content = (
     <VStack align="center" spacing={3} py={2} justify="center" h="100%">
@@ -287,12 +287,12 @@ function OfficialMapCard() {
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#888888");
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
   const cardBg = useColorModeValue("gray.50", "#1a1a1a");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#e0e0e0");
+  const textColor = useColorModeValue("#000000", "#ffffff");
   const [isOpening, setIsOpening] = useState(false);
   const toast = useToast();
 
@@ -363,12 +363,12 @@ function OfficialWallpaperCard() {
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#888888");
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
   const cardBg = useColorModeValue("gray.50", "#1a1a1a");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#e0e0e0");
+  const textColor = useColorModeValue("#000000", "#ffffff");
   const [isOpening, setIsOpening] = useState(false);
   const toast = useToast();
 
@@ -587,8 +587,8 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const effectiveBlur = showBlur ? liquidGlassBlur : 0;
 
   const primaryColor = getActiveColor();
-  const textColor = useColorModeValue("#000000", "#e0e0e0");
-  const subTextColor = useColorModeValue("#000000", "#888888");
+  const textColor = useColorModeValue("#000000", "#ffffff");
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
   const cardBg = useColorModeValue("gray.50", "#1a1a1a");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");

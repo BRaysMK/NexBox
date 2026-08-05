@@ -196,7 +196,7 @@ function SliderControl({
   onChange: (val: number) => void;
   suffix?: string;
 }) {
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
   const sliderBg = useColorModeValue("gray.200", "gray.700");
   const { getActiveColor } = useThemeColor();
 
@@ -223,7 +223,7 @@ interface CustomItemCardProps {
 }
 
 function CustomItemCard({ item, onUpdate, onRemove }: CustomItemCardProps) {
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const inputBg = useColorModeValue("gray.50", "#1a1a1a");
   const { getActiveColor } = useThemeColor();

@@ -78,8 +78,8 @@ function DesktopLyricsSettingsModalInner({
   const desktopLyricsBaseColor = useMusicStore((s) => s.desktopLyricsBaseColor);
   const desktopLyricsLineCount = useMusicStore((s) => s.desktopLyricsLineCount);
 
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subLabelColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");

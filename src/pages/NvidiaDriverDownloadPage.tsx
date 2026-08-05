@@ -79,8 +79,8 @@ export default function NvidiaDriverDownloadPage() {
   const [detection, setDetection] = useState<GpuDetection | null>(null);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const textColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.700", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const inputBg = useColorModeValue("white", "#1a1a1a");
 

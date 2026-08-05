@@ -103,6 +103,26 @@ const EQ_STORE_PREAMP = "eq-preamp";
 const EQ_STORE_FX = "eq-effects";
 
 // ===== 辅助函数 =====
+/** 将任意数量的 EQ 频段下采样到 10 个标准频段 */
+function downsampleBands(bands: EqBand[]): EqBand[] {
+  const STANDARD_FREQS = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+  if (bands.length <= 10) return bands;
+  const sorted = [...bands].sort((a, b) => a.freq - b.freq);
+  return STANDARD_FREQS.map((targetFreq) => {
+    // 在 sorted 中找到最接近 targetFreq 的频段
+    let best = sorted[0];
+    let bestDist = Math.abs(best.freq - targetFreq);
+    for (let i = 1; i < sorted.length; i++) {
+      const dist = Math.abs(sorted[i].freq - targetFreq);
+      if (dist < bestDist) {
+        best = sorted[i];
+        bestDist = dist;
+      }
+    }
+    return { ...best };
+  });
+}
+
 function formatFreq(freq: number): string {
   if (freq >= 1000) {
     return `${(freq / 1000).toFixed(freq >= 10000 ? 2 : 1)}k`;
@@ -303,7 +323,7 @@ function EqBandSlider({
   band: EqBand;
   onChange: (gain: number) => void;
 }) {
-  const labelColor = useColorModeValue("gray.600", "#aaaaaa");
+  const labelColor = useColorModeValue("gray.600", "#ffffff");
   const valueColor = useColorModeValue("gray.800", "#e0e0e0");
   const { getActiveColor } = useThemeColor();
   const activeColor = getActiveColor();
@@ -409,8 +429,8 @@ export default function AudioEqPage() {
   const toast = useToast();
 
   const headingColor = useColorModeValue("#1A202C", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const presetIconColor = useColorModeValue("#4A5568", "#aaaaaa");
   const iconBg = useColorModeValue("gray.100", "#222222");
   const warningBg = useColorModeValue("orange.50", "rgba(237, 137, 54, 0.1)");
@@ -487,7 +507,7 @@ export default function AudioEqPage() {
         if (saved) {
           setSelectedPresetId(saved.id);
           selectedPresetIdRef.current = saved.id;
-          setBands(savedBands ?? saved.bands);
+          setBands(downsampleBands(savedBands ?? saved.bands));
           return;
         }
       }
@@ -496,7 +516,7 @@ export default function AudioEqPage() {
       const first = presetList[0];
       setSelectedPresetId(first.id);
       selectedPresetIdRef.current = first.id;
-      setBands(first.bands);
+      setBands(downsampleBands(first.bands));
     } catch (error) {
       console.error("Failed to load EQ data:", error);
     } finally {
@@ -653,7 +673,8 @@ export default function AudioEqPage() {
   const handleSelectPreset = async (preset: EqPreset) => {
     setSelectedPresetId(preset.id);
     selectedPresetIdRef.current = preset.id;
-    setBands(preset.bands);
+    const displayBands = downsampleBands(preset.bands);
+    setBands(displayBands);
 
     await store.set(EQ_STORE_SELECTED, preset.id);
     await store.set(EQ_STORE_BANDS, preset.bands);
@@ -1185,16 +1206,20 @@ ${bandsStr}`;
                     ))}
                   </HStack>
                 </Box>
-                <HStack spacing={1} justify="space-between" px={1}>
-                  {bands.map((band, index) => {
-                    const [minF, maxF] = BAND_FREQ_RANGES[index];
-                    return (
-                      <VStack key={index} spacing={0.5} w="full" align="center">
-                        <FreqKnob freq={band.freq} minFreq={minF} maxFreq={maxF} onChange={(f) => handleFreqChange(index, f)} />
-                      </VStack>
-                    );
-                  })}
-                </HStack>
+                {bands.length <= 10 && (
+                  <HStack spacing={1} justify="space-between" px={1}>
+                    {bands.map((band, index) => {
+                      const range = BAND_FREQ_RANGES[index];
+                      const minF = range?.[0] ?? band.freq * 0.7;
+                      const maxF = range?.[1] ?? band.freq * 1.4;
+                      return (
+                        <VStack key={index} spacing={0.5} w="full" align="center">
+                          <FreqKnob freq={band.freq} minFreq={minF} maxFreq={maxF} onChange={(f) => handleFreqChange(index, f)} />
+                        </VStack>
+                      );
+                    })}
+                  </HStack>
+                )}
               </VStack>
             </LiquidGlassCard>
             <Box mt={4}>

@@ -50,7 +50,7 @@ export function AnnouncementCard() {
   const [loading, setLoading] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
 
-  const labelColor = useColorModeValue("gray.500", "#cccccc");
+  const labelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const contentColor = useColorModeValue("gray.700", "#cccccc");

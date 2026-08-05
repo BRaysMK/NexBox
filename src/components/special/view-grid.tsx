@@ -45,7 +45,7 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const IconComponent = tool.icon;
   const isDark = useColorModeValue(false, true);
   const hoverBg = useColorModeValue("gray.50", "#1a1a1a");
@@ -191,7 +191,7 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const IconComponent = tool.icon;
   const isDark = useColorModeValue(false, true);
   const hoverBg = useColorModeValue("gray.50", "#1a1a1a");

@@ -90,7 +90,7 @@ export function GlobalSearch() {
     liquidGlassEnabled ? "rgba(255,255,255,0.2)" : "rgba(200,200,200,0.3)",
     liquidGlassEnabled ? "rgba(255,255,255,0.1)" : "rgba(51,51,51,0.5)"
   );
-  const textColor = useColorModeValue("gray.700", "gray.200");
+  const textColor = useColorModeValue("gray.700", "#ffffff");
   const placeholderColor = useColorModeValue("gray.500", "gray.400");
   const resultItemBg = useColorModeValue("gray.50", "gray.800");
   const resultItemHoverBg = useColorModeValue("gray.100", "gray.700");

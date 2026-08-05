@@ -42,8 +42,8 @@ export default function PeripheralOptimizePage() {
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.700", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.700", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();

@@ -26,8 +26,8 @@ interface PlatformInfo {
 export default function OtherGunCodePlatformsPage() {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const textColor = useColorModeValue("#000000", "#e0e0e0");
-  const subTextColor = useColorModeValue("#000000", "#888888");
+  const textColor = useColorModeValue("#000000", "#ffffff");
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();

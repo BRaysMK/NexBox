@@ -12,8 +12,8 @@ export default function GameWinKeyCard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const textColor = useColorModeValue("gray.800", "#e6e6e6");
-  const subTextColor = useColorModeValue("gray.600", "#a0a0a0");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.600", "#ffffff");
 
   useEffect(() => {
     let mounted = true;

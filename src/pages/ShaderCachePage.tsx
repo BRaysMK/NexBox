@@ -73,8 +73,8 @@ function VendorCard({
   onToggleExpand: () => void;
 }) {
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.800", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const headingColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const dirPathColor = useColorModeValue("gray.400", "#666666");
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
@@ -247,7 +247,7 @@ export default function ShaderCachePage() {
   const navigate = useNavigate();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tipBg = useColorModeValue(
     "rgba(59,130,246,0.05)",
     "rgba(59,130,246,0.1)"

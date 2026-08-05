@@ -56,7 +56,7 @@ export default function StartupManagerPage() {
   const navigate = useNavigate();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tableBg = liquidGlassEnabled
     ? "rgba(255,255,255,0.7)"
     : useColorModeValue("#ffffff", "#1a1a1a");

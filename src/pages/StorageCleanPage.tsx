@@ -112,8 +112,8 @@ function CleanItemCard({
 }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
-  const headingColor = useColorModeValue("gray.800", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const headingColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const pathColor = useColorModeValue("gray.400", "#666666");
   const cardBg = liquidGlassEnabled
     ? "rgba(255,255,255,0.7)"
@@ -226,7 +226,7 @@ export default function StorageCleanPage() {
   const navigate = useNavigate();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
   const statsBg = liquidGlassEnabled
     ? "rgba(255,255,255,0.6)"

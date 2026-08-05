@@ -27,8 +27,8 @@ export function LiquidGlassMenuItem({
 
   const activeBg = getActiveColor();
   const activeTextFinal = getContrastTextColor();
-  const inactiveText = useColorModeValue("gray.500", "#d0d0d0");
-  const glassInactiveText = useColorModeValue("gray.900", "#d0d0d0");
+  const inactiveText = useColorModeValue("gray.500", "#ffffff");
+  const glassInactiveText = useColorModeValue("gray.900", "#ffffff");
   const defaultInactiveBg = useColorModeValue("white", "#111111");
   const hoverBg = useColorModeValue("gray.200", "#333333");
 

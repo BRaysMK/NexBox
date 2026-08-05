@@ -33,7 +33,7 @@ export function CloseConfirmDialog({
     "rgba(0, 0, 0, 0.7)"
   );
   const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const textColor = useColorModeValue("gray.600", "gray.300");
+  const textColor = useColorModeValue("gray.600", "#ffffff");
 
   const handleMinimizeToTray = () => {
     onMinimizeToTray(dontAskAgain);

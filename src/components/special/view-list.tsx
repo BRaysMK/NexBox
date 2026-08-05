@@ -43,7 +43,7 @@ function SortableListItem({ tool, activeDrag }: { tool: ViewItem; activeDrag: bo
   const { liquidGlassEnabled } = useBackground();
   const { config } = useThemeColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const listBg = useColorModeValue("white", "#111111");
   const listBorder = useColorModeValue("gray.200", "#333333");
   const hoverBg = useColorModeValue("gray.50", "#1a1a1a");
@@ -186,7 +186,7 @@ export function ViewList({ tools, onReorder }: ViewListProps) {
   const { liquidGlassEnabled } = useBackground();
   const { config } = useThemeColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const listBg = useColorModeValue("white", "#111111");
   const listBorder = useColorModeValue("gray.200", "#333333");
   const hoverBg = useColorModeValue("gray.50", "#1a1a1a");

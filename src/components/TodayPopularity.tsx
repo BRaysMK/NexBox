@@ -50,7 +50,7 @@ export function TodayPopularity() {
   const [animating, setAnimating] = useState(false);
 
   const valueColor = useColorModeValue("purple.500", "#b794f4");
-  const labelColor = useColorModeValue("gray.500", "#cccccc");
+  const labelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
 

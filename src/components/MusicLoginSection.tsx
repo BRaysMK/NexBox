@@ -121,8 +121,8 @@ export function MusicLoginSection() {
   const activeColor = getActiveColor();
   const contrastText = getContrastTextColor();
 
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const modalBg = useColorModeValue("white", "#1a1a1a");
   const modalBorder = useColorModeValue("gray.200", "#333333");
   const menuBg = useColorModeValue("white", "#1a1a1a");

@@ -57,7 +57,7 @@ export default function SystemOptimizerPage() {
   const [noticeCountdown, setNoticeCountdown] = useState(NOTICE_COUNTDOWN_SECONDS);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
 

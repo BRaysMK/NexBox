@@ -57,7 +57,7 @@ export default function GpuRenamePage() {
   const contrastText = getContrastTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const textColor = useColorModeValue("gray.600", "#a0a0a0");
+  const textColor = useColorModeValue("gray.600", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
 

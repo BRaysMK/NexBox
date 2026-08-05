@@ -215,8 +215,8 @@ function DLSSCard() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const hoverBg = useColorModeValue("gray.100", "#252525");
   const menuListBg = useColorModeValue("white", "#1a1a1a");
@@ -408,8 +408,8 @@ function GpuInfoCard() {
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
   useEffect(() => {
     getHardwareInfo()
@@ -452,7 +452,7 @@ function DLSSIndicatorCard() {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
   useEffect(() => {
     invoke<DLSSSettingsStatus>("get_dlss_settings_status")
@@ -529,11 +529,11 @@ function PresetReferenceTable() {
 
   const tableBg = useColorModeValue("gray.50", "#1a1a1a");
   const headerBg = useColorModeValue("gray.100", "#252525");
-  const textColor = useColorModeValue("gray.800", "#e0e0e0");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
 
   return (
     <SectionCard title={t("dlssPresetTable.title")} icon={<FileText size={18} />}>
-      <Text fontSize="sm" color={useColorModeValue("gray.500", "#888888")} mb={3}>
+      <Text fontSize="sm" color={useColorModeValue("gray.500", "#ffffff")} mb={3}>
         {t("dlssPresetTable.description")}
       </Text>
 

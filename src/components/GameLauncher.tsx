@@ -329,8 +329,8 @@ export default function GameLauncher() {
     [cardSize, updateCardSize],
   );
 
-  const titleColor = useColorModeValue("gray.800", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const headerColor = useColorModeValue("gray.800", "#ffffff");

@@ -81,8 +81,8 @@ function SystemPlanCard({
   deleteLoading: boolean;
 }) {
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.800", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const headingColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const accentColor = "#805ad5";
 
   return (
@@ -183,8 +183,8 @@ function BuiltinPlanCard({
   importActivateLoading: boolean;
 }) {
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.800", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const headingColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const accentColor = "#F6AD55";
 
   return (
@@ -290,7 +290,7 @@ export default function PowerManagementPage() {
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tipBg = useColorModeValue(
     "rgba(246,173,85,0.05)",
     "rgba(246,173,85,0.1)"

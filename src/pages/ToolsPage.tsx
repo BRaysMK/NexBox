@@ -1,4 +1,4 @@
-﻿import {
+import {
   Box,
   Flex,
   Grid,
@@ -106,8 +106,8 @@ function ToolCardComponent({
   categoryLabels: Record<string, string>;
 }) {
   const iconColor = useColorModeValue("gray.700", "#cccccc");
-  const titleColor = useColorModeValue("gray.800", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const { getActiveColor } = useThemeColor();
 
   return (
@@ -165,8 +165,8 @@ function ThirdPartyToolCard({
   const toast = useToast();
 
   const iconColor = useColorModeValue("gray.700", "#cccccc");
-  const titleColor = useColorModeValue("gray.800", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
   const { getActiveColor } = useThemeColor();
 
   const isCustomAdded = !!customToolPath;
@@ -452,8 +452,8 @@ function OfficialToolSection({
   const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
   const dividerColor = useColorModeValue("gray.200", "#333333");
   const iconColor = useColorModeValue("gray.700", "#cccccc");
-  const titleColor = useColorModeValue("gray.800", "#e0e0e0");
-  const descColor = useColorModeValue("gray.500", "#888888");
+  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
 
   // Official recommendation only shows when category is "all"
   if (activeCategory !== "all") return null;

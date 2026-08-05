@@ -14,7 +14,7 @@ interface MenuItemProps {
 
 function MenuItem({ icon, label, onClick, color }: MenuItemProps) {
   const hoverBg = useColorModeValue("rgba(255,255,255,0.15)", "rgba(255,255,255,0.08)");
-  const labelColor = color ?? useColorModeValue("#e0e0e0", "#e0e0e0");
+  const labelColor = color ?? useColorModeValue("#e0e0e0", "#ffffff");
 
   return (
     <Box
