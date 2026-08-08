@@ -4,7 +4,7 @@ import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
 
 interface LiquidGlassCardProps extends BoxProps {
   children: React.ReactNode;
@@ -41,18 +41,8 @@ export function LiquidGlassCard({
   const defaultBg = useColorModeValue("white", "#111111");
   const defaultBorder = useColorModeValue("gray.200", "#333333");
 
-  const [showBlur, setShowBlur] = useState(false);
-
-  useEffect(() => {
-    if (glassOn) {
-      const timer = setTimeout(() => setShowBlur(true), 250);
-      return () => clearTimeout(timer);
-    } else {
-      setShowBlur(false);
-    }
-  }, [glassOn]);
-
-  const effectiveBlur = showBlur ? effectiveGlassBlur : 0;
+  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  const effectiveBlur = glassOn ? effectiveGlassBlur : 0;
   const isReal = glassOn && liquidGlassMode === "real" && !isDashed;
 
   // 卡片主体：零滤镜

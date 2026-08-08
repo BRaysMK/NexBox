@@ -346,8 +346,6 @@ export function Sidebar() {
     isFirstRender.current = false;
   }, []);
 
-  const [showBlur, setShowBlur] = useState(false);
-
   useEffect(() => {
     if (typeof document === "undefined") return;
     const styleId = "nav-burst-keyframes";
@@ -358,16 +356,8 @@ export function Sidebar() {
     document.head.appendChild(style);
   }, []);
 
-  useEffect(() => {
-    if (liquidGlassEnabled) {
-      const timer = setTimeout(() => setShowBlur(true), 250);
-      return () => clearTimeout(timer);
-    } else {
-      setShowBlur(false);
-    }
-  }, [liquidGlassEnabled]);
-
-  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const isReal = liquidGlassEnabled && liquidGlassMode === "real";
   const backdropFilter = isReal
     ? (svgSupported
@@ -503,7 +493,7 @@ export function Sidebar() {
       border="1px solid"
       borderColor={liquidGlassEnabled ? glassBorderColor : defaultBorderColor}
       backdropFilter={backdropFilter}
-      transition="max-width 0.25s cubic-bezier(0.95, 0, 1, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+      transition="max-width 0.25s cubic-bezier(0.95, 0, 1, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), top 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
       sx={{
         ...containerStyles.sx,
         willChange: "auto",

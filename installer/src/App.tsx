@@ -56,6 +56,9 @@ export default function App() {
         onNext={step < 4 ? handleNext : undefined}
         showCancel={false}
       >
+        {/* 页面切换动画保留 framer-motion；玻璃卡片的背景模糊通过 CSS animation
+            延迟到页面动画结束后再平滑浮现，避免合成层内 backdrop-filter 采样失败
+            导致的「先透明、动画结束瞬间变模糊」（WebView2/Chromium 已知行为） */}
         <AnimatePresence mode="wait">
           {step === 1 && <WelcomePage key="welcome" />}
           {step === 2 && <LicensePage key="license" onAgreed={() => {}} />}

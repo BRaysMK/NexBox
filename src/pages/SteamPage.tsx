@@ -106,6 +106,8 @@ interface SteamGame {
   build_id: number;
   bytes_to_download: number;
   bytes_downloaded: number;
+  playtime_minutes: number;
+  last_played: number;
 }
 
 interface SteamAllData {
@@ -133,6 +135,29 @@ function formatDate(timestamp: number): string {
   if (timestamp === 0) return "-";
   return new Date(timestamp * 1000).toLocaleDateString("zh-CN", {
     year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+/** 分钟 → "X小时Y分钟"，不足 1 小时只显示分钟 */
+function formatPlaytime(minutes: number): string {
+  if (minutes <= 0) return "";
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours > 0 && mins > 0) return `${hours}小时${mins}分钟`;
+  if (hours > 0) return `${hours}小时`;
+  return `${mins}分钟`;
+}
+
+/** 最近游玩相对时间（X天前 / X小时前 / 日期） */
+function formatLastPlayed(timestamp: number): string {
+  if (timestamp <= 0) return "";
+  const diff = Date.now() / 1000 - timestamp;
+  if (diff < 3600) return "刚刚";
+  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}天前`;
+  return new Date(timestamp * 1000).toLocaleDateString("zh-CN", {
     month: "2-digit",
     day: "2-digit",
   });
@@ -467,6 +492,21 @@ const GameCard = memo(function GameCard({
             <Text noOfLines={1}>AppID: {game.app_id}</Text>
             <Text>{formatSize(game.size_on_disk)}</Text>
           </HStack>
+          {/* 游玩时长/最近游玩行：固定行高，无数据时也占据空间，保证卡片高度一致 */}
+          <Text
+            fontSize="2xs"
+            color={subTextColor}
+            noOfLines={1}
+            h="16px"
+            lineHeight="16px"
+            overflow="hidden"
+          >
+            {game.playtime_minutes > 0 ? formatPlaytime(game.playtime_minutes) : ""}
+            {game.playtime_minutes > 0 && game.last_played > 0 ? " · " : ""}
+            {game.last_played > 0
+              ? `${t("steam.lastPlayed")} ${formatLastPlayed(game.last_played)}`
+              : ""}
+          </Text>
           <Text fontSize="2xs" color={subTextColor} noOfLines={1}>
             {formatDate(game.last_updated)}
           </Text>

@@ -15,6 +15,8 @@ import {
   Monitor,
   HardDrive,
   Volume2,
+  MousePointerClick,
+  Gauge,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
@@ -117,6 +119,22 @@ const defaultTools: ViewItem[] = [
     descriptionKey: "builtinTools.nvidiaDriverDownloadDesc",
     color: "#76B900",
     beta: true,
+  },
+  {
+    id: "autoclicker",
+    path: "/autoclicker",
+    icon: MousePointerClick,
+    titleKey: "sidebar.autoclicker",
+    descriptionKey: "builtinTools.autoclickerDesc",
+    color: "#FF8C00",
+  },
+  {
+    id: "speedtest",
+    path: "/speedtest",
+    icon: Gauge,
+    titleKey: "sidebar.speedtest",
+    descriptionKey: "builtinTools.speedtestDesc",
+    color: "#00B4D8",
   },
 ];
 

@@ -101,6 +101,53 @@ export interface QrCheckResult {
   avatar?: string;
 }
 
+/** 评论 */
+export interface MusicComment {
+  comment_id: number;
+  content: string;
+  time: number;       // 毫秒时间戳
+  liked_count: number;
+  liked: boolean;
+  user_id: number;
+  nickname: string;
+  avatar: string;
+}
+
+/** 评论分页结果 */
+export interface CommentPage {
+  total: number;
+  has_more: boolean;
+  comments: MusicComment[];
+  hot_comments: MusicComment[];
+}
+
+/** 专辑 */
+export interface Album {
+  id: string;
+  name: string;
+  cover: string;
+  publish_time: number;
+  song_count: number;
+  artist_name: string;
+}
+
+/** 歌手 MV */
+export interface Mv {
+  id: string;
+  name: string;
+  cover: string;
+  duration: number;
+  play_count: number;
+  artist_name: string;
+}
+
+/** 歌手简介 */
+export interface ArtistDetail {
+  id: string;
+  name: string;
+  brief_desc: string;
+}
+
 export type PlayMode = "list" | "shuffle" | "one";
 
 export type PlaybackQuality = "jymaster" | "hires" | "lossless" | "exhigh" | "standard";

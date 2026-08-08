@@ -50,10 +50,17 @@ import {
   Droplets,
   TrendingUp,
   Film,
+  MessageCircle,
+  Send,
+  Disc3,
+  Info,
+  ChevronRight,
+  X,
+  Maximize2,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import type { Song, Playlist, Artist } from "@/types/music";
+import type { Song, Playlist, Artist, MusicComment, Album, Mv } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -400,6 +407,215 @@ const ProgressSection = memo(function ProgressSection({
 });
 
 // ═══════════════════════════════════════════════
+// CommentPanel — 评论面板（网易云）
+// ═══════════════════════════════════════════════
+const formatCommentTime = (ts: number): string => {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const now = Date.now();
+  const diff = (now - ts) / 1000;
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+  if (diff < 86400 * 30) return `${Math.floor(diff / 86400)} 天前`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+interface CommentPanelProps {
+  song: Song;
+  proxyPort: number;
+  activeColor: string;
+  subTextColor: string;
+  textColor: string;
+  hoverBg: string;
+  loginInfo: { logged_in: boolean; nickname?: string; avatar?: string } | null;
+  scrollbarSx: any;
+}
+
+const CommentPanel = memo(function CommentPanel({
+  song,
+  proxyPort,
+  activeColor,
+  subTextColor,
+  textColor,
+  hoverBg,
+  loginInfo,
+  scrollbarSx,
+}: CommentPanelProps) {
+  const comments = useMusicStore((s) => s.currentComments);
+  const loadingComments = useMusicStore((s) => s.loadingComments);
+  const sendingComment = useMusicStore((s) => s.sendingComment);
+  const commentError = useMusicStore((s) => s.commentError);
+  const [commentInput, setCommentInput] = useState("");
+  const toast = useToast();
+  const [page, setPage] = useState(1);
+  const [lastLoadedSong, setLastLoadedSong] = useState("");
+
+  // 切换歌曲时重置并加载评论
+  useEffect(() => {
+    if (song.id !== lastLoadedSong) {
+      setPage(1);
+      setCommentInput("");
+      useMusicStore.getState().clearComments();
+      useMusicStore.getState().loadComments(song.id, 1);
+      setLastLoadedSong(song.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song.id]);
+
+  if (song.provider !== "netease") {
+    return (
+      <VStack h="100%" align="center" justify="center" spacing={2}>
+        <MessageCircle size={32} color={subTextColor} opacity={0.4} />
+        <Text color={subTextColor} fontSize="sm">当前平台暂不支持评论</Text>
+      </VStack>
+    );
+  }
+
+  const handleSend = async () => {
+    const content = commentInput.trim();
+    if (!content || !loginInfo?.logged_in) return;
+    const ok = await useMusicStore.getState().sendComment(song.id, content);
+    if (ok) {
+      setCommentInput("");
+      setPage(1);
+      toast({ title: "评论成功", status: "success", duration: 2000, isClosable: true });
+    } else {
+      toast({ title: "评论失败", status: "error", duration: 3000, isClosable: true });
+    }
+  };
+
+  const renderCommentRow = (c: MusicComment) => (
+    <VStack key={c.comment_id} spacing={1} align="stretch" p={3} borderRadius="md" _hover={{ bg: hoverBg }} transition="background 0.15s">
+      <HStack spacing={2}>
+        <Box w="28px" h="28px" borderRadius="full" overflow="hidden" flexShrink={0} bg="gray.600">
+          <ChakraImage
+            src={coverProxyUrl(c.avatar, proxyPort)}
+            alt=""
+            w="28px"
+            h="28px"
+            objectFit="cover"
+            fallback={<User size={16} color={subTextColor} />}
+          />
+        </Box>
+        <Text color={textColor} fontSize="sm" fontWeight="bold" flexShrink={0} maxW="50%" noOfLines={1}>
+          {c.nickname}
+        </Text>
+        <Text color={subTextColor} fontSize="xs" flexShrink={0}>{formatCommentTime(c.time)}</Text>
+        <Box flex={1} />
+        <HStack spacing={1} flexShrink={0}>
+          <Heart size={13} color={subTextColor} />
+          <Text fontSize="xs" color={subTextColor}>{c.liked_count}</Text>
+        </HStack>
+      </HStack>
+      <Text color={textColor} fontSize="sm" whiteSpace="pre-wrap" wordBreak="break-word">
+        {c.content}
+      </Text>
+    </VStack>
+  );
+
+  return (
+    <VStack flex={1} align="stretch" minH={0} spacing={3}>
+      {/* 评论输入框 */}
+      <Box flexShrink={0}>
+        {loginInfo?.logged_in ? (
+          <HStack spacing={2}>
+            <Input
+              value={commentInput}
+              onChange={(e) => setCommentInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              placeholder={`向 ${song.name} 发个评论吧...`}
+              size="sm"
+              variant="filled"
+              bg={hoverBg}
+              border="1px solid"
+              borderColor="transparent"
+              borderRadius="lg"
+              _placeholder={{ color: subTextColor, opacity: 0.7 }}
+              color={textColor}
+              flex={1}
+              isDisabled={sendingComment}
+              _focus={{ borderColor: activeColor, boxShadow: `0 0 0 2px ${activeColor}33, 0 0 0 1px ${activeColor}`, bg: hoverBg }}
+              _hover={{ borderColor: `${activeColor}66` }}
+            />
+            <Button
+              size="sm"
+              onClick={handleSend}
+              isLoading={sendingComment}
+              isDisabled={!commentInput.trim()}
+              leftIcon={<Send size={14} />}
+              sx={{ bg: activeColor, color: "white", _hover: { opacity: 0.85 } }}
+              borderRadius="lg"
+            >
+              发送
+            </Button>
+          </HStack>
+        ) : (
+          <Text color={subTextColor} fontSize="xs" textAlign="center" py={2}>
+            登录后可参与评论
+          </Text>
+        )}
+      </Box>
+
+      {loadingComments && !comments ? (
+        <VStack py={8}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
+      ) : commentError ? (
+        <VStack flex={1} align="center" justify="center" spacing={2}>
+          <MessageCircle size={28} color={subTextColor} opacity={0.4} />
+          <Text color="red.400" fontSize="sm">评论加载失败</Text>
+          <Text color={subTextColor} fontSize="xs" textAlign="center" px={4} wordBreak="break-all">
+            {commentError}
+          </Text>
+          <Button size="xs" variant="ghost" color={activeColor} onClick={() => useMusicStore.getState().loadComments(song.id, 1)}>
+            重试
+          </Button>
+        </VStack>
+      ) : comments && comments.total > 0 ? (
+        <Box flex={1} overflowY="auto" sx={scrollbarSx}>
+          {/* 热门评论 */}
+          {comments.hot_comments.length > 0 && (
+            <>
+              <Text fontSize="xs" fontWeight="bold" color={activeColor} mb={1} mt={2}>热门评论</Text>
+              <VStack spacing={1} align="stretch">
+                {comments.hot_comments.map(renderCommentRow)}
+              </VStack>
+            </>
+          )}
+          <Text fontSize="xs" fontWeight="bold" color={activeColor} mb={1} mt={3}>
+            最新评论 ({comments.total})
+          </Text>
+          <VStack spacing={1} align="stretch">
+            {comments.comments.map(renderCommentRow)}
+          </VStack>
+          {comments.has_more && (
+            <Button
+              size="xs"
+              variant="ghost"
+              w="100%"
+              mt={2}
+              color={activeColor}
+              isLoading={loadingComments}
+              onClick={() => {
+                const next = page + 1;
+                setPage(next);
+                useMusicStore.getState().loadComments(song.id, next);
+              }}
+            >
+              加载更多评论
+            </Button>
+          )}
+        </Box>
+      ) : (
+        <VStack flex={1} align="center" justify="center" spacing={2}>
+          <MessageCircle size={28} color={subTextColor} opacity={0.4} />
+          <Text color={subTextColor} fontSize="sm">暂无评论，来抢沙发吧~</Text>
+        </VStack>
+      )}
+    </VStack>
+  );
+});
+
+// ═══════════════════════════════════════════════
 // ExpandedPlayer — 展开的全屏播放器
 // 点击播放器封面展开，左侧封面+信息，右侧歌词
 // ═══════════════════════════════════════════════
@@ -431,6 +647,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const currentIndex = useMusicStore((s) => s.currentIndex);
 
   const [isClosing, setIsClosing] = useState(false);
+  const [rightTab, setRightTab] = useState<"lyrics" | "comments">("lyrics");
 
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const activeColor = getActiveColor();
@@ -789,20 +1006,67 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </VStack>
         </VStack>
 
-        {/* 右侧：歌词 */}
-        <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden" justify="flex-start">
-          <KaraokeLyricsView
-            lines={karaokeLines}
-            loading={loadingLyrics}
-            fontSize={lyricsFontSize}
-            activeColor={activeColor}
-            highlightColor={lyricsHighlightColor}
-            textColor={effectiveTextColor}
-            subTextColor={effectiveSubTextColor}
-            scrollbarSx={memoScrollbarSx}
-            audioRef={audioRef}
-            isPlaying={isPlaying}
-          />
+        {/* 右侧：歌词 / 评论 */}
+        <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden" justify="flex-start" spacing={2}>
+          {/* Tab 切换 */}
+          <HStack spacing={1} flexShrink={0} justify="center">
+            <Button
+              size="xs"
+              variant={rightTab === "lyrics" ? "solid" : "ghost"}
+              onClick={() => setRightTab("lyrics")}
+              leftIcon={<MusicIcon size={13} />}
+              sx={
+                rightTab === "lyrics"
+                  ? { bg: activeColor, color: "white", _hover: { opacity: 0.85 } }
+                  : { color: effectiveSubTextColor, _hover: { bg: effectiveHoverBg } }
+              }
+              borderRadius="full"
+            >
+              歌词
+            </Button>
+            {currentSong.provider === "netease" && (
+              <Button
+                size="xs"
+                variant={rightTab === "comments" ? "solid" : "ghost"}
+                onClick={() => setRightTab("comments")}
+                leftIcon={<MessageCircle size={13} />}
+                sx={
+                  rightTab === "comments"
+                    ? { bg: activeColor, color: "white", _hover: { opacity: 0.85 } }
+                    : { color: effectiveSubTextColor, _hover: { bg: effectiveHoverBg } }
+                }
+                borderRadius="full"
+              >
+                评论
+              </Button>
+            )}
+          </HStack>
+
+          {rightTab === "lyrics" ? (
+            <KaraokeLyricsView
+              lines={karaokeLines}
+              loading={loadingLyrics}
+              fontSize={lyricsFontSize}
+              activeColor={activeColor}
+              highlightColor={lyricsHighlightColor}
+              textColor={effectiveTextColor}
+              subTextColor={effectiveSubTextColor}
+              scrollbarSx={memoScrollbarSx}
+              audioRef={audioRef}
+              isPlaying={isPlaying}
+            />
+          ) : (
+            <CommentPanel
+              song={currentSong}
+              proxyPort={proxyPort}
+              activeColor={activeColor}
+              subTextColor={effectiveSubTextColor}
+              textColor={effectiveTextColor}
+              hoverBg={effectiveHoverBg}
+              loginInfo={loginInfo}
+              scrollbarSx={memoScrollbarSx}
+            />
+          )}
         </VStack>
       </HStack>
 
@@ -2060,6 +2324,15 @@ export default function MusicPage() {
   const selectedArtist = useMusicStore((s) => s.selectedArtist);
   const searchingArtists = useMusicStore((s) => s.searchingArtists);
   const loadingArtistSongs = useMusicStore((s) => s.loadingArtistSongs);
+  const artistDetail = useMusicStore((s) => s.artistDetail);
+  const artistAlbums = useMusicStore((s) => s.artistAlbums);
+  const artistMvs = useMusicStore((s) => s.artistMvs);
+  const albumDetailSongs = useMusicStore((s) => s.albumDetailSongs);
+  const albumDetailMeta = useMusicStore((s) => s.albumDetailMeta);
+  const loadingArtistDetail = useMusicStore((s) => s.loadingArtistDetail);
+  const loadingArtistAlbums = useMusicStore((s) => s.loadingArtistAlbums);
+  const loadingArtistMvs = useMusicStore((s) => s.loadingArtistMvs);
+  const loadingAlbumDetail = useMusicStore((s) => s.loadingAlbumDetail);
   const playlistSearchResults = useMusicStore((s) => s.playlistSearchResults);
   const searchingPlaylists = useMusicStore((s) => s.searchingPlaylists);
   const musicToast = useMusicStore((s) => s.musicToast);
@@ -2092,6 +2365,49 @@ export default function MusicPage() {
   const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
   const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks" | "daily">("recommendations");
   const [expandedPlayer, setExpandedPlayer] = useState(false);
+  const [artistTab, setArtistTab] = useState<"songs" | "albums" | "mvs" | "info">("songs");
+  const [expandedAlbum, setExpandedAlbum] = useState<Album | null>(null);
+  const [playingMv, setPlayingMv] = useState<Mv | null>(null);
+  const [mvUrl, setMvUrl] = useState("");
+  const [mvLoading, setMvLoading] = useState(false);
+  const mvVideoRef = useRef<HTMLVideoElement | null>(null);
+  const mvPlayerRef = useRef<HTMLDivElement | null>(null);
+  const mvCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mvClosing, setMvClosing] = useState(false);
+  const [mvIsPlaying, setMvIsPlaying] = useState(false);
+  const [mvCurrentTime, setMvCurrentTime] = useState(0);
+  const [mvDuration, setMvDuration] = useState(0);
+  const [mvVolume, setMvVolume] = useState(() => {
+    try {
+      const saved = localStorage.getItem("nexbox-mv-volume");
+      const num = saved ? parseFloat(saved) : NaN;
+      return isNaN(num) ? 1 : Math.min(1, Math.max(0, num));
+    } catch {
+      return 1;
+    }
+  });
+
+  // 音量变化时持久化，重进/重开播放器后保持用户设置
+  useEffect(() => {
+    try {
+      localStorage.setItem("nexbox-mv-volume", String(mvVolume));
+    } catch {}
+    if (mvVideoRef.current) {
+      mvVideoRef.current.volume = mvVolume;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mvVolume]);
+
+  const closeMvPlayer = useCallback(() => {
+    if (mvClosing) return;
+    setMvClosing(true);
+    mvCloseTimerRef.current = setTimeout(() => {
+      setPlayingMv(null);
+      setMvUrl("");
+      setMvIsPlaying(false);
+      setMvClosing(false);
+    }, 300);
+  }, [mvClosing]);
 
   // 搜索结果中展开的歌单
   const [searchExpandedPlaylist, setSearchExpandedPlaylist] = useState<Playlist | null>(null);
@@ -2219,8 +2535,15 @@ export default function MusicPage() {
     previousViewRef.current = viewMode;
     const patched = { ...artist };
     useMusicStore.setState({ selectedArtist: patched });
-    storeActions.loadArtistSongs(patched.mid || patched.id || "");
+    const artistId = patched.mid || patched.id || "";
+    storeActions.loadArtistSongs(artistId);
     setViewMode("artistDetail");
+    // 网易云歌手扩展: 简介/专辑/MV
+    if (playbackSource === "netease" && artistId) {
+      storeActions.loadArtistDetail(artistId);
+      storeActions.loadArtistAlbums(artistId);
+      storeActions.loadArtistMvs(artistId);
+    }
     // 歌手可能没有头像（从歌曲卡片进入时），异步搜索补齐
     if (!patched.pic_url && patched.name) {
       const cmd = playbackSource === "kugou" ? "kugou_artist_search" : "music_artist_search";
@@ -2341,6 +2664,10 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
     (song: Song, i: number) => renderSongRow(song, i, artistSongs),
     [renderSongRow, artistSongs]
   );
+  const renderAlbumSongItem = useCallback(
+    (song: Song, i: number) => renderSongRow(song, i, albumDetailSongs),
+    [renderSongRow, albumDetailSongs]
+  );
   const renderLeftTrackItem = useCallback(
     (song: Song, i: number) => renderSongRow(song, i, leftPlaylistTracks),
     [renderSongRow, leftPlaylistTracks]
@@ -2409,6 +2736,107 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
   // 歌手详情视图
   // ═══════════════════════════════════════════════
   if (viewMode === "artistDetail") {
+    const artistTabBarBg = useColorModeValue("gray.100", "rgba(255,255,255,0.04)");
+    const artistTabActiveBg = useColorModeValue("white", "rgba(255,255,255,0.1)");
+
+    const renderAlbumItem = (album: Album) => (
+      <HStack
+        key={album.id}
+        spacing={3}
+        p={3}
+        borderRadius="lg"
+        cursor="pointer"
+        _hover={{ bg: itemHoverBg }}
+        onClick={() => {
+          setExpandedAlbum(album);
+          storeActions.loadAlbumDetail(album.id);
+        }}
+        transition="background 0.15s"
+      >
+        <ChakraImage
+          src={coverProxyUrl(album.cover, proxyPort)}
+          alt=""
+          w="52px"
+          h="52px"
+          borderRadius="md"
+          objectFit="cover"
+          fallback={<Box w="52px" h="52px" borderRadius="md" bg="gray.700" display="flex" alignItems="center" justifyContent="center"><MusicIcon size={20} color={subTextColor} /></Box>}
+        />
+        <VStack spacing={0} align="start" flex={1} minW={0}>
+          <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
+            {album.name}
+          </Text>
+          <Text color={subTextColor} fontSize="xs">
+            {album.publish_time ? new Date(album.publish_time).getFullYear() : ""} · {album.song_count} 首
+          </Text>
+        </VStack>
+        <ChevronRight size={16} color={subTextColor} />
+      </HStack>
+    );
+
+    const handlePlayMv = async (mv: Mv) => {
+      setPlayingMv(mv);
+      setMvUrl("");
+      setMvLoading(true);
+      try {
+        const url = await invoke<string>("music_mv_url", { mvId: mv.id, resolution: 1080 });
+        setMvUrl(url);
+      } catch (e) {
+        console.error("[Music] load mv url failed:", e);
+        toast({ title: "MV 加载失败", description: String(e), status: "error", duration: 3000, isClosable: true });
+        setPlayingMv(null);
+      } finally {
+        setMvLoading(false);
+      }
+    };
+
+    const renderMvItem = (mv: Mv) => (
+      <HStack
+        key={mv.id}
+        spacing={3}
+        p={3}
+        borderRadius="lg"
+        cursor="pointer"
+        _hover={{ bg: itemHoverBg }}
+        onClick={() => handlePlayMv(mv)}
+        transition="background 0.15s"
+      >
+        <Box position="relative" w="80px" h="48px" borderRadius="md" overflow="hidden" flexShrink={0}>
+          <ChakraImage
+            src={coverProxyUrl(mv.cover, proxyPort)}
+            alt=""
+            w="80px"
+            h="48px"
+            objectFit="cover"
+            fallback={<Box w="80px" h="48px" bg="gray.700" display="flex" alignItems="center" justifyContent="center"><Film size={18} color={subTextColor} /></Box>}
+          />
+          <Box position="absolute" inset={0} display="flex" alignItems="center" justifyContent="center" bg="rgba(0,0,0,0.3)">
+            <Box color="white"><PlayBtn size={18} /></Box>
+          </Box>
+        </Box>
+        <VStack spacing={0} align="start" flex={1} minW={0}>
+          <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
+            {mv.name}
+          </Text>
+          <Text color={subTextColor} fontSize="xs">
+            {mv.duration ? formatTime(mv.duration / 1000) : ""}
+            {mv.play_count > 0 ? ` · ${(mv.play_count / 10000).toFixed(1)}万播放` : ""}
+          </Text>
+        </VStack>
+      </HStack>
+    );
+
+    const artistTabs: { key: "songs" | "albums" | "mvs" | "info"; label: string; icon: React.ReactElement; count?: number }[] = [
+      { key: "songs", label: "热门歌曲", icon: <MusicIcon size={13} />, count: artistSongs.length },
+      ...(playbackSource === "netease"
+        ? ([
+            { key: "albums", label: "专辑", icon: <Disc3 size={13} />, count: artistAlbums.length },
+            { key: "mvs", label: "MV", icon: <Film size={13} />, count: artistMvs.length },
+            { key: "info", label: "简介", icon: <Info size={13} /> },
+          ] as { key: "albums" | "mvs" | "info"; label: string; icon: React.ReactElement; count?: number }[])
+        : []),
+    ];
+
     return (
       <VStack
         spacing={4}
@@ -2452,7 +2880,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
           )}
           {!selectedArtist && (
             <Text fontSize="lg" fontWeight="bold" color={textColor}>
-              歌手歌曲
+              歌手详情
             </Text>
           )}
         </HStack>
@@ -2462,27 +2890,139 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
           onArtistClick={handleArtistClick}
         />
 
+        {/* Tab 切换 */}
+        <HStack spacing={1} flexShrink={0} flexWrap="wrap">
+          {artistTabs.map((tab) => (
+            <Button
+              key={tab.key}
+              size="sm"
+              onClick={() => setArtistTab(tab.key)}
+              leftIcon={tab.icon}
+              sx={{
+                bg: artistTab === tab.key ? artistTabActiveBg : "transparent",
+                color: artistTab === tab.key ? activeColor : subTextColor,
+                fontWeight: artistTab === tab.key ? "bold" : "normal",
+                _hover: { bg: artistTab === tab.key ? artistTabActiveBg : artistTabBarBg },
+              }}
+              borderRadius="full"
+            >
+              {tab.label}
+              {tab.count != null && <Text ml={1} fontSize="xs" color={subTextColor}>({tab.count})</Text>}
+            </Button>
+          ))}
+        </HStack>
+
         <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden">
-          {loadingArtistSongs ? (
-            <VStack py={12}>
-              <Spinner size="lg" sx={{ color: activeColor }} />
-              <Text color={subTextColor} fontSize="sm">加载中...</Text>
-            </VStack>
-          ) : artistSongs.length > 0 ? (
-            <VirtualList
-              items={artistSongs}
-              itemHeight={60}
-              renderItem={renderArtistSongItem}
-              getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
-              emptyText="暂无歌曲"
-              resetKey={selectedArtist?.id}
-              scrollbarSx={memoScrollbarSx}
-            />
+          {/* 专辑展开的曲目 */}
+          {expandedAlbum ? (
+            <>
+              <HStack spacing={2} mb={3} flexShrink={0}>
+                <Tooltip label="返回专辑列表">
+                  <IconButton
+                    aria-label="Back to albums"
+                    icon={<ArrowLeft size={16} />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setExpandedAlbum(null)}
+                    sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                  />
+                </Tooltip>
+                <VStack spacing={0} align="start" minW={0}>
+                  <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
+                    {albumDetailMeta?.name || expandedAlbum.name}
+                  </Text>
+                  <Text color={subTextColor} fontSize="xs">
+                    {albumDetailMeta?.song_count || expandedAlbum.song_count} 首
+                  </Text>
+                </VStack>
+              </HStack>
+              {loadingAlbumDetail ? (
+                <VStack py={10}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
+              ) : albumDetailSongs.length > 0 ? (
+                <VirtualList
+                  items={albumDetailSongs}
+                  itemHeight={60}
+                  renderItem={renderAlbumSongItem}
+                  getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
+                  emptyText="暂无歌曲"
+                  resetKey={expandedAlbum.id}
+                  scrollbarSx={memoScrollbarSx}
+                />
+              ) : (
+                <VStack py={10} spacing={2}>
+                  <MusicIcon size={32} color={subTextColor} />
+                  <Text color={subTextColor} fontSize="sm">暂无歌曲</Text>
+                </VStack>
+              )}
+            </>
+          ) : artistTab === "songs" ? (
+            loadingArtistSongs ? (
+              <VStack py={12}>
+                <Spinner size="lg" sx={{ color: activeColor }} />
+                <Text color={subTextColor} fontSize="sm">加载中...</Text>
+              </VStack>
+            ) : artistSongs.length > 0 ? (
+              <VirtualList
+                items={artistSongs}
+                itemHeight={60}
+                renderItem={renderArtistSongItem}
+                getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
+                emptyText="暂无歌曲"
+                resetKey={selectedArtist?.id}
+                scrollbarSx={memoScrollbarSx}
+              />
+            ) : (
+              <VStack py={12} spacing={2}>
+                <MusicIcon size={32} color={subTextColor} />
+                <Text color={subTextColor} fontSize="sm">暂无歌曲</Text>
+              </VStack>
+            )
+          ) : artistTab === "albums" ? (
+            loadingArtistAlbums && artistAlbums.length === 0 ? (
+              <VStack py={12}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
+            ) : artistAlbums.length > 0 ? (
+              <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
+                <VStack spacing={1} align="stretch">
+                  {artistAlbums.map(renderAlbumItem)}
+                </VStack>
+              </Box>
+            ) : (
+              <VStack py={12} spacing={2}>
+                <Disc3 size={32} color={subTextColor} />
+                <Text color={subTextColor} fontSize="sm">暂无专辑</Text>
+              </VStack>
+            )
+          ) : artistTab === "mvs" ? (
+            loadingArtistMvs && artistMvs.length === 0 ? (
+              <VStack py={12}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
+            ) : artistMvs.length > 0 ? (
+              <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
+                <VStack spacing={1} align="stretch">
+                  {artistMvs.map(renderMvItem)}
+                </VStack>
+              </Box>
+            ) : (
+              <VStack py={12} spacing={2}>
+                <Film size={32} color={subTextColor} />
+                <Text color={subTextColor} fontSize="sm">暂无 MV</Text>
+              </VStack>
+            )
           ) : (
-            <VStack py={12} spacing={2}>
-              <MusicIcon size={32} color={subTextColor} />
-              <Text color={subTextColor} fontSize="sm">暂无歌曲</Text>
-            </VStack>
+            // 简介
+            <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
+              {loadingArtistDetail ? (
+                <VStack py={12}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
+              ) : artistDetail?.brief_desc ? (
+                <Text color={textColor} fontSize="sm" whiteSpace="pre-wrap" lineHeight="tall">
+                  {artistDetail.brief_desc}
+                </Text>
+              ) : (
+                <VStack py={12} spacing={2}>
+                  <Info size={32} color={subTextColor} />
+                  <Text color={subTextColor} fontSize="sm">暂无歌手简介</Text>
+                </VStack>
+              )}
+            </Box>
           )}
         </LiquidGlassCard>
 
@@ -2490,6 +3030,318 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
 
         {/* 展开的播放器 */}
         {expandedPlayer && <ExpandedPlayer onClose={handleCloseExpandedPlayer} />}
+
+        {/* MV 播放器遮罩 — 自定义控制栏 */}
+        {playingMv && (
+          <Box
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            zIndex={9998}
+            bg="rgba(0,0,0,0.35)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            p={8}
+            onClick={closeMvPlayer}
+            sx={{
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
+              "@keyframes mvPlayerFadeIn": {
+                from: { opacity: 0 },
+                to: { opacity: 1 },
+              },
+              "@keyframes mvPlayerFadeOut": {
+                from: { opacity: 1 },
+                to: { opacity: 0 },
+              },
+              animation: mvClosing
+                ? "mvPlayerFadeOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
+                : "mvPlayerFadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          >
+            <Box
+              w="100%"
+              maxW="880px"
+              onClick={(e) => e.stopPropagation()}
+              sx={{
+                "@keyframes mvPlayerSlideUp": {
+                  from: { transform: "translateY(40px) scale(0.98)", opacity: 0 },
+                  to: { transform: "translateY(0) scale(1)", opacity: 1 },
+                },
+                "@keyframes mvPlayerSlideDown": {
+                  from: { transform: "translateY(0) scale(1)", opacity: 1 },
+                  to: { transform: "translateY(40px) scale(0.98)", opacity: 0 },
+                },
+                animation: mvClosing
+                  ? "mvPlayerSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
+                  : "mvPlayerSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
+            >
+              <HStack justify="space-between" mb={3}>
+                <VStack spacing={0} align="start">
+                  <Text color="white" fontSize="lg" fontWeight="bold" noOfLines={1}>
+                    {playingMv.name}
+                  </Text>
+                  <Text color="rgba(255,255,255,0.6)" fontSize="sm">
+                    {playingMv.artist_name || selectedArtist?.name || ""} 的 MV
+                  </Text>
+                </VStack>
+                <IconButton
+                  aria-label="Close MV"
+                  icon={<X size={20} />}
+                  size="sm"
+                  variant="ghost"
+                  color="white"
+                  onClick={closeMvPlayer}
+                />
+              </HStack>
+              <Box
+                ref={mvPlayerRef}
+                role="group"
+                position="relative"
+                w="100%"
+                aspectRatio="16 / 9"
+                borderRadius="lg"
+                overflow="hidden"
+                bg="black"
+                boxShadow="2xl"
+                sx={{
+                  "&:fullscreen": {
+                    width: "100%",
+                    height: "100%",
+                    aspectRatio: "auto",
+                    borderRadius: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#000",
+                  },
+                }}
+              >
+                {/* 视频层 */}
+                {mvUrl && (
+                  <video
+                    key={mvUrl}
+                    ref={mvVideoRef}
+                    src={`http://127.0.0.1:${proxyPort}/audio?url=${encodeURIComponent(mvUrl)}`}
+                    autoPlay
+                    playsInline
+                    style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+                    onPlay={() => setMvIsPlaying(true)}
+                    onPause={() => setMvIsPlaying(false)}
+                    onTimeUpdate={(e) => setMvCurrentTime((e.target as HTMLVideoElement).currentTime)}
+                    onLoadedMetadata={(e) => {
+                      const v = e.target as HTMLVideoElement;
+                      setMvDuration(v.duration);
+                      // 重新挂载后强制应用用户保存的音量
+                      v.volume = mvVolume;
+                    }}
+                    onEnded={() => setMvIsPlaying(false)}
+                    onError={(e) => {
+                      console.error("[Music] MV video error:", e);
+                      toast({ title: "MV 播放失败", status: "error", duration: 3000, isClosable: true });
+                    }}
+                  />
+                )}
+                {mvLoading && (
+                  <Box position="absolute" inset={0} display="flex" alignItems="center" justifyContent="center">
+                    <Spinner size="lg" sx={{ color: "white" }} />
+                  </Box>
+                )}
+
+                {/* 点击视频切换播放/暂停 */}
+                {!mvLoading && mvUrl && (
+                  <Box
+                    position="absolute"
+                    inset={0}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    cursor="pointer"
+                    onClick={() => {
+                      const v = mvVideoRef.current;
+                      if (!v) return;
+                      if (v.paused) v.play(); else v.pause();
+                    }}
+                  >
+                    {!mvIsPlaying && (
+                      <Box
+                        w="64px"
+                        h="64px"
+                        borderRadius="full"
+                        bg="rgba(0,0,0,0.6)"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        color="white"
+                        transition="transform 0.2s"
+                        _hover={{ transform: "scale(1.1)" }}
+                      >
+                        <PlayBtn size={30} />
+                      </Box>
+                    )}
+                  </Box>
+                )}
+
+                {/* 自定义控制栏 — 播放时自动隐藏，悬停视频区域显示 */}
+                {!mvLoading && mvUrl && (
+                  <HStack
+                    position="absolute"
+                    left={0}
+                    right={0}
+                    bottom={0}
+                    px={4}
+                    py={3}
+                    spacing={3}
+                    zIndex={1}
+                    bg="linear-gradient(to top, rgba(0,0,0,0.85), transparent)"
+                    sx={{
+                      opacity: mvIsPlaying ? 0 : 1,
+                      pointerEvents: mvIsPlaying ? "none" : "auto",
+                      transition: "opacity 0.3s",
+                      _groupHover: { opacity: 1, pointerEvents: "auto" },
+                    }}
+                  >
+                    <IconButton
+                      className="mv-controls"
+                      aria-label="Play/Pause"
+                      icon={mvIsPlaying ? <PauseIcon size={20} /> : <PlayBtn size={20} />}
+                      size="sm"
+                      variant="ghost"
+                      color="white"
+                      onClick={() => {
+                        const v = mvVideoRef.current;
+                        if (!v) return;
+                        if (v.paused) v.play(); else v.pause();
+                      }}
+                    />
+                    <Text color="white" fontSize="xs" flexShrink={0} w="36px" textAlign="center">
+                      {formatTime(mvCurrentTime)}
+                    </Text>
+                    <Box
+                      as="input"
+                      type="range"
+                      min={0}
+                      max={mvDuration || 0}
+                      step={0.1}
+                      value={mvCurrentTime}
+                      onChange={(e) => {
+                        const v = mvVideoRef.current;
+                        if (!v) return;
+                        const t = parseFloat((e.target as HTMLInputElement).value);
+                        v.currentTime = t;
+                        setMvCurrentTime(t);
+                      }}
+                      tabIndex={-1}
+                      flex={1}
+                      style={sliderBgStyle("#ffffff", mvDuration ? (mvCurrentTime / mvDuration) * 100 : 0, "rgba(255,255,255,0.3)")}
+                      sx={{
+                        ...rangeSliderSx,
+                        "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: "#ffffff" },
+                        "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: "#ffffff" },
+                        "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
+                        "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
+                      }}
+                    />
+                    <Text color="white" fontSize="xs" flexShrink={0} w="36px" textAlign="center">
+                      {formatTime(mvDuration)}
+                    </Text>
+                    <Box
+                      role="group"
+                      position="relative"
+                      display="flex"
+                      alignItems="center"
+                    >
+                      <IconButton
+                        aria-label="Mute"
+                        icon={mvVolume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                        size="sm"
+                        variant="ghost"
+                        color="white"
+                        onClick={() => {
+                          const v = mvVideoRef.current;
+                          if (!v) return;
+                          const next = v.volume > 0 ? 0 : 1;
+                          v.volume = next;
+                          setMvVolume(next);
+                        }}
+                      />
+                      {/* 垂直音量条 — 从按钮正上方弹出，上下调节 */}
+                      <Box
+                        className="mv-volume-slider"
+                        position="absolute"
+                        left="50%"
+                        bottom="100%"
+                        mb="0px"
+                        w="90px"
+                        h="0px"
+                        opacity={0}
+                        pointerEvents="none"
+                        sx={{
+                          transform: "translateX(-50%)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden",
+                          transition: "height 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease",
+                          _groupHover: { h: "90px", opacity: 1, pointerEvents: "auto", mb: "8px" },
+                        }}
+                      >
+                        <Box
+                          as="input"
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={mvVolume}
+                          onChange={(e) => {
+                            const v = mvVideoRef.current;
+                            if (!v) return;
+                            const vol = parseFloat((e.target as HTMLInputElement).value);
+                            v.volume = vol;
+                            setMvVolume(vol);
+                          }}
+                          tabIndex={-1}
+                          w="90px"
+                          flexShrink={0}
+                          style={sliderBgStyle("#ffffff", mvVolume * 100, "rgba(255,255,255,0.3)")}
+                          sx={{
+                            ...rangeSliderSx,
+                            transform: "rotate(-90deg)",
+                            cursor: "pointer",
+                            "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: "#ffffff" },
+                            "&::-moz-range-thumb": { ...rangeSliderSx["&::-moz-range-thumb"], background: "#ffffff" },
+                            "&::-webkit-slider-runnable-track": { ...rangeSliderSx["&::-webkit-slider-runnable-track"], background: "transparent" },
+                            "&::-moz-range-track": { ...rangeSliderSx["&::-moz-range-track"], background: "transparent" },
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                    <IconButton
+                      aria-label="Fullscreen"
+                      icon={<Maximize2 size={18} />}
+                      size="sm"
+                      variant="ghost"
+                      color="white"
+                      onClick={() => {
+                        const player = mvPlayerRef.current;
+                        if (!player) return;
+                        if (document.fullscreenElement) {
+                          document.exitFullscreen().catch(() => {});
+                        } else {
+                          player.requestFullscreen?.().catch(() => {});
+                        }
+                      }}
+                    />
+                  </HStack>
+                )}
+              </Box>
+            </Box>
+          </Box>
+        )}
       </VStack>
     );
   }

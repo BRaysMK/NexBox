@@ -86,6 +86,30 @@ const FUN_VARIANTS: string[] = [
   "运气守恒，好运会来的，{{name}}！(◕ᴗ◕✿)",
 ];
 
+// 关怀小语：作为标题独立出现的候选，不必非是"早上好"等时段问候
+const CARE_VARIANTS: string[] = [
+  "今天有没有好好吃饭呀，{{name}}？(｡･ω･｡)ﾉ♡",
+  "记得多喝水，{{name}} 要保持水润哦～(๑˃ᴗ˂)ﻭ",
+  "今天也要开开心心的，{{name}}！(๑•̀ㅂ•́)و✧",
+  "记得早点休息，{{name}} 别熬夜呀 (。-ω-)zzz",
+  "少熬夜，{{name}} 身体才是本钱 (ง •̀_•́)ง",
+  "工作再忙，{{name}} 也要照顾好自己 (´• ω •`)",
+  "久坐记得起来活动活动，{{name}} (๑˃ᴗ˂)ﻭ",
+  "屏幕看久了，{{name}} 眺望一下远方吧 (・∀・)",
+  "记得给家人打个电话，{{name}} (´▽`)ﾉ",
+  "天气多变，{{name}} 记得添衣保暖 (っ˘ω˘ς)",
+  "多出去走走，{{name}} 晒晒太阳心情好 (◕ᴗ◕✿)",
+  "按时吃饭，{{name}} 规律作息很重要 (๑´ㅂ`๑)",
+  "好好照顾自己，{{name}} 你是最棒的 (´• ω •`)",
+  "今天也辛苦啦，{{name}} 早点休息 (¦3[▓▓]",
+  "记得吃早餐，{{name}} 一天才有力气 (๑˃ᴗ˂)ﻭ",
+  "别太拼了，{{name}} 也要学会放松 (・ω< )★",
+  "睡前记得泡个脚，{{name}} 睡得更香 (。-ω-)zzz",
+  "周末到了，{{name}} 好好放松一下吧 (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧",
+  "今日份的快乐，{{name}} 记得查收～✧(≖ ◡ ≖✿)",
+  "天冷了，{{name}} 记得多穿点 (っ˘ω˘ς)",
+];
+
 // 公历节日：key 为 "月-日"
 const SOLAR_FESTIVALS: Record<string, string> = {
   "1-1": "元旦快乐，{{name}}！新年新气象 🎉 (๑˃ᴗ˂)ﻭ",
@@ -187,6 +211,10 @@ export function getGreeting(now: Date, username: string, variantOffset = 0): Gre
   const seasonPrefix = getSeasonPrefix(month);
   if (Math.random() < 0.1) {
     return { text: seasonPrefix + renderTemplate(pickVariant(FUN_VARIANTS, now, variantOffset), username) };
+  }
+  // 约 40% 概率直接以关怀小语作为标题（独立显示，不拼接时段问候）
+  if (Math.random() < 0.4) {
+    return { text: renderTemplate(pickVariant(CARE_VARIANTS, now, variantOffset), username) };
   }
   const slotVariants = SLOT_VARIANTS[getSlotKey(now.getHours())];
   return { text: seasonPrefix + renderTemplate(pickVariant(slotVariants, now, variantOffset), username) };

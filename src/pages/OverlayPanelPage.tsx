@@ -735,11 +735,13 @@ export default function OverlayPanelPage() {
             <HStack spacing={4}>
               <HotkeyRecorder
                 value={overlayHotkey}
-                onChange={(val) => {
-                  saveOverlayHotkey(val);
+                onChange={async (val) => {
+                  const ok = await saveOverlayHotkey(val);
                   toast({
-                    title: t("overlayPanel.hotkeySaved") || "快捷键已保存",
-                    status: "success",
+                    title: ok
+                      ? (t("overlayPanel.hotkeySaved") || "快捷键已保存")
+                      : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                    status: ok ? "success" : "error",
                     duration: 2000,
                     isClosable: true,
                   });

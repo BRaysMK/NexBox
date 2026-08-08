@@ -11,7 +11,15 @@ use tauri::Manager;
 use winreg::enums::*;
 use winreg::RegKey;
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE};
-use windows_sys::Win32::System::Threading::{OpenProcess, SetPriorityClass};
+use windows_sys::Win32::System::ProcessStatus::{
+    EmptyWorkingSet, K32EnumProcesses, K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+};
+use windows_sys::Win32::System::Memory::SetSystemFileCacheSize;
+use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+use windows_sys::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, SetPriorityClass, SetProcessWorkingSetSize,
+    PROCESS_QUERY_INFORMATION, PROCESS_SET_QUOTA, PROCESS_VM_READ,
+};
 
 pub(crate) const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -175,8 +183,8 @@ pub struct OptimizationResult {
 }
 
 fn get_memory_info() -> MemoryInfo {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    let mut sys = System::new();
+    sys.refresh_memory();
 
     let total = sys.total_memory() / 1024 / 1024;
     let available = sys.available_memory() / 1024 / 1024;
@@ -200,75 +208,30 @@ pub async fn optimize_memory() -> Result<OptimizationResult, String> {
     let before = get_memory_info();
 
     if cfg!(target_os = "windows") {
-        let result = Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-ExecutionPolicy", "Bypass",
-                "-Command",
-                r#"
-                    Add-Type -TypeDefinition @"
-                    using System;
-                    using System.Runtime.InteropServices;
-                    public class Memory {
-                        [DllImport("psapi.dll")]
-                        public static extern bool EmptyWorkingSet(IntPtr hProcess);
-                        [DllImport("kernel32.dll")]
-                        public static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
-                        [DllImport("kernel32.dll")]
-                        public static extern bool CloseHandle(IntPtr hObject);
-                    }
-"@
-                    $PROCESS_QUERY_INFORMATION = 0x0400
-                    $PROCESS_SET_QUOTA = 0x0100
-                    $access = $PROCESS_QUERY_INFORMATION -bor $PROCESS_SET_QUOTA
-                    $freed = 0
-                    $processes = Get-Process -ErrorAction SilentlyContinue
-                    foreach ($proc in $processes) {
-                        try {
-                            $handle = [Memory]::OpenProcess($access, $false, $proc.Id)
-                            if ($handle -ne [IntPtr]::Zero) {
-                                $wsBefore = $proc.WorkingSet64
-                                [Memory]::EmptyWorkingSet($handle)
-                                [Memory]::CloseHandle($handle) | Out-Null
-                                $proc.Refresh()
-                                $wsAfter = $proc.WorkingSet64
-                                if ($wsBefore -gt $wsAfter) {
-                                    $freed += [math]::Round(($wsBefore - $wsAfter) / 1MB, 2)
-                                }
-                            }
-                        } catch {}
-                    }
-                    Write-Host "Freed: $freed MB"
-                "#
-            ])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
+        // 原生并行清理：待机缓存 + 全进程工作集收紧，无需 PowerShell
+        thread::scope(|s| {
+            s.spawn(|| {
+                clean_standby_memory_inner();
+            });
+            s.spawn(|| {
+                trim_working_set_inner();
+            });
+        });
 
-        match result {
-            Ok(output) => {
-                if output.status.success() {
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                    let after = get_memory_info();
-                    let freed = if after.available > before.available {
-                        after.available - before.available
-                    } else {
-                        0
-                    };
+        let after = get_memory_info();
+        let freed = if after.available > before.available {
+            after.available - before.available
+        } else {
+            0
+        };
 
-                    Ok(OptimizationResult {
-                        success: true,
-                        message: format!("内存优化完成，释放约 {} MB", freed),
-                        before,
-                        after,
-                        freed_mb: freed,
-                    })
-                } else {
-                    let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    Err(format!("内存优化失败: {}", error_msg))
-                }
-            }
-            Err(e) => Err(format!("执行内存优化命令失败: {}", e)),
-        }
+        Ok(OptimizationResult {
+            success: true,
+            message: format!("内存优化完成，释放约 {} MB", freed),
+            before,
+            after,
+            freed_mb: freed,
+        })
     } else {
         Err("内存优化仅支持 Windows 系统".to_string())
     }
@@ -948,8 +911,8 @@ static AUTO_CLEAN_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[tauri::command]
 pub async fn get_detailed_memory_status() -> Result<DetailedMemoryInfo, String> {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    let mut sys = System::new();
+    sys.refresh_memory();
 
     let physical_total = sys.total_memory() / 1024 / 1024;
     let physical_available = sys.available_memory() / 1024 / 1024;
@@ -959,164 +922,166 @@ pub async fn get_detailed_memory_status() -> Result<DetailedMemoryInfo, String> 
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let ps_script = r#"
-        $os = Get-CimInstance Win32_OperatingSystem
-        $virtualTotal = [math]::Round($os.TotalVirtualMemorySize / 1024)
-        $virtualFree = [math]::Round($os.FreeVirtualMemory / 1024)
-        $virtualUsed = $virtualTotal - $virtualFree
-        $workingSet = [math]::Round(((Get-Process | Measure-Object WorkingSet64 -Sum -ErrorAction SilentlyContinue).Sum) / 1MB)
-        Write-Host "VTOTAL:$virtualTotal"
-        Write-Host "VFREE:$virtualFree"
-        Write-Host "VUSED:$virtualUsed"
-        Write-Host "WS:$workingSet"
-    "#;
+    // 原生获取虚拟内存 + 全进程工作集总和（GlobalMemoryStatusEx + EnumProcesses），无需 PowerShell
+    let mut virtual_total: u64 = 0;
+    let mut virtual_available: u64 = 0;
+    let mut working_set_used: u64 = 0;
 
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let mut virtual_total: u64 = 0;
-            let mut virtual_used: u64 = 0;
-            let mut virtual_available: u64 = 0;
-            let mut working_set_used: u64 = 0;
-
-            for line in stdout.lines() {
-                if line.starts_with("VTOTAL:") {
-                    virtual_total = line.trim_start_matches("VTOTAL:").trim().parse().unwrap_or(0);
-                } else if line.starts_with("VFREE:") {
-                    virtual_available = line.trim_start_matches("VFREE:").trim().parse().unwrap_or(0);
-                } else if line.starts_with("VUSED:") {
-                    virtual_used = line.trim_start_matches("VUSED:").trim().parse().unwrap_or(0);
-                } else if line.starts_with("WS:") {
-                    working_set_used = line.trim_start_matches("WS:").trim().parse().unwrap_or(0);
-                }
-            }
-
-            if virtual_available == 0 && virtual_total > 0 {
-                virtual_available = virtual_total - virtual_used;
-            }
-
-            let working_set_total = sys.total_memory() / 1024 / 1024;
-            let working_set_available = if working_set_total > working_set_used {
-                working_set_total - working_set_used
-            } else {
-                0
-            };
-
-            Ok(DetailedMemoryInfo {
-                physical_total,
-                physical_used,
-                physical_available,
-                virtual_total,
-                virtual_used,
-                virtual_available,
-                working_set_total,
-                working_set_used,
-                working_set_available,
-            })
+    unsafe {
+        let mut status: MEMORYSTATUSEX = std::mem::zeroed();
+        status.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+        if GlobalMemoryStatusEx(&mut status) != 0 {
+            virtual_total = status.ullTotalPageFile / 1024 / 1024;
+            virtual_available = status.ullAvailPageFile / 1024 / 1024;
         }
-        Err(e) => Err(format!("获取内存状态失败: {}", e)),
+
+        let mut pids: [u32; 8192] = [0; 8192];
+        let mut needed: u32 = 0;
+        if K32EnumProcesses(
+            pids.as_mut_ptr(),
+            std::mem::size_of_val(&pids) as u32,
+            &mut needed,
+        ) != 0
+        {
+            let count = ((needed as usize) / std::mem::size_of::<u32>()).min(pids.len());
+            let access = PROCESS_QUERY_INFORMATION | PROCESS_VM_READ;
+            let pmc_size = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+            for &pid in &pids[..count] {
+                if pid == 0 {
+                    continue;
+                }
+                let handle = OpenProcess(access, 0, pid);
+                if handle.is_null() {
+                    continue;
+                }
+                let mut pmc: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+                if K32GetProcessMemoryInfo(handle, &mut pmc, pmc_size) != 0 {
+                    working_set_used += (pmc.WorkingSetSize / 1024 / 1024) as u64;
+                }
+                CloseHandle(handle);
+            }
+        }
+    }
+
+    let virtual_used = virtual_total.saturating_sub(virtual_available);
+    let working_set_total = physical_total;
+    let working_set_available = working_set_total.saturating_sub(working_set_used);
+
+    Ok(DetailedMemoryInfo {
+        physical_total,
+        physical_used,
+        physical_available,
+        virtual_total,
+        virtual_used,
+        virtual_available,
+        working_set_total,
+        working_set_used,
+        working_set_available,
+    })
+}
+
+#[repr(C)]
+struct MemoryPurgeStandbyListCommand {
+    next: *mut std::ffi::c_void,
+    command: u32,
+}
+
+/// 原生清空待机列表（standby list），需要管理员权限，失败返回 false
+fn purge_standby_list_native() -> bool {
+    #[link(name = "ntdll")]
+    extern "system" {
+        fn NtSetSystemInformation(
+            InformationClass: u32,
+            Information: *const std::ffi::c_void,
+            Length: u32,
+        ) -> i32;
+    }
+    unsafe {
+        const SYSTEM_MEMORY_LIST_INFORMATION: u32 = 80;
+        const MEMORY_PURGE_STANDBY_LIST: u32 = 4;
+        let mut cmd = MemoryPurgeStandbyListCommand {
+            next: std::ptr::null_mut(),
+            command: MEMORY_PURGE_STANDBY_LIST,
+        };
+        NtSetSystemInformation(
+            SYSTEM_MEMORY_LIST_INFORMATION,
+            &mut cmd as *mut _ as *const std::ffi::c_void,
+            std::mem::size_of::<MemoryPurgeStandbyListCommand>() as u32,
+        ) == 0
     }
 }
 
+/// 原生清理待机内存（standby 文件缓存 + 待机列表），无需 PowerShell
 fn clean_standby_memory_inner() -> u64 {
     let before = get_memory_info();
 
-    let ps_script = r#"
-        Add-Type -TypeDefinition @"
-        using System;
-        using System.Runtime.InteropServices;
-        public class Win32Mem {
-            [DllImport("kernel32.dll", SetLastError = true)]
-            public static extern bool SetProcessWorkingSetSize(IntPtr hProcess, int dwMinimumWorkingSetSize, int dwMaximumWorkingSetSize);
-            [DllImport("kernel32.dll")]
-            public static extern IntPtr GetCurrentProcess();
-        }
-"@
-        $handle = [Win32Mem]::GetCurrentProcess()
-        [Win32Mem]::SetProcessWorkingSetSize($handle, -1, -1) | Out-Null
-        Start-Sleep -Milliseconds 500
-        Write-Host "Done"
-    "#;
+    // 1) 清空待机列表（管理员权限下生效）
+    let purged = purge_standby_list_native();
 
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
+    unsafe {
+        // 2) 临时把系统文件缓存上限压到最低，强制回收文件缓存页（usize::MAX 即 -1，表示恢复系统默认）
+        SetSystemFileCacheSize(usize::MAX, usize::MAX, 0);
+        // 给系统一点时间回收
+        thread::sleep(Duration::from_millis(400));
+        // 恢复默认文件缓存上限
+        SetSystemFileCacheSize(usize::MAX, usize::MAX, 1);
 
-    match result {
-        Ok(_) => {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            let after = get_memory_info();
-            if after.available > before.available {
-                after.available - before.available
-            } else {
-                0
-            }
+        if !purged {
+            // 权限不足时回退：收紧当前进程工作集（原逻辑兜底，保证至少执行一次清理动作）
+            let handle = GetCurrentProcess();
+            SetProcessWorkingSetSize(handle, usize::MAX, usize::MAX);
         }
-        Err(_) => 0,
+    }
+
+    let after = get_memory_info();
+    if after.available > before.available {
+        after.available - before.available
+    } else {
+        0
     }
 }
 
+/// 原生遍历所有进程并 EmptyWorkingSet（收紧工作集），无需 PowerShell
 fn trim_working_set_inner() -> u64 {
-    let before = get_memory_info();
-
-    let ps_script = r#"
-        Add-Type -TypeDefinition @"
-        using System;
-        using System.Runtime.InteropServices;
-        public class Mem {
-            [DllImport("psapi.dll", SetLastError = true)]
-            public static extern bool EmptyWorkingSet(IntPtr hProcess);
-            [DllImport("kernel32.dll")]
-            public static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
-            [DllImport("kernel32.dll")]
-            public static extern bool CloseHandle(IntPtr hObject);
+    unsafe {
+        let mut pids: [u32; 4096] = [0; 4096];
+        let mut needed: u32 = 0;
+        if K32EnumProcesses(
+            pids.as_mut_ptr(),
+            std::mem::size_of_val(&pids) as u32,
+            &mut needed,
+        ) == 0
+        {
+            return 0;
         }
-"@
-        $PROCESS_QUERY_INFORMATION = 0x0400
-        $PROCESS_SET_QUOTA = 0x0100
-        $access = $PROCESS_QUERY_INFORMATION -bor $PROCESS_SET_QUOTA
-        $freed = 0
-        $processes = Get-Process -ErrorAction SilentlyContinue
-        foreach ($proc in $processes) {
-            try {
-                $handle = [Mem]::OpenProcess($access, $false, $proc.Id)
-                if ($handle -ne [IntPtr]::Zero) {
-                    $wsBefore = $proc.WorkingSet64
-                    [Mem]::EmptyWorkingSet($handle)
-                    [Mem]::CloseHandle($handle) | Out-Null
-                    $proc.Refresh()
-                    $wsAfter = $proc.WorkingSet64
-                    if ($wsBefore -gt $wsAfter) {
-                        $freed += [math]::Round(($wsBefore - $wsAfter) / 1MB, 2)
-                    }
-                }
-            } catch {}
-        }
-        Write-Host "Freed: $freed MB"
-    "#;
+        let count = ((needed as usize) / std::mem::size_of::<u32>()).min(pids.len());
+        let access = PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA | PROCESS_VM_READ;
+        let pmc_size = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+        let self_pid = std::process::id();
+        let mut freed_mb: u64 = 0;
 
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match result {
-        Ok(_) => {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            let after = get_memory_info();
-            if after.available > before.available {
-                after.available - before.available
-            } else {
-                0
+        for &pid in &pids[..count] {
+            if pid == 0 || pid == self_pid {
+                continue;
+            }
+            let handle = OpenProcess(access, 0, pid);
+            if handle.is_null() {
+                continue;
+            }
+            let mut pmc_before: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+            if K32GetProcessMemoryInfo(handle, &mut pmc_before, pmc_size) == 0 {
+                CloseHandle(handle);
+                continue;
+            }
+            EmptyWorkingSet(handle);
+            let mut pmc_after: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+            K32GetProcessMemoryInfo(handle, &mut pmc_after, pmc_size);
+            CloseHandle(handle);
+            if pmc_before.WorkingSetSize > pmc_after.WorkingSetSize {
+                freed_mb += ((pmc_before.WorkingSetSize - pmc_after.WorkingSetSize) / 1024 / 1024) as u64;
             }
         }
-        Err(_) => 0,
+        freed_mb
     }
 }
 
@@ -1183,8 +1148,15 @@ fn auto_clean_loop(config: AutoCleanConfig, generation: u64) {
         if interval_reached || threshold_reached {
             match config.clean_type.as_str() {
                 "all" => {
-                    clean_standby_memory_inner();
-                    trim_working_set_inner();
+                    // 原生并行：待机缓存 + 工作集收紧
+                    thread::scope(|s| {
+                        s.spawn(|| {
+                            clean_standby_memory_inner();
+                        });
+                        s.spawn(|| {
+                            trim_working_set_inner();
+                        });
+                    });
                 }
                 "standby" => {
                     clean_standby_memory_inner();
@@ -1903,6 +1875,138 @@ pub struct PowerPlanOperationResult {
     pub guid: Option<String>,
 }
 
+#[derive(serde::Serialize)]
+pub struct LaptopPowerLockStatus {
+    /// 是否已解锁（PlatformAoAcOverride == 0）
+    pub unlocked: bool,
+    /// 当前注册表值（None 表示未设置）
+    pub value: Option<u32>,
+}
+
+/// 读取 PlatformAoAcOverride 注册表值。
+/// 该值用于覆盖平台 AoAc（Always On Always Connected）能力：
+/// 现代待机（Modern Standby）笔记本厂商通过它锁定电源计划，
+/// 设为 0 可解锁，使系统可自由导入/激活电源计划（需重启生效）。
+fn read_platform_aoac_override() -> Option<u32> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let power = hklm
+        .open_subkey(r"System\CurrentControlSet\Control\Power")
+        .ok()?;
+    power.get_value("PlatformAoAcOverride").ok()
+}
+
+/// 直接写入 PlatformAoAcOverride=0（需要管理员权限）
+fn write_platform_aoac_override() -> Result<(), String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let (power, _) = hklm
+        .create_subkey(r"System\CurrentControlSet\Control\Power")
+        .map_err(|e| format!("打开注册表键失败: {}", e))?;
+    power
+        .set_value("PlatformAoAcOverride", &0u32)
+        .map_err(|e| format!("写入注册表失败: {}", e))?;
+    Ok(())
+}
+
+/// 通过 ShellExecuteEx 提权运行 reg.exe 写入（无 PowerShell，启动开销小）。
+/// 应用非管理员时弹出 UAC，等待提权进程结束。
+fn run_reg_add_elevated() -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
+    use windows::Win32::UI::Shell::{
+        ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+
+    let system_root = env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+    let reg_path = format!(r"{}\System32\reg.exe", system_root);
+
+    let to_w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let verb_w = to_w("runas");
+    let file_w = to_w(&reg_path);
+    let args_w = to_w(
+        "add HKLM\\System\\CurrentControlSet\\Control\\Power /v PlatformAoAcOverride /t REG_DWORD /d 0 /f",
+    );
+
+    let mut sei: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    sei.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+    sei.lpVerb = PCWSTR(verb_w.as_ptr());
+    sei.lpFile = PCWSTR(file_w.as_ptr());
+    sei.lpParameters = PCWSTR(args_w.as_ptr());
+    sei.nShow = SW_HIDE.0;
+
+    if unsafe { ShellExecuteExW(&mut sei) }.is_err() {
+        let code = unsafe { GetLastError() };
+        return Err(format!(
+            "需要管理员权限：提权失败（错误码 {}），可能是用户取消了授权",
+            code
+        ));
+    }
+
+    // 等待提权的 reg.exe 执行完毕
+    unsafe { WaitForSingleObject(sei.hProcess, u32::MAX) };
+
+    let mut exit_code: u32 = 0;
+    if unsafe { GetExitCodeProcess(sei.hProcess, &mut exit_code) }.is_err() {
+        let _ = unsafe { CloseHandle(sei.hProcess) };
+        return Err("无法获取 reg.exe 执行结果".to_string());
+    }
+    let _ = unsafe { CloseHandle(sei.hProcess) };
+
+    if exit_code != 0 {
+        return Err(format!("reg.exe 写入失败（退出码 {}）", exit_code));
+    }
+    Ok(())
+}
+
+/// 获取笔记本电源计划锁定状态
+#[tauri::command]
+pub async fn get_laptop_power_lock_status() -> Result<LaptopPowerLockStatus, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+    let value = read_platform_aoac_override();
+    Ok(LaptopPowerLockStatus {
+        unlocked: value == Some(0),
+        value,
+    })
+}
+
+/// 解锁笔记本电源计划（写入 PlatformAoAcOverride=0，需管理员权限，重启后生效）
+#[tauri::command]
+pub async fn unlock_laptop_power_plan() -> Result<LaptopPowerLockStatus, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    // 已解锁则直接返回
+    if read_platform_aoac_override() == Some(0) {
+        return Ok(LaptopPowerLockStatus {
+            unlocked: true,
+            value: Some(0),
+        });
+    }
+
+    // 1) 应用以管理员运行时直接写入（纯 winreg，零子进程，速度快）
+    if write_platform_aoac_override().is_err() {
+        // 2) 非管理员：ShellExecuteEx 提权运行 reg.exe（弹 UAC）
+        run_reg_add_elevated()?;
+    }
+
+    // 3) 回读验证，以注册表实际值为准
+    match read_platform_aoac_override() {
+        Some(0) => Ok(LaptopPowerLockStatus {
+            unlocked: true,
+            value: Some(0),
+        }),
+        other => Err(format!(
+            "解锁未生效（当前注册表值: {:?}）。请以管理员身份运行 NexBox 后重试",
+            other
+        )),
+    }
+}
+
 fn get_builtin_plan_filename(id: &str) -> String {
     match id {
         "ggOSDesktopGaming" => "ggOS Desktop Gaming.pow".to_string(),
@@ -2160,7 +2264,7 @@ pub async fn import_power_plan(app: tauri::AppHandle, plan_id: String) -> Result
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                 let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
-                return Err(format!("导入电源计划失败: {}", err_msg));
+                return Err(format!("导入电源计划失败: {}\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", err_msg));
             }
 
             std::thread::sleep(std::time::Duration::from_millis(800));
@@ -2188,7 +2292,7 @@ pub async fn import_power_plan(app: tauri::AppHandle, plan_id: String) -> Result
                     guid: Some(guid),
                 })
             } else {
-                Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，可能是厂商锁定了电源计划，无法更改", display_name))
+                Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", display_name))
             }
         }
         Err(e) => Err(format!("执行导入命令失败: {}", e)),
@@ -2237,7 +2341,7 @@ pub async fn activate_power_plan(guid: String) -> Result<PowerPlanOperationResul
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                 let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
-                Err(format!("电源计划激活失败: {}\n如果您是笔记本，可能是厂商锁定了电源计划，无法更改", err_msg))
+                Err(format!("电源计划激活失败: {}\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", err_msg))
             }
         }
         Err(e) => Err(format!("执行激活命令失败: {}", e)),
@@ -2279,7 +2383,7 @@ pub async fn import_and_activate_power_plan(app: tauri::AppHandle, plan_id: Stri
                         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
                         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                         let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
-                        return Err(format!("导入失败: {}", err_msg));
+                        return Err(format!("导入失败: {}\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", err_msg));
                     }
                     std::thread::sleep(std::time::Duration::from_millis(800));
                     let system_plans_after = get_system_plans_internal();
@@ -2297,7 +2401,7 @@ pub async fn import_and_activate_power_plan(app: tauri::AppHandle, plan_id: Stri
                     } else if let Some(g) = find_plan_guid_by_name(&system_plans_after, &display_name) {
                         g
                     } else {
-                        return Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，可能是厂商锁定了电源计划，无法更改", display_name));
+                        return Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", display_name));
                     }
                 }
                 Err(e) => return Err(format!("导入失败: {}", e)),
@@ -2573,23 +2677,47 @@ fn schtasks_wu_tasks(enable: bool) -> Result<(), String> {
 }
 
 /// Check if any WU scheduled task is disabled.
+/// 直接读 TaskCache 注册表（State=1 表示已禁用），无需启动 PowerShell，毫秒级完成。
 fn check_schtasks_wu_disabled() -> bool {
-    // Use PowerShell Get-ScheduledTask — State enum values are always English
-    let ps_script = r#"
-        $tasks = Get-ScheduledTask -TaskPath '\Microsoft\Windows\WindowsUpdate\*' -ErrorAction SilentlyContinue
-        $disabled = $tasks | Where-Object { $_.State -eq 'Disabled' }
-        if ($disabled) { Write-Output 'YES' } else { Write-Output 'NO' }
-    "#;
-    let output = std::process::Command::new("powershell.exe")
-        .args(&["-NoProfile", "-NonInteractive", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
+    const TREE_PATH: &str =
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\WindowsUpdate";
+    const TASKS_PATH: &str =
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks";
+    const STATE_DISABLED: u32 = 1;
 
-    if let Ok(out) = output {
-        let text = String::from_utf8_lossy(&out.stdout);
-        return text.trim().eq_ignore_ascii_case("YES");
+    fn task_state_disabled(hklm: &RegKey, tasks_path: &str, key: &RegKey) -> bool {
+        // 1) 任务键自身的 State
+        if let Ok(v) = key.get_value::<u32, _>("State") {
+            if v == STATE_DISABLED {
+                return true;
+            }
+        }
+        // 2) 通过 Id 定位到 TaskCache\Tasks\{guid} 读取 State
+        if let Ok(id) = key.get_value::<String, _>("Id") {
+            if let Ok(task_key) = hklm.open_subkey(format!(r"{}\{}", tasks_path, id)) {
+                if let Ok(v) = task_key.get_value::<u32, _>("State") {
+                    if v == STATE_DISABLED {
+                        return true;
+                    }
+                }
+            }
+        }
+        // 3) 递归子键
+        for child in key.enum_keys().flatten() {
+            if let Ok(sub) = key.open_subkey(child) {
+                if task_state_disabled(hklm, tasks_path, &sub) {
+                    return true;
+                }
+            }
+        }
+        false
     }
-    false
+
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    match hklm.open_subkey(TREE_PATH) {
+        Ok(root) => task_state_disabled(&hklm, TASKS_PATH, &root),
+        Err(_) => false,
+    }
 }
 
 #[tauri::command]
@@ -2693,8 +2821,17 @@ pub async fn enable_windows_update() -> Result<String, String> {
 }
 
 /// Check service Start value via registry (simpler and more reliable than SCM query).
+/// 优先直接读注册表（毫秒级），仅当 ACL 阻止读取时回退到 reg query 进程。
 fn get_service_start(service_name: &str) -> Option<u32> {
-    // Use reg query via cmd.exe for reliable reading of ACL-protected keys
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let path = format!(r"SYSTEM\CurrentControlSet\Services\{}", service_name);
+    if let Ok(key) = hklm.open_subkey(path) {
+        if let Ok(v) = key.get_value::<u32, _>("Start") {
+            return Some(v);
+        }
+    }
+
+    // Fallback: use reg query via cmd.exe for reliable reading of ACL-protected keys
     let output = std::process::Command::new("cmd.exe")
         .args(&[
             "/c",

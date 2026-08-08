@@ -36,8 +36,9 @@ import {
   Play,
   Trash2,
   Cpu,
+  Lock,
 } from "lucide-react";
-import { useBackground } from "@/contexts/background-context";
+
 import { useNavigate } from "react-router-dom";
 
 interface BuiltinPowerPlan {
@@ -65,6 +66,11 @@ interface PowerPlanOperationResult {
   success: boolean;
   message: string;
   guid: string | null;
+}
+
+interface LaptopPowerLockStatus {
+  unlocked: boolean;
+  value: number | null;
 }
 
 function SystemPlanCard({
@@ -285,7 +291,7 @@ function BuiltinPlanCard({
 export default function PowerManagementPage() {
   const { t } = useTranslation();
   const toast = useToast();
-  const { liquidGlassEnabled } = useBackground();
+
   const navigate = useNavigate();
   const cancelRef = useRef<HTMLButtonElement>(null);
 
@@ -312,6 +318,8 @@ export default function PowerManagementPage() {
   const [operating, setOperating] = useState<{ planId: string; action: string } | null>(null);
   const [isImportingAll, setIsImportingAll] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ guid: string; name: string } | null>(null);
+  const [laptopLock, setLaptopLock] = useState<LaptopPowerLockStatus | null>(null);
+  const [unlockLoading, setUnlockLoading] = useState(false);
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
 
   const loadData = useCallback(async () => {
@@ -325,6 +333,9 @@ export default function PowerManagementPage() {
       setBuiltinPlans(builtin);
       setSystemPlans(system);
       setActivePlan(active);
+      invoke<LaptopPowerLockStatus>("get_laptop_power_lock_status")
+        .then(setLaptopLock)
+        .catch(() => {});
     } catch (error) {
       console.error("Failed to load power plans:", error);
       toast({
@@ -464,6 +475,34 @@ export default function PowerManagementPage() {
     setOperating(null);
     setDeleteTarget(null);
     await loadData();
+  };
+
+  const handleUnlockLaptop = async () => {
+    setUnlockLoading(true);
+    try {
+      const result: LaptopPowerLockStatus = await invoke(
+        "unlock_laptop_power_plan"
+      );
+      setLaptopLock(result);
+      if (result.unlocked) {
+        toast({
+          title: t("optimization.powerManagement.laptopUnlockSuccess"),
+          description: t("optimization.powerManagement.laptopUnlockRestartHint"),
+          status: "success",
+          duration: 8000,
+          isClosable: true,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: t("optimization.powerManagement.laptopUnlockFailed"),
+        description: String(error),
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+    setUnlockLoading(false);
   };
 
   const handleImportAll = async () => {
@@ -637,18 +676,35 @@ export default function PowerManagementPage() {
                 <Text fontWeight="600" color={headingColor} fontSize="md">
                   {t("optimization.powerManagement.builtinPlans")}
                 </Text>
-                {hasUnimported && (
+                <HStack spacing={2}>
                   <LiquidGlassButton
                     size="sm"
-                    leftIcon={<Download size={14} />}
-                    onClick={handleImportAll}
-                    isLoading={isImportingAll}
-                    loadingText={t("optimization.powerManagement.importingAll")}
-                    colorScheme="orange"
+                    leftIcon={
+                      laptopLock?.unlocked ? <CheckCircle size={14} /> : <Lock size={14} />
+                    }
+                    onClick={handleUnlockLaptop}
+                    isLoading={unlockLoading}
+                    loadingText={t("optimization.powerManagement.unlocking") || "解锁中"}
+                    isDisabled={laptopLock?.unlocked}
+                    colorScheme={laptopLock?.unlocked ? "green" : "purple"}
                   >
-                    {t("optimization.powerManagement.importAll")}
+                    {laptopLock?.unlocked
+                      ? t("optimization.powerManagement.laptopUnlockDone")
+                      : t("optimization.powerManagement.laptopUnlockButton")}
                   </LiquidGlassButton>
-                )}
+                  {hasUnimported && (
+                    <LiquidGlassButton
+                      size="sm"
+                      leftIcon={<Download size={14} />}
+                      onClick={handleImportAll}
+                      isLoading={isImportingAll}
+                      loadingText={t("optimization.powerManagement.importingAll")}
+                      colorScheme="orange"
+                    >
+                      {t("optimization.powerManagement.importAll")}
+                    </LiquidGlassButton>
+                  )}
+                </HStack>
               </HStack>
               <VStack align="stretch" spacing={2} maxH="60vh" overflowY="auto">
                 <AnimatePresence>

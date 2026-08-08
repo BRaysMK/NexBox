@@ -166,7 +166,14 @@ async fn post_weapi(
     let url = format!("https://music.163.com/weapi{}", &api_path[4..]);
 
     let mut full = payload;
-    full.insert("csrf_token".into(), json!(""));
+    // 从 cookie 提取 csrf_token（点赞/发评论等写操作必须与 cookie 中的 csrf 匹配）
+    let cookie_map = super::cookie::parse_cookie_string(cookie);
+    let csrf = cookie_map
+        .get("__csrf")
+        .or_else(|| cookie_map.get("csrf_token"))
+        .cloned()
+        .unwrap_or_default();
+    full.insert("csrf_token".into(), json!(csrf));
     let payload_text = serde_json::to_string(&full)
         .map_err(|e| format!("Failed to serialize weapi payload: {e}"))?;
     let (params, enc_sec_key) = encrypt_weapi_payload(&payload_text);
@@ -1180,3 +1187,268 @@ pub async fn artist_songs(
 
     Ok(mapped)
 }
+
+// ═══════════════════════════════════════════════════════
+//  评论系统 (参考 NeteaseCloudMusicApi)
+// ═══════════════════════════════════════════════════════
+
+/// 解析单条评论（含 beReplied 回复拼接）
+fn map_comment(c: &Value) -> Comment {
+    let user = c.get("user").unwrap_or(&Value::Null);
+    let content = c.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let reply = c
+        .get("beReplied")
+        .and_then(|b| b.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|r| r.get("content"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    let final_content = if reply.is_empty() { content } else { format!("{content} // 回复: {reply}") };
+
+    Comment {
+        comment_id: c.get("commentId").and_then(|v| v.as_i64()).unwrap_or(0),
+        content: final_content,
+        time: c.get("time").and_then(|v| v.as_i64()).unwrap_or(0),
+        liked_count: c.get("likedCount").and_then(|v| v.as_i64()).unwrap_or(0),
+        liked: c.get("liked").and_then(|v| v.as_bool()).unwrap_or(false),
+        user_id: user.get("userId").and_then(|v| v.as_i64()).unwrap_or(0),
+        nickname: user.get("nickname").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        avatar: user.get("avatarUrl").or_else(|| user.get("avatar")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+    }
+}
+
+/// 获取歌曲评论（分页，需登录获取完整列表）
+pub async fn song_comments(id: &str, page: u32, page_size: u32, cookie: &str) -> Result<CommentPage, String> {
+    let client = build_client();
+    let offset = page.saturating_sub(1) * page_size;
+
+    let mut payload = serde_json::Map::new();
+    payload.insert("rid".into(), json!(id));
+    payload.insert("limit".into(), json!(page_size));
+    payload.insert("offset".into(), json!(offset));
+
+    let api_path = format!("/api/v1/resource/comments/R_SO_4_{id}");
+    let result = post_weapi(&client, &api_path, payload, cookie).await?;
+
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+    log::info!("[NetEase] song_comments id={id} code={code} total={}", result.get("total").and_then(|v| v.as_i64()).unwrap_or(-1));
+    if code != 200 {
+        return Err(format!("song_comments failed: code={code}, msg={}", result.get("message").and_then(|v| v.as_str()).unwrap_or("")));
+    }
+
+    let total = result.get("total").and_then(|v| v.as_i64()).unwrap_or(0);
+    let comments: Vec<Comment> = result
+        .get("comments")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(map_comment)
+        .collect();
+    let hot_comments: Vec<Comment> = result
+        .get("hotComments")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(map_comment)
+        .collect();
+
+    let loaded = comments.len() as i64 + hot_comments.len() as i64;
+    let has_more = (offset as i64 + page_size as i64) < total && loaded >= page_size as i64;
+
+    Ok(CommentPage {
+        total,
+        has_more,
+        comments,
+        hot_comments,
+    })
+}
+
+/// 发表评论（需登录）
+pub async fn send_comment(id: &str, content: &str, cookie: &str) -> Result<(), String> {
+    let client = build_client();
+    let mut payload = serde_json::Map::new();
+    payload.insert("threadId".into(), json!(format!("R_SO_4_{id}")));
+    payload.insert("content".into(), json!(content));
+
+    let result = post_weapi(&client, "/api/resource/comments/add", payload, cookie).await?;
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if code == 200 {
+        Ok(())
+    } else {
+        let msg = result.get("message").and_then(|v| v.as_str()).unwrap_or("unknown error");
+        Err(format!("send_comment failed: code={code}, msg={msg}"))
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+//  歌手扩展: 简介 / 专辑 / MV / 专辑详情
+// ═══════════════════════════════════════════════════════
+
+/// 获取歌手简介 (参考 NeteaseCloudMusicApi artist_desc: /api/artist/introduction)
+pub async fn artist_detail(id: &str, cookie: &str) -> Result<ArtistDetail, String> {
+    let client = build_client();
+    let mut payload = serde_json::Map::new();
+    payload.insert("id".into(), json!(id));
+
+    let result = post_weapi(&client, "/api/artist/introduction", payload, cookie).await?;
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if code != 200 {
+        return Err(format!("artist_detail failed: code={code}"));
+    }
+
+    let artist = result.get("artist").unwrap_or(&Value::Null);
+    Ok(ArtistDetail {
+        id: id.to_string(),
+        name: artist.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        brief_desc: artist
+            .get("briefDesc")
+            .or_else(|| result.get("briefDesc"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+    })
+}
+
+/// 获取歌手专辑列表 (参考 NeteaseCloudMusicApi artist_album: /api/artist/albums/{id})
+pub async fn artist_albums(id: &str, limit: u32, offset: u32, cookie: &str) -> Result<Vec<Album>, String> {
+    let client = build_client();
+    let mut payload = serde_json::Map::new();
+    payload.insert("limit".into(), json!(limit));
+    payload.insert("offset".into(), json!(offset));
+    payload.insert("total".into(), json!(true));
+
+    let api_path = format!("/api/artist/albums/{id}");
+    let result = post_weapi(&client, &api_path, payload, cookie).await?;
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if code != 200 {
+        return Err(format!("artist_albums failed: code={code}"));
+    }
+
+    let albums_raw = result
+        .get("hotAlbums")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(albums_raw
+        .iter()
+        .map(|a| Album {
+            id: a.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_default(),
+            name: a.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            cover: a.get("picUrl").or_else(|| a.get("cover")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            publish_time: a.get("publishTime").and_then(|v| v.as_i64()).unwrap_or(0),
+            song_count: a.get("size").and_then(|v| v.as_u64()).map(|n| n as u32).unwrap_or(0),
+            artist_name: a
+                .get("artist")
+                .and_then(|ar| ar.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+        })
+        .collect())
+}
+
+/// 获取歌手 MV 列表 (参考 NeteaseCloudMusicApi artist_mv: /api/artist/mvs)
+pub async fn artist_mvs(id: &str, limit: u32, offset: u32, cookie: &str) -> Result<Vec<Mv>, String> {
+    let client = build_client();
+    let mut payload = serde_json::Map::new();
+    payload.insert("artistId".into(), json!(id));
+    payload.insert("limit".into(), json!(limit));
+    payload.insert("offset".into(), json!(offset));
+    payload.insert("total".into(), json!(true));
+
+    let result = post_weapi(&client, "/api/artist/mvs", payload, cookie).await?;
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if code != 200 {
+        return Err(format!("artist_mvs failed: code={code}"));
+    }
+
+    let mvs_raw = result
+        .get("mvs")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(mvs_raw
+        .iter()
+        .map(|m| Mv {
+            id: m.get("id").and_then(|v| v.as_i64()).map(|n| n.to_string()).unwrap_or_default(),
+            name: m.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            cover: m.get("coverUrl").or_else(|| m.get("imgurl")).or_else(|| m.get("imgUrl")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            duration: m.get("duration").and_then(|v| v.as_i64()).map(|n| n as u64).unwrap_or(0),
+            play_count: m.get("playCount").and_then(|v| v.as_i64()).unwrap_or(0),
+            artist_name: m
+                .get("artist")
+                .and_then(|ar| ar.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+        })
+        .collect())
+}
+
+/// 获取专辑详情 + 歌曲列表 (参考 NeteaseCloudMusicApi album: /api/v1/album/{id})
+pub async fn album_detail(id: &str, cookie: &str) -> Result<(Album, Vec<Song>), String> {
+    let client = build_client();
+    let api_path = format!("/api/v1/album/{id}");
+    let result = post_weapi(&client, &api_path, serde_json::Map::new(), cookie).await?;
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if code != 200 {
+        return Err(format!("album_detail failed: code={code}"));
+    }
+
+    let album_raw = result.get("album").unwrap_or(&Value::Null);
+    let album = Album {
+        id: id.to_string(),
+        name: album_raw.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        cover: album_raw.get("picUrl").or_else(|| album_raw.get("cover")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        publish_time: album_raw.get("publishTime").and_then(|v| v.as_i64()).unwrap_or(0),
+        song_count: album_raw.get("size").and_then(|v| v.as_u64()).map(|n| n as u32).unwrap_or(0),
+        artist_name: album_raw
+            .get("artist")
+            .and_then(|ar| ar.get("name"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+    };
+
+    let songs_raw = result
+        .get("songs")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let songs: Vec<Song> = songs_raw.iter().map(map_song_record).collect();
+
+    Ok((album, songs))
+}
+
+/// 获取 MV 播放地址 (参考 NeteaseCloudMusicApi mv_url: /api/song/enhance/play/mv/url)
+pub async fn mv_url(id: &str, resolution: u32, cookie: &str) -> Result<String, String> {
+    let client = build_client();
+    let mut payload = serde_json::Map::new();
+    payload.insert("id".into(), json!(id));
+    payload.insert("r".into(), json!(resolution));
+
+    let result = post_weapi(&client, "/api/song/enhance/play/mv/url", payload, cookie).await?;
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if code != 200 {
+        return Err(format!("mv_url failed: code={code}"));
+    }
+
+    let url = result
+        .get("data")
+        .and_then(|d| d.get("url"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    if url.is_empty() {
+        Err("MV 播放地址为空，可能需要登录或该 MV 不可用".into())
+    } else {
+        Ok(url)
+    }
+}
+

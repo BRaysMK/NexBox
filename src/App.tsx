@@ -39,7 +39,9 @@ import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
 import SensorMonitorPage from "./pages/SensorMonitorPage";
 import AudioEqPage from "./pages/AudioEqPage";
+import AutoClickerPage from "./pages/AutoClickerPage";
 import CpuSchedulerPage from "./pages/CpuSchedulerPage";
+import SpeedTestPage from "./pages/SpeedTestPage";
 import CustomPage from "./pages/CustomPage";
 import { useState, useEffect } from "react";
 
@@ -72,7 +74,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "v6.9.4";
+const CURRENT_VERSION = "v7.1.3";
 
 function App() {
   const { t } = useTranslation();
@@ -284,6 +286,7 @@ function App() {
               <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
               <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
               <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
+              <Route path="/autoclicker" element={<AnimatedPage><AutoClickerPage /></AnimatedPage>} />
               <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
               <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
               <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
@@ -308,6 +311,7 @@ function App() {
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
               <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
+              <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
         </Routes>
       </AnimatePresence>
     ) : (
@@ -324,6 +328,7 @@ function App() {
             <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
             <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
             <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
+            <Route path="/autoclicker" element={<AnimatedPage><AutoClickerPage /></AnimatedPage>} />
             <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
             <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
             <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
@@ -348,6 +353,7 @@ function App() {
               <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
             <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
             <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
+            <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
       </Routes>
     )}
 

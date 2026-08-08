@@ -66,7 +66,9 @@ fn content_type_for(url: &str) -> &'static str {
         "audio/flac"
     } else if lower.contains(".mp3") {
         "audio/mpeg"
-    } else if lower.contains(".m4a") || lower.contains(".mp4") {
+    } else if lower.contains(".mp4") {
+        "video/mp4"
+    } else if lower.contains(".m4a") {
         "audio/mp4"
     } else if lower.contains(".ogg") {
         "audio/ogg"

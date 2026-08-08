@@ -573,18 +573,8 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const toast = useToast();
   const { getActiveColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const [showBlur, setShowBlur] = useState(false);
-
-  useEffect(() => {
-    if (liquidGlassEnabled) {
-      const timer = setTimeout(() => setShowBlur(true), 250);
-      return () => clearTimeout(timer);
-    } else {
-      setShowBlur(false);
-    }
-  }, [liquidGlassEnabled]);
-
-  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
   const primaryColor = getActiveColor();
   const textColor = useColorModeValue("#000000", "#ffffff");

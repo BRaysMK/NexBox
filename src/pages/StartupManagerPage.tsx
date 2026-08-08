@@ -17,6 +17,7 @@ import {
   Td,
   IconButton,
   Tooltip,
+  Badge,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
@@ -26,7 +27,8 @@ import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  Trash2,
+  Ban,
+  RotateCcw,
   RefreshCw,
   ArrowLeft,
   FolderOpen,
@@ -46,6 +48,7 @@ interface StartupItem {
   reg_value_name: string | null;
   folder_path: string | null;
   raw_registry_value: string | null;
+  is_disabled: boolean;
 }
 
 export default function StartupManagerPage() {
@@ -67,28 +70,32 @@ export default function StartupManagerPage() {
   const pathColor = useColorModeValue("gray.500", "#888888");
   const hoverBg = useColorModeValue("gray.50", "#252525");
   const deleteColor = useColorModeValue("red.500", "red.400");
+  const enableColor = useColorModeValue("teal.600", "teal.300");
 
   const [items, setItems] = useState<StartupItem[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [disablingItems, setDisablingItems] = useState<Set<string>>(new Set());
 
-  const doScan = useCallback(async () => {
-    setIsScanning(true);
-    try {
-      const result = await invoke<StartupItem[]>("scan_startup_items");
-      setItems(result);
-    } catch (error) {
-      console.error("Failed to scan startup items:", error);
-      toast({
-        title: t("optimization.startupManager.scanError"),
-        description: String(error),
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-    setIsScanning(false);
-  }, [t, toast]);
+  const doScan = useCallback(
+    async (showSpinner = true) => {
+      if (showSpinner) setIsScanning(true);
+      try {
+        const result = await invoke<StartupItem[]>("scan_startup_items");
+        setItems(result);
+      } catch (error) {
+        console.error("Failed to scan startup items:", error);
+        toast({
+          title: t("optimization.startupManager.scanError"),
+          description: String(error),
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+      if (showSpinner) setIsScanning(false);
+    },
+    [t, toast]
+  );
 
   useEffect(() => {
     doScan();
@@ -98,18 +105,47 @@ export default function StartupManagerPage() {
     const key = `${item.name}-${index}`;
     setDisablingItems((prev) => new Set(prev).add(key));
     try {
-      await invoke("delete_startup_item", { item });
+      await invoke("disable_startup_item", { item });
       toast({
         title: t("optimization.startupManager.disableSuccess", { name: item.name }),
         status: "success",
         duration: 2000,
         isClosable: true,
       });
-      setItems((prev) => prev.filter((_, i) => i !== index));
+      await doScan(false);
     } catch (error) {
       console.error("Failed to disable startup item:", error);
       toast({
         title: t("optimization.startupManager.disableError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setDisablingItems((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  };
+
+  const handleEnable = async (item: StartupItem, index: number) => {
+    const key = `${item.name}-${index}`;
+    setDisablingItems((prev) => new Set(prev).add(key));
+    try {
+      await invoke("enable_startup_item", { item });
+      toast({
+        title: t("optimization.startupManager.enableSuccess", { name: item.name }),
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+      await doScan(false);
+    } catch (error) {
+      console.error("Failed to enable startup item:", error);
+      toast({
+        title: t("optimization.startupManager.enableError"),
         description: String(error),
         status: "error",
         duration: 3000,
@@ -230,7 +266,7 @@ export default function StartupManagerPage() {
                     key={key}
                     _hover={{ bg: hoverBg }}
                     transition="background 0.15s"
-                    opacity={isDisabling ? 0.5 : 1}
+                    opacity={isDisabling ? 0.5 : item.is_disabled ? 0.6 : 1}
                   >
                     <Td px={4} py={3}>
                       <Flex align="center" gap={2}>
@@ -252,13 +288,26 @@ export default function StartupManagerPage() {
                           )}
                         </Box>
                         <Text
-                          color={headingColor}
+                          color={item.is_disabled ? pathColor : headingColor}
                           fontWeight="medium"
                           fontSize="sm"
                           noOfLines={1}
+                          textDecoration={item.is_disabled ? "line-through" : "none"}
                         >
                           {item.name}
                         </Text>
+                        {item.is_disabled && (
+                          <Badge
+                            colorScheme="gray"
+                            variant="subtle"
+                            borderRadius="full"
+                            px={2}
+                            fontSize="xs"
+                            flexShrink={0}
+                          >
+                            {t("optimization.startupManager.disabled")}
+                          </Badge>
+                        )}
                       </Flex>
                     </Td>
                     <Td px={4} py={3}>
@@ -298,18 +347,33 @@ export default function StartupManagerPage() {
                             />
                           </Tooltip>
                         )}
-                        <Tooltip label={t("optimization.startupManager.disable")} placement="top">
-                          <IconButton
-                            aria-label={t("optimization.startupManager.disable")}
-                            icon={<Trash2 size={14} />}
-                            size="sm"
-                            variant="ghost"
-                            colorScheme="red"
-                            color={deleteColor}
-                            onClick={() => handleDisable(item, index)}
-                            isLoading={isDisabling}
-                          />
-                        </Tooltip>
+                        {item.is_disabled ? (
+                          <Tooltip label={t("optimization.startupManager.enable")} placement="top">
+                            <IconButton
+                              aria-label={t("optimization.startupManager.enable")}
+                              icon={<RotateCcw size={14} />}
+                              size="sm"
+                              variant="ghost"
+                              colorScheme="teal"
+                              color={enableColor}
+                              onClick={() => handleEnable(item, index)}
+                              isLoading={isDisabling}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Tooltip label={t("optimization.startupManager.disable")} placement="top">
+                            <IconButton
+                              aria-label={t("optimization.startupManager.disable")}
+                              icon={<Ban size={14} />}
+                              size="sm"
+                              variant="ghost"
+                              colorScheme="red"
+                              color={deleteColor}
+                              onClick={() => handleDisable(item, index)}
+                              isLoading={isDisabling}
+                            />
+                          </Tooltip>
+                        )}
                       </HStack>
                     </Td>
                   </Tr>

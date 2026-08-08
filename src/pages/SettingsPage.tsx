@@ -25,9 +25,8 @@ import {
   SliderTrack,
   SliderFilledTrack,
   SliderThumb,
+  Spinner,
 } from "@chakra-ui/react";
-import { AnimatePresence, motion } from "framer-motion";
-import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 
 import {
   LuMonitor,
@@ -50,6 +49,11 @@ import {
   LuTrash2,
   LuCpu,
   LuUsers,
+  LuRotateCcw,
+  LuThermometer,
+  LuFan,
+  LuShieldCheck,
+  LuCircleAlert,
 } from "react-icons/lu";
 import { RiBilibiliFill, RiTiktokFill } from "react-icons/ri";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -68,6 +72,7 @@ import { CustomSelect } from "@/components/special/custom-select";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { MouseHotkeyRecorder } from "@/components/mouse-hotkey-recorder";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import {
   DndContext,
@@ -179,18 +184,8 @@ function GeneralSettings() {
   const toast = useToast();
   const { config, getContrastTextColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const [showBlur, setShowBlur] = useState(false);
-
-  useEffect(() => {
-    if (liquidGlassEnabled) {
-      const timer = setTimeout(() => setShowBlur(true), 250);
-      return () => clearTimeout(timer);
-    } else {
-      setShowBlur(false);
-    }
-  }, [liquidGlassEnabled]);
-
-  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
   const [language, setLanguage] = useState(i18n.language || "zh");
   const [todayPopularityEnabled, setTodayPopularityEnabled] = useState(true);
@@ -201,6 +196,7 @@ function GeneralSettings() {
   const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  const [homeUsername, setHomeUsername] = useState("");
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
   const [closeBehavior, setCloseBehavior] = useState<string>(() => {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
@@ -224,6 +220,8 @@ function GeneralSettings() {
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
+  const inputBg = useColorModeValue("white", "#1a1a1a");
+  const inputBorder = useColorModeValue("gray.200", "#333333");
   const splashLogoHoverBorder = useColorModeValue("blue.400", "blue.300");
   const segmentedControlBg = useColorModeValue(
     liquidGlassEnabled ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.78)",
@@ -346,6 +344,15 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_feedback_enabled");
         if (ls !== null) setFeedbackEnabled(ls === "true");
+      }
+
+      // 标题用户名（空 = 使用系统用户名）
+      let uname = await store.get<string>("nexbox_home_username");
+      if (uname !== null && uname !== undefined) {
+        setHomeUsername(uname);
+      } else {
+        const ls = localStorage.getItem("nexbox_home_username");
+        if (ls !== null) setHomeUsername(ls);
       }
 
       // 侧边栏标签
@@ -533,6 +540,22 @@ function GeneralSettings() {
     store.set("nexbox_feedback_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_feedback_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("feedback-setting-changed", { detail: newValue }));
+  };
+
+  // 标题用户名：留空时使用系统用户名
+  const handleHomeUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setHomeUsername(newValue);
+    store.set("nexbox_home_username", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_home_username", newValue);
+    window.dispatchEvent(new CustomEvent("home-username-setting-changed", { detail: newValue }));
+  };
+
+  const handleHomeUsernameReset = () => {
+    setHomeUsername("");
+    store.delete("nexbox_home_username").then(() => store.save());
+    localStorage.removeItem("nexbox_home_username");
+    window.dispatchEvent(new CustomEvent("home-username-setting-changed", { detail: "" }));
   };
 
   const handleSplashLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -726,6 +749,52 @@ function GeneralSettings() {
         </Text>
         <LiquidGlassCard px={4} py={3} boxShadow="sm">
           <VStack spacing={0} align="stretch">
+            <HStack justify="space-between" py={2}>
+              <Box flex={1} pr={3}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.homeUsernameLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.homeUsernameDesc")}
+                </Text>
+              </Box>
+              <HStack spacing={2}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleHomeUsernameReset}
+                  leftIcon={<LuRotateCcw size={13} />}
+                  color={subLabelColor}
+                  _hover={{ color: "red.400" }}
+                  isDisabled={!homeUsername}
+                  flexShrink={0}
+                >
+                  {t("settings.generalSettings.homeUsernameReset")}
+                </Button>
+                <Input
+                  value={homeUsername}
+                  onChange={handleHomeUsernameChange}
+                  placeholder={t("settings.generalSettings.homeUsernamePlaceholder")}
+                  size="sm"
+                  pl={3}
+                  pr={3}
+                  h="34px"
+                  width="160px"
+                  flexShrink={0}
+                  borderRadius="lg"
+                  bg={inputBg}
+                  border="1px solid"
+                  borderColor={hexToRgba(config.primaryColor, 0.4)}
+                  _hover={{ borderColor: hexToRgba(config.primaryColor, 0.7) }}
+                  _focus={{
+                    borderColor: config.primaryColor,
+                    boxShadow: `0 0 0 3px ${hexToRgba(config.primaryColor, 0.22)}`,
+                  }}
+                  transition="all 0.2s"
+                />
+              </HStack>
+            </HStack>
+            <Divider />
             <HStack justify="space-between" py={2}>
               <Box flex={1}>
                 <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -2609,6 +2678,7 @@ function PawnioSettings() {
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const dividerColor = useColorModeValue("gray.200", "#333333");
+  const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
 
   const [status, setStatus] = useState<{ installed: boolean; version?: string } | null>(null);
   const [checking, setChecking] = useState(true);
@@ -2646,40 +2716,151 @@ function PawnioSettings() {
       .finally(() => setChecking(false));
   };
 
+  const isInstalled = !!status?.installed;
+  const activeColor = getActiveColor();
+  const accent = getContrastTextColor();
+  const accentBorder = getBorderColor();
+  const accentSoft = getHoverColor();
+
   return (
     <Box>
       <Text fontSize="lg" fontWeight="bold" mb={6} color={titleColor}>
         {t("settings.pawnio.title", "PawnIO 驱动管理")}
       </Text>
 
-      <LiquidGlassCard px={4} py={4} boxShadow="sm">
-        <VStack spacing={3} align="stretch">
-          <HStack justify="space-between">
-            <Text fontSize="sm" color={labelColor} fontWeight="medium">
-              {t("settings.pawnio.status", "状态")}
-            </Text>
-            <Text fontSize="sm" color={subLabelColor}>
+      {/* 状态卡片 */}
+      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
+        <HStack spacing={4} align="center">
+          <Flex
+            align="center"
+            justify="center"
+            w="56px"
+            h="56px"
+            borderRadius="xl"
+            flexShrink={0}
+            bg={accentSoft}
+            border={`1px solid ${accentBorder}`}
+            color={activeColor}
+          >
+            {isInstalled ? <LuShieldCheck size={28} /> : <LuCircleAlert size={28} />}
+          </Flex>
+          <VStack align="flex-start" spacing={0.5} flex={1}>
+            <HStack spacing={2}>
+              <Text fontSize="sm" color={subLabelColor} fontWeight="medium">
+                {t("settings.pawnio.status", "状态")}
+              </Text>
+              {!checking && (
+                <Badge
+                  variant="solid"
+                  bg={isInstalled ? activeColor : undefined}
+                  color={isInstalled ? accent : undefined}
+                  fontSize="xs"
+                  borderRadius="full"
+                  px={2.5}
+                  py={0.5}
+                  textTransform="none"
+                >
+                  {isInstalled
+                    ? `${t("settings.pawnio.installed", "已安装")}${status.version ? ` v${status.version}` : ""}`
+                    : t("settings.pawnio.notInstalled", "未安装")}
+                </Badge>
+              )}
+            </HStack>
+            <Text fontSize="md" fontWeight="bold" color={labelColor}>
               {checking
                 ? t("settings.pawnio.checking", "检查中...")
-                : status?.installed
-                  ? `${t("settings.pawnio.installed", "已安装")}${status.version ? ` v${status.version}` : ""}`
-                  : t("settings.pawnio.notInstalled", "未安装")}
+                : isInstalled
+                  ? t("settings.pawnio.installedDesc", "传感器数据已启用", { defaultValue: "传感器数据已启用" })
+                  : t("settings.pawnio.notInstalledDesc", "当前未启用传感器数据", { defaultValue: "当前未启用传感器数据" })}
+            </Text>
+          </VStack>
+          {checking && <Spinner size="sm" color={activeColor} />}
+        </HStack>
+      </LiquidGlassCard>
+
+      {/* 功能说明卡片 */}
+      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
+        <VStack spacing={4} align="stretch">
+          <HStack spacing={2}>
+            <LuInfo size={16} color={activeColor} />
+            <Text fontSize="sm" color={labelColor} fontWeight="semibold">
+              {t("settings.pawnio.aboutTitle", "关于 PawnIO", { defaultValue: "关于 PawnIO" })}
             </Text>
           </HStack>
-
-          <Divider borderColor={dividerColor} />
-
-          <Text fontSize="xs" color={subLabelColor} lineHeight="1.5">
+          <Text fontSize="sm" color={subLabelColor} lineHeight="1.6">
             {t("settings.pawnio.description", "PawnIO 是一个可选的内核级驱动，安装后可以获取 CPU 温度、风扇转速等更详细的硬件信息。该驱动为可选组件，不安装不影响 NexBox 的其他功能。")}
           </Text>
-
           <Divider borderColor={dividerColor} />
+          <VStack spacing={3} align="stretch">
+            <HStack spacing={3}>
+              <Flex
+                align="center"
+                justify="center"
+                w="32px"
+                h="32px"
+                borderRadius="lg"
+                flexShrink={0}
+                bg={accentSoft}
+                color={activeColor}
+              >
+                <LuThermometer size={16} />
+              </Flex>
+              <Text fontSize="sm" color={labelColor}>
+                {t("settings.pawnio.featureTemp", "CPU 温度", { defaultValue: "CPU 温度" })}
+              </Text>
+            </HStack>
+            <HStack spacing={3}>
+              <Flex
+                align="center"
+                justify="center"
+                w="32px"
+                h="32px"
+                borderRadius="lg"
+                flexShrink={0}
+                bg={accentSoft}
+                color={activeColor}
+              >
+                <LuFan size={16} />
+              </Flex>
+              <Text fontSize="sm" color={labelColor}>
+                {t("settings.pawnio.featureFan", "风扇转速", { defaultValue: "风扇转速" })}
+              </Text>
+            </HStack>
+            <HStack spacing={3}>
+              <Flex
+                align="center"
+                justify="center"
+                w="32px"
+                h="32px"
+                borderRadius="lg"
+                flexShrink={0}
+                bg={accentSoft}
+                color={activeColor}
+              >
+                <LuCpu size={16} />
+              </Flex>
+              <Text fontSize="sm" color={labelColor}>
+                {t("settings.pawnio.featureDetail", "更详细的硬件数据", { defaultValue: "更详细的硬件数据" })}
+              </Text>
+            </HStack>
+          </VStack>
+        </VStack>
+      </LiquidGlassCard>
 
+      {/* 操作卡片 */}
+      <LiquidGlassCard px={4} py={4} boxShadow="sm">
+        <VStack spacing={3} align="stretch">
+          <Text fontSize="sm" color={labelColor} fontWeight="medium">
+            {t("settings.pawnio.actionTitle", "操作", { defaultValue: "操作" })}
+          </Text>
           <HStack spacing={3}>
-            {status?.installed ? (
+            {isInstalled ? (
               <Button
                 size="sm"
-                colorScheme="blue"
+                bg={activeColor}
+                color={accent}
+                _hover={{ bg: activeColor, opacity: 0.85 }}
+                leftIcon={<LuRefreshCw size={14} />}
                 onClick={handleRefreshStatus}
                 isLoading={checking}
               >
@@ -2688,7 +2869,9 @@ function PawnioSettings() {
             ) : (
               <Button
                 size="sm"
-                colorScheme="blue"
+                bg={activeColor}
+                color={accent}
+                _hover={{ bg: activeColor, opacity: 0.85 }}
                 leftIcon={<Download size={14} />}
                 onClick={onPawnioModalOpen}
               >
@@ -2722,7 +2905,7 @@ function AboutSettings() {
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "6.9.4";
+  const currentVersion = "7.1.3";
   const [isChecking, setIsChecking] = useState(false);
   const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
@@ -3171,7 +3354,7 @@ function AboutSettings() {
 
 function HotkeySettings() {
   const { t } = useTranslation();
-  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
+  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, autoclickerHotkey, saveAutoclickerHotkey, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
   const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
@@ -3227,11 +3410,13 @@ function HotkeySettings() {
             </Box>
             <HotkeyRecorder
               value={overlayHotkey}
-              onChange={(val) => {
-                saveOverlayHotkey(val);
+              onChange={async (val) => {
+                const ok = await saveOverlayHotkey(val);
                 toast({
-                  title: t("hotkeySettings.saved") || "快捷键已保存",
-                  status: "success",
+                  title: ok
+                    ? (t("hotkeySettings.saved") || "快捷键已保存")
+                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                  status: ok ? "success" : "error",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3264,11 +3449,13 @@ function HotkeySettings() {
             </Box>
             <HotkeyRecorder
               value={crosshairHotkey}
-              onChange={(val) => {
-                saveCrosshairHotkey(val);
+              onChange={async (val) => {
+                const ok = await saveCrosshairHotkey(val);
                 toast({
-                  title: t("hotkeySettings.saved") || "快捷键已保存",
-                  status: "success",
+                  title: ok
+                    ? (t("hotkeySettings.saved") || "快捷键已保存")
+                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                  status: ok ? "success" : "error",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3301,11 +3488,52 @@ function HotkeySettings() {
             </Box>
             <HotkeyRecorder
               value={filterHotkey}
-              onChange={(val) => {
-                saveFilterHotkey(val);
+              onChange={async (val) => {
+                const ok = await saveFilterHotkey(val);
                 toast({
-                  title: t("hotkeySettings.saved") || "快捷键已保存",
-                  status: "success",
+                  title: ok
+                    ? (t("hotkeySettings.saved") || "快捷键已保存")
+                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                  status: ok ? "success" : "error",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box>
+
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          {t("hotkeySettings.autoclicker") || "连点器"}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between">
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("hotkeySettings.autoclickerToggle") || "切换连点器"}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("hotkeySettings.autoclickerToggleDesc") || "使用快捷键开始或停止连点（支持中键、侧键）"}
+              </Text>
+            </Box>
+            <MouseHotkeyRecorder
+              value={autoclickerHotkey}
+              onChange={async (val) => {
+                const ok = await saveAutoclickerHotkey(val);
+                toast({
+                  title: ok
+                    ? (t("hotkeySettings.saved") || "快捷键已保存")
+                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                  status: ok ? "success" : "error",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3323,7 +3551,6 @@ export default function SettingsPage() {
   const [activeItem, setActiveItem] = useState("general");
   const { t } = useTranslation();
   const { config } = useThemeColor();
-  const transitionMode = useTransitionMode();
   const { jellyBounceEnabled } = useBackground();
   const isFirstRender = useRef(true);
 
@@ -3369,39 +3596,18 @@ export default function SettingsPage() {
       </Box>
 
       <Box flex={1}>
-        <AnimatePresence mode="wait">
-          {transitionMode !== "off" ? (
-            <motion.div
-              key={activeItem}
-              initial="initial"
-              animate="enter"
-              exit="exit"
-              variants={getVariants(transitionMode)}
-              transition={getTransitionConfig(transitionMode)}
-              style={{ position: 'relative', zIndex: 1 }}
-            >
-              {activeItem === "general" && <GeneralSettings />}
-              {activeItem === "appearance" && <AppearanceSettings />}
-              {activeItem === "pawnio" && <PawnioSettings />}
-              {activeItem === "hotkeys" && <HotkeySettings />}
-              {activeItem === "network" && <NetworkSettings />}
-              {activeItem === "contributor" && <ContributorSettings />}
-              {activeItem === "sponsor" && <SponsorSettings />}
-              {activeItem === "about" && <AboutSettings />}
-            </motion.div>
-          ) : (
-            <div key={activeItem} style={{ position: 'relative', zIndex: 1 }}>
-              {activeItem === "general" && <GeneralSettings />}
-              {activeItem === "appearance" && <AppearanceSettings />}
-              {activeItem === "pawnio" && <PawnioSettings />}
-              {activeItem === "hotkeys" && <HotkeySettings />}
-              {activeItem === "network" && <NetworkSettings />}
-              {activeItem === "contributor" && <ContributorSettings />}
-              {activeItem === "sponsor" && <SponsorSettings />}
-              {activeItem === "about" && <AboutSettings />}
-            </div>
-          )}
-        </AnimatePresence>
+        {/* 直接渲染子菜单，不做 motion 动画：opacity/transform 动画会让 backdrop-filter 失效，
+            导致液态玻璃卡片在切换时先透明、动画结束后瞬间出现模糊 */}
+        <div key={activeItem} style={{ position: 'relative', zIndex: 1 }}>
+          {activeItem === "general" && <GeneralSettings />}
+          {activeItem === "appearance" && <AppearanceSettings />}
+          {activeItem === "pawnio" && <PawnioSettings />}
+          {activeItem === "hotkeys" && <HotkeySettings />}
+          {activeItem === "network" && <NetworkSettings />}
+          {activeItem === "contributor" && <ContributorSettings />}
+          {activeItem === "sponsor" && <SponsorSettings />}
+          {activeItem === "about" && <AboutSettings />}
+        </div>
       </Box>
     </Flex>
   );

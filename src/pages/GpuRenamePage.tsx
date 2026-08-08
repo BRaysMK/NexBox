@@ -84,6 +84,20 @@ export default function GpuRenamePage() {
       ]);
       setGpuInfo(info);
       setGpuOptions(options);
+
+      // 默认选中当前显卡：若已在预设列表中则直接选中，否则作为"当前显卡"选项加入并默认选中
+      if (info?.current_name) {
+        const matched = options.find((opt) => opt.name === info.current_name);
+        if (matched) {
+          setSelectedOption(matched.id);
+        } else {
+          setGpuOptions([
+            { id: "current-gpu", name: info.current_name, category: "current" },
+            ...options,
+          ]);
+          setSelectedOption("current-gpu");
+        }
+      }
     } catch (error) {
       toast({
         title: t("gpuRename.loadError"),
@@ -287,6 +301,22 @@ export default function GpuRenamePage() {
             </TabList>
             <TabPanels>
               <TabPanel px={0}>
+                {gpuOptions.some((option) => option.category === "current") && (
+                  <Box w="full" mb={4}>
+                    <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
+                      {t("gpuRename.currentGpu")}
+                    </Text>
+                    <CustomSelect
+                      value={selectedOption}
+                      onChange={setSelectedOption}
+                      options={gpuOptions
+                        .filter((option) => option.category === "current")
+                        .map((option) => ({ value: option.id, label: option.name }))}
+                      placeholder={t("gpuRename.selectPlaceholder")}
+                      width="100%"
+                    />
+                  </Box>
+                )}
                 <Box w="full">
                   <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
                     {t("gpuRename.lowEnd")}

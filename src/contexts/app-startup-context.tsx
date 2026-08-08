@@ -8,6 +8,7 @@ import { type HardwareInfo, getHardwareInfo } from "@/lib/hardware";
 const DEFAULT_OVERLAY_HOTKEY = "Shift+F10";
 const DEFAULT_CROSSHAIR_HOTKEY = "Shift+F9";
 const DEFAULT_FILTER_HOTKEY = "Shift+F8";
+const DEFAULT_AUTOCLICKER_HOTKEY = "F8";
 
 interface DisplayItem {
   id: string;
@@ -80,11 +81,13 @@ interface AppStartupContextType {
   overlaySettings: OverlaySettings | null;
   saveOverlaySettings: (settings: OverlaySettings) => Promise<void>;
   overlayHotkey: string;
-  saveOverlayHotkey: (shortcut: string) => Promise<void>;
+  saveOverlayHotkey: (shortcut: string) => Promise<boolean>;
   crosshairHotkey: string;
-  saveCrosshairHotkey: (shortcut: string) => Promise<void>;
+  saveCrosshairHotkey: (shortcut: string) => Promise<boolean>;
   filterHotkey: string;
-  saveFilterHotkey: (shortcut: string) => Promise<void>;
+  saveFilterHotkey: (shortcut: string) => Promise<boolean>;
+  autoclickerHotkey: string;
+  saveAutoclickerHotkey: (shortcut: string) => Promise<boolean>;
   hotkeysEnabled: boolean;
   saveHotkeysEnabled: (enabled: boolean) => Promise<void>;
 }
@@ -135,11 +138,13 @@ const AppStartupContext = createContext<AppStartupContextType>({
   overlaySettings: null,
   saveOverlaySettings: async () => {},
   overlayHotkey: DEFAULT_OVERLAY_HOTKEY,
-  saveOverlayHotkey: async () => {},
+  saveOverlayHotkey: async () => false,
   crosshairHotkey: DEFAULT_CROSSHAIR_HOTKEY,
-  saveCrosshairHotkey: async () => {},
+  saveCrosshairHotkey: async () => false,
   filterHotkey: DEFAULT_FILTER_HOTKEY,
-  saveFilterHotkey: async () => {},
+  saveFilterHotkey: async () => false,
+  autoclickerHotkey: DEFAULT_AUTOCLICKER_HOTKEY,
+  saveAutoclickerHotkey: async () => false,
   hotkeysEnabled: true,
   saveHotkeysEnabled: async () => {},
 });
@@ -158,6 +163,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [overlayHotkey, setOverlayHotkey] = useState(DEFAULT_OVERLAY_HOTKEY);
   const [crosshairHotkey, setCrosshairHotkey] = useState(DEFAULT_CROSSHAIR_HOTKEY);
   const [filterHotkey, setFilterHotkey] = useState(DEFAULT_FILTER_HOTKEY);
+  const [autoclickerHotkey, setAutoclickerHotkey] = useState(DEFAULT_AUTOCLICKER_HOTKEY);
   const [hotkeysEnabled, setHotkeysEnabled] = useState(true);
   const hasStarted = useRef(false);
 
@@ -277,49 +283,52 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
 
   const loadOverlayHotkey = async () => {
     try {
-      const saved = await store.get<string>("overlay-hotkey");
+      // 热键已由 Rust 端在启动时读取持久化配置注册，这里只同步 UI 显示值
+      const saved = await invoke<string>("get_overlay_hotkey");
       if (saved) {
         setOverlayHotkey(saved);
-        await invoke("set_overlay_hotkey", { shortcut: saved });
       }
-      // 没有保存值则无需调用，Rust 端已用默认值初始化
     } catch (error) {
       console.error("Failed to load overlay hotkey:", error);
     }
   };
 
-  const saveOverlayHotkey = async (shortcut: string) => {
-    setOverlayHotkey(shortcut);
+  const saveOverlayHotkey = async (shortcut: string): Promise<boolean> => {
     try {
+      // Rust 端负责注册并写入 settings.json；这里仅同步前端 store 内存，
+      // 避免后续保存其他设置时整体写回把热键覆盖成旧值
       await invoke("set_overlay_hotkey", { shortcut });
       await store.set("overlay-hotkey", shortcut);
-      await store.save();
+      setOverlayHotkey(shortcut);
+      return true;
     } catch (error) {
       console.error("Failed to save overlay hotkey:", error);
+      return false;
     }
   };
 
   const loadCrosshairHotkey = async () => {
     try {
-      const saved = await store.get<string>("crosshair-hotkey");
+      // 热键已由 Rust 端在启动时读取持久化配置注册，这里只同步 UI 显示值
+      const saved = await invoke<string>("get_crosshair_hotkey");
       if (saved) {
         setCrosshairHotkey(saved);
-        await invoke("set_crosshair_hotkey", { shortcut: saved });
       }
-      // 没有保存值则无需调用，Rust 端已用默认值初始化
     } catch (error) {
       console.error("Failed to load crosshair hotkey:", error);
     }
   };
 
-  const saveCrosshairHotkey = async (shortcut: string) => {
-    setCrosshairHotkey(shortcut);
+  const saveCrosshairHotkey = async (shortcut: string): Promise<boolean> => {
     try {
+      // Rust 端负责注册并写入 settings.json；这里仅同步前端 store 内存
       await invoke("set_crosshair_hotkey", { shortcut });
       await store.set("crosshair-hotkey", shortcut);
-      await store.save();
+      setCrosshairHotkey(shortcut);
+      return true;
     } catch (error) {
       console.error("Failed to save crosshair hotkey:", error);
+      return false;
     }
   };
 
@@ -344,36 +353,59 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
 
   const loadFilterHotkey = async () => {
     try {
-      const saved = await store.get<string>("filter-hotkey");
+      // 热键已由 Rust 端在启动时读取持久化配置注册，这里只同步 UI 显示值
+      const saved = await invoke<string>("get_filter_hotkey");
       if (saved) {
         setFilterHotkey(saved);
-        await invoke("set_filter_hotkey", { shortcut: saved });
       }
-      // 没有保存值则无需调用，Rust 端已用默认值初始化
     } catch (error) {
       console.error("Failed to load filter hotkey:", error);
     }
   };
 
-  const saveFilterHotkey = async (shortcut: string) => {
-    setFilterHotkey(shortcut);
+  const saveFilterHotkey = async (shortcut: string): Promise<boolean> => {
     try {
+      // Rust 端负责注册并写入 settings.json；这里仅同步前端 store 内存
       await invoke("set_filter_hotkey", { shortcut });
       await store.set("filter-hotkey", shortcut);
-      await store.save();
+      setFilterHotkey(shortcut);
+      return true;
     } catch (error) {
       console.error("Failed to save filter hotkey:", error);
+      return false;
+    }
+  };
+
+  const loadAutoclickerHotkey = async () => {
+    try {
+      // 热键已由 Rust 端在启动时读取持久化配置注册，这里只同步 UI 显示值
+      const saved = await invoke<string>("get_autoclicker_hotkey");
+      if (saved) {
+        setAutoclickerHotkey(saved);
+      }
+    } catch (error) {
+      console.error("Failed to load autoclicker hotkey:", error);
+    }
+  };
+
+  const saveAutoclickerHotkey = async (shortcut: string): Promise<boolean> => {
+    try {
+      // Rust 端负责注册并写入 settings.json；这里仅同步前端 store 内存
+      await invoke("set_autoclicker_hotkey", { shortcut });
+      await store.set("autoclicker-hotkey", shortcut);
+      setAutoclickerHotkey(shortcut);
+      return true;
+    } catch (error) {
+      console.error("Failed to save autoclicker hotkey:", error);
+      return false;
     }
   };
 
   const loadHotkeysEnabled = async () => {
     try {
-      const saved = await store.get<boolean>("hotkeys-enabled");
-      if (saved !== undefined && saved !== null) {
-        setHotkeysEnabled(saved);
-        await invoke("set_hotkeys_enabled_cmd", { enabled: saved });
-      }
-      // 没有保存值则保持默认开启，Rust 端默认也是开启
+      // 总开关已由 Rust 端在启动时恢复，这里只同步 UI 显示值
+      const saved = await invoke<boolean>("get_hotkeys_enabled_cmd");
+      setHotkeysEnabled(saved);
     } catch (error) {
       console.error("Failed to load hotkeys enabled:", error);
     }
@@ -382,9 +414,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const saveHotkeysEnabled = async (enabled: boolean) => {
     setHotkeysEnabled(enabled);
     try {
+      // Rust 端负责设置并写入 settings.json
       await invoke("set_hotkeys_enabled_cmd", { enabled });
-      await store.set("hotkeys-enabled", enabled);
-      await store.save();
     } catch (error) {
       console.error("Failed to save hotkeys enabled:", error);
     }
@@ -426,6 +457,7 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         { name: "crosshair-hotkey", fn: loadCrosshairHotkey, weight: 1 },
         { name: "crosshair-settings", fn: loadCrosshairSettings, weight: 1 },
         { name: "filter-hotkey", fn: loadFilterHotkey, weight: 1 },
+        { name: "autoclicker-hotkey", fn: loadAutoclickerHotkey, weight: 1 },
         { name: "hotkeys-enabled", fn: loadHotkeysEnabled, weight: 1 },
         {
           name: "filter-restore",
@@ -498,6 +530,8 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         saveCrosshairHotkey,
         filterHotkey,
         saveFilterHotkey,
+        autoclickerHotkey,
+        saveAutoclickerHotkey,
         hotkeysEnabled,
         saveHotkeysEnabled,
       }}

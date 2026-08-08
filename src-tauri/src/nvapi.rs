@@ -2034,7 +2034,9 @@ pub fn get_nvidia_display_modes(device_name: String) -> Result<Vec<DisplayMode>,
                     != 0
                 {
                     let freq_raw = dm.dmDisplayFrequency as f64;
-                    let refresh_rate = if freq_raw > 200.0 {
+                    // 真实高刷(144/240/360Hz)直接返回整数 Hz，只有非整数刷新率
+                    // (如 59.94Hz) 才编码为 x100 (5994)。> 1000 才是编码值。
+                    let refresh_rate = if freq_raw > 1000.0 {
                         freq_raw / 100.0
                     } else {
                         freq_raw
@@ -2070,10 +2072,11 @@ pub fn get_nvidia_display_modes(device_name: String) -> Result<Vec<DisplayMode>,
                 }
 
                 // Calculate effective refresh rate
-                // dmDisplayFrequency may be exact (e.g. 60, 144) or fractional (e.g. 5995 → 59.95)
+                // dmDisplayFrequency 真实高刷(144/240/360Hz)直接返回整数 Hz，
+                // 只有非整数刷新率(如 5995 → 59.95Hz)才编码为 x100。> 1000 才是编码值。
                 let freq_raw = dev_mode.dmDisplayFrequency as f64;
-                let refresh_rate = if freq_raw > 200.0 {
-                    // Assume it's 100x encoded (e.g., 5995 = 59.95 Hz)
+                let refresh_rate = if freq_raw > 1000.0 {
+                    // x100 encoded (e.g., 5995 = 59.95 Hz)
                     freq_raw / 100.0
                 } else {
                     freq_raw
@@ -2203,8 +2206,11 @@ fn inject_nv_modes_registry(device_name: &str, width: u32, height: u32, refresh_
                 wide.as_ptr(), 0xFFFFFFFF, &mut dm,
             ) != 0
             {
-                let freq = dm.dmDisplayFrequency as u32;
-                if freq > 200 { freq } else { freq * 1000 }
+                // 真实高刷(144/240/360Hz)返回整数 Hz，只有非整数刷新率(如 5995=59.95Hz)
+                // 才编码为 x100。> 1000 才是编码值，统一换算成 rrx1k(Hz*1000)。
+                let freq_raw = dm.dmDisplayFrequency as f64;
+                let hz = if freq_raw > 1000.0 { freq_raw / 100.0 } else { freq_raw };
+                (hz * 1000.0).round() as u32
             } else {
                 144000
             }
@@ -2677,10 +2683,33 @@ pub fn set_nvidia_display_resolution(
             let mut dm_fields = DM_PELSWIDTH | DM_PELSHEIGHT;
 
             if let Some(rr) = refresh_rate {
-                // dmDisplayFrequency: for integer Hz (60, 144), set directly.
-                // For fractional rates (59.95), some drivers use x100 encoding;
-                // we use the integer Hz which works for most cases.
-                dm.dmDisplayFrequency = rr.round() as u32;
+                // 优先从 Windows 枚举的模式列表里找到 (width,height,rr) 完全匹配的
+                // 原始 dmDisplayFrequency，确保与 Windows 显示设置里的值一致。
+                // 找不到时回退：整数刷新率(60/144/240Hz)直接以 Hz 写入；
+                // 非整数(如 59.95Hz)按 x100 编码写入(5995)。
+                let mut freq: u32 = if (rr.fract()).abs() < f64::EPSILON {
+                    rr.round() as u32
+                } else {
+                    (rr * 100.0).round() as u32
+                };
+                let mut mode_num: u32 = 0;
+                while mode_num < 300 {
+                    let mut dev_mode: DEVMODEW = mem::zeroed();
+                    dev_mode.dmSize = mem::size_of::<DEVMODEW>() as u16;
+                    if EnumDisplaySettingsW(wide_name.as_ptr(), mode_num, &mut dev_mode) == 0 {
+                        break;
+                    }
+                    if dev_mode.dmPelsWidth == width && dev_mode.dmPelsHeight == height {
+                        let raw = dev_mode.dmDisplayFrequency as f64;
+                        let raw_hz = if raw > 1000.0 { raw / 100.0 } else { raw };
+                        if (raw_hz - rr).abs() < 0.5 {
+                            freq = dev_mode.dmDisplayFrequency;
+                            break;
+                        }
+                    }
+                    mode_num += 1;
+                }
+                dm.dmDisplayFrequency = freq;
                 dm_fields |= DM_DISPLAYFREQUENCY;
                 log::info!(
                     "ChangeDisplaySettingsExW 设置刷新率: {} Hz (dmDisplayFrequency={})",

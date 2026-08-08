@@ -18,7 +18,7 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { Monitor, ArrowLeft, RefreshCw } from "lucide-react";
+import { Monitor, ArrowLeft } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -318,41 +318,53 @@ export default function ResolutionConverterPage() {
   const [displays, setDisplays] = useState<NvidiaDisplay[]>([]);
   const [selectedDisplayIdx, setSelectedDisplayIdx] = useState(0);
   const [displayModes, setDisplayModes] = useState<DisplayMode[]>([]);
-  const [selectedModeKey, setSelectedModeKey] = useState<string>("");
+  const [selectedResKey, setSelectedResKey] = useState<string>("");
+  const [selectedRateKey, setSelectedRateKey] = useState<string>("");
   const [isApplyingResolution, setIsApplyingResolution] = useState(false);
   const [isLoadingModes, setIsLoadingModes] = useState(false);
   const [applyingResKey, setApplyingResKey] = useState<string>("");
   const [injectedResolutions, setInjectedResolutions] = useState<InjectedResolution[]>([]);
-  const [selectedRefreshRate, setSelectedRefreshRate] = useState<string>("");
-  const [isApplyingRefreshRate, setIsApplyingRefreshRate] = useState(false);
 
-  // Compute available refresh rates for the CURRENT resolution
-  const currentResRefreshRates = useMemo(() => {
-    const disp = displays[selectedDisplayIdx];
-    if (!disp || disp.current_width <= 0 || disp.current_height <= 0) return [];
-    const currentW = disp.current_width;
-    const currentH = disp.current_height;
-    // Filter modes matching current resolution, dedup by refresh rate
-    const seen = new Set<number>();
-    const rates: { value: string; label: string; rate: number }[] = [];
+  // 去重后的分辨率列表（按面积降序），用于两级联动下拉
+  const availableResolutions = useMemo(() => {
+    const seen = new Set<string>();
+    const list: { key: string; width: number; height: number; label: string }[] = [];
     for (const m of displayModes) {
-      if (m.width === currentW && m.height === currentH) {
-        // Round to 1 decimal to handle minor floating point differences
-        const key = Math.round(m.refresh_rate * 10) / 10;
+      const key = `${m.width}x${m.height}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({ key, width: m.width, height: m.height, label: `${m.width} × ${m.height}` });
+      }
+    }
+    list.sort((a, b) => b.width * b.height - a.width * a.height);
+    return list;
+  }, [displayModes]);
+
+  // 当前所选分辨率下的刷新率列表
+  const availableRates = useMemo(() => {
+    if (!selectedResKey) return [];
+    const [w, h] = selectedResKey.split("x").map(Number);
+    const seen = new Set<string>();
+    const list: { key: string; rate: number; label: string; isCurrent: boolean }[] = [];
+    for (const m of displayModes) {
+      if (m.width === w && m.height === h) {
+        const key = (Math.round(m.refresh_rate * 10) / 10).toFixed(1);
         if (!seen.has(key)) {
           seen.add(key);
-          rates.push({
-            value: key.toFixed(1),
-            label: `${key.toFixed(1)} Hz${m.is_current ? " (当前)" : ""}`,
-            rate: key,
+          list.push({
+            key,
+            rate: Math.round(m.refresh_rate * 10) / 10,
+            label: `${key} Hz`,
+            isCurrent: m.is_current,
           });
         }
       }
     }
-    // Sort descending
-    rates.sort((a, b) => b.rate - a.rate);
-    return rates;
-  }, [displays, selectedDisplayIdx, displayModes]);
+    list.sort((a, b) => b.rate - a.rate);
+    return list;
+  }, [displayModes, selectedResKey]);
+
+
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const textColor = useColorModeValue("gray.700", "#ffffff");
@@ -385,8 +397,12 @@ export default function ResolutionConverterPage() {
     try {
       const modes = await invoke<DisplayMode[]>("get_nvidia_display_modes", { deviceName });
       setDisplayModes(modes);
-      if (modes.length > 0) {
-        setSelectedModeKey(`${modes[0].width}x${modes[0].height}@${modes[0].refresh_rate.toFixed(1)}`);
+      // 默认定位到当前正在使用的模式，而不是列表第一个，避免"对不上"
+      const currentMode = modes.find((m) => m.is_current);
+      const target = currentMode ?? modes[0];
+      if (target) {
+        setSelectedResKey(`${target.width}x${target.height}`);
+        setSelectedRateKey((Math.round(target.refresh_rate * 10) / 10).toFixed(1));
       }
     } catch (e) {
       console.error("加载分辨率列表失败:", e);
@@ -478,37 +494,15 @@ export default function ResolutionConverterPage() {
   }, [displays, selectedDisplayIdx, t, toast]);
 
   function handleApplyResolution() {
-    const match = selectedModeKey.match(/^(\d+)x(\d+)@([\d.]+)/);
-    if (!match) return;
-    const w = parseInt(match[1]);
-    const h = parseInt(match[2]);
-    const rr = parseFloat(match[3]);
+    if (!selectedResKey || !selectedRateKey) return;
+    const [wStr, hStr] = selectedResKey.split("x");
+    const w = parseInt(wStr);
+    const h = parseInt(hStr);
+    const rr = parseFloat(selectedRateKey);
     setIsApplyingResolution(true);
     applyCustomResolution(w, h, rr).finally(() =>
       setIsApplyingResolution(false)
     );
-  }
-
-  async function handleApplyRefreshRate() {
-    const disp = displays[selectedDisplayIdx];
-    if (!disp || disp.current_width <= 0 || disp.current_height <= 0) {
-      toast({
-        title: t("resolutionConverter.applyFailed"),
-        description: t("resolutionConverter.selectDisplayFirst"),
-        status: "warning",
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-    const rr = parseFloat(selectedRefreshRate);
-    if (isNaN(rr)) return;
-    setIsApplyingRefreshRate(true);
-    try {
-      await applyCustomResolution(disp.current_width, disp.current_height, rr);
-    } finally {
-      setIsApplyingRefreshRate(false);
-    }
   }
 
   // 加载 NVIDIA 显示器列表和已注入分辨率
@@ -530,22 +524,6 @@ export default function ResolutionConverterPage() {
     }, 200);
     return () => clearTimeout(timer);
   }, []);
-
-  // Auto-select current refresh rate when display modes or selected display changes
-  useEffect(() => {
-    if (currentResRefreshRates.length > 0) {
-      // Find the current refresh rate (the one marked as current in displayModes)
-      const currentMode = displayModes.find((m) => m.is_current);
-      if (currentMode) {
-        const key = (Math.round(currentMode.refresh_rate * 10) / 10).toFixed(1);
-        setSelectedRefreshRate(key);
-      } else {
-        setSelectedRefreshRate(currentResRefreshRates[0].value);
-      }
-    } else {
-      setSelectedRefreshRate("");
-    }
-  }, [currentResRefreshRates, displayModes]);
 
   const content = (
     <VStack align="start" spacing={6}>
@@ -635,7 +613,7 @@ export default function ResolutionConverterPage() {
             />
           </Box>
 
-          {/* 分辨率列表 */}
+          {/* 分辨率选择（两级联动） */}
           <Box>
             <Text fontWeight="medium" fontSize="sm" color={textColor} mb={2}>
               {t("builtinTools.selectResolution")}
@@ -644,14 +622,32 @@ export default function ResolutionConverterPage() {
               <Flex justify="center" py={4}>
                 <Spinner size="sm" color={getActiveColor()} />
               </Flex>
-            ) : displayModes.length > 0 ? (
+            ) : availableResolutions.length > 0 ? (
               <CustomSelect
-                value={selectedModeKey}
-                onChange={setSelectedModeKey}
+                value={selectedResKey}
+                onChange={(v) => {
+                  setSelectedResKey(v);
+                  // 切换分辨率后，自动选中该分辨率下的第一个刷新率（最高）
+                  const [w, h] = v.split("x").map(Number);
+                  const rates = displayModes
+                    .filter((m) => m.width === w && m.height === h)
+                    .map((m) => Math.round(m.refresh_rate * 10) / 10)
+                    .sort((a, b) => b - a);
+                  if (rates.length > 0) {
+                    setSelectedRateKey(rates[0].toFixed(1));
+                  }
+                }}
                 direction="up"
-                options={displayModes.map((m) => ({
-                  value: `${m.width}x${m.height}@${m.refresh_rate.toFixed(1)}`,
-                  label: `${m.width}x${m.height} @ ${m.refresh_rate.toFixed(1)} Hz`,
+                options={availableResolutions.map((r) => ({
+                  value: r.key,
+                  label: `${r.label}${
+                    displayModes.some(
+                      (m) =>
+                        m.width === r.width && m.height === r.height && m.is_current
+                    )
+                      ? " (当前)"
+                      : ""
+                  }`,
                 }))}
                 width="100%"
               />
@@ -662,11 +658,30 @@ export default function ResolutionConverterPage() {
             )}
           </Box>
 
+          {/* 刷新率选择 */}
+          {selectedResKey && availableRates.length > 0 && (
+            <Box>
+              <Text fontWeight="medium" fontSize="sm" color={textColor} mb={2}>
+                刷新率
+              </Text>
+              <CustomSelect
+                value={selectedRateKey}
+                onChange={setSelectedRateKey}
+                direction="up"
+                options={availableRates.map((r) => ({
+                  value: r.key,
+                  label: `${r.label}${r.isCurrent ? " (当前)" : ""}`,
+                }))}
+                width="100%"
+              />
+            </Box>
+          )}
+
           {/* 应用按钮 */}
           <Button
             bg={getActiveColor()}
             color={getContrastTextColor()}
-            isDisabled={!selectedModeKey || isLoadingModes}
+            isDisabled={!selectedResKey || !selectedRateKey || isLoadingModes}
             isLoading={isApplyingResolution}
             loadingText={t("resolutionConverter.applying")}
             onClick={handleApplyResolution}
@@ -679,52 +694,6 @@ export default function ResolutionConverterPage() {
           </Button>
         </VStack>
       </LiquidGlassCard>
-
-      {/* 刷新率切换 */}
-      {currentResRefreshRates.length > 0 && (
-        <LiquidGlassCard w="full" p={5} boxShadow="2xl">
-          <HStack mb={4} spacing={2}>
-            <RefreshCw size={18} color={getActiveColor()} />
-            <Text fontWeight="semibold" color={headingColor} fontSize="md">
-              刷新率切换
-            </Text>
-          </HStack>
-          <VStack spacing={4} align="stretch">
-            <Box>
-              <Text fontWeight="medium" fontSize="sm" color={textColor} mb={2}>
-                当前分辨率: {displays[selectedDisplayIdx]?.current_width}x{displays[selectedDisplayIdx]?.current_height}
-              </Text>
-              <CustomSelect
-                value={selectedRefreshRate}
-                onChange={setSelectedRefreshRate}
-                direction="up"
-                options={currentResRefreshRates.map((r) => ({
-                  value: r.value,
-                  label: r.label,
-                }))}
-                width="100%"
-              />
-            </Box>
-            <Button
-              bg={getActiveColor()}
-              color={getContrastTextColor()}
-              isDisabled={!selectedRefreshRate}
-              isLoading={isApplyingRefreshRate}
-              loadingText={t("resolutionConverter.applying")}
-              onClick={handleApplyRefreshRate}
-              w="full"
-              size="md"
-              borderRadius="lg"
-              _hover={{ filter: 'brightness(0.85)' }}
-            >
-              应用刷新率
-            </Button>
-            <Text fontSize="xs" color={subTextColor}>
-              仅切换刷新率，不改变当前分辨率。如需同时修改分辨率和刷新率，请使用上方的分辨率列表。
-            </Text>
-          </VStack>
-        </LiquidGlassCard>
-      )}
 
       {/* 已注入的分辨率 */}
       {injectedResolutions.length > 0 && (

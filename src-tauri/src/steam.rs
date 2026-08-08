@@ -246,6 +246,10 @@ pub struct SteamGame {
     pub build_id: u32,
     pub bytes_to_download: u64,
     pub bytes_downloaded: u64,
+    /// 游玩时长（分钟），来自 localconfig.vdf
+    pub playtime_minutes: u64,
+    /// 最近游玩时间（unix 秒），来自 localconfig.vdf
+    pub last_played: i64,
 }
 
 // ======================== 核心逻辑 ========================
@@ -518,6 +522,98 @@ fn parse_single_library(index_str: &str, folder_data: &VdfValue) -> Option<Steam
     })
 }
 
+/// 从 localconfig.vdf 解析各游戏的游玩时长（分钟）与最近游玩时间（unix 秒）。
+/// 结构: UserLocalConfigStore -> Software -> Valve -> Steam -> apps -> {appid} -> Playtime / LastPlayed
+/// 注意：userdata 目录名是 Steam3 Account ID（10 位数字），非 Steam64；字段为 Playtime（旧版为 Playtime2）。
+fn parse_local_config_playtimes(steam_dir: &str) -> std::collections::HashMap<u32, (u64, i64)> {
+    use std::collections::HashMap;
+    let mut result: HashMap<u32, (u64, i64)> = HashMap::new();
+
+    let userdata_dir = format!("{}\\userdata", steam_dir);
+    let userdata = match fs::read_dir(&userdata_dir) {
+        Ok(d) => d,
+        Err(_) => return result,
+    };
+
+    // 收集用户目录：当前活跃用户（注册表 ActiveUser 即目录名）优先，再补充其他纯数字目录
+    let mut user_dirs: Vec<String> = vec![];
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(hkcu) = RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey("Software\\Valve\\Steam\\ActiveProcess")
+        {
+            if let Ok(active_user) = hkcu.get_value::<u32, _>("ActiveUser") {
+                if active_user != 0 {
+                    user_dirs.push(active_user.to_string());
+                }
+            }
+        }
+    }
+    for entry in userdata.flatten() {
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.is_empty()
+                && name.chars().all(|c| c.is_ascii_digit())
+                && !user_dirs.contains(&name)
+            {
+                user_dirs.push(name);
+            }
+        }
+    }
+
+    for user_id in user_dirs {
+        let local_path = format!("{}\\{}\\config\\localconfig.vdf", userdata_dir, user_id);
+        let content = match fs::read_to_string(&local_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let mut parser = VdfParser::new(&content);
+        let root = match parser.parse() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let Some(store) = root.get_obj("UserLocalConfigStore") else { continue };
+        let Some(software) = store.get_obj("Software") else { continue };
+        let Some(valve) = software.get_obj("Valve") else { continue };
+        let Some(steam) = valve.get_obj("Steam") else { continue };
+        let Some(apps) = steam.get_obj("apps") else { continue };
+        let Some(entries) = apps.get_obj_entries() else { continue };
+
+        for (appid_str, app_data) in entries {
+            let appid: u32 = match appid_str.parse() {
+                Ok(a) => a,
+                Err(_) => continue,
+            };
+            // 新版字段为 Playtime，旧版为 Playtime2
+            let playtime = app_data
+                .get_str("Playtime")
+                .and_then(|s| s.parse::<u64>().ok())
+                .or_else(|| {
+                    app_data
+                        .get_str("Playtime2")
+                        .and_then(|s| s.parse::<u64>().ok())
+                })
+                .unwrap_or(0);
+            let last_played = app_data
+                .get_str("LastPlayed")
+                .and_then(|s| s.parse::<i64>().ok())
+                .unwrap_or(0);
+
+            // 多用户时取时长/最近游玩的最大值
+            let entry = result.entry(appid).or_insert((0, 0));
+            if playtime > entry.0 {
+                entry.0 = playtime;
+            }
+            if last_played > entry.1 {
+                entry.1 = last_played;
+            }
+        }
+    }
+
+    result
+}
+
 /// 扫描已安装的游戏
 fn scan_installed_games(libraries: &[SteamLibrary]) -> Vec<SteamGame> {
     let mut games = vec![];
@@ -527,6 +623,9 @@ fn scan_installed_games(libraries: &[SteamLibrary]) -> Vec<SteamGame> {
         Some(p) => p,
         None => return vec![],
     };
+
+    // 解析本地游玩时长/最近游玩（localconfig.vdf）
+    let playtimes = parse_local_config_playtimes(&steam_dir);
 
     // 收集所有需要扫描的 steamapps 目录，并记录对应的库路径
     // (steamapps_dir, library_path) library_path 是去掉 \steamapps 后的库根路径
@@ -588,11 +687,16 @@ fn scan_installed_games(libraries: &[SteamLibrary]) -> Vec<SteamGame> {
             };
 
             if let Some(app_state) = root.get_obj("AppState") {
+                let app_id: u32 = app_state
+                    .get_str("appid")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0);
+                let (playtime_minutes, last_played) = playtimes
+                    .get(&app_id)
+                    .copied()
+                    .unwrap_or((0, 0));
                 let game = SteamGame {
-                    app_id: app_state
-                        .get_str("appid")
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(0),
+                    app_id,
                     name: app_state.get_str("name").unwrap_or("").to_string(),
                     install_dir: app_state
                         .get_str("installdir")
@@ -627,6 +731,8 @@ fn scan_installed_games(libraries: &[SteamLibrary]) -> Vec<SteamGame> {
                         .get_str("BytesDownloaded")
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(0),
+                    playtime_minutes,
+                    last_played,
                 };
                 if game.app_id > 0 {
                     games.push(game);
@@ -1490,6 +1596,8 @@ pub async fn get_steam_stats() -> SteamStats {
         user_count: data.users.len(),
     }
 }
+
+
 
 /// 获取路径所在磁盘的实际容量和可用空间
 #[cfg(windows)]

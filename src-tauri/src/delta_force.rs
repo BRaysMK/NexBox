@@ -69,7 +69,7 @@ pub struct DLSSSettingsStatus {
 
 static DELTA_PASSWORD_CACHE: std::sync::Mutex<Option<(Vec<DeltaPasswordItem>, std::time::Instant)>> = std::sync::Mutex::new(None);
 
-fn fetch_delta_passwords_from_api() -> Option<Vec<DeltaPasswordItem>> {
+fn fetch_delta_passwords_from_primary_api() -> Option<Vec<DeltaPasswordItem>> {
     let url = "https://i.elaina.vin/api/%E4%B8%89%E8%A7%92%E6%B4%B2/%E5%AF%86%E7%A0%81/";
     
     let response = reqwest::blocking::Client::new()
@@ -85,6 +85,74 @@ fn fetch_delta_passwords_from_api() -> Option<Vec<DeltaPasswordItem>> {
     } else {
         None
     }
+}
+
+/// 备用接口：https://api.s0o1.com/API/sjz/mm/
+/// 返回纯文本，格式形如：
+///   1. 潮汐监狱
+///   具体点位：监狱行政区1楼大厅楼梯拐角处
+///   每日密码：0557
+///   地点图片：https://...
+/// 即 "1." 之后是地图名，"每日密码：" 之后是密码
+fn parse_backup_password_text(text: &str) -> Vec<DeltaPasswordItem> {
+    let map_re = regex::Regex::new(r"^\s*\d+\.\s*(.+?)\s*$").unwrap();
+    let pw_re = regex::Regex::new(r"每日密码\s*[:：]\s*(\S+)").unwrap();
+
+    let mut items: Vec<DeltaPasswordItem> = Vec::new();
+    let mut current: Option<(String, String)> = None;
+
+    for line in text.lines() {
+        if let Some(caps) = map_re.captures(line) {
+            // 上一组数据完整则先保存
+            if let Some((name, pw)) = current.take() {
+                if !pw.is_empty() {
+                    items.push(DeltaPasswordItem { name, password: pw });
+                }
+            }
+            current = Some((caps[1].to_string(), String::new()));
+            continue;
+        }
+        if let Some(caps) = pw_re.captures(line) {
+            if let Some((_, pw)) = current.as_mut() {
+                if pw.is_empty() {
+                    *pw = caps[1].to_string();
+                }
+            }
+        }
+    }
+
+    if let Some((name, pw)) = current.take() {
+        if !pw.is_empty() {
+            items.push(DeltaPasswordItem { name, password: pw });
+        }
+    }
+
+    items
+}
+
+fn fetch_delta_passwords_from_backup_api() -> Option<Vec<DeltaPasswordItem>> {
+    let url = "https://api.s0o1.com/API/sjz/mm/";
+
+    let text = reqwest::blocking::Client::new()
+        .get(url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .ok()?
+        .text()
+        .ok()?;
+
+    let items = parse_backup_password_text(&text);
+    if items.is_empty() { None } else { Some(items) }
+}
+
+/// 主接口优先，失败或数据为空时回退到备用接口
+fn fetch_delta_passwords_from_api() -> Option<Vec<DeltaPasswordItem>> {
+    if let Some(items) = fetch_delta_passwords_from_primary_api() {
+        if !items.is_empty() {
+            return Some(items);
+        }
+    }
+    fetch_delta_passwords_from_backup_api()
 }
 
 #[tauri::command]

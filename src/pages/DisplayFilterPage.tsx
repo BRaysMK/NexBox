@@ -267,18 +267,8 @@ export default function DisplayFilterPage() {
   const miniGlassBorder = useColorModeValue("rgba(255,255,255,0.5)", "rgba(255,255,255,0.2)");
   const miniGlassGlow = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.45)");
 
-  const [showBlur, setShowBlur] = useState(false);
-
-  useEffect(() => {
-    if (liquidGlassEnabled) {
-      const timer = setTimeout(() => setShowBlur(true), 250);
-      return () => clearTimeout(timer);
-    } else {
-      setShowBlur(false);
-    }
-  }, [liquidGlassEnabled]);
-
-  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
   const loadSettings = useCallback(async () => {
     try {
@@ -1672,11 +1662,13 @@ export default function DisplayFilterPage() {
             <HStack spacing={4}>
               <HotkeyRecorder
                 value={filterHotkey}
-                onChange={(val) => {
-                  saveFilterHotkey(val);
+                onChange={async (val) => {
+                  const ok = await saveFilterHotkey(val);
                   toast({
-                    title: t("displayFilter.hotkeySaved") || "快捷键已保存",
-                    status: "success",
+                    title: ok
+                      ? (t("displayFilter.hotkeySaved") || "快捷键已保存")
+                      : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                    status: ok ? "success" : "error",
                     duration: 2000,
                     isClosable: true,
                   });

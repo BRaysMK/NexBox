@@ -93,12 +93,12 @@ fn find_gpu_registry_keys() -> Result<Vec<(RegKey, String, bool)>, String> {
     
     let mut gpu_keys = Vec::new();
     
-    // 支持的显卡厂商 PCI Vendor ID: NVIDIA(10DE)、AMD(1002)
-    let supported_vendors = ["VEN_10DE", "VEN_1002"];
+    // 支持的显卡厂商 PCI Vendor ID: NVIDIA(10DE)、AMD(1002)、Intel(8086)
+    let supported_vendors = ["VEN_10DE", "VEN_1002", "VEN_8086"];
     // 排除关键词：USB控制器等非显卡设备
     let exclude_keywords = ["usb", "controller", "控制器", "host", "xhci", "ehci", "uhci", "chipset", "smbus", "audio", "sound"];
-    // 显卡名称关键词（NVIDIA / AMD）
-    let gpu_keywords = ["nvidia", "geforce", "gtx", "rtx", "amd", "radeon"];
+    // 显卡名称关键词（NVIDIA / AMD / Intel）
+    let gpu_keywords = ["nvidia", "geforce", "gtx", "rtx", "amd", "radeon", "intel", "uhd graphics", "iris", "hd graphics"];
     
     for vendor_result in enum_key.enum_keys() {
         let vendor_key_name = match vendor_result {
@@ -318,8 +318,8 @@ try {{
     if (Test-Path $pciPath) {{
         $vendors = Get-ChildItem $pciPath
         foreach ($vendor in $vendors) {{
-            # 只处理 NVIDIA(VEN_10DE) / AMD(VEN_1002) 设备，排除 USB 控制器等其他非显卡设备
-            if ($vendor.PSChildName -notmatch "VEN_10DE|VEN_1002") {{
+            # 只处理 NVIDIA(VEN_10DE) / AMD(VEN_1002) / Intel(VEN_8086) 设备，排除 USB 控制器等其他非显卡设备
+            if ($vendor.PSChildName -notmatch "VEN_10DE|VEN_1002|VEN_8086") {{
                 continue
             }}
             $devices = Get-ChildItem $vendor.PSPath
@@ -363,7 +363,7 @@ try {{
                     
                     if (-not $isExcluded) {{
                         $descText = "$deviceDesc $friendlyName"
-                        if ($isDisplay -or $descText -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon") {{
+                        if ($isDisplay -or $descText -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon|Intel|UHD Graphics|Iris|HD Graphics") {{
                             $isGpu = $true
                             Write-Host "找到显卡: $($device.PSChildName)"
                         }}
@@ -422,7 +422,7 @@ try {{
                 $keyPath = $subkey.PSPath
                 try {{
                     $driverDesc = (Get-ItemProperty -Path $keyPath -Name "DriverDesc" -ErrorAction SilentlyContinue).DriverDesc
-                    if ($driverDesc -and ($driverDesc -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon")) {{
+                    if ($driverDesc -and ($driverDesc -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon|Intel|UHD Graphics|Iris|HD Graphics")) {{
                         Write-Host "找到显卡Class键: $($subkey.PSChildName) DriverDesc: $driverDesc"
                         Set-ItemProperty -Path $keyPath -Name "DriverDesc" -Value "{}"
                         Write-Host "成功修改 DriverDesc"
@@ -453,7 +453,7 @@ try {{
                     $description = (Get-ItemProperty -Path $keyPath -Name "Description" -ErrorAction SilentlyContinue).Description
                     
                     $checkText = @($driverDesc, $deviceDesc, $description) -join " "
-                    if ($checkText -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon") {{
+                    if ($checkText -match "NVIDIA|GeForce|GTX|RTX|AMD|Radeon|Intel|UHD Graphics|Iris|HD Graphics") {{
                         Write-Host "找到Video键: $($videoKey.PSChildName)\$($subkey.PSChildName)"
                         
                         foreach ($name in @("DriverDesc", "DeviceDesc", "Description", "FriendlyName")) {{
@@ -593,26 +593,6 @@ pub async fn get_gpu_options() -> Result<Vec<GpuOption>, String> {
         GpuOption {
             id: "rx590".to_string(),
             name: "AMD Radeon RX 590".to_string(),
-            category: "low-end".to_string(),
-        },
-        GpuOption {
-            id: "rx6400".to_string(),
-            name: "AMD Radeon RX 6400".to_string(),
-            category: "low-end".to_string(),
-        },
-        GpuOption {
-            id: "rx6500xt".to_string(),
-            name: "AMD Radeon RX 6500 XT".to_string(),
-            category: "low-end".to_string(),
-        },
-        GpuOption {
-            id: "rx6600".to_string(),
-            name: "AMD Radeon RX 6600".to_string(),
-            category: "low-end".to_string(),
-        },
-        GpuOption {
-            id: "rx6650xt".to_string(),
-            name: "AMD Radeon RX 6650 XT".to_string(),
             category: "low-end".to_string(),
         },
         // 高端显卡（NVIDIA）

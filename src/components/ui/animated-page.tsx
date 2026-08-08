@@ -95,6 +95,7 @@ export function useTransitionMode(): TransitionMode {
 
 export function AnimatedPage({ children }: AnimatedPageProps) {
   const mode = useTransitionMode();
+  const [animating, setAnimating] = useState(false);
 
   if (mode === "off") {
     return <div style={{ width: "100%", height: "100%" }}>{children}</div>;
@@ -106,6 +107,9 @@ export function AnimatedPage({ children }: AnimatedPageProps) {
       animate="enter"
       exit="exit"
       variants={getVariants(mode)}
+      onAnimationStart={() => setAnimating(true)}
+      onAnimationComplete={() => setAnimating(false)}
+      className={animating ? "page-animating" : undefined}
       style={{ width: "100%", height: "100%" }}
     >
       {children}

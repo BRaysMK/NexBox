@@ -37,6 +37,10 @@ monitor/build.log*
 .DS_Store
 Thumbs.db
 
+# TypeScript 编译输出日志
+tscout*.txt
+query
+
 # IDE
 .idea/
 .vscode/

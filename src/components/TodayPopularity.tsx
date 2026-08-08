@@ -1,6 +1,6 @@
 import { Box, Text, VStack, useColorModeValue } from "@chakra-ui/react";
 import { keyframes } from "@emotion/react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
@@ -48,6 +48,8 @@ export function TodayPopularity() {
 
   const [value, setValue] = useState<number | null>(null);
   const [animating, setAnimating] = useState(false);
+  // 标记今天是否已生成过，防止同一天内重复点击
+  const generatedRef = useRef(false);
 
   const valueColor = useColorModeValue("purple.500", "#b794f4");
   const labelColor = useColorModeValue("gray.500", "#ffffff");
@@ -67,31 +69,42 @@ export function TodayPopularity() {
 
       if (savedDate === todayKey && savedValue !== null) {
         setValue(Number(savedValue));
+        generatedRef.current = true;
       }
     })();
   }, []);
 
-  const generate = useCallback(() => {
+  const generate = useCallback(async () => {
+    // 同一天内只能生成一次
+    if (generatedRef.current) return;
     const todayKey = getTodayKey();
 
-    // 从 store 读取判断是否已生成（避免异步过时问题）
-    store.get<string>("nexbox_today_popularity_date").then((savedDate) => {
-      if (savedDate === todayKey && value !== null) return;
-    });
-
-    if (value !== null) {
-      // 同步检查 localStorage 作为回退
-      const savedDate = localStorage.getItem("nexbox_today_popularity_date");
-      if (savedDate === todayKey) return;
+    // 同步检查 localStorage，避免页面刷新后 value 为 null 时重复生成
+    const lsDate = localStorage.getItem("nexbox_today_popularity_date");
+    if (lsDate === todayKey) {
+      generatedRef.current = true;
+      return;
     }
 
+    // 异步检查 store 兜底（跨存储一致性）
+    const savedDate = await store.get<string>("nexbox_today_popularity_date");
+    if (savedDate === todayKey) {
+      generatedRef.current = true;
+      const savedValue = await store.get<string>("nexbox_today_popularity_value");
+      if (savedValue !== null) setValue(Number(savedValue));
+      return;
+    }
+
+    generatedRef.current = true;
     const randomValue = Math.floor(Math.random() * 101);
     setValue(randomValue);
     setAnimating(true);
+    localStorage.setItem("nexbox_today_popularity_date", todayKey);
+    localStorage.setItem("nexbox_today_popularity_value", String(randomValue));
     store.set("nexbox_today_popularity_date", todayKey).then(() => store.save());
     store.set("nexbox_today_popularity_value", String(randomValue)).then(() => store.save());
     setTimeout(() => setAnimating(false), 600);
-  }, [value]);
+  }, []);
 
   const cardContent = (
     <VStack spacing={0} align="center">

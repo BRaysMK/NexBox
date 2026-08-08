@@ -32,6 +32,21 @@ import {
   X,
   ExternalLink,
   Shield,
+  HardDrive,
+  Thermometer,
+  Activity,
+  Eraser,
+  Scaling,
+  Search,
+  Settings2,
+  Scissors,
+  Boxes,
+  PieChart,
+  Archive,
+  Rocket,
+  Gauge,
+  LineChart,
+  Gamepad2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
@@ -195,6 +210,38 @@ function ThirdPartyToolCard({
         return Monitor;
       case "geek":
         return Trash2;
+      case "hwinfo":
+        return Cpu;
+      case "crystaldiskinfo":
+        return HardDrive;
+      case "core-temp":
+        return Thermometer;
+      case "aida64":
+        return Activity;
+      case "ddu":
+        return Eraser;
+      case "lossless-scaling":
+        return Scaling;
+      case "everything":
+        return Search;
+      case "dismpp":
+        return Settings2;
+      case "snipaste":
+        return Scissors;
+      case "powertoys":
+        return Boxes;
+      case "wiztree":
+        return PieChart;
+      case "7zip":
+        return Archive;
+      case "watt-toolkit":
+        return Rocket;
+      case "trafficmonitor":
+        return Gauge;
+      case "rtss":
+        return LineChart;
+      case "playnite":
+        return Gamepad2;
       default:
         return Wrench;
     }

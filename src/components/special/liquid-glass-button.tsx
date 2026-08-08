@@ -4,7 +4,6 @@ import { Button, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
-import { useState, useEffect } from "react";
 
 interface LiquidGlassButtonProps {
   children: React.ReactNode;
@@ -16,21 +15,12 @@ export function LiquidGlassButton({ children, className, ...props }: LiquidGlass
   const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
-  const [showBlur, setShowBlur] = useState(false);
 
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.3)", "rgba(255,255,255,0.15)");
   const glassBg = getActiveColor();
 
-  useEffect(() => {
-    if (liquidGlassEnabled) {
-      const timer = setTimeout(() => setShowBlur(true), 250);
-      return () => clearTimeout(timer);
-    } else {
-      setShowBlur(false);
-    }
-  }, [liquidGlassEnabled]);
-
-  const effectiveBlur = showBlur ? liquidGlassBlur : 0;
+  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const isReal = liquidGlassEnabled && liquidGlassMode === "real";
 
   const backdropFilter = isReal

@@ -188,8 +188,11 @@ export default function MemoryCleanupPage() {
   const handleCleanAll = async () => {
     setCleaningAll(true);
     try {
-      const result1 = await invoke<CleanupResult>("clean_standby_memory");
-      const result2 = await invoke<CleanupResult>("trim_system_working_set");
+      // 并行执行待机缓存清理 + 工作集收紧，缩短等待时间
+      const [result1, result2] = await Promise.all([
+        invoke<CleanupResult>("clean_standby_memory"),
+        invoke<CleanupResult>("trim_system_working_set"),
+      ]);
       const totalFreed = result1.freed_mb + result2.freed_mb;
       await fetchMemoryData();
       toast({

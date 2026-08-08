@@ -32,6 +32,7 @@ export default function FinishPage({ targetDir }: FinishPageProps) {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.3 }}
       style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, gap: 16 }}
     >
       <motion.div

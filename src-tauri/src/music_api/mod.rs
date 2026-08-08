@@ -156,6 +156,18 @@ pub async fn music_lyric(id: String) -> Result<Lyrics, String> {
 }
 
 #[tauri::command]
+pub async fn music_song_comments(id: String, page: Option<u32>, page_size: Option<u32>) -> Result<CommentPage, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::song_comments(&id, page.unwrap_or(1), page_size.unwrap_or(20), &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_send_comment(id: String, content: String) -> Result<(), String> {
+    let app_cookie = get_app_cookie().await;
+    netease::send_comment(&id, &content, &app_cookie).await
+}
+
+#[tauri::command]
 pub async fn music_personalized() -> Result<Vec<Playlist>, String> {
     let app_cookie = get_app_cookie().await;
     netease::personalized(&app_cookie).await
@@ -189,6 +201,36 @@ pub async fn music_playlist_search(keywords: String, limit: Option<u32>) -> Resu
 pub async fn music_artist_songs(artist_id: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Song>, String> {
     let app_cookie = get_app_cookie().await;
     netease::artist_songs(&artist_id, limit.unwrap_or(50), offset.unwrap_or(0), &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_artist_detail(artist_id: String) -> Result<ArtistDetail, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::artist_detail(&artist_id, &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_artist_albums(artist_id: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Album>, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::artist_albums(&artist_id, limit.unwrap_or(50), offset.unwrap_or(0), &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_artist_mvs(artist_id: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Mv>, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::artist_mvs(&artist_id, limit.unwrap_or(50), offset.unwrap_or(0), &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_album_detail(album_id: String) -> Result<(Album, Vec<Song>), String> {
+    let app_cookie = get_app_cookie().await;
+    netease::album_detail(&album_id, &app_cookie).await
+}
+
+#[tauri::command]
+pub async fn music_mv_url(mv_id: String, resolution: Option<u32>) -> Result<String, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::mv_url(&mv_id, resolution.unwrap_or(1080), &app_cookie).await
 }
 
 // ============================================================

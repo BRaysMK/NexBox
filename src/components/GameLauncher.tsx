@@ -23,7 +23,8 @@ import { Gamepad2, Plus, X, FolderOpen, GripVertical } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { store } from "@/lib/store";
+import { LazyStore } from "@tauri-apps/plugin-store";
+import { store as legacyStore } from "@/lib/store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import {
@@ -240,6 +241,8 @@ interface GameShortcut {
   isDefault?: boolean;
 }
 
+// 独立存储文件，与全局 settings.json 隔离，避免被其它 store 实例的全量覆盖写盘清空
+const launcherStore = new LazyStore("quick-launch.json");
 const STORE_KEY_GAMES = "nexbox_game_launcher_games";
 const STORE_KEY_ICONS = "nexbox_game_launcher_icons";
 const STORE_KEY_SIZE = "nexbox_game_launcher_size";
@@ -276,7 +279,7 @@ export default function GameLauncher() {
 
   const updateCardSize = useCallback((size: { width: number; height: number }) => {
     setCardSize(size);
-    store.set(STORE_KEY_SIZE, size).then(() => store.save());
+    launcherStore.set(STORE_KEY_SIZE, size).then(() => launcherStore.save());
   }, []);
 
   const onResizeStart = useCallback(
@@ -359,13 +362,26 @@ export default function GameLauncher() {
   }, [newGamePath]);
 
   const loadCardSize = async () => {
-    // 优先从 store 读取，兼容旧 localStorage 数据
-    let saved = await store.get<{ width: number; height: number }>(STORE_KEY_SIZE);
+    // 优先从新存储(quick-launch.json)读取；空则从旧位置(settings.json → localStorage)迁移
+    let saved = await launcherStore.get<{ width: number; height: number }>(STORE_KEY_SIZE);
     if (!saved) {
       try {
-        const ls = localStorage.getItem(LS_KEY_SIZE);
-        if (ls) saved = JSON.parse(ls);
-      } catch {}
+        const legacy = await legacyStore.get<{ width: number; height: number }>(STORE_KEY_SIZE);
+        if (legacy) {
+          saved = legacy;
+        } else {
+          const ls = localStorage.getItem(LS_KEY_SIZE);
+          if (ls) saved = JSON.parse(ls);
+        }
+      } catch {
+        try {
+          const ls = localStorage.getItem(LS_KEY_SIZE);
+          if (ls) saved = JSON.parse(ls);
+        } catch {}
+      }
+      if (saved) {
+        launcherStore.set(STORE_KEY_SIZE, saved).then(() => launcherStore.save());
+      }
     }
     if (saved) {
       setCardSize(saved);
@@ -375,22 +391,50 @@ export default function GameLauncher() {
   const loadGames = async () => {
     setIsLoading(true);
     try {
-      // 优先从 store 读取，兼容旧 localStorage 数据
-      let gameList: GameShortcut[] = await store.get<GameShortcut[]>(STORE_KEY_GAMES) || [];
+      // 优先从新存储(quick-launch.json)读取；空则从旧位置(settings.json → localStorage)迁移
+      let gameList: GameShortcut[] = await launcherStore.get<GameShortcut[]>(STORE_KEY_GAMES) || [];
       if (gameList.length === 0) {
         try {
-          const ls = localStorage.getItem(LS_KEY_GAMES);
-          if (ls) gameList = JSON.parse(ls);
-        } catch {}
+          const legacy = await legacyStore.get<GameShortcut[]>(STORE_KEY_GAMES);
+          if (legacy && legacy.length > 0) {
+            gameList = legacy;
+          } else {
+            const ls = localStorage.getItem(LS_KEY_GAMES);
+            if (ls) gameList = JSON.parse(ls);
+          }
+        } catch {
+          try {
+            const ls = localStorage.getItem(LS_KEY_GAMES);
+            if (ls) gameList = JSON.parse(ls);
+          } catch {}
+        }
+        // 迁移到新存储，下次直接从 quick-launch.json 读取
+        if (gameList.length > 0) {
+          const userGames = gameList.filter((g) => !g.isDefault);
+          launcherStore.set(STORE_KEY_GAMES, userGames).then(() => launcherStore.save());
+        }
       }
 
-      // 加载缓存的图标
-      let savedIcons: Record<string, string> | null = await store.get<Record<string, string>>(STORE_KEY_ICONS);
+      // 加载缓存的图标（同样支持从旧位置迁移）
+      let savedIcons: Record<string, string> | null = await launcherStore.get<Record<string, string>>(STORE_KEY_ICONS);
       if (!savedIcons) {
         try {
-          const ls = localStorage.getItem(LS_KEY_ICONS);
-          if (ls) savedIcons = JSON.parse(ls);
-        } catch {}
+          const legacy = await legacyStore.get<Record<string, string>>(STORE_KEY_ICONS);
+          if (legacy && Object.keys(legacy).length > 0) {
+            savedIcons = legacy;
+          } else {
+            const ls = localStorage.getItem(LS_KEY_ICONS);
+            if (ls) savedIcons = JSON.parse(ls);
+          }
+        } catch {
+          try {
+            const ls = localStorage.getItem(LS_KEY_ICONS);
+            if (ls) savedIcons = JSON.parse(ls);
+          } catch {}
+        }
+        if (savedIcons) {
+          launcherStore.set(STORE_KEY_ICONS, savedIcons).then(() => launcherStore.save());
+        }
       }
       if (savedIcons) {
         setIcons(savedIcons);
@@ -419,7 +463,7 @@ export default function GameLauncher() {
       setIcons((prev) => {
         const next = { ...prev, [game.id]: dataUri };
         // 缓存到 store
-        store.set(STORE_KEY_ICONS, next).then(() => store.save());
+        launcherStore.set(STORE_KEY_ICONS, next).then(() => launcherStore.save());
         return next;
       });
     } catch (error) {
@@ -429,7 +473,7 @@ export default function GameLauncher() {
 
   const saveGames = (gameList: GameShortcut[]) => {
     const userGames = gameList.filter((g) => !g.isDefault);
-    store.set(STORE_KEY_GAMES, userGames).then(() => store.save());
+    launcherStore.set(STORE_KEY_GAMES, userGames).then(() => launcherStore.save());
   };
 
   const handleLaunch = async (game: GameShortcut) => {
@@ -472,7 +516,7 @@ export default function GameLauncher() {
     setGames(reordered);
     // 保存到 store
     const userGames = reordered.filter((g) => !g.isDefault);
-    store.set(STORE_KEY_GAMES, userGames).then(() => store.save());
+    launcherStore.set(STORE_KEY_GAMES, userGames).then(() => launcherStore.save());
   }, [games]);
 
   const handleSelectPath = async () => {

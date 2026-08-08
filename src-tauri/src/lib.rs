@@ -2,6 +2,7 @@ mod announcement;
 mod audio_engine;
 mod audio_eq;
 mod auto_start;
+mod autoclicker;
 mod music_api;
 mod cpu_scheduler;
 mod crosshair;
@@ -39,6 +40,7 @@ mod sponsor;
 mod contributor;
 mod startup_manager;
 mod steam;
+mod speedtest;
 mod storage_clean;
 mod thirdparty_tools;
 mod tray;
@@ -193,6 +195,8 @@ pub fn run() {
                             let _ = crosshair::toggle_crosshair_sync(app);
                         } else if shortcut.id() == hotkey::get_filter_shortcut_id() {
                             let _ = display_filter::toggle_filter_sync(app);
+                        } else if shortcut.id() == hotkey::get_autoclicker_shortcut_id() {
+                            let _ = autoclicker::toggle(app);
                         }
                     }
                 })
@@ -316,10 +320,18 @@ pub fn run() {
             // 提前从持久化存储加载悬浮框设置，确保快捷键触发时使用已保存的配置而非默认值
             overlay_panel::try_load_persisted_settings(app.handle());
 
-            // Register default hotkeys (will be overridden by frontend if user changed them)
-            let _ = hotkey::init_overlay(app.handle(), "Shift+F10");
-            let _ = hotkey::init_crosshair(app.handle(), "Shift+F9");
-            let _ = hotkey::init_filter(app.handle(), "Shift+F8");
+            // 启动时直接从持久化配置读取用户设置的快捷键并注册，
+            // 不再依赖前端启动后覆盖，避免用户自定义热键重启后失效
+            let overlay_hotkey = hotkey::load_saved_hotkey(app.handle(), "overlay-hotkey", "Shift+F10");
+            let crosshair_hotkey = hotkey::load_saved_hotkey(app.handle(), "crosshair-hotkey", "Shift+F9");
+            let filter_hotkey = hotkey::load_saved_hotkey(app.handle(), "filter-hotkey", "Shift+F8");
+            let autoclicker_hotkey = hotkey::load_saved_hotkey(app.handle(), "autoclicker-hotkey", "F8");
+            hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
+
+            let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
+            let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
+            let _ = hotkey::init_filter(app.handle(), &filter_hotkey);
+            let _ = hotkey::init_autoclicker(app.handle(), &autoclicker_hotkey);
 
             Ok(())
         })
@@ -354,11 +366,18 @@ pub fn run() {
         music_api::music_like,
         music_api::music_playlist_subscribe,
         music_api::music_lyric,
+        music_api::music_song_comments,
+        music_api::music_send_comment,
         music_api::music_personalized,
         music_api::music_recommend_songs,
         music_api::music_recommend_resource,
         music_api::music_artist_search,
         music_api::music_artist_songs,
+        music_api::music_artist_detail,
+        music_api::music_artist_albums,
+        music_api::music_artist_mvs,
+        music_api::music_album_detail,
+        music_api::music_mv_url,
         music_api::music_playlist_search,
         music_api::music_open_login_window,
         // === 酷狗音乐 API ===
@@ -439,6 +458,8 @@ pub fn run() {
         optimization::get_builtin_power_plans,
         optimization::get_system_power_plans,
         optimization::get_active_power_plan,
+        optimization::get_laptop_power_lock_status,
+        optimization::unlock_laptop_power_plan,
         optimization::import_power_plan,
         optimization::activate_power_plan,
         optimization::import_and_activate_power_plan,
@@ -470,7 +491,8 @@ pub fn run() {
         network_optimize::batch_network_enable,
         network_optimize::batch_network_disable,
         startup_manager::scan_startup_items,
-        startup_manager::delete_startup_item,
+        startup_manager::disable_startup_item,
+        startup_manager::enable_startup_item,
         startup_manager::locate_startup_file,
         startup_manager::find_startup_key_in_registry,
         display_filter::get_displays,
@@ -569,8 +591,15 @@ pub fn run() {
         hotkey::set_crosshair_hotkey,
         hotkey::get_filter_hotkey,
         hotkey::set_filter_hotkey,
+        hotkey::get_autoclicker_hotkey,
+        hotkey::set_autoclicker_hotkey,
         hotkey::set_hotkeys_enabled_cmd,
         hotkey::get_hotkeys_enabled_cmd,
+        autoclicker::autoclicker_start,
+        autoclicker::autoclicker_stop,
+        autoclicker::autoclicker_toggle,
+        autoclicker::autoclicker_update,
+        autoclicker::autoclicker_get_status,
         crosshair::toggle_crosshair,
         crosshair::get_crosshair_status,
         crosshair::update_crosshair_settings,
@@ -667,6 +696,11 @@ pub fn run() {
         steam::steam_debug,
         steam::get_steam_user_avatars,
 
+        // === 网络测速 ===
+        speedtest::start_speedtest,
+        speedtest::stop_speedtest,
+        speedtest::is_speedtest_running,
+
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -686,9 +720,11 @@ pub fn run() {
                 hardware::cleanup_hardware_cache();
                 overlay_panel::cleanup(); // 先停后台轮询线程(FPS/传感器)，再恢复 Gamma
                 game_win_key::cleanup();
+                speedtest::cleanup();
                 display_filter::cleanup();
                 vertical_overlay::cleanup(app_handle);
                 crosshair::cleanup();
+                autoclicker::cleanup();
                 audio_eq::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);

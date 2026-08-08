@@ -13,6 +13,10 @@ import type {
   SongUrlResult,
   KaraokeLine,
   MusicProvider,
+  CommentPage,
+  Album,
+  Mv,
+  ArtistDetail,
 } from "@/types/music";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 
@@ -64,6 +68,15 @@ interface MusicState {
   selectedArtist: Artist | null;
   searchingArtists: boolean;
   loadingArtistSongs: boolean;
+  artistDetail: ArtistDetail | null;
+  artistAlbums: Album[];
+  artistMvs: Mv[];
+  albumDetailSongs: Song[];
+  albumDetailMeta: Album | null;
+  loadingArtistDetail: boolean;
+  loadingArtistAlbums: boolean;
+  loadingArtistMvs: boolean;
+  loadingAlbumDetail: boolean;
 
   // 歌单搜索
   playlistSearchResults: Playlist[];
@@ -116,6 +129,10 @@ interface MusicState {
   search: (keywords: string) => Promise<void>;
   searchArtists: (keywords: string) => Promise<void>;
   loadArtistSongs: (artistId: string, offset?: number) => Promise<void>;
+  loadArtistDetail: (artistId: string) => Promise<void>;
+  loadArtistAlbums: (artistId: string, offset?: number) => Promise<void>;
+  loadArtistMvs: (artistId: string, offset?: number) => Promise<void>;
+  loadAlbumDetail: (albumId: string) => Promise<void>;
   clearArtistState: () => void;
   searchPlaylists: (keywords: string) => Promise<void>;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
@@ -168,6 +185,15 @@ interface MusicState {
   loadRecommendations: () => Promise<void>;
   loadOfficialCharts: () => Promise<void>;
   togglePlaylistSubscribe: (playlistId: string, currentSubscribed: boolean) => Promise<void>;
+
+  // 评论系统
+  currentComments: CommentPage | null;
+  loadingComments: boolean;
+  sendingComment: boolean;
+  commentError: string;
+  loadComments: (songId: string, page?: number) => Promise<void>;
+  sendComment: (songId: string, content: string) => Promise<boolean>;
+  clearComments: () => void;
 }
 
 let storeInstance: Store | null = null;
@@ -324,6 +350,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   selectedArtist: null,
   searchingArtists: false,
   loadingArtistSongs: false,
+  artistDetail: null,
+  artistAlbums: [],
+  artistMvs: [],
+  albumDetailSongs: [],
+  albumDetailMeta: null,
+  loadingArtistDetail: false,
+  loadingArtistAlbums: false,
+  loadingArtistMvs: false,
+  loadingAlbumDetail: false,
 
   playlistSearchResults: [],
   searchingPlaylists: false,
@@ -340,6 +375,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   dynamicEnabled: false,
   coverFilmEffect: false,
   proxyPort: 0,
+
+  // 评论系统
+  currentComments: null,
+  loadingComments: false,
+  sendingComment: false,
+  commentError: "",
 
   desktopLyricsVisible: false,
   desktopLyricsFontSize: 36,
@@ -639,8 +680,69 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
+  loadArtistDetail: async (artistId) => {
+    set({ loadingArtistDetail: true });
+    try {
+      const detail = await invoke<ArtistDetail>("music_artist_detail", { artistId });
+      set({ artistDetail: detail });
+    } catch (e) {
+      console.error("Load artist detail failed:", e);
+      set({ artistDetail: null });
+    } finally {
+      set({ loadingArtistDetail: false });
+    }
+  },
+
+  loadArtistAlbums: async (artistId, offset = 0) => {
+    set({ loadingArtistAlbums: true });
+    try {
+      const albums = await invoke<Album[]>("music_artist_albums", { artistId, limit: 50, offset });
+      set((state) => ({ artistAlbums: offset === 0 ? albums : [...state.artistAlbums, ...albums] }));
+    } catch (e) {
+      console.error("Load artist albums failed:", e);
+      set({ artistAlbums: [] });
+    } finally {
+      set({ loadingArtistAlbums: false });
+    }
+  },
+
+  loadArtistMvs: async (artistId, offset = 0) => {
+    set({ loadingArtistMvs: true });
+    try {
+      const mvs = await invoke<Mv[]>("music_artist_mvs", { artistId, limit: 50, offset });
+      set((state) => ({ artistMvs: offset === 0 ? mvs : [...state.artistMvs, ...mvs] }));
+    } catch (e) {
+      console.error("Load artist mvs failed:", e);
+      set({ artistMvs: [] });
+    } finally {
+      set({ loadingArtistMvs: false });
+    }
+  },
+
+  loadAlbumDetail: async (albumId) => {
+    set({ loadingAlbumDetail: true });
+    try {
+      const [meta, songs] = await invoke<[Album, Song[]]>("music_album_detail", { albumId });
+      set({ albumDetailMeta: meta, albumDetailSongs: songs });
+    } catch (e) {
+      console.error("Load album detail failed:", e);
+      set({ albumDetailMeta: null, albumDetailSongs: [] });
+    } finally {
+      set({ loadingAlbumDetail: false });
+    }
+  },
+
   clearArtistState: () => {
-    set({ artistSearchResults: [], artistSongs: [], selectedArtist: null });
+    set({
+      artistSearchResults: [],
+      artistSongs: [],
+      selectedArtist: null,
+      artistDetail: null,
+      artistAlbums: [],
+      artistMvs: [],
+      albumDetailSongs: [],
+      albumDetailMeta: null,
+    });
   },
 
   searchPlaylists: async (keywords) => {
@@ -1511,6 +1613,49 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     } finally {
       set({ loadingLyrics: false });
     }
+  },
+
+  loadComments: async (songId, page = 1) => {
+    set({ loadingComments: true, commentError: "" });
+    try {
+      const result = await invoke<CommentPage>("music_song_comments", { id: songId, page, pageSize: 20 });
+      // 分页时追加到已有列表（跳过已加载的 id），第一页直接替换
+      set((state) => {
+        if (page === 1 || !state.currentComments) {
+          return { currentComments: result, loadingComments: false };
+        }
+        const seen = new Set(state.currentComments.comments.map((c) => c.comment_id));
+        const merged = [...state.currentComments.comments, ...result.comments.filter((c) => !seen.has(c.comment_id))];
+        return {
+          currentComments: { ...result, comments: merged, hot_comments: state.currentComments.hot_comments },
+          loadingComments: false,
+        };
+      });
+    } catch (e) {
+      console.error("[Music] loadComments failed:", e);
+      set({ loadingComments: false, commentError: String(e) || "加载评论失败" });
+    }
+  },
+
+  sendComment: async (songId, content) => {
+    const trimmed = content.trim();
+    if (!trimmed) return false;
+    set({ sendingComment: true });
+    try {
+      await invoke("music_send_comment", { id: songId, content: trimmed });
+      // 发送成功后刷新第一页，让新评论出现在列表
+      await get().loadComments(songId, 1);
+      return true;
+    } catch (e) {
+      console.error("[Music] sendComment failed:", e);
+      return false;
+    } finally {
+      set({ sendingComment: false });
+    }
+  },
+
+  clearComments: () => {
+    set({ currentComments: null });
   },
 
   loadRecommendations: async () => {

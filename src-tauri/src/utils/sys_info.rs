@@ -1,6 +1,6 @@
 use serde_json::json;
+use tauri::Manager;
 use tauri_plugin_os::locale;
-use tauri_plugin_store::StoreExt;
 
 async fn send_statistics(version: String, os: String) {
     let client = reqwest::Client::builder()
@@ -22,16 +22,20 @@ async fn send_statistics(version: String, os: String) {
     }
 }
 
-pub fn check_and_send_statistics(app: &tauri::App) {
-    let store = match app.store("settings.json") {
-        Ok(s) => s,
-        Err(e) => {
-            log::error!("Failed to open settings store: {}", e);
-            return;
-        }
-    };
+/// 统计标志的独立文件路径（app_data_dir/statistics-sent.json）。
+/// 注意：刻意不写入 settings.json —— 插件 store 对同一文件会创建多个独立实例，
+/// 任何实例的 save() 都会用自身不完整的缓存全量覆盖磁盘，导致前端数据丢失。
+fn statistics_flag_path(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
+    app_handle
+        .path()
+        .app_data_dir()
+        .unwrap_or_default()
+        .join("statistics-sent.json")
+}
 
-    if store.has("box-statistics-sent") {
+pub fn check_and_send_statistics(app: &tauri::App) {
+    let flag_path = statistics_flag_path(app.handle());
+    if flag_path.exists() {
         log::info!("Statistics already sent, skipping");
         return;
     }
@@ -44,10 +48,14 @@ pub fn check_and_send_statistics(app: &tauri::App) {
     tauri::async_runtime::spawn(async move {
         send_statistics(version, os).await;
 
-        if let Ok(store) = app_handle.store("settings.json") {
-            store.set("box-statistics-sent", json!(true));
-            let _ = store.save();
+        let flag_path = statistics_flag_path(&app_handle);
+        if let Some(parent) = flag_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if std::fs::write(&flag_path, "1").is_ok() {
             log::info!("Statistics flag saved");
+        } else {
+            log::error!("Failed to write statistics flag");
         }
     });
 }

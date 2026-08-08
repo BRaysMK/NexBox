@@ -50,6 +50,36 @@ pub struct Artist {
     pub music_size: Option<i64>,
 }
 
+/// 专辑
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Album {
+    pub id: String,
+    pub name: String,
+    pub cover: String,
+    pub publish_time: i64,
+    pub song_count: u32,
+    pub artist_name: String,
+}
+
+/// 歌手 MV
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Mv {
+    pub id: String,
+    pub name: String,
+    pub cover: String,
+    pub duration: u64,
+    pub play_count: i64,
+    pub artist_name: String,
+}
+
+/// 歌手简介
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ArtistDetail {
+    pub id: String,
+    pub name: String,
+    pub brief_desc: String,
+}
+
 /// 歌单
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Playlist {
@@ -104,6 +134,28 @@ pub struct Lyrics {
     pub roma: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub yrc: Option<String>,
+}
+
+/// 评论
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Comment {
+    pub comment_id: i64,
+    pub content: String,
+    pub time: i64,
+    pub liked_count: i64,
+    pub liked: bool,
+    pub user_id: i64,
+    pub nickname: String,
+    pub avatar: String,
+}
+
+/// 评论分页结果
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CommentPage {
+    pub total: i64,
+    pub has_more: bool,
+    pub comments: Vec<Comment>,
+    pub hot_comments: Vec<Comment>,
 }
 
 /// 二维码检查结果
