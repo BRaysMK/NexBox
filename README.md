@@ -13,6 +13,10 @@
 </p>
 
 <p align="center">
+  🌐 官网：<a href="https://nexbox.top">nexbox.top</a>
+</p>
+
+<p align="center">
   <strong>为 PC 游戏玩家打造的一站式性能工具箱</strong><br />
   硬件监控 · 系统优化 · 显示增强 · 游戏辅助 · 影音娱乐
 </p>
@@ -299,5 +303,5 @@ npm run lint && npm run format
 ***
 
 <p align="center">
-  <sub>Made with by <a href="https://github.com/MuLiuSaMa">MuLiu_SaMa</a> & the NexBox community</sub>
+  <sub>Made with by <a href="https://github.com/MuLiuSaMa">MuLiu_SaMa</a> & the NexBox community · 官网：<a href="https://nexbox.top">nexbox.top</a></sub>
 </p>
