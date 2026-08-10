@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { MainLayout } from "./components/ui/main-layout";
 import { AnimatedPage, type TransitionMode, readTransitionMode } from "./components/ui/animated-page";
@@ -45,43 +45,16 @@ import SpeedTestPage from "./pages/SpeedTestPage";
 import CustomPage from "./pages/CustomPage";
 import { useState, useEffect } from "react";
 
-import {
-  Box,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  Button,
-  Progress,
-  useColorModeValue,
-  Text,
-  VStack,
-  HStack,
-  useToast,
-} from "@chakra-ui/react";
-import { useTranslation } from "react-i18next";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { fetchLatestRelease, compareVersions, type GiteeRelease } from "@/lib/update-checker";
-import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
-import { LuDownload, LuRefreshCw } from "react-icons/lu";
+import { UpdateModal } from "./components/UpdateModal";
 import { SplashScreen } from "./components/SplashScreen";
 import { useAppStartup } from "./contexts/app-startup-context";
 import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 
-const CURRENT_VERSION = "v7.1.3";
-
 function App() {
-  const { t } = useTranslation();
   const { isStartupComplete } = useAppStartup();
   const location = useLocation();
-  const navigate = useNavigate();
-  const toast = useToast();
 
   // Tray menu: render standalone, no main layout
   if (location.pathname === "/tray-menu") {
@@ -107,27 +80,7 @@ function App() {
   if (location.pathname === "/sensor-monitor") {
     return <SensorMonitorPage />;
   }
-  const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [isDownloadComplete, setIsDownloadComplete] = useState(false);
-  const [downloadedFilePath, setDownloadedFilePath] = useState<string>("");
   const [pageTransitionMode, setPageTransitionMode] = useState<TransitionMode>("fade");
-
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const modalBg = useColorModeValue("white", "#111111");
-  const modalBorderColor = useColorModeValue("gray.200", "#333333");
-
-  useEffect(() => {
-    const unlisten = listen<{ progress: number; total: number }>("download-progress", (event) => {
-      setDownloadProgress(event.payload.progress);
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
 
   useEffect(() => {
     setPageTransitionMode(readTransitionMode());
@@ -137,133 +90,6 @@ function App() {
     window.addEventListener("page-transition-setting-changed", handler);
     return () => window.removeEventListener("page-transition-setting-changed", handler);
   }, []);
-
-  useEffect(() => {
-    const unlisten = listen("check-update", async () => {
-      navigate("/settings?section=about");
-
-      setTimeout(async () => {
-        try {
-          const release = await fetchLatestRelease();
-          if (release) {
-            const hasUpdate = compareVersions(CURRENT_VERSION, release.tag_name);
-            if (hasUpdate) {
-              setLatestRelease(release);
-              setIsModalOpen(true);
-            } else {
-              toast({ title: "已是最新版本", status: "success", duration: 2000, isClosable: true });
-            }
-          }
-        } catch (error) {
-          console.error("Failed to check for updates:", error);
-          toast({ title: "检查更新失败", status: "error", duration: 2000, isClosable: true });
-        }
-      }, 500);
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [navigate, toast]);
-
-  useEffect(() => {
-    const checkUpdateOnStartup = async () => {
-      if (!isStartupComplete) return;
-
-      try {
-        const release = await fetchLatestRelease();
-        if (release) {
-          const hasUpdate = compareVersions(CURRENT_VERSION, release.tag_name);
-          if (hasUpdate) {
-            setLatestRelease(release);
-            setIsModalOpen(true);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to check for updates on startup:", error);
-      }
-    };
-
-    checkUpdateOnStartup();
-  }, [isStartupComplete]);
-
-  const handleOpenLink = async (url: string) => {
-    try {
-      const { open } = await import("@tauri-apps/plugin-shell");
-      await open(url);
-    } catch (error) {
-      console.error("Failed to open link:", error);
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!latestRelease) return;
-
-    setIsDownloading(true);
-    setDownloadProgress(0);
-    setIsDownloadComplete(false);
-
-    try {
-      const asset = latestRelease.assets.find(
-        (a) => a.name.endsWith(".msi") || a.name.endsWith(".exe"),
-      );
-
-      if (asset) {
-        const filePath = await invoke<string>("download_update", {
-          url: asset.browser_download_url,
-          fileName: asset.name,
-        });
-        setDownloadedFilePath(filePath);
-        setIsDownloadComplete(true);
-      } else {
-        await handleOpenLink(latestRelease.html_url);
-        setIsDownloading(false);
-      }
-    } catch (error) {
-      console.error("Failed to download:", error);
-      toast({
-        title: t("settings.aboutSettings.downloadFailed") || "下载失败",
-        status: "error",
-        duration: 2000,
-        isClosable: true,
-      });
-      setIsDownloading(false);
-    }
-  };
-
-  const handleInstall = async () => {
-    if (!downloadedFilePath) return;
-
-    try {
-      await invoke("install_update", {
-        filePath: downloadedFilePath,
-      });
-    } catch (error) {
-      console.error("Failed to install:", error);
-      toast({
-        title: t("settings.aboutSettings.installFailed") || "安装失败",
-        status: "error",
-        duration: 2000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const handleSkip = async () => {
-    if (downloadedFilePath) {
-      try {
-        await invoke("delete_download_file", {
-          filePath: downloadedFilePath,
-        });
-      } catch (error) {
-        console.error("Failed to delete file:", error);
-      }
-    }
-    setIsModalOpen(false);
-    setIsDownloadComplete(false);
-    setDownloadedFilePath("");
-    setIsDownloading(false);
-  };
 
   return (
     <MusicProvider>
@@ -359,114 +185,7 @@ function App() {
 
       </MainLayout>
 
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => !isDownloading && !isDownloadComplete && setIsModalOpen(false)}
-        isCentered
-        closeOnOverlayClick={!isDownloading && !isDownloadComplete}
-      >
-        <ModalOverlay />
-        <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="xl">
-          <ModalHeader color={labelColor}>
-            {t("settings.aboutSettings.updateModal.title")}
-          </ModalHeader>
-          {!isDownloading && !isDownloadComplete && <ModalCloseButton />}
-          <ModalBody>
-            <VStack align="start" spacing={4}>
-              <HStack>
-                <Text color={subLabelColor} fontSize="sm">
-                  {t("settings.aboutSettings.updateModal.version")}:
-                </Text>
-                <Text color={labelColor} fontWeight="medium">
-                  {latestRelease?.tag_name}
-                </Text>
-              </HStack>
-              <Box w="full">
-                <Text color={subLabelColor} fontSize="sm" mb={2}>
-                  {t("settings.aboutSettings.updateModal.releaseNotes")}:
-                </Text>
-                <Box
-                  p={3}
-                  borderRadius="lg"
-                  bg={useColorModeValue("gray.50", "#1a1a1a")}
-                  maxH="200px"
-                  overflowY="auto"
-                >
-                  <Text color={labelColor} fontSize="sm" whiteSpace="pre-wrap">
-                    {latestRelease?.body || "无更新说明"}
-                  </Text>
-                </Box>
-              </Box>
-              {isDownloading && !isDownloadComplete && (
-                <Box w="full">
-                  <Progress
-                    value={downloadProgress}
-                    size="sm"
-                    colorScheme="teal"
-                    borderRadius="full"
-                  />
-                  <Text color={subLabelColor} fontSize="xs" mt={1}>
-                    {t("settings.aboutSettings.updateModal.downloading")} {downloadProgress}%
-                  </Text>
-                </Box>
-              )}
-              {isDownloadComplete && (
-                <Box
-                  w="full"
-                  p={3}
-                  borderRadius="lg"
-                  bg={useColorModeValue("green.50", "rgba(72, 187, 120, 0.1)")}
-                  border="1px solid"
-                  borderColor={useColorModeValue("green.200", "rgba(72, 187, 120, 0.3)")}
-                >
-                  <Text
-                    color={useColorModeValue("green.600", "green.300")}
-                    fontSize="sm"
-                    fontWeight="medium"
-                  >
-                    {t("settings.aboutSettings.updateModal.downloadComplete")}
-                  </Text>
-                </Box>
-              )}
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            {isDownloadComplete ? (
-              <>
-                <Button variant="ghost" mr={3} onClick={handleSkip}>
-                  {t("settings.aboutSettings.updateModal.skip")}
-                </Button>
-                <LiquidGlassButton
-                  colorScheme="teal"
-                  onClick={handleInstall}
-                  leftIcon={<LuRefreshCw size={14} />}
-                >
-                  {t("settings.aboutSettings.updateModal.restartInstall")}
-                </LiquidGlassButton>
-              </>
-            ) : (
-              <>
-                {!isDownloading && (
-                  <Button variant="ghost" mr={3} onClick={() => setIsModalOpen(false)}>
-                    {t("settings.aboutSettings.updateModal.cancel")}
-                  </Button>
-                )}
-                <LiquidGlassButton
-                  colorScheme="teal"
-                  onClick={handleDownload}
-                  isDisabled={isDownloading}
-                  isLoading={isDownloading}
-                  leftIcon={!isDownloading ? <LuDownload size={14} /> : undefined}
-                >
-                  {isDownloading
-                    ? t("settings.aboutSettings.updateModal.downloading")
-                    : t("settings.aboutSettings.updateModal.download")}
-                </LiquidGlassButton>
-              </>
-            )}
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      <UpdateModal />
       <ImportantAnnouncementModal />
       </>
       </MusicProvider>

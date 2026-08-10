@@ -20,6 +20,7 @@ interface LyricsCanvasProps {
   baseColor: string;
   lineCount: 1 | 2;
   isPlaying: boolean;
+  showTranslation: boolean;
 }
 
 /** 计算当前活跃行索引 */
@@ -42,6 +43,7 @@ function ActiveKaraokeLine({
   highlightColor,
   baseColor,
   isPlaying,
+  showTranslation,
 }: {
   line: KaraokeLine;
   nextLine?: KaraokeLine;
@@ -50,6 +52,7 @@ function ActiveKaraokeLine({
   highlightColor: string;
   baseColor: string;
   isPlaying: boolean;
+  showTranslation: boolean;
 }) {
   const overlayRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -166,6 +169,32 @@ function ActiveKaraokeLine({
           {line.text}
         </span>
       </span>
+      {/* 当前行翻译：清晰硬描边 + 更大字号 */}
+      {showTranslation && line.translation && (
+        <div
+          style={{
+            marginTop: "2px",
+            fontSize: `${Math.max(18, Math.round(fontSize * 0.65))}px`,
+            color: baseColor,
+            fontWeight: "bold",
+            lineHeight: 1.3,
+            textShadow: `
+              -1px -1px 0 rgba(0,0,0,0.9),
+              1px -1px 0 rgba(0,0,0,0.9),
+              -1px 1px 0 rgba(0,0,0,0.9),
+              1px 1px 0 rgba(0,0,0,0.9)
+            `,
+            WebkitFontSmoothing: "antialiased",
+            textAlign: "center",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            maxWidth: "100%",
+          }}
+        >
+          {line.translation}
+        </div>
+      )}
     </div>
   );
 }
@@ -178,6 +207,7 @@ function LyricsCanvasInner({
   baseColor,
   lineCount,
   isPlaying,
+  showTranslation,
 }: LyricsCanvasProps) {
   const activeIndex = useMemo(
     () => calcActiveIndex(lines, currentTime),
@@ -238,6 +268,7 @@ function LyricsCanvasInner({
         highlightColor={highlightColor}
         baseColor={baseColor}
         isPlaying={isPlaying}
+        showTranslation={showTranslation}
       />
 
       {lineCount === 2 && nextLine && (
@@ -246,6 +277,9 @@ function LyricsCanvasInner({
             overflow: "hidden",
             textAlign: "center",
             padding: "2px 0",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
           }}
         >
           <span
@@ -266,6 +300,31 @@ function LyricsCanvasInner({
           >
             {nextLine.text}
           </span>
+          {showTranslation && nextLine.translation && (
+            <span
+              style={{
+                display: "block",
+                maxWidth: "100%",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                fontSize: `${Math.max(14, Math.round(fontSize * 0.48))}px`,
+                fontWeight: "bold",
+                color: baseColor,
+                opacity: 0.6,
+                lineHeight: 1.3,
+                textShadow: `
+                  -1px -1px 0 rgba(0,0,0,0.8),
+                  1px -1px 0 rgba(0,0,0,0.8),
+                  -1px 1px 0 rgba(0,0,0,0.8),
+                  1px 1px 0 rgba(0,0,0,0.8)
+                `,
+                WebkitFontSmoothing: "antialiased",
+              }}
+            >
+              {nextLine.translation}
+            </span>
+          )}
         </div>
       )}
     </div>

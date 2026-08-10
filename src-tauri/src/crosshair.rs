@@ -27,6 +27,9 @@ pub struct CrosshairSettings {
     pub offset_y: i32,
     pub screen_width: i32,
     pub screen_height: i32,
+    pub outline_enabled: bool,
+    pub outline_color: String,
+    pub outline_thickness: i32,
 }
 
 impl Default for CrosshairSettings {
@@ -48,6 +51,9 @@ impl Default for CrosshairSettings {
             offset_y: 0,
             screen_width: 0,
             screen_height: 0,
+            outline_enabled: false,
+            outline_color: "#000000".to_string(),
+            outline_thickness: 1,
         }
     }
 }
@@ -380,6 +386,7 @@ mod win32 {
     unsafe fn draw_style_cross(
         graphics: *mut GpGraphics,
         pen: *mut GpPen,
+        outline_pen: *mut GpPen,
         center_x: f32,
         center_y: f32,
         gap: f32,
@@ -387,6 +394,13 @@ mod win32 {
     ) {
         if size <= gap {
             return;
+        }
+        // 先画描边（更粗的笔），再画本体覆盖中心区域，留出描边边框
+        if !outline_pen.is_null() {
+            GdipDrawLine(graphics, outline_pen, center_x, center_y - gap - size, center_x, center_y - gap);
+            GdipDrawLine(graphics, outline_pen, center_x, center_y + gap, center_x, center_y + gap + size);
+            GdipDrawLine(graphics, outline_pen, center_x - gap - size, center_y, center_x - gap, center_y);
+            GdipDrawLine(graphics, outline_pen, center_x + gap, center_y, center_x + gap + size, center_y);
         }
         GdipDrawLine(graphics, pen, center_x, center_y - gap - size, center_x, center_y - gap);
         GdipDrawLine(graphics, pen, center_x, center_y + gap, center_x, center_y + gap + size);
@@ -397,10 +411,21 @@ mod win32 {
     unsafe fn draw_style_circle(
         graphics: *mut GpGraphics,
         pen: *mut GpPen,
+        outline_pen: *mut GpPen,
         center_x: f32,
         center_y: f32,
         size: f32,
     ) {
+        if !outline_pen.is_null() {
+            GdipDrawEllipse(
+                graphics,
+                outline_pen,
+                center_x - size,
+                center_y - size,
+                size * 2.0,
+                size * 2.0,
+            );
+        }
         GdipDrawEllipse(
             graphics,
             pen,
@@ -414,10 +439,17 @@ mod win32 {
     unsafe fn draw_style_dot(
         graphics: *mut GpGraphics,
         brush: *mut GpBrush,
+        outline_brush: *mut GpBrush,
+        outline_thickness: f32,
         center_x: f32,
         center_y: f32,
         dot_size: f32,
     ) {
+        // 描边：用描边颜色填充一个更大的圆，再画本体圆覆盖中心
+        if !outline_brush.is_null() && outline_thickness > 0.0 {
+            let r_out = (dot_size + outline_thickness * 2.0) / 2.0;
+            GdipFillEllipse(graphics, outline_brush, center_x - r_out, center_y - r_out, r_out * 2.0, r_out * 2.0);
+        }
         let r = dot_size / 2.0;
         GdipFillEllipse(graphics, brush, center_x - r, center_y - r, r * 2.0, r * 2.0);
     }
@@ -426,14 +458,24 @@ mod win32 {
         graphics: *mut GpGraphics,
         pen: *mut GpPen,
         brush: *mut GpBrush,
+        outline_pen: *mut GpPen,
+        outline_brush: *mut GpBrush,
+        outline_thickness: f32,
         center_x: f32,
         center_y: f32,
         size: f32,
         dot_size: f32,
     ) {
-        // Draw outer rectangle
+        // Draw outer rectangle (outline first, then original)
+        if !outline_pen.is_null() {
+            GdipDrawRectangle(graphics, outline_pen, center_x - size, center_y - size, size * 2.0, size * 2.0);
+        }
         GdipDrawRectangle(graphics, pen, center_x - size, center_y - size, size * 2.0, size * 2.0);
-        // Draw center dot
+        // Draw center dot (outline first, then original)
+        if !outline_brush.is_null() && outline_thickness > 0.0 {
+            let r_out = (dot_size + outline_thickness * 2.0) / 2.0;
+            GdipFillEllipse(graphics, outline_brush, center_x - r_out, center_y - r_out, r_out * 2.0, r_out * 2.0);
+        }
         let r = dot_size / 2.0;
         GdipFillEllipse(graphics, brush, center_x - r, center_y - r, r * 2.0, r * 2.0);
     }
@@ -514,36 +556,62 @@ mod win32 {
         GdipSetPenStartCap(pen, 2);
         GdipSetPenEndCap(pen, 2);
 
+        // 创建描边笔和刷（当描边启用时）
+        let outline_thickness_f = if settings.outline_enabled {
+            settings.outline_thickness.max(0) as f32
+        } else {
+            0.0
+        };
+        let mut outline_pen: *mut GpPen = ptr::null_mut();
+        let mut outline_brush: *mut GpSolidFill = ptr::null_mut();
+        if settings.outline_enabled && outline_thickness_f > 0.0 {
+            let (or, og, ob) = parse_hex_color(&settings.outline_color);
+            let outline_argb: u32 =
+                ((settings.opacity as u32) << 24) | ((or as u32) << 16) | ((og as u32) << 8) | (ob as u32);
+            // 描边笔宽度 = 原始粗细 + 描边厚度 * 2，使得描边在原始线条两侧各延伸 outline_thickness 像素
+            let outline_pen_width = settings.thickness as f32 + outline_thickness_f * 2.0;
+            GdipCreatePen1(outline_argb, outline_pen_width, 2, &mut outline_pen);
+            GdipSetPenStartCap(outline_pen, 2);
+            GdipSetPenEndCap(outline_pen, 2);
+            GdipCreateSolidFill(outline_argb, &mut outline_brush);
+        }
+
         let size = settings.size as f32;
         let gap = settings.gap as f32;
         let dot_size = settings.dot_size as f32;
 
         match settings.style.as_str() {
             "Cross" => {
-                draw_style_cross(graphics, pen, center_x, center_y, gap, size);
+                draw_style_cross(graphics, pen, outline_pen, center_x, center_y, gap, size);
             }
             "Dot" => {
-                draw_style_dot(graphics, brush as *mut GpBrush, center_x, center_y, dot_size);
+                draw_style_dot(graphics, brush as *mut GpBrush, outline_brush as *mut GpBrush, outline_thickness_f, center_x, center_y, dot_size);
             }
             "Circle" => {
-                draw_style_circle(graphics, pen, center_x, center_y, size);
+                draw_style_circle(graphics, pen, outline_pen, center_x, center_y, size);
             }
             "CrossDot" => {
-                draw_style_cross(graphics, pen, center_x, center_y, gap, size);
-                draw_style_dot(graphics, brush as *mut GpBrush, center_x, center_y, dot_size);
+                draw_style_cross(graphics, pen, outline_pen, center_x, center_y, gap, size);
+                draw_style_dot(graphics, brush as *mut GpBrush, outline_brush as *mut GpBrush, outline_thickness_f, center_x, center_y, dot_size);
             }
             "CircleCross" => {
-                draw_style_circle(graphics, pen, center_x, center_y, size);
-                draw_style_cross(graphics, pen, center_x, center_y, gap, size);
+                draw_style_circle(graphics, pen, outline_pen, center_x, center_y, size);
+                draw_style_cross(graphics, pen, outline_pen, center_x, center_y, gap, size);
             }
             "DotBox" => {
-                draw_style_dot_box(graphics, pen, brush as *mut GpBrush, center_x, center_y, size, dot_size);
+                draw_style_dot_box(graphics, pen, brush as *mut GpBrush, outline_pen, outline_brush as *mut GpBrush, outline_thickness_f, center_x, center_y, size, dot_size);
             }
             _ => {
-                draw_style_cross(graphics, pen, center_x, center_y, gap, size);
+                draw_style_cross(graphics, pen, outline_pen, center_x, center_y, gap, size);
             }
         }
 
+        if !outline_pen.is_null() {
+            GdipDeletePen(outline_pen);
+        }
+        if !outline_brush.is_null() {
+            GdipDeleteBrush(outline_brush as *mut GpBrush);
+        }
         if !pen.is_null() {
             GdipDeletePen(pen);
         }
@@ -633,7 +701,8 @@ mod win32 {
         let dib_size = if settings.use_custom_image {
             (settings.size + 16).max(64)
         } else {
-            let extent = settings.size + settings.gap + settings.thickness;
+            let outline_extra = if settings.outline_enabled { settings.outline_thickness.max(0) } else { 0 };
+            let extent = settings.size + settings.gap + settings.thickness + outline_extra;
             ((extent * 2 + 16) as i32).max(64)
         };
 
@@ -774,7 +843,8 @@ mod win32 {
         let dib_size = if settings.use_custom_image {
             (settings.size + 16).max(64)
         } else {
-            let extent = settings.size + settings.gap + settings.thickness;
+            let outline_extra = if settings.outline_enabled { settings.outline_thickness.max(0) } else { 0 };
+            let extent = settings.size + settings.gap + settings.thickness + outline_extra;
             ((extent * 2 + 16) as i32).max(64)
         };
 

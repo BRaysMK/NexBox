@@ -65,6 +65,51 @@ pub struct SchedulerRule {
     pub description: String,
 }
 
+// ── 核心隔离数据结构 ────────────────────────────────────────
+
+/// 核心隔离规则（持久化于 cpu-isolation-rules.json，区别于「进程→掩码」调度规则）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IsolationRule {
+    pub name: String,
+    /// 被隔离的核心掩码（其他进程被剔除的位）
+    pub isolated_mask: u64,
+    /// 豁免进程名（游戏进程，保持全核心）
+    pub exclude_process: String,
+    pub preset: String,
+    pub description: String,
+    /// 开机自动应用开关
+    pub auto_apply: bool,
+}
+
+/// 核心隔离应用/恢复结果（返回前端展示统计）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IsolationApplyResult {
+    /// 尝试处理的进程数
+    pub total: u32,
+    /// 成功修改的进程数
+    pub modified: u32,
+    /// 失败进程数
+    pub failed: u32,
+    /// 失败进程名列表
+    pub failed_processes: Vec<String>,
+}
+
+/// 单个被隔离进程的原始状态（供恢复时还原）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IsolationModifiedProcess {
+    pub pid: u32,
+    pub name: String,
+    pub original_mask: u64,
+}
+
+/// 活动隔离状态（持久化于 cpu-isolation-state.json，pid+name 供恢复时校验防 PID 复用）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct IsolationStateRecord {
+    pub isolated_mask: u64,
+    pub exclude_process: String,
+    pub modified_processes: Vec<IsolationModifiedProcess>,
+}
+
 // ── CPU 拓扑 ────────────────────────────────────────────────
 
 /// 读取 LE u32
@@ -586,5 +631,454 @@ pub async fn apply_all_saved_rules(app: &AppHandle) {
             applied,
             skipped
         );
+    }
+
+    // 应用标记为「开机自动应用」的核心隔离规则
+    apply_auto_isolation_rules(app).await;
+}
+
+// ── 核心隔离 ────────────────────────────────────────────────
+
+const ISOLATION_STATE_FILE: &str = "cpu-isolation-state.json";
+const ISOLATION_RULES_FILE: &str = "cpu-isolation-rules.json";
+
+// ── 隔离状态持久化 ──────────────────────────────────────────
+
+fn read_isolation_state(app: &AppHandle) -> Option<IsolationStateRecord> {
+    let store = app.store(ISOLATION_STATE_FILE).ok()?;
+    let value = store.get("state")?;
+    serde_json::from_value::<IsolationStateRecord>(value).ok()
+}
+
+fn save_isolation_state(app: &AppHandle, state: &IsolationStateRecord) -> Result<(), String> {
+    let store = app
+        .store(ISOLATION_STATE_FILE)
+        .map_err(|e| format!("无法打开隔离状态存储: {}", e))?;
+    store.set(
+        "state",
+        serde_json::to_value(state).map_err(|e| format!("隔离状态序列化失败: {}", e))?,
+    );
+    store
+        .save()
+        .map_err(|e| format!("保存隔离状态失败: {}", e))
+}
+
+fn clear_isolation_state(app: &AppHandle) -> Result<(), String> {
+    let store = app
+        .store(ISOLATION_STATE_FILE)
+        .map_err(|e| format!("无法打开隔离状态存储: {}", e))?;
+    store.delete("state");
+    store
+        .save()
+        .map_err(|e| format!("清除隔离状态失败: {}", e))
+}
+
+// ── Win32 同步辅助（仅 Windows）──────────────────────────────
+
+/// 读取指定进程当前亲和掩码（失败返回错误）
+#[cfg(target_os = "windows")]
+fn get_process_mask_sync(pid: u32) -> Result<u64, String> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::GetProcessAffinityMask;
+
+    let handle = open_process_for_affinity(pid)?;
+    let mut process_mask: usize = 0;
+    let mut system_mask: usize = 0;
+    let success = unsafe { GetProcessAffinityMask(handle, &mut process_mask, &mut system_mask) };
+    unsafe { CloseHandle(handle); }
+
+    if success == 0 {
+        return Err(format!("读取进程亲和掩码失败 (PID: {})", pid));
+    }
+    Ok(process_mask as u64)
+}
+
+/// 设置指定进程亲和掩码（失败返回错误）
+#[cfg(target_os = "windows")]
+fn set_process_mask_sync(pid: u32, mask: u64) -> Result<(), String> {
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError};
+    use windows_sys::Win32::System::Threading::SetProcessAffinityMask;
+
+    let handle = open_process_for_affinity(pid)?;
+    let success = unsafe { SetProcessAffinityMask(handle, mask as usize) };
+    let err = unsafe { GetLastError() };
+    unsafe { CloseHandle(handle); }
+
+    if success == 0 {
+        return Err(format!(
+            "设置进程亲和掩码失败, 错误码: {} (可能需要管理员权限)",
+            err
+        ));
+    }
+    Ok(())
+}
+
+// ── 应用 / 恢复核心隔离 ─────────────────────────────────────
+
+#[cfg(target_os = "windows")]
+fn apply_core_isolation_sync(
+    app: &AppHandle,
+    isolated_mask: u64,
+    exclude_process: &str,
+) -> Result<IsolationApplyResult, String> {
+    // 边界校验：隔离核心必须有效且不能隔离全部核心
+    if isolated_mask == 0 {
+        return Err("请至少选择一个要隔离的核心".to_string());
+    }
+    let topology = get_cpu_topology_win32()?;
+    let system_mask = topology.system_affinity_mask;
+    if isolated_mask & system_mask == 0 {
+        return Err("所选隔离核心不在系统可用核心范围内".to_string());
+    }
+    if isolated_mask == system_mask {
+        return Err("不允许隔离全部核心，否则将导致系统无法调度".to_string());
+    }
+    let restricted = system_mask & !isolated_mask;
+    if restricted == 0 {
+        return Err("隔离后的受限掩码为空，操作已取消".to_string());
+    }
+
+    // 若已存在活动隔离状态，先自动恢复旧状态，避免原始掩码记录错乱
+    if let Some(old_state) = read_isolation_state(app) {
+        log::info!(
+            "[核心隔离] 检测到活动隔离状态，先自动恢复旧状态 (隔离掩码 0x{:X})",
+            old_state.isolated_mask
+        );
+        let _ = restore_core_isolation_state_sync(app, &old_state);
+    }
+
+    // 遍历全部进程（尽力而为，受保护/系统进程与豁免进程跳过）
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+
+    let mut result = IsolationApplyResult {
+        total: 0,
+        modified: 0,
+        failed: 0,
+        failed_processes: Vec::new(),
+    };
+    let mut modified_processes: Vec<IsolationModifiedProcess> = Vec::new();
+
+    for (_, proc_) in sys.processes() {
+        let name = proc_.name().to_string();
+        if name.is_empty() || is_protected_process(&name) {
+            continue;
+        }
+        // 跳过豁免进程（游戏进程，保持全核心）
+        if !exclude_process.is_empty() && name.eq_ignore_ascii_case(exclude_process) {
+            continue;
+        }
+        // 跳过 NexBox 自身，避免锁死 UI
+        if proc_.pid().as_u32() == std::process::id() as u32 {
+            continue;
+        }
+
+        let pid = proc_.pid().as_u32();
+        result.total += 1;
+
+        // 读取原始掩码（失败说明权限不足或进程已退出 → 计入失败）
+        let original_mask = match get_process_mask_sync(pid) {
+            Ok(m) => m,
+            Err(_) => {
+                result.failed += 1;
+                result.failed_processes.push(name);
+                continue;
+            }
+        };
+        // 原始掩码已等于受限掩码 → 无需修改也无需记录
+        if original_mask == restricted {
+            continue;
+        }
+
+        match set_process_mask_sync(pid, restricted) {
+            Ok(_) => {
+                result.modified += 1;
+                modified_processes.push(IsolationModifiedProcess {
+                    pid,
+                    name: name.clone(),
+                    original_mask,
+                });
+            }
+            Err(_) => {
+                result.failed += 1;
+                result.failed_processes.push(name);
+            }
+        }
+    }
+
+    // 保存活动状态，供恢复时逐条还原
+    let state = IsolationStateRecord {
+        isolated_mask,
+        exclude_process: exclude_process.to_string(),
+        modified_processes,
+    };
+    save_isolation_state(app, &state)?;
+
+    log::info!(
+        "[核心隔离] 应用完成: 隔离掩码 0x{:X}, 总进程 {}, 修改 {} 个, 失败 {} 个",
+        isolated_mask,
+        result.total,
+        result.modified,
+        result.failed
+    );
+    Ok(result)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn apply_core_isolation_sync(
+    _app: &AppHandle,
+    _isolated_mask: u64,
+    _exclude_process: &str,
+) -> Result<IsolationApplyResult, String> {
+    Err("此功能仅支持 Windows 系统".to_string())
+}
+
+/// 按记录还原各进程原始亲和掩码（pid+name 双重校验，防止 PID 复用误改新进程）
+#[cfg(target_os = "windows")]
+fn restore_core_isolation_state_sync(
+    _app: &AppHandle,
+    state: &IsolationStateRecord,
+) -> Result<IsolationApplyResult, String> {
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+
+    let mut result = IsolationApplyResult {
+        total: 0,
+        modified: 0,
+        failed: 0,
+        failed_processes: Vec::new(),
+    };
+
+    for rec in &state.modified_processes {
+        result.total += 1;
+
+        // 校验当前 pid 对应的进程名是否一致；进程已退出或 PID 被复用 → 跳过（新进程默认全核心）
+        let name_matches = sys
+            .process(Pid::from_u32(rec.pid))
+            .map(|p| p.name().to_string().eq_ignore_ascii_case(&rec.name))
+            .unwrap_or(false);
+        if !name_matches {
+            continue;
+        }
+
+        match set_process_mask_sync(rec.pid, rec.original_mask) {
+            Ok(_) => result.modified += 1,
+            Err(_) => {
+                result.failed += 1;
+                result.failed_processes.push(rec.name.clone());
+            }
+        }
+    }
+
+    log::info!(
+        "[核心隔离] 恢复完成: 隔离掩码 0x{:X}, 总记录 {}, 还原 {} 个, 失败 {} 个",
+        state.isolated_mask,
+        result.total,
+        result.modified,
+        result.failed
+    );
+    Ok(result)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn restore_core_isolation_state_sync(
+    _app: &AppHandle,
+    _state: &IsolationStateRecord,
+) -> Result<IsolationApplyResult, String> {
+    Err("此功能仅支持 Windows 系统".to_string())
+}
+
+// ── 核心隔离 Tauri 命令 ─────────────────────────────────────
+
+#[tauri::command]
+pub async fn apply_core_isolation(
+    app: AppHandle,
+    isolated_mask: u64,
+    exclude_process: String,
+) -> Result<IsolationApplyResult, String> {
+    apply_core_isolation_sync(&app, isolated_mask, &exclude_process)
+}
+
+#[tauri::command]
+pub async fn restore_core_isolation(app: AppHandle) -> Result<IsolationApplyResult, String> {
+    let state = read_isolation_state(&app)
+        .ok_or_else(|| "当前没有活动中的核心隔离，无需恢复".to_string())?;
+    let result = restore_core_isolation_state_sync(&app, &state)?;
+    // 无论还原结果如何均清除活动状态（失败的进程可能已退出；仍在运行的由失败列表提示）
+    clear_isolation_state(&app)?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn get_isolation_state(
+    app: AppHandle,
+) -> Result<Option<IsolationStateRecord>, String> {
+    Ok(read_isolation_state(&app))
+}
+
+// ── 核心隔离规则 CRUD ───────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_isolation_rules(app: AppHandle) -> Result<Vec<IsolationRule>, String> {
+    let store = app
+        .store(ISOLATION_RULES_FILE)
+        .map_err(|e| format!("无法打开隔离规则存储: {}", e))?;
+    let mut rules: Vec<IsolationRule> = Vec::new();
+
+    for (name, value) in store.entries() {
+        if let Some(obj) = value.as_object() {
+            rules.push(IsolationRule {
+                name,
+                isolated_mask: obj
+                    .get("isolated_mask")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
+                exclude_process: obj
+                    .get("exclude_process")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                preset: obj
+                    .get("preset")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("custom")
+                    .to_string(),
+                description: obj
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                auto_apply: obj
+                    .get("auto_apply")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            });
+        }
+    }
+
+    rules.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(rules)
+}
+
+#[tauri::command]
+pub async fn save_isolation_rule(
+    app: AppHandle,
+    name: String,
+    isolated_mask: u64,
+    exclude_process: String,
+    preset: String,
+    description: String,
+    auto_apply: bool,
+) -> Result<bool, String> {
+    if name.trim().is_empty() {
+        return Err("规则名称不能为空".to_string());
+    }
+    if isolated_mask == 0 {
+        return Err("请至少选择一个要隔离的核心".to_string());
+    }
+    let store = app
+        .store(ISOLATION_RULES_FILE)
+        .map_err(|e| format!("无法打开隔离规则存储: {}", e))?;
+    let rule = serde_json::json!({
+        "isolated_mask": isolated_mask,
+        "exclude_process": exclude_process,
+        "preset": preset,
+        "description": description,
+        "auto_apply": auto_apply,
+    });
+    store.set(&name, rule);
+    store
+        .save()
+        .map_err(|e| format!("保存隔离规则失败: {}", e))?;
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn delete_isolation_rule(app: AppHandle, name: String) -> Result<bool, String> {
+    let store = app
+        .store(ISOLATION_RULES_FILE)
+        .map_err(|e| format!("无法打开隔离规则存储: {}", e))?;
+    store.delete(&name);
+    store
+        .save()
+        .map_err(|e| format!("删除隔离规则失败: {}", e))?;
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn apply_isolation_rule_by_name(
+    app: AppHandle,
+    name: String,
+) -> Result<IsolationApplyResult, String> {
+    let store = app
+        .store(ISOLATION_RULES_FILE)
+        .map_err(|e| format!("无法打开隔离规则存储: {}", e))?;
+    let value = store
+        .get(&name)
+        .ok_or_else(|| format!("未找到隔离规则: {}", name))?;
+    let obj = value
+        .as_object()
+        .ok_or_else(|| format!("隔离规则数据异常: {}", name))?;
+    let isolated_mask = obj
+        .get("isolated_mask")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| format!("隔离规则缺少掩码: {}", name))?;
+    let exclude_process = obj
+        .get("exclude_process")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    apply_core_isolation_sync(&app, isolated_mask, &exclude_process)
+}
+
+// ── 启动时自动应用标记 auto_apply 的隔离规则 ─────────────────
+
+async fn apply_auto_isolation_rules(app: &AppHandle) {
+    let store = match app.store(ISOLATION_RULES_FILE) {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("[核心隔离] 无法打开隔离规则存储: {}", e);
+            return;
+        }
+    };
+
+    let mut applied = 0u32;
+    for (name, value) in store.entries() {
+        let obj = match value.as_object() {
+            Some(o) => o,
+            None => continue,
+        };
+        if !obj
+            .get("auto_apply")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let isolated_mask = match obj.get("isolated_mask").and_then(|v| v.as_u64()) {
+            Some(m) => m,
+            None => continue,
+        };
+        let exclude_process = obj
+            .get("exclude_process")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        match apply_core_isolation_sync(app, isolated_mask, &exclude_process) {
+            Ok(result) => {
+                applied += 1;
+                log::info!(
+                    "[核心隔离] 启动时自动应用规则 {}: 修改 {} 个进程",
+                    name,
+                    result.modified
+                );
+            }
+            Err(e) => log::warn!("[核心隔离] 启动时应用规则 {} 失败: {}", name, e),
+        }
+    }
+
+    if applied > 0 {
+        log::info!("[核心隔离] 启动时自动应用完成: {} 条隔离规则", applied);
     }
 }

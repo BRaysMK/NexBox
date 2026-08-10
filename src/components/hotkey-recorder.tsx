@@ -30,6 +30,8 @@ export function keyToHotkeyFormat(key: string): string | null {
   if (key === "PrintScreen") return "PrintScreen";
   if (/^[0-9]$/.test(key)) return key;
   if (/^[a-zA-Z]$/.test(key)) return key.toUpperCase();
+  if (key === "[") return "[";
+  if (key === "]") return "]";
   return null;
 }
 

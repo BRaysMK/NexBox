@@ -11,6 +11,7 @@ import i18n from "./lib/i18n";
 import { BackgroundProvider } from "./contexts/background-context";
 import { ThemeColorProvider } from "./contexts/theme-color-context";
 import { AppStartupProvider } from "./contexts/app-startup-context";
+import { UpdateProvider } from "./contexts/update-context";
 import { FontProvider } from "./contexts/font-context";
 import { LiquidGlassSvgFilter } from "./components/special/liquid-glass-svg-filter";
 import theme from "./lib/theme";
@@ -70,6 +71,10 @@ if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
         case "exit_app":
         case "install_update":
         case "delete_download_file":
+        case "mark_pending_install":
+        case "clear_pending_install":
+        case "cancel_download":
+        case "reset_download_cancel":
           return;
         case "download_update":
           return "downloaded.exe";
@@ -115,14 +120,16 @@ function Root() {
           <ChakraProvider theme={theme}>
             <BrowserRouter>
               <AppStartupProvider>
-                <BackgroundProvider>
-                  <ThemeColorProvider>
-                    <FontProvider>
-                      <LiquidGlassSvgFilter />
-                      <App />
-                    </FontProvider>
-                  </ThemeColorProvider>
-                </BackgroundProvider>
+                <UpdateProvider>
+                  <BackgroundProvider>
+                    <ThemeColorProvider>
+                      <FontProvider>
+                        <LiquidGlassSvgFilter />
+                        <App />
+                      </FontProvider>
+                    </ThemeColorProvider>
+                  </BackgroundProvider>
+                </UpdateProvider>
               </AppStartupProvider>
             </BrowserRouter>
           </ChakraProvider>

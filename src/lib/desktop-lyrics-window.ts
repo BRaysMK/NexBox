@@ -44,9 +44,20 @@ export async function setIgnoreCursorEvents(ignore: boolean) {
   }
 }
 
-/** 保存窗口位置 */
+/** 将窗口位置钳制到所在显示器工作区（排除任务栏）内 */
+export async function clampToWorkArea(): Promise<boolean> {
+  try {
+    return await invoke<boolean>("clamp_lyrics_window_position");
+  } catch (e) {
+    console.error("[DesktopLyrics] clampToWorkArea failed:", e);
+    return false;
+  }
+}
+
+/** 保存窗口位置（先钳制到工作区内再保存，避免记录越界坐标） */
 export async function saveWindowPosition() {
   try {
+    await clampToWorkArea();
     const pos = await lyricsWindow.outerPosition();
     const store = await getStore();
     await store.set("desktopLyricsPosition", { x: pos.x, y: pos.y });
@@ -56,7 +67,7 @@ export async function saveWindowPosition() {
   }
 }
 
-/** 恢复窗口位置 */
+/** 恢复窗口位置（恢复后立即钳制到工作区内，兼容分辨率变化/副屏移除场景） */
 export async function restoreWindowPosition() {
   try {
     const store = await getStore();
@@ -65,8 +76,32 @@ export async function restoreWindowPosition() {
       const { LogicalPosition } = await import("@tauri-apps/api/window");
       await lyricsWindow.setPosition(new LogicalPosition(pos.x, pos.y));
     }
+    await clampToWorkArea();
   } catch (e) {
     console.error("[DesktopLyrics] restoreWindowPosition failed:", e);
+  }
+}
+
+/**
+ * 将桌面歌词窗口居中到屏幕中央并保存位置。
+ *
+ * 注意：本函数可能从主窗口（设置弹窗）调用，不能使用模块级
+ * `lyricsWindow`（那是 getCurrentWindow()），必须按 label 获取
+ * desktop-lyrics 窗口句柄。
+ */
+export async function centerLyricsWindow() {
+  try {
+    await invoke("center_lyrics_window");
+    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    const win = await WebviewWindow.getByLabel("desktop-lyrics");
+    if (win) {
+      const pos = await win.outerPosition();
+      const store = await getStore();
+      await store.set("desktopLyricsPosition", { x: pos.x, y: pos.y });
+      await store.save();
+    }
+  } catch (e) {
+    console.error("[DesktopLyrics] centerLyricsWindow failed:", e);
   }
 }
 

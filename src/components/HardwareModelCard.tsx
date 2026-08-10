@@ -6,20 +6,31 @@ import type { HardwareInfo } from "@/lib/hardware";
 import { getHardwareInfo } from "@/lib/hardware";
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useAppStartup } from "@/contexts/app-startup-context";
 
 export default function HardwareModelCard() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
+  // 复用应用启动时已缓存的硬件信息，避免每次进入主页重新加载
+  const { hardwareInfo: startupHardwareInfo } = useAppStartup();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hardware, setHardware] = useState<HardwareInfo | null>(null);
+  const [hardware, setHardware] = useState<HardwareInfo | null>(startupHardwareInfo);
   const [osShort, setOsShort] = useState<string | null>(null);
 
+  // 仅当全局缓存未加载时才自行获取；已有缓存则直接使用，不重复调用后端
   useEffect(() => {
+    if (startupHardwareInfo) {
+      setHardware(startupHardwareInfo);
+      setLoading(false);
+      return;
+    }
+    if (hardware) return;
+
     let mounted = true;
+    setLoading(true);
+    setError(null);
 
     const load = async () => {
-      setLoading(true);
-      setError(null);
       try {
         const info = await getHardwareInfo();
         if (mounted) setHardware(info);
@@ -34,7 +45,7 @@ export default function HardwareModelCard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [startupHardwareInfo, hardware]);
 
   const detectOs = useCallback(async () => {
     try {

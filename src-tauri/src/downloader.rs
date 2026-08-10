@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 use std::os::windows::process::CommandExt;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 use futures_util::StreamExt;
 use reqwest::Client;
@@ -12,6 +14,66 @@ use tauri::{Window, Emitter, AppHandle};
 struct DownloadProgress {
     progress: u64,
     total: u64,
+}
+
+/// 已下载待安装的更新包路径（进程内标记，退出时自动启动安装向导）
+static PENDING_INSTALL: Mutex<Option<String>> = Mutex::new(None);
+
+/// 取消下载标志：关闭静默更新时置位，下载循环据此中止
+static CANCEL_DOWNLOAD: AtomicBool = AtomicBool::new(false);
+
+/// 读取静默更新开关：读取 settings.json 中 nexbox_auto_update，默认开启
+pub fn auto_update_enabled() -> bool {
+    let Some(config_dir) = dirs::config_dir() else {
+        return true;
+    };
+    let settings_path = config_dir.join("NexBox").join("settings.json");
+    let Ok(content) = std::fs::read_to_string(&settings_path) else {
+        return true;
+    };
+    // 去空格后匹配，兼容 compact/pretty 两种 JSON 写法
+    let normalized: String = content.chars().filter(|c| !c.is_whitespace()).collect();
+    if normalized.contains("\"nexbox_auto_update\":false") {
+        return false;
+    }
+    true
+}
+
+/// 以 SW_SHOWNORMAL 方式异步启动安装向导，立即返回（不等待安装完成）
+pub fn launch_installer_sync(file_path: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let file_path_wide: Vec<u16> = file_path
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let verb: Vec<u16> = "open\0".encode_utf16().collect();
+
+        // 使用 ShellExecuteW 直接启动安装包，避免 cmd 中介弹出终端窗口
+        let hinst = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                verb.as_ptr(),
+                file_path_wide.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+
+        // ShellExecuteW 返回值 <= 32 表示错误
+        if hinst as isize <= 32 {
+            return Err(format!("Failed to launch installer (error: {})", hinst as isize));
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        return Err("Only Windows is supported".to_string());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -41,8 +103,14 @@ pub async fn download_file(
 
     let mut stream = response.bytes_stream();
     let mut downloaded: u64 = 0;
+    let mut last_emit = std::time::Instant::now();
+    let mut last_emitted: u64 = 0;
 
     while let Some(chunk) = stream.next().await {
+        // 检查取消标志：关闭静默更新后中止下载
+        if CANCEL_DOWNLOAD.load(Ordering::SeqCst) {
+            return Err("Download cancelled".to_string());
+        }
         let chunk = chunk.map_err(|e| e.to_string())?;
         file.write_all(&chunk).map_err(|e| e.to_string())?;
         downloaded += chunk.len() as u64;
@@ -53,16 +121,21 @@ pub async fn download_file(
             0
         };
 
-        match window.emit(
-            "download-progress",
-            DownloadProgress {
-                progress,
-                total: total_size,
-            },
-        ) {
-            Ok(_) => {},
-            Err(e) => {
-                eprintln!("Failed to emit progress: {}", e);
+        // 节流：至少间隔 200ms 且进度前进时才向前端推送，避免高频事件导致 UI 数字跳闪
+        if progress != last_emitted && last_emit.elapsed().as_millis() >= 200 {
+            last_emit = std::time::Instant::now();
+            last_emitted = progress;
+            match window.emit(
+                "download-progress",
+                DownloadProgress {
+                    progress,
+                    total: total_size,
+                },
+            ) {
+                Ok(_) => {},
+                Err(e) => {
+                    eprintln!("Failed to emit progress: {}", e);
+                }
             }
         }
     }
@@ -94,8 +167,13 @@ pub async fn open_installer(file_path: String) -> Result<(), String> {
 pub async fn download_update(
     url: String,
     file_name: String,
+    silent: bool,
     window: Window,
 ) -> Result<String, String> {
+    // 静默自动下载时检查开关；用户手动点击下载始终允许
+    if silent && !auto_update_enabled() {
+        return Err("Silent update disabled".to_string());
+    }
     download_file(url, file_name, window).await
 }
 
@@ -104,40 +182,53 @@ pub async fn install_update(
     file_path: String,
     app_handle: AppHandle,
 ) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::UI::Shell::ShellExecuteW;
-        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-
-        let file_path_wide: Vec<u16> = file_path
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
-        let verb: Vec<u16> = "open\0".encode_utf16().collect();
-
-        // 使用 ShellExecuteW 直接启动安装包，避免 cmd 中介弹出终端窗口
-        let hinst = unsafe {
-            ShellExecuteW(
-                std::ptr::null_mut(),
-                verb.as_ptr(),
-                file_path_wide.as_ptr(),
-                std::ptr::null(),
-                std::ptr::null(),
-                SW_SHOWNORMAL,
-            )
-        };
-
-        // ShellExecuteW 返回值 <= 32 表示错误
-        if hinst as isize <= 32 {
-            return Err(format!("Failed to launch installer (error: {})", hinst as isize));
-        }
-    }
+    launch_installer_sync(&file_path)?;
 
     std::thread::sleep(std::time::Duration::from_millis(500));
 
     app_handle.exit(0);
 
     Ok(())
+}
+
+/// 关闭静默更新时调用：置位取消标志，中止进行中的下载
+#[tauri::command]
+pub fn cancel_download() -> Result<(), String> {
+    CANCEL_DOWNLOAD.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+/// 开始新下载前调用：清除取消标志
+#[tauri::command]
+pub fn reset_download_cancel() -> Result<(), String> {
+    CANCEL_DOWNLOAD.store(false, Ordering::SeqCst);
+    Ok(())
+}
+
+/// 下载完成后由前端调用，登记待安装包路径（供关闭软件时自动启动安装向导）
+#[tauri::command]
+pub fn mark_pending_install(file_path: String) -> Result<(), String> {
+    // 后端兜底：静默更新已关闭时不登记待安装，退出时不会自动启动安装向导
+    if !auto_update_enabled() {
+        return Err("Silent update disabled".to_string());
+    }
+    if !std::path::Path::new(&file_path).exists() {
+        return Err(format!("Install file not found: {file_path}"));
+    }
+    *PENDING_INSTALL.lock().map_err(|e| e.to_string())? = Some(file_path);
+    Ok(())
+}
+
+/// 用户点击"重启安装"、跳过或删除文件时清除待安装标记
+#[tauri::command]
+pub fn clear_pending_install() -> Result<(), String> {
+    *PENDING_INSTALL.lock().map_err(|e| e.to_string())? = None;
+    Ok(())
+}
+
+/// 供 RunEvent::ExitRequested 读取；取出并清除待安装包路径（进程即将退出）
+pub fn take_pending_install() -> Option<String> {
+    PENDING_INSTALL.lock().ok().and_then(|mut g| g.take())
 }
 
 #[tauri::command]

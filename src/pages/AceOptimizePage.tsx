@@ -43,6 +43,8 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 interface OptionState {
   running: boolean;
   message: string;
+  foundCount: number; // 后端发现的进程数（与是否成功修改无关）
+  modifiedCount: number; // 成功修改的进程数
 }
 
 interface AceAutoDetectStatus {
@@ -83,6 +85,7 @@ function OptionRow({
   isLoading,
   isApplied,
   gameRunning,
+  needsAdmin,
   onApply,
   onSettings,
   titleBadge,
@@ -93,6 +96,7 @@ function OptionRow({
   isLoading: boolean;
   isApplied: boolean;
   gameRunning: boolean | null;
+  needsAdmin?: boolean;
   onApply: () => void;
   onSettings?: () => void;
   titleBadge?: string;
@@ -172,14 +176,18 @@ function OptionRow({
         </HStack>
         {gameRunning !== null && (
           <Badge
-            colorScheme={gameRunning ? "green" : "gray"}
+            colorScheme={needsAdmin ? "orange" : (gameRunning ? "green" : "gray")}
             variant="subtle"
             fontSize="2xs"
             px={2}
             py={0.5}
             borderRadius="full"
           >
-            {gameRunning ? t("optimization.aceOptimize.status.processRunning") : t("optimization.aceOptimize.status.processNotRunning")}
+            {needsAdmin
+              ? t("optimization.aceOptimize.status.needsAdmin")
+              : (gameRunning
+                ? t("optimization.aceOptimize.status.processRunning")
+                : t("optimization.aceOptimize.status.processNotRunning"))}
           </Badge>
         )}
       </VStack>
@@ -423,11 +431,11 @@ export default function AceOptimizePage() {
   const borderColorVal = useColorModeValue("gray.200", "#333333");
   const { getActiveColor } = useThemeColor();
 
-  const [deltaPriority, setDeltaPriority] = useState<OptionState>({ running: false, message: "" });
-  const [deltaAffinity, setDeltaAffinity] = useState<OptionState>({ running: false, message: "" });
-  const [acePriority, setAcePriority] = useState<OptionState>({ running: false, message: "" });
-  const [aceAffinity, setAceAffinity] = useState<OptionState>({ running: false, message: "" });
-  const [aceEfficiency, setAceEfficiency] = useState<OptionState>({ running: false, message: "" });
+  const [deltaPriority, setDeltaPriority] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
+  const [deltaAffinity, setDeltaAffinity] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
+  const [acePriority, setAcePriority] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
+  const [aceAffinity, setAceAffinity] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
+  const [aceEfficiency, setAceEfficiency] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
   const [optimizeAllLoading, setOptimizeAllLoading] = useState(false);
 
   // 核心选择配置
@@ -523,14 +531,14 @@ export default function AceOptimizePage() {
     setDeltaPriority(prev => ({ ...prev, running: true }));
     try {
       const result = await invoke<{ success: boolean; message: string; was_running: boolean }>("boost_delta_force_priority");
-      setDeltaPriority({ running: false, message: result.message });
+      setDeltaPriority({ running: false, message: result.message, foundCount: result.was_running ? 1 : 0, modifiedCount: result.was_running ? 1 : 0 });
       toast({
         title: result.was_running ? t("optimization.aceOptimize.deltaBoost.success") : t("optimization.aceOptimize.deltaBoost.notRunning"),
         status: result.was_running ? "success" : "info",
         duration: 2000,
       });
     } catch (e: any) {
-      setDeltaPriority({ running: false, message: String(e) });
+      setDeltaPriority({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
       toast({ title: String(e), status: "error", duration: 2000 });
     }
   }, [toast, t]);
@@ -540,14 +548,14 @@ export default function AceOptimizePage() {
     try {
       const mask = deltaAffinityMask ?? getDefaultDeltaMask(coreCount);
       const result = await invoke<{ success: boolean; message: string; was_running: boolean }>("boost_delta_force_affinity_with_mask", { mask });
-      setDeltaAffinity({ running: false, message: result.message });
+      setDeltaAffinity({ running: false, message: result.message, foundCount: result.was_running ? 1 : 0, modifiedCount: result.was_running ? 1 : 0 });
       toast({
         title: result.was_running ? t("optimization.aceOptimize.deltaBoost.affinitySuccess") : t("optimization.aceOptimize.deltaBoost.notRunning"),
         status: result.was_running ? "success" : "info",
         duration: 2000,
       });
     } catch (e: any) {
-      setDeltaAffinity({ running: false, message: String(e) });
+      setDeltaAffinity({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
       toast({ title: String(e), status: "error", duration: 2000 });
     }
   }, [toast, t, deltaAffinityMask, getDefaultDeltaMask, coreCount]);
@@ -555,15 +563,19 @@ export default function AceOptimizePage() {
   const applyAcePriority = useCallback(async () => {
     setAcePriority(prev => ({ ...prev, running: true }));
     try {
-      const result = await invoke<{ success: boolean; message: string; count: number }>("limit_ace_priority");
-      setAcePriority({ running: false, message: result.message });
+      const result = await invoke<{ success: boolean; message: string; count: number; found_count: number }>("limit_ace_priority");
+      setAcePriority({ running: false, message: result.message, foundCount: result.found_count ?? 0, modifiedCount: result.count ?? 0 });
       toast({
-        title: result.count > 0 ? t("optimization.aceOptimize.aceLimit.success", { count: result.count }) : t("optimization.aceOptimize.aceLimit.notRunning"),
+        title: result.count > 0
+          ? t("optimization.aceOptimize.aceLimit.success", { count: result.count })
+          : (result.found_count ?? 0) > 0
+            ? result.message
+            : t("optimization.aceOptimize.aceLimit.notRunning"),
         status: result.count > 0 ? "success" : "info",
         duration: 2000,
       });
     } catch (e: any) {
-      setAcePriority({ running: false, message: String(e) });
+      setAcePriority({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
       toast({ title: String(e), status: "error", duration: 2000 });
     }
   }, [toast, t]);
@@ -572,15 +584,19 @@ export default function AceOptimizePage() {
     setAceAffinity(prev => ({ ...prev, running: true }));
     try {
       const mask = aceAffinityMask ?? getDefaultAceMask();
-      const result = await invoke<{ success: boolean; message: string; count: number }>("restrict_ace_affinity_with_mask", { mask });
-      setAceAffinity({ running: false, message: result.message });
+      const result = await invoke<{ success: boolean; message: string; count: number; found_count: number }>("restrict_ace_affinity_with_mask", { mask });
+      setAceAffinity({ running: false, message: result.message, foundCount: result.found_count ?? 0, modifiedCount: result.count ?? 0 });
       toast({
-        title: result.count > 0 ? t("optimization.aceOptimize.aceLimit.affinitySuccess", { count: result.count }) : t("optimization.aceOptimize.aceLimit.notRunning"),
+        title: result.count > 0
+          ? t("optimization.aceOptimize.aceLimit.affinitySuccess", { count: result.count })
+          : (result.found_count ?? 0) > 0
+            ? result.message
+            : t("optimization.aceOptimize.aceLimit.notRunning"),
         status: result.count > 0 ? "success" : "info",
         duration: 2000,
       });
     } catch (e: any) {
-      setAceAffinity({ running: false, message: String(e) });
+      setAceAffinity({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
       toast({ title: String(e), status: "error", duration: 2000 });
     }
   }, [toast, t, aceAffinityMask, getDefaultAceMask]);
@@ -588,15 +604,19 @@ export default function AceOptimizePage() {
   const applyAceEfficiency = useCallback(async () => {
     setAceEfficiency(prev => ({ ...prev, running: true }));
     try {
-      const result = await invoke<{ success: boolean; message: string; count: number }>("set_ace_efficiency_mode");
-      setAceEfficiency({ running: false, message: result.message });
+      const result = await invoke<{ success: boolean; message: string; count: number; found_count: number }>("set_ace_efficiency_mode");
+      setAceEfficiency({ running: false, message: result.message, foundCount: result.found_count ?? 0, modifiedCount: result.count ?? 0 });
       toast({
-        title: result.count > 0 ? t("optimization.aceOptimize.aceEfficiency.success", { count: result.count }) : t("optimization.aceOptimize.aceEfficiency.notRunning"),
+        title: result.count > 0
+          ? t("optimization.aceOptimize.aceEfficiency.success", { count: result.count })
+          : (result.found_count ?? 0) > 0
+            ? result.message
+            : t("optimization.aceOptimize.aceEfficiency.notRunning"),
         status: result.count > 0 ? "success" : "info",
         duration: 2000,
       });
     } catch (e: any) {
-      setAceEfficiency({ running: false, message: String(e) });
+      setAceEfficiency({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
       toast({ title: String(e), status: "error", duration: 2000 });
     }
   }, [toast, t]);
@@ -631,12 +651,12 @@ export default function AceOptimizePage() {
     try {
       const result = await invoke<{ success: boolean; message: string; delta_boosted: boolean; ace_limited: boolean; ace_count: number }>("optimize_all_game_processes");
       if (result.delta_boosted) {
-        setDeltaPriority({ running: false, message: t("optimization.aceOptimize.status.optimized") });
-        setDeltaAffinity({ running: false, message: t("optimization.aceOptimize.status.optimized") });
+        setDeltaPriority({ running: false, message: t("optimization.aceOptimize.status.optimized"), foundCount: 1, modifiedCount: 1 });
+        setDeltaAffinity({ running: false, message: t("optimization.aceOptimize.status.optimized"), foundCount: 1, modifiedCount: 1 });
       }
       if (result.ace_limited) {
-        setAcePriority({ running: false, message: t("optimization.aceOptimize.status.optimized") });
-        setAceAffinity({ running: false, message: t("optimization.aceOptimize.status.optimized") });
+        setAcePriority({ running: false, message: t("optimization.aceOptimize.status.optimized"), foundCount: result.ace_count, modifiedCount: result.ace_count });
+        setAceAffinity({ running: false, message: t("optimization.aceOptimize.status.optimized"), foundCount: result.ace_count, modifiedCount: result.ace_count });
       }
       toast({
         title: result.message,
@@ -679,8 +699,8 @@ export default function AceOptimizePage() {
               title={t("optimization.aceOptimize.deltaBoost.title")}
               description={t("optimization.aceOptimize.deltaBoost.description")}
               isLoading={deltaPriority.running}
-              isApplied={!!deltaPriority.message && !deltaPriority.message.includes("未运行")}
-              gameRunning={deltaPriority.message ? !deltaPriority.message.includes("未运行") : null}
+              isApplied={deltaPriority.modifiedCount > 0}
+              gameRunning={deltaPriority.foundCount > 0 ? true : (deltaPriority.message ? false : null)}
               onApply={applyDeltaPriority}
             />
             <OptionRow
@@ -688,8 +708,8 @@ export default function AceOptimizePage() {
               title={t("optimization.aceOptimize.deltaBoost.affinityTitle")}
               description={t("optimization.aceOptimize.deltaBoost.affinityDescription")}
               isLoading={deltaAffinity.running}
-              isApplied={!!deltaAffinity.message && !deltaAffinity.message.includes("未运行")}
-              gameRunning={deltaAffinity.message ? !deltaAffinity.message.includes("未运行") : null}
+              isApplied={deltaAffinity.modifiedCount > 0}
+              gameRunning={deltaAffinity.foundCount > 0 ? true : (deltaAffinity.message ? false : null)}
               onApply={applyDeltaAffinity}
               onSettings={openDeltaSettings}
             />
@@ -708,8 +728,9 @@ export default function AceOptimizePage() {
               title={t("optimization.aceOptimize.aceLimit.title")}
               description={t("optimization.aceOptimize.aceLimit.description")}
               isLoading={acePriority.running}
-              isApplied={!!acePriority.message && !acePriority.message.includes("未找到")}
-              gameRunning={acePriority.message ? !acePriority.message.includes("未找到") : null}
+              isApplied={acePriority.modifiedCount > 0}
+              gameRunning={acePriority.foundCount > 0 ? true : (acePriority.message ? false : null)}
+              needsAdmin={acePriority.foundCount > 0 && acePriority.modifiedCount === 0}
               onApply={applyAcePriority}
             />
             <OptionRow
@@ -717,8 +738,9 @@ export default function AceOptimizePage() {
               title={t("optimization.aceOptimize.aceLimit.affinityTitle")}
               description={t("optimization.aceOptimize.aceLimit.affinityDescription")}
               isLoading={aceAffinity.running}
-              isApplied={!!aceAffinity.message && !aceAffinity.message.includes("未找到")}
-              gameRunning={aceAffinity.message ? !aceAffinity.message.includes("未找到") : null}
+              isApplied={aceAffinity.modifiedCount > 0}
+              gameRunning={aceAffinity.foundCount > 0 ? true : (aceAffinity.message ? false : null)}
+              needsAdmin={aceAffinity.foundCount > 0 && aceAffinity.modifiedCount === 0}
               onApply={applyAceAffinity}
               onSettings={openAceSettings}
             />
@@ -727,8 +749,9 @@ export default function AceOptimizePage() {
               title={t("optimization.aceOptimize.aceEfficiency.title")}
               description={t("optimization.aceOptimize.aceEfficiency.description")}
               isLoading={aceEfficiency.running}
-              isApplied={!!aceEfficiency.message && !aceEfficiency.message.includes("未找到")}
-              gameRunning={aceEfficiency.message ? !aceEfficiency.message.includes("未找到") : null}
+              isApplied={aceEfficiency.modifiedCount > 0}
+              gameRunning={aceEfficiency.foundCount > 0 ? true : (aceEfficiency.message ? false : null)}
+              needsAdmin={aceEfficiency.foundCount > 0 && aceEfficiency.modifiedCount === 0}
               onApply={applyAceEfficiency}
             />
 

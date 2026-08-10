@@ -1,6 +1,6 @@
 {
   "name": "nexbox-uninstaller",
-  "version": "7.1.3",
+  "version": "7.3.3",
   "private": true,
   "type": "module",
   "scripts": {

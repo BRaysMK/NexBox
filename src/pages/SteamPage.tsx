@@ -182,6 +182,12 @@ function normalizePath(path: string): string {
   return path.replace(/\//g, "\\").toLowerCase().replace(/\\+$/, "");
 }
 
+/** 从库路径中提取盘符，如 "D:\SteamLibrary" → "D:" */
+function getDriveLabel(path: string): string {
+  const m = path.match(/^[A-Za-z]:/);
+  return m ? m[0].toUpperCase() : path;
+}
+
 // ======================== 组件 ========================
 
 function StatusBadge({ running, activeColor, t }: { running: boolean; activeColor: string; t: (k: string) => string }) {
@@ -731,6 +737,46 @@ export default function SteamPage() {
     );
   }, [data?.games, searchText]);
 
+  // 按库（硬盘）分组后的游戏列表
+  const groupedGames = useMemo(() => {
+    if (!data || filteredGames.length === 0) return [];
+    const groups: { key: string; driveLabel: string; path: string; label: string; games: SteamGame[]; totalSize: number }[] = [];
+    const matched = new Set<number>();
+    for (const lib of data.libraries) {
+      const libNorm = normalizePath(lib.path);
+      const games = filteredGames.filter((g) => {
+        const gameNorm = normalizePath(g.library_path);
+        if (gameNorm === libNorm || gameNorm.startsWith(libNorm + "\\")) {
+          matched.add(g.app_id);
+          return true;
+        }
+        return false;
+      });
+      if (games.length === 0) continue;
+      groups.push({
+        key: `${lib.index}-${lib.path}`,
+        driveLabel: getDriveLabel(lib.path),
+        path: lib.path,
+        label: lib.label,
+        games,
+        totalSize: games.reduce((s, g) => s + g.size_on_disk, 0),
+      });
+    }
+    // 未匹配到任何库的游戏（理论上少见，兜底处理）
+    const rest = filteredGames.filter((g) => !matched.has(g.app_id));
+    if (rest.length > 0) {
+      groups.push({
+        key: "other",
+        driveLabel: t("steam.other"),
+        path: "",
+        label: "",
+        games: rest,
+        totalSize: rest.reduce((s, g) => s + g.size_on_disk, 0),
+      });
+    }
+    return groups;
+  }, [data, filteredGames, t]);
+
   // 直接按路径匹配计算每个库的游戏统计
   const getLibraryStats = useCallback((libPath: string) => {
     if (!data?.games) return { count: 0, size: 0 };
@@ -1105,19 +1151,50 @@ export default function SteamPage() {
           </Text>
         </VStack>
       ) : (
-        <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4, xl: 5 }} spacing={4}>
-          {filteredGames.map((game) => (
-            <GameCard
-              key={game.app_id}
-              game={game}
-              isLaunching={launchingAppId === game.app_id}
-              onLaunch={handleLaunch}
-              onOpenFolder={handleOpenFolder}
-              onStorePage={handleStorePage}
-              onUninstall={onUninstallClick}
-            />
+        <VStack spacing={6} align="stretch">
+          {groupedGames.map((group) => (
+            <Box key={group.key}>
+              {/* 分组标题：盘符 + 路径 + 游戏数 + 总大小 */}
+              <HStack spacing={2} mb={3} flexWrap="wrap">
+                <Box color={activeColor}>
+                  <LuHardDrive size={16} />
+                </Box>
+                <Text fontSize="md" fontWeight="bold" color={headerColor} noOfLines={1}>
+                  {group.driveLabel}
+                </Text>
+                {group.path && (
+                  <Text fontSize="xs" color={subTextColor} noOfLines={1}>
+                    {group.path}
+                  </Text>
+                )}
+                {group.label && (
+                  <Badge colorScheme="teal" variant="subtle" borderRadius="full">
+                    {group.label}
+                  </Badge>
+                )}
+                <Badge colorScheme="gray" variant="subtle" borderRadius="full">
+                  {group.games.length} {t("steam.games")}
+                </Badge>
+                <Text fontSize="xs" color={subTextColor}>
+                  {formatSize(group.totalSize)}
+                </Text>
+              </HStack>
+              <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4, xl: 5 }} spacing={4}>
+                {group.games.map((game) => (
+                  <GameCard
+                    key={game.app_id}
+                    game={game}
+                    isLaunching={launchingAppId === game.app_id}
+                    onLaunch={handleLaunch}
+                    onOpenFolder={handleOpenFolder}
+                    onStorePage={handleStorePage}
+                    onUninstall={onUninstallClick}
+                  />
+                ))}
+              </SimpleGrid>
+            </Box>
           ))}
-        </SimpleGrid>
+        </VStack>
       )}
 
       {/* 卸载确认弹窗 */}

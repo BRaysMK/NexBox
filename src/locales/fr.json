@@ -211,6 +211,18 @@
       "description": "Optimiser les paramètres réseau et DNS",
       "loadFailed": "Échec du chargement",
       "restore": "Restaurer",
+      "publicIp": {
+        "title": "IP publique",
+        "label": "Adresse IPv4 publique du réseau actuel",
+        "loading": "Récupération...",
+        "failed": "Échec de la récupération, vérifiez votre connexion réseau",
+        "refresh": "Actualiser",
+        "copy": "Copier",
+        "copied": "IP publique copiée dans le presse-papiers",
+        "copyFailed": "Échec de la copie",
+        "updated": "IP publique mise à jour",
+        "fetchFailed": "Échec de la récupération de l'IP publique"
+      },
       "tcpCongestion": {
         "title": "Contrôle de congestion TCP",
         "description": "Définir le contrôle de congestion TCP sur CTCP/CUBIC"
@@ -399,7 +411,8 @@
             "notRunning": "Non en cours",
             "notOptimized": "À optimiser",
             "processRunning": "Processus en cours",
-            "processNotRunning": "Processus non en cours"
+            "processNotRunning": "Processus non en cours",
+            "needsAdmin": "Droits admin requis"
         },
         "apply": "Appliquer",
         "applied": "Appliqué",
@@ -446,7 +459,47 @@
       "warning": "Avertissement",
       "warningText": "Modifier l'affinité des cœurs peut affecter les performances. À utiliser avec prudence.",
       "hybridNotSupported": "Le CPU actuel ne prend pas en charge la distinction P-core/E-core",
-      "error": "Échec de l'opération"
+      "error": "Échec de l'opération",
+      "coreIsolation": {
+        "tab": "Isolation de cœurs",
+        "assignmentTab": "Affectation des cœurs",
+        "description": "Réservez des cœurs comme zone d'isolation. Les autres logiciels seront restreints à ne pas les utiliser, laissant ces ressources exclusivement au jeu sélectionné.",
+        "selectCores": "Sélectionner les cœurs à isoler",
+        "selectCoresHint": "Les cœurs isolés ne seront plus assignés aux autres processus. Le jeu exempté n'est pas affecté.",
+        "excludeProcess": "Sélectionner le jeu",
+        "excludeProcessHint": "Le jeu conserve la planification sur tous les cœurs et peut utiliser librement les cœurs isolés ; les autres logiciels sont restreints hors des cœurs isolés. Re-cliquez pour désélectionner.",
+        "noExcludeProcess": "Aucun",
+        "noCoreSelected": "Veuillez sélectionner au moins un cœur à isoler",
+        "allCoresForbidden": "Isoler tous les cœurs n'est pas autorisé",
+        "apply": "Appliquer l'isolation",
+        "applying": "Isolation...",
+        "restore": "Restaurer",
+        "restoring": "Restauration...",
+        "applied": "Isolation des cœurs appliquée",
+        "restored": "Isolation des cœurs restaurée",
+        "applyResult": "{{modified}} processus modifiés, {{failed}} échecs",
+        "failedList": "Processus en échec",
+        "permissionHint": "Astuce : si beaucoup de processus échouent, exécutez NexBox en administrateur puis réessayez.",
+        "activeState": "Isolation des cœurs active",
+        "idleState": "Aucune isolation de cœurs active",
+        "isolatedMaskLabel": "Masque d'isolation",
+        "excludeProcessLabel": "Processus exempté",
+        "modifiedCount": "{{count}} processus isolés",
+        "saveRule": "Enregistrer comme règle d'isolation",
+        "saveRuleBtn": "Enregistrer",
+        "ruleNameRequired": "Veuillez saisir un nom de règle",
+        "ruleNamePlaceholder": "Saisir un nom",
+        "autoApply": "Auto au démarrage de NexBox",
+        "autoApplyHint": "Appliquer cette règle au démarrage de NexBox",
+        "autoApplyBadge": "Auto",
+        "restoreRule": "Restaurer",
+        "activeBadge": "Actif",
+        "ruleSaved": "Règle d'isolation enregistrée",
+        "ruleDeleted": "Règle d'isolation supprimée",
+        "rulesTitle": "Règles d'isolation enregistrées",
+        "exempted": "Exempté",
+        "warningText": "L'isolation des cœurs restreint la planification des autres logiciels et peut affecter la réactivité globale. N'isolez pas tous les cœurs et choisissez la plage avec prudence."
+      }
     }
   },
   "home": {
@@ -466,6 +519,27 @@
       "loading": "Chargement...",
       "title": "Désactiver la touche Win en jeu",
       "subtitle": "Bloque automatiquement la touche Win lorsqu'un jeu de la liste est en cours d'exécution"
+    },
+    "randomImage": {
+      "loading": "Chargement...",
+      "title": "Image aléatoire",
+      "subtitle": "Cliquez pour ouvrir une image aléatoire",
+      "refresh": "Nouvelle image",
+      "retry": "Réessayer",
+      "error": "Échec du chargement de l'image",
+      "modalTitle": "Image aléatoire",
+      "categoryLabel": "Catégorie",
+      "typeLabel": "Sous-catégorie",
+      "anyCategory": "Aléatoire global",
+      "anyType": "Auto",
+      "typeNotSupported": "Cette catégorie ne prend pas en charge les sous-catégories",
+      "generate": "Générer",
+      "download": "Télécharger",
+      "downloadTitle": "Enregistrer l'image aléatoire",
+      "downloadSuccess": "Image enregistrée",
+      "downloadFailed": "Échec de l'enregistrement de l'image",
+      "noImageYet": "Aucune image à télécharger",
+      "previewAlt": "Aperçu de l'image aléatoire"
     }
   },
   "hardware": {
@@ -500,7 +574,12 @@
     "macAddress": "Adresse MAC",
     "linkSpeed": "Vitesse de liaison",
     "deltaPasswordFetched": "Récupéré",
-    "deltaPasswordNotFetched": "--"
+    "deltaPasswordNotFetched": "--",
+    "copyAll": "Copier toutes les infos matérielles",
+    "copySuccess": "Copié dans le presse-papiers",
+    "copyDesc": "Infos matérielles copiées par catégorie",
+    "copyFailed": "Échec de la copie",
+    "noData": "Aucune information matérielle"
   },
   "tools": {
     "title": "Outils",
@@ -708,6 +787,9 @@
     "gap": "Espacement",
     "dotSize": "Taille du point",
     "opacity": "Opacité",
+    "outline": "Contour",
+    "outlineColor": "Couleur du contour",
+    "outlineThickness": "Épaisseur du contour",
     "preview": "Aperçu",
     "parameters": "Paramètres",
     "monitor": "Moniteur",
@@ -949,6 +1031,8 @@
     "loading": "Chargement...",
     "loadError": "Échec du chargement",
     "currentGpu": "GPU actuel",
+    "integrated": "Intégré",
+    "discrete": "Discret",
     "originalGpu": "GPU d'origine",
     "backupStatus": "État de la sauvegarde",
     "backedUp": "Sauvegardé",
@@ -1060,6 +1144,8 @@
       "feedbackDesc": "Afficher le carrousel d'images sur la page d'accueil",
       "gameWinKeyLabel": "Carte désactivation touche Win",
       "gameWinKeyDesc": "Afficher la carte de désactivation de la touche Win en jeu sur la page d'accueil",
+      "randomImageLabel": "Image aléatoire",
+      "randomImageDesc": "Afficher la carte d'image aléatoire sur la page d'accueil",
       "splash": "Animation",
       "splashLogoLabel": "Logo de démarrage",
       "splashLogoDesc": "Personnalisez l'image du logo affichée au démarrage",
@@ -1087,6 +1173,7 @@
       "autoStartDisabled": "Lancement au démarrage désactivé",
       "autoStartError": "Échec de la configuration du démarrage automatique",
       "autoStartErrorHint": "Vérifiez si l'antivirus bloque, ou essayez d'exécuter en tant qu'administrateur",
+      "autoUpdate": "Mise à jour automatique silencieuse",
       "closeBehavior": "Comportement de fermeture",
       "closeBehaviorLabel": "Lors du clic sur fermer",
       "closeBehaviorDesc": "Choisir l'action lors du clic sur le bouton fermer",
@@ -1183,7 +1270,8 @@
         "title": "Liste des sponsors",
         "loading": "Chargement...",
         "error": "Échec du chargement",
-        "empty": "Aucun sponsor pour l'instant"
+        "empty": "Aucun sponsor pour l'instant",
+        "totalAmount": "Montant total :"
       }
     },
     "aboutSettings": {
@@ -1203,6 +1291,10 @@
       "changelogTitle": "Mises à jour de la version actuelle",
       "noChangelog": "Aucun journal des modifications disponible",
       "loadingChangelog": "Chargement...",
+      "newVersionDownloading": "Téléchargement de la nouvelle version",
+      "autoUpdateDisabledHint": "Désactivé. Activez la mise à jour automatique pour télécharger",
+      "downloadingWithProgress": "Téléchargement {{progress}}%",
+      "pendingInstall": "Redémarrer pour installer",
       "updateModal": {
         "title": "Nouvelle version disponible",
         "version": "Version",
@@ -1293,6 +1385,13 @@
     "filter": "Filtre",
     "filterToggle": "Activer/Désactiver le filtre",
     "filterToggleDesc": "Utiliser un raccourci pour activer ou désactiver le filtre d'affichage",
+    "music": "Musique",
+    "musicPrev": "Piste précédente",
+    "musicPrevDesc": "Utiliser un raccourci pour passer à la piste précédente",
+    "musicNext": "Piste suivante",
+    "musicNextDesc": "Utiliser un raccourci pour passer à la piste suivante",
+    "musicPlayPause": "Lecture / Pause",
+    "musicPlayPauseDesc": "Utiliser un raccourci pour lire ou mettre en pause la musique",
     "saved": "Raccourci enregistré",
     "masterToggle": "Interrupteur global des raccourcis",
     "masterToggleDesc": "Une fois désactivé, aucun raccourci global ne fonctionnera"

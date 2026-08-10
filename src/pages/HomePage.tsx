@@ -7,6 +7,7 @@ import { RandomQuote, useRandomQuoteEnabled } from "@/components/RandomQuote";
 import { useState, useEffect, useRef } from "react";
 import HardwareModelCard from "@/components/HardwareModelCard";
 import GameWinKeyCard from "@/components/GameWinKeyCard";
+import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
 import { FeedbackBanner, useFeedbackEnabled } from "@/components/FeedbackBanner";
 import { store } from "@/lib/store";
 import { getGreeting, rollEasterEgg, EASTER_EGG_TEXT } from "@/lib/greetings";
@@ -94,6 +95,7 @@ export default function HomePage() {
   const feedbackEnabled = useFeedbackEnabled();
   const announcementEnabled = useAnnouncementEnabled();
   const randomQuoteEnabled = useRandomQuoteEnabled();
+  const randomImageEnabled = useRandomImageEnabled();
   useEffect(() => {
     (async () => {
       const saved = await store.get<boolean>("nexbox_game_launcher_enabled");
@@ -189,9 +191,10 @@ export default function HomePage() {
         )}
       </Flex>
 
-      {(gameWinKeyCardEnabled || homeHardwareModelEnabled) && (
+      {(randomImageEnabled || gameWinKeyCardEnabled || homeHardwareModelEnabled) && (
         <Box position="absolute" bottom={4} left={4}>
           <VStack spacing={2} align="stretch">
+            {randomImageEnabled && <RandomImageCard />}
             {gameWinKeyCardEnabled && <GameWinKeyCard />}
             {homeHardwareModelEnabled && <HardwareModelCard />}
           </VStack>

@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { LuMinus, LuX } from "react-icons/lu";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { GlobalSearch } from "./global-search";
+import { UpdateProgressIndicator } from "./update-progress-indicator";
 import { CloseConfirmDialog } from "../CloseConfirmDialog";
 import { store } from "@/lib/store";
 
@@ -159,13 +160,16 @@ export function TitleBar() {
         onMouseDown={handleMouseDown}
       >
         <Flex justify="space-between" align="center" h="full" pl={4} pr={4}>
-          <Box
+          <Flex
+            align="center"
+            gap={3}
             ml={navPosition === "top" ? "16px" : "112px"}
             transition="margin 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
             onMouseDown={(e) => e.stopPropagation()}
           >
             {searchBarVisible && <GlobalSearch />}
-          </Box>
+            <UpdateProgressIndicator />
+          </Flex>
           <HStack id="window-controls" spacing={1} h="40px" align="center">
             <IconButton
               icon={<LuMinus size={18} />}

@@ -17,8 +17,8 @@ use windows_sys::Win32::System::ProcessStatus::{
 use windows_sys::Win32::System::Memory::SetSystemFileCacheSize;
 use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, OpenProcess, SetPriorityClass, SetProcessWorkingSetSize,
-    PROCESS_QUERY_INFORMATION, PROCESS_SET_QUOTA, PROCESS_VM_READ,
+    GetCurrentProcess, OpenProcess, SetPriorityClass, SetProcessAffinityMask,
+    SetProcessWorkingSetSize, PROCESS_QUERY_INFORMATION, PROCESS_SET_QUOTA, PROCESS_VM_READ,
 };
 
 pub(crate) const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -37,6 +37,7 @@ const PROCESS_SET_INFORMATION: u32 = 0x0200;
 const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 const IDLE_PRIORITY_CLASS: u32 = 0x00000040;
 const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x00004000;
+const REALTIME_PRIORITY_CLASS: u32 = 0x00000100;
 const PROCESS_MODE_BACKGROUND_BEGIN: u32 = 0x00100000;
 const IO_PRIORITY_VERY_LOW: u32 = 0;
 const PROCESS_MEMORY_PRIORITY_NEW: u32 = 0;
@@ -136,6 +137,33 @@ fn set_process_low_priority(pid: u32) -> bool {
             true
         };
 
+        CloseHandle(handle);
+        ok
+    }
+}
+
+/// 设置进程优先级为实时（对应 .NET ProcessPriorityClass::RealTime）
+fn set_process_realtime_priority(pid: u32) -> bool {
+    unsafe {
+        let handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        let ok = SetPriorityClass(handle, REALTIME_PRIORITY_CLASS) != 0;
+        CloseHandle(handle);
+        ok
+    }
+}
+
+/// 设置进程 CPU 亲和性掩码（直接 Win32 API，无需 PowerShell）
+fn set_process_affinity(pid: u32, mask: u64) -> bool {
+    unsafe {
+        let handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        // SetProcessAffinityMask 第二参数为 usize（ULONG_PTR），64 位系统为 u64
+        let ok = SetProcessAffinityMask(handle, mask as usize) != 0;
         CloseHandle(handle);
         ok
     }
@@ -394,84 +422,39 @@ pub struct AceOptimizeResult {
 
 #[tauri::command]
 pub async fn optimize_ace_processes() -> Result<AceOptimizeResult, String> {
-    let process_names = ["ACE-Tray.exe", "SGuard64.exe", "SGuardSvc64.exe"];
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
 
-    if cfg!(target_os = "windows") {
-        let mut optimized_processes = Vec::new();
+    let mut optimized_processes = Vec::new();
+    let mut system = System::new();
+    system.refresh_processes();
 
-        let ps_script = r#"
-            $processNames = @("ACE-Tray", "SGuard64", "SGuardSvc64")
-            $optimized = @()
-            
-            foreach ($name in $processNames) {
-                $processes = Get-Process -Name $name -ErrorAction SilentlyContinue
-                if ($processes) {
-                    foreach ($proc in $processes) {
-                        try {
-                            # 设置优先级为最低 (Low = 64)
-                            $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Low
-                            
-                            # 设置核心相关性为只使用 CPU0 (affinity = 1)
-                            $proc.ProcessorAffinity = 1
-                            
-                            $optimized += $proc.ProcessName
-                            Write-Host "Optimized: $($proc.ProcessName)"
-                        } catch {
-                            Write-Host "Failed to optimize: $name - $_"
-                        }
-                    }
-                }
+    for (_, process) in system.processes() {
+        let name = process.name().to_string();
+        let name_lower = name.to_lowercase();
+        if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
+            let pid = process.pid().as_u32();
+            let priority_ok = set_process_low_priority(pid);
+            let affinity_ok = set_process_affinity(pid, 1);
+            if priority_ok || affinity_ok {
+                optimized_processes.push(name);
             }
-            
-            if ($optimized.Count -gt 0) {
-                Write-Host "Optimized processes: $($optimized -join ', ')"
-                exit 0
-            } else {
-                Write-Host "No ACE processes found"
-                exit 1
-            }
-        "#;
-
-        let result = Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                ps_script,
-            ])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
-
-        match result {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-
-                for name in process_names {
-                    let process_name = name.trim_end_matches(".exe");
-                    if stdout.contains(&format!("Optimized: {}", process_name)) {
-                        optimized_processes.push(process_name.to_string());
-                    }
-                }
-
-                if !optimized_processes.is_empty() {
-                    Ok(AceOptimizeResult {
-                        success: true,
-                        message: format!("已优化 {} 个ACE进程", optimized_processes.len()),
-                        optimized_processes,
-                    })
-                } else {
-                    Ok(AceOptimizeResult {
-                        success: true,
-                        message: "未找到运行中的ACE进程".to_string(),
-                        optimized_processes: vec![],
-                    })
-                }
-            }
-            Err(e) => Err(format!("执行ACE进程优化命令失败: {}", e)),
         }
+    }
+
+    if !optimized_processes.is_empty() {
+        Ok(AceOptimizeResult {
+            success: true,
+            message: format!("已优化 {} 个ACE进程", optimized_processes.len()),
+            optimized_processes,
+        })
     } else {
-        Err("此功能仅支持 Windows 系统".to_string())
+        Ok(AceOptimizeResult {
+            success: true,
+            message: "未找到运行中的ACE进程".to_string(),
+            optimized_processes: vec![],
+        })
     }
 }
 
@@ -480,6 +463,7 @@ pub struct AceEfficiencyResult {
     pub success: bool,
     pub message: String,
     pub count: u32,
+    pub found_count: u32,
 }
 
 #[tauri::command]
@@ -488,7 +472,7 @@ pub async fn set_ace_efficiency_mode() -> Result<AceEfficiencyResult, String> {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let process_names = ["ACE-Tray.exe", "SGuard64.exe", "SGuardSvc64.exe"];
+    let mut found = 0u32;
     let mut count = 0u32;
 
     let mut system = System::new();
@@ -497,7 +481,8 @@ pub async fn set_ace_efficiency_mode() -> Result<AceEfficiencyResult, String> {
     for (_, process) in system.processes() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
-        if process_names.iter().any(|n| n.to_lowercase() == name_lower) {
+        if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
+            found += 1;
             if enable_process_efficiency_mode(process.pid().as_u32()) {
                 count += 1;
             }
@@ -506,12 +491,9 @@ pub async fn set_ace_efficiency_mode() -> Result<AceEfficiencyResult, String> {
 
     Ok(AceEfficiencyResult {
         success: count > 0,
-        message: if count > 0 {
-            format!("已为 {} 个 ACE 进程开启效能模式", count)
-        } else {
-            "未找到运行中的 ACE 进程".to_string()
-        },
+        message: ace_message(found, count, "已为 {} 个 ACE 进程开启效能模式"),
         count,
+        found_count: found,
     })
 }
 
@@ -1231,7 +1213,17 @@ static AUTO_DETECT_STATS: Mutex<Option<AceAutoDetectStats>> = Mutex::new(None);
 // 内存中的 enabled 状态，避免 store 读取竞争
 static AUTO_DETECT_ENABLED: AtomicBool = AtomicBool::new(false);
 
-const ACE_PROCESS_NAMES: &[&str] = &["ACE-Tray.exe", "SGuard64.exe", "SGuardSvc64.exe"];
+const ACE_PROCESS_NAMES: &[&str] = &[
+    "ACE-Tray.exe",
+    "ACE-BASE.exe",
+    "ACE-GAME.exe",
+    "ACE-Client.exe",
+    "SGuard64.exe",
+    "SGuardSvc64.exe",
+    "SGuardLite64.exe",
+    "SGuardLite.exe",
+    "SGuardSvc.exe",
+];
 const ACE_DETECT_INTERVAL_SECS: u64 = 5;
 
 fn update_auto_detect_stats(optimized: Vec<String>) {
@@ -1259,71 +1251,45 @@ fn set_auto_detect_running(running: bool) {
 
 fn detect_and_optimize_ace_processes() -> Vec<String> {
     let mut optimized = Vec::new();
-    
+    let mut found_unauthorized = 0u32;
+
     let mut system = System::new();
     system.refresh_processes();
-    
+
     for (_, process) in system.processes() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
-        
+
         if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
+            let pid = process.pid().as_u32();
             let mut this_optimized = false;
-            
+
             // 1. 启用调度优化（BELOW_NORMAL 优先级 + I/O VeryLow + 低内存优先级）
-            if enable_process_efficiency_mode(process.pid().as_u32()) || set_process_low_priority(process.pid().as_u32()) {
+            if enable_process_efficiency_mode(pid) || set_process_low_priority(pid) {
                 this_optimized = true;
             }
-            
-            // 2. 限制亲和性为 CPU0 (affinity = 1)
-            if restrict_process_affinity_powershell(&name) {
+
+            // 2. 限制亲和性为 CPU0 (affinity = 1)，直接 Win32 API
+            if set_process_affinity(pid, 1) {
                 this_optimized = true;
             }
-            
+
             if this_optimized {
                 optimized.push(name);
+            } else {
+                found_unauthorized += 1;
             }
         }
     }
-    
-    optimized
-}
 
-fn restrict_process_affinity_powershell(process_name: &str) -> bool {
-    let name_without_ext = process_name.trim_end_matches(".exe");
-    let ps_script = format!(
-        r#"
-        $proc = Get-Process -Name "{}" -ErrorAction SilentlyContinue
-        if ($proc) {{
-            foreach ($p in $proc) {{
-                try {{
-                    $p.ProcessorAffinity = 1
-                    Write-Host "AFFINITY_SET:{}"
-                }} catch {{
-                    Write-Host "AFFINITY_FAILED:{}"
-                }}
-            }}
-            exit 0
-        }} else {{
-            Write-Host "NOT_FOUND"
-            exit 1
-        }}
-        "#,
-        name_without_ext, name_without_ext, name_without_ext
-    );
-    
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-    
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            stdout.contains("AFFINITY_SET")
-        }
-        Err(_) => false,
+    if found_unauthorized > 0 {
+        log::warn!(
+            "[ACE auto-detect] 发现 {} 个 ACE 进程无法修改（需管理员权限），已跳过",
+            found_unauthorized
+        );
     }
+
+    optimized
 }
 
 fn ace_auto_detect_loop(config: AceAutoDetectConfig, generation: u64) {
@@ -1476,43 +1442,42 @@ pub async fn boost_delta_force_priority() -> Result<ProcessOptimizeResult, Strin
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let ps_script = r#"
-        $proc = Get-Process -Name "DeltaForceClient-Win64-Shipping" -ErrorAction SilentlyContinue
-        if ($proc) {
-            $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
-            Write-Host "BOOSTED"
-            exit 0
-        } else {
-            Write-Host "NOT_FOUND"
-            exit 1
-        }
-    "#;
+    let target = "DeltaForceClient-Win64-Shipping.exe";
+    let mut system = System::new();
+    system.refresh_processes();
 
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            if stdout.contains("BOOSTED") {
-                Ok(ProcessOptimizeResult {
-                    success: true,
-                    message: "三角洲进程优先级已提升为「超高」（实时）".to_string(),
-                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
-                    was_running: true,
-                })
-            } else {
-                Ok(ProcessOptimizeResult {
-                    success: false,
-                    message: "三角洲游戏未运行，请先启动游戏".to_string(),
-                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
-                    was_running: false,
-                })
+    let mut boosted = false;
+    for (_, process) in system.processes() {
+        if process.name().eq_ignore_ascii_case(target) {
+            if set_process_realtime_priority(process.pid().as_u32()) {
+                boosted = true;
             }
         }
-        Err(e) => Err(format!("优化三角洲进程失败: {}", e)),
+    }
+
+    if boosted {
+        Ok(ProcessOptimizeResult {
+            success: true,
+            message: "三角洲进程优先级已提升为「超高」（实时）".to_string(),
+            process_name: target.to_string(),
+            was_running: true,
+        })
+    } else {
+        // 检查是否找到了进程但改不动
+        let found = system
+            .processes()
+            .values()
+            .any(|p| p.name().eq_ignore_ascii_case(target));
+        Ok(ProcessOptimizeResult {
+            success: false,
+            message: if found {
+                "三角洲进程已运行，但优先级修改失败（请以管理员身份运行本应用）".to_string()
+            } else {
+                "三角洲游戏未运行，请先启动游戏".to_string()
+            },
+            process_name: target.to_string(),
+            was_running: found,
+        })
     }
 }
 
@@ -1530,47 +1495,40 @@ pub async fn boost_delta_force_affinity() -> Result<PriorityResult, String> {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let ps_script = r#"
-        $proc = Get-Process -Name "DeltaForceClient-Win64-Shipping" -ErrorAction SilentlyContinue
-        if ($proc) {
-            $numCores = [Environment]::ProcessorCount
-            $allCores = [Math]::Pow(2, $numCores) - 1
-            $affinity = $allCores -bxor 1
-            $proc.ProcessorAffinity = $affinity
-            Write-Host "AFFINITY_SET"
-            exit 0
-        } else {
-            Write-Host "NOT_FOUND"
-            exit 1
-        }
-    "#;
+    let target = "DeltaForceClient-Win64-Shipping.exe";
+    // 默认掩码：使用除 CPU0 外的所有核心（与原 PowerShell 版一致）
+    let num_cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let all_cores_mask: u64 = if num_cores >= 64 { u64::MAX } else { (1u64 << num_cores) - 1 };
+    let mask = all_cores_mask ^ 1;
 
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
+    let mut system = System::new();
+    system.refresh_processes();
 
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            if stdout.contains("AFFINITY_SET") {
-                Ok(PriorityResult {
-                    success: true,
-                    message: "三角洲进程已设置为使用所有处理器核心".to_string(),
-                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
-                    was_running: true,
-                })
-            } else {
-                Ok(PriorityResult {
-                    success: false,
-                    message: "三角洲游戏未运行，请先启动游戏".to_string(),
-                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
-                    was_running: false,
-                })
+    let mut found = false;
+    let mut applied = false;
+    for (_, process) in system.processes() {
+        if process.name().eq_ignore_ascii_case(target) {
+            found = true;
+            if set_process_affinity(process.pid().as_u32(), mask) {
+                applied = true;
             }
         }
-        Err(e) => Err(format!("设置三角洲进程核心分配失败: {}", e)),
     }
+
+    Ok(PriorityResult {
+        success: applied,
+        message: if applied {
+            "三角洲进程已设置为使用所有处理器核心".to_string()
+        } else if found {
+            "三角洲进程已运行，但核心分配修改失败（请以管理员身份运行本应用）".to_string()
+        } else {
+            "三角洲游戏未运行，请先启动游戏".to_string()
+        },
+        process_name: target.to_string(),
+        was_running: found,
+    })
 }
 
 #[derive(serde::Serialize)]
@@ -1578,6 +1536,28 @@ pub struct AcePartialResult {
     pub success: bool,
     pub message: String,
     pub count: u32,
+    pub found_count: u32,
+}
+
+/// 根据 found/count 生成统一文案，区分"未找到"、"需要管理员权限"、"部分成功"、"全部成功"
+fn ace_message(found: u32, count: u32, ok_template: &str) -> String {
+    if found == 0 {
+        return "未找到运行中的 ACE 进程".to_string();
+    }
+    if count == 0 {
+        return format!(
+            "发现 {} 个 ACE 进程，但无法修改（请以管理员身份运行本应用）",
+            found
+        );
+    }
+    if count < found {
+        return format!(
+            "{}（另有 {} 个需管理员权限）",
+            ok_template.replace("{}", &count.to_string()),
+            found - count
+        );
+    }
+    ok_template.replace("{}", &count.to_string())
 }
 
 #[tauri::command]
@@ -1586,7 +1566,7 @@ pub async fn limit_ace_priority() -> Result<AcePartialResult, String> {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let process_names = ["ACE-Tray.exe", "SGuard64.exe", "SGuardSvc64.exe"];
+    let mut found = 0u32;
     let mut count = 0u32;
 
     let mut system = System::new();
@@ -1595,7 +1575,8 @@ pub async fn limit_ace_priority() -> Result<AcePartialResult, String> {
     for (_, process) in system.processes() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
-        if process_names.iter().any(|n| n.to_lowercase() == name_lower) {
+        if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
+            found += 1;
             if set_process_low_priority(process.pid().as_u32()) {
                 count += 1;
             }
@@ -1604,12 +1585,9 @@ pub async fn limit_ace_priority() -> Result<AcePartialResult, String> {
 
     Ok(AcePartialResult {
         success: count > 0,
-        message: if count > 0 {
-            format!("已限制 {} 个 ACE 进程优先级", count)
-        } else {
-            "未找到运行中的 ACE 进程".to_string()
-        },
+        message: ace_message(found, count, "已限制 {} 个 ACE 进程优先级"),
         count,
+        found_count: found,
     })
 }
 
@@ -1619,93 +1597,8 @@ pub async fn restrict_ace_affinity() -> Result<AcePartialResult, String> {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let ps_script = r#"
-        $count = 0
-        $processNames = @("ACE-Tray", "SGuard64", "SGuardSvc64")
-        foreach ($name in $processNames) {
-            $processes = Get-Process -Name $name -ErrorAction SilentlyContinue
-            if ($processes) {
-                foreach ($proc in $processes) {
-                    try {
-                        $proc.ProcessorAffinity = 1
-                        $count++
-                    } catch {}
-                }
-            }
-        }
-        Write-Host "RESTRICTED:$count"
-        if ($count -gt 0) { exit 0 } else { exit 1 }
-    "#;
-
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let count: u32 = stdout.lines()
-                .find_map(|l| l.strip_prefix("RESTRICTED:"))
-                .and_then(|s| s.trim().parse().ok())
-                .unwrap_or(0);
-            Ok(AcePartialResult {
-                success: count > 0,
-                message: if count > 0 { format!("已限制 {} 个 ACE 进程使用单核心", count) } else { "未找到运行中的 ACE 进程".to_string() },
-                count,
-            })
-        }
-        Err(e) => Err(format!("限制 ACE 进程核心分配失败: {}", e)),
-    }
-}
-
-#[tauri::command]
-pub async fn boost_delta_force_affinity_with_mask(mask: u64) -> Result<PriorityResult, String> {
-    if !cfg!(target_os = "windows") {
-        return Err("此功能仅支持 Windows 系统".to_string());
-    }
-
-    let ps_script = format!(
-        r#"
-        $proc = Get-Process -Name "DeltaForceClient-Win64-Shipping" -ErrorAction SilentlyContinue
-        if ($proc) {{
-            $proc.ProcessorAffinity = {}
-            Write-Host "AFFINITY_SET"
-            exit 0
-        }} else {{
-            Write-Host "NOT_FOUND"
-            exit 1
-        }}
-        "#,
-        mask
-    );
-
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            if stdout.contains("AFFINITY_SET") {
-                Ok(PriorityResult {
-                    success: true,
-                    message: "三角洲进程已设置为使用指定处理器核心".to_string(),
-                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
-                    was_running: true,
-                })
-            } else {
-                Ok(PriorityResult {
-                    success: false,
-                    message: "三角洲游戏未运行，请先启动游戏".to_string(),
-                    process_name: "DeltaForceClient-Win64-Shipping.exe".to_string(),
-                    was_running: false,
-                })
-            }
-        }
-        Err(e) => Err(format!("设置三角洲进程核心分配失败: {}", e)),
-    }
+    // 默认掩码 = 1，只使用 CPU0
+    restrict_ace_affinity_impl(1, "已限制 {} 个 ACE 进程使用单核心")
 }
 
 #[tauri::command]
@@ -1714,47 +1607,69 @@ pub async fn restrict_ace_affinity_with_mask(mask: u64) -> Result<AcePartialResu
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let ps_script = format!(
-        r#"
-        $count = 0
-        $processNames = @("ACE-Tray", "SGuard64", "SGuardSvc64")
-        foreach ($name in $processNames) {{
-            $processes = Get-Process -Name $name -ErrorAction SilentlyContinue
-            if ($processes) {{
-                foreach ($proc in $processes) {{
-                    try {{
-                        $proc.ProcessorAffinity = {}
-                        $count++
-                    }} catch {{}}
-                }}
-            }}
-        }}
-        Write-Host "RESTRICTED:$count"
-        if ($count -gt 0) {{ exit 0 }} else {{ exit 1 }}
-        "#,
-        mask
-    );
+    restrict_ace_affinity_impl(mask, "已限制 {} 个 ACE 进程使用指定核心")
+}
 
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
+/// ACE 亲和性限制的统一实现：直接 Win32 API，不走 PowerShell
+fn restrict_ace_affinity_impl(mask: u64, ok_template: &str) -> Result<AcePartialResult, String> {
+    let mut found = 0u32;
+    let mut count = 0u32;
 
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let count: u32 = stdout.lines()
-                .find_map(|l| l.strip_prefix("RESTRICTED:"))
-                .and_then(|s| s.trim().parse().ok())
-                .unwrap_or(0);
-            Ok(AcePartialResult {
-                success: count > 0,
-                message: if count > 0 { format!("已限制 {} 个 ACE 进程使用指定核心", count) } else { "未找到运行中的 ACE 进程".to_string() },
-                count,
-            })
+    let mut system = System::new();
+    system.refresh_processes();
+
+    for (_, process) in system.processes() {
+        let name = process.name().to_string();
+        let name_lower = name.to_lowercase();
+        if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
+            found += 1;
+            if set_process_affinity(process.pid().as_u32(), mask) {
+                count += 1;
+            }
         }
-        Err(e) => Err(format!("限制 ACE 进程核心分配失败: {}", e)),
     }
+
+    Ok(AcePartialResult {
+        success: count > 0,
+        message: ace_message(found, count, ok_template),
+        count,
+        found_count: found,
+    })
+}
+
+#[tauri::command]
+pub async fn boost_delta_force_affinity_with_mask(mask: u64) -> Result<PriorityResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let target = "DeltaForceClient-Win64-Shipping.exe";
+    let mut system = System::new();
+    system.refresh_processes();
+
+    let mut found = false;
+    let mut applied = false;
+    for (_, process) in system.processes() {
+        if process.name().eq_ignore_ascii_case(target) {
+            found = true;
+            if set_process_affinity(process.pid().as_u32(), mask) {
+                applied = true;
+            }
+        }
+    }
+
+    Ok(PriorityResult {
+        success: applied,
+        message: if applied {
+            "三角洲进程已设置为使用指定处理器核心".to_string()
+        } else if found {
+            "三角洲进程已运行，但核心分配修改失败（请以管理员身份运行本应用）".to_string()
+        } else {
+            "三角洲游戏未运行，请先启动游戏".to_string()
+        },
+        process_name: target.to_string(),
+        was_running: found,
+    })
 }
 
 #[derive(serde::Serialize)]
@@ -1772,76 +1687,67 @@ pub async fn optimize_all_game_processes() -> Result<AllGameOptimizeResult, Stri
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
+    let delta_target = "DeltaForceClient-Win64-Shipping.exe";
+
+    let mut system = System::new();
+    system.refresh_processes();
+
+    // 1) DeltaForce: 提升优先级为 RealTime
     let mut delta_boosted = false;
-    let mut ace_limited = false;
-    let mut ace_count: u32 = 0;
-
-    let ps_script = r#"
-        $results = @{}
-
-        $delta = Get-Process -Name "DeltaForceClient-Win64-Shipping" -ErrorAction SilentlyContinue
-        if ($delta) {
-            $delta.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
-            $results["Delta"] = "BOOSTED"
-        } else {
-            $results["Delta"] = "NOT_FOUND"
-        }
-
-        $aceProcesses = @("ACE-Tray", "SGuard64", "SGuardSvc64")
-        $aceDone = 0
-        foreach ($name in $aceProcesses) {
-            $proc = Get-Process -Name $name -ErrorAction SilentlyContinue
-            if ($proc) {
-                $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::Idle
-                $proc.ProcessorAffinity = [IntPtr]1
-                $aceDone++
+    for (_, process) in system.processes() {
+        if process.name().eq_ignore_ascii_case(delta_target) {
+            if set_process_realtime_priority(process.pid().as_u32()) {
+                delta_boosted = true;
             }
         }
-        $results["Ace"] = $aceDone
-
-        $results.GetEnumerator() | ForEach-Object { Write-Host "$($_.Key):$($_.Value)" }
-    "#;
-
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            for line in stdout.lines() {
-                if line.starts_with("Delta:BOOSTED") {
-                    delta_boosted = true;
-                }
-                if line.starts_with("Ace:") {
-                    ace_count = line.trim_start_matches("Ace:").trim().parse().unwrap_or(0);
-                    ace_limited = ace_count > 0;
-                }
-            }
-
-            let mut msgs: Vec<String> = Vec::new();
-            if delta_boosted {
-                msgs.push("三角洲: 已优化".to_string());
-            } else {
-                msgs.push("三角洲: 未运行".to_string());
-            }
-            if ace_limited {
-                msgs.push(format!("ACE: 已限制 {} 个进程", ace_count));
-            } else {
-                msgs.push("ACE: 未运行".to_string());
-            }
-
-            Ok(AllGameOptimizeResult {
-                success: delta_boosted || ace_limited,
-                message: msgs.join(" | "),
-                delta_boosted,
-                ace_limited,
-                ace_count,
-            })
-        }
-        Err(e) => Err(format!("全部游戏优化失败: {}", e)),
     }
+
+    // 2) ACE: 优先级降为 Idle + 限制亲和性为 CPU0
+    let mut ace_found: u32 = 0;
+    let mut ace_count: u32 = 0;
+    for (_, process) in system.processes() {
+        let name = process.name().to_string();
+        let name_lower = name.to_lowercase();
+        if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
+            ace_found += 1;
+            let pid = process.pid().as_u32();
+            let priority_ok = set_process_low_priority(pid);
+            let affinity_ok = set_process_affinity(pid, 1);
+            if priority_ok || affinity_ok {
+                ace_count += 1;
+            }
+        }
+    }
+
+    let ace_limited = ace_count > 0;
+
+    let mut msgs: Vec<String> = Vec::new();
+    if delta_boosted {
+        msgs.push("三角洲: 已优化".to_string());
+    } else {
+        msgs.push("三角洲: 未运行".to_string());
+    }
+    if ace_found == 0 {
+        msgs.push("ACE: 未运行".to_string());
+    } else if ace_count == 0 {
+        msgs.push(format!("ACE: 发现 {} 个进程，需管理员权限", ace_found));
+    } else if ace_count < ace_found {
+        msgs.push(format!(
+            "ACE: 已限制 {} 个进程（另有 {} 个需管理员权限）",
+            ace_count,
+            ace_found - ace_count
+        ));
+    } else {
+        msgs.push(format!("ACE: 已限制 {} 个进程", ace_count));
+    }
+
+    Ok(AllGameOptimizeResult {
+        success: delta_boosted || ace_limited,
+        message: msgs.join(" | "),
+        delta_boosted,
+        ace_limited,
+        ace_count,
+    })
 }
 
 #[derive(serde::Serialize, Clone)]

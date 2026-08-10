@@ -146,7 +146,7 @@ export function CustomSelect({
           onClick={toggleSelect}
         >
           <HStack justify="space-between">
-            <Text fontSize="sm" color={textColor}>
+            <Text fontSize="sm" color={textColor} noOfLines={1} minW={0}>
               {displayLabel}
             </Text>
             <LuChevronDown
@@ -155,6 +155,7 @@ export function CustomSelect({
               style={{
                 transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
                 transition: "transform 0.2s",
+                flexShrink: 0,
               }}
             />
           </HStack>

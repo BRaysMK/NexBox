@@ -1278,7 +1278,7 @@ pub async fn open_game_folder(library_path: String, install_dir: String) -> Resu
     Ok(())
 }
 
-/// 手动重建 loginusers.vdf，确保指定账户的 MostRecent 为 1
+/// 手动重建 loginusers.vdf，确保指定账户的 MostRecent=1、RememberPassword=1（其余账户两者为 0）
 fn rebuild_loginusers_vdf(vdf_path: &str, target_account: &str, users: &[SteamUser]) -> Result<(), String> {
     let content = fs::read_to_string(vdf_path)
         .map_err(|e| format!("读取 loginusers.vdf 失败: {}", e))?;
@@ -1324,14 +1324,19 @@ fn rebuild_loginusers_vdf(vdf_path: &str, target_account: &str, users: &[SteamUs
             continue;
         }
 
-        // 在用户块内，检查 MostRecent 行
+        // 在用户块内，检查 MostRecent / RememberPassword 行
+        let is_target_user = users.iter().any(|u|
+            u.steam_id64 == current_steam_id &&
+            u.account_name.eq_ignore_ascii_case(target_account)
+        );
         if in_users_block && depth > 1 && trimmed.starts_with("\"MostRecent\"") {
-            let should_be_one = users.iter().any(|u|
-                u.steam_id64 == current_steam_id &&
-                u.account_name.eq_ignore_ascii_case(target_account)
-            );
             let indent = line.chars().take_while(|c| c.is_whitespace()).collect::<String>();
-            result.push_str(&format!("{}\"MostRecent\"\t\t\"{}\"\n", indent, if should_be_one { "1" } else { "0" }));
+            result.push_str(&format!("{}\"MostRecent\"\t\t\"{}\"\n", indent, if is_target_user { "1" } else { "0" }));
+            continue;
+        }
+        if in_users_block && depth > 1 && trimmed.starts_with("\"RememberPassword\"") {
+            let indent = line.chars().take_while(|c| c.is_whitespace()).collect::<String>();
+            result.push_str(&format!("{}\"RememberPassword\"\t\t\"{}\"\n", indent, if is_target_user { "1" } else { "0" }));
             continue;
         }
 
@@ -1346,27 +1351,50 @@ fn rebuild_loginusers_vdf(vdf_path: &str, target_account: &str, users: &[SteamUs
     Ok(())
 }
 
-/// 切换 Steam 账户
+/// 等待 Steam 进程完全退出（最多约 10 秒）
+fn wait_steam_exit() {
+    for _ in 0..50 {
+        if !is_steam_running() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+}
+
+/// 切换 Steam 账户并自动登录
 #[tauri::command]
 pub async fn switch_steam_account(account_name: String) -> Result<(), String> {
     #[cfg(windows)]
     {
-        // 1. 修改 loginusers.vdf，将目标账户设为 MostRecent=1，其他为 0
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        let steam_path = get_steam_path().ok_or("未找到 Steam 路径")?;
+        let steam_exe = format!("{}\\steam.exe", steam_path);
+
+        // 1. 先关闭 Steam，并等待其完全退出（否则 Steam 退出时会重写覆盖 loginusers.vdf 的修改）
+        if is_steam_running() {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/IM", "steam.exe", "/F"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+            wait_steam_exit();
+        }
+
+        // 2. 修改 loginusers.vdf：目标账户 MostRecent=1、RememberPassword=1，其他账户为 0
         if !account_name.is_empty() {
-            if let Some(steam_dir) = get_steam_path() {
-                let vdf_path = format!("{}\\config\\loginusers.vdf", steam_dir);
-                let users = parse_login_users(&steam_dir, is_steam_running());
-                // 如果目标账户还不是 most_recent，重建 vdf
-                let needs_rebuild = !users.iter().any(|u|
-                    u.account_name.eq_ignore_ascii_case(&account_name) && u.most_recent
-                );
-                if needs_rebuild {
-                    let _ = rebuild_loginusers_vdf(&vdf_path, &account_name, &users);
-                }
+            let vdf_path = format!("{}\\config\\loginusers.vdf", steam_path);
+            let users = parse_login_users(&steam_path, false);
+            // 如果目标账户还不是 most_recent / 未记住密码，重建 vdf
+            let needs_rebuild = !users.iter().any(|u|
+                u.account_name.eq_ignore_ascii_case(&account_name) && u.most_recent && u.remember_password
+            );
+            if needs_rebuild {
+                let _ = rebuild_loginusers_vdf(&vdf_path, &account_name, &users);
             }
         }
 
-        // 2. 写入注册表
+        // 3. 写入注册表：AutoLoginUser 指向目标账户，RememberPassword=1（自动登录前提）
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         let steam_key = hkcu
             .open_subkey_with_flags("Software\\Valve\\Steam", KEY_SET_VALUE)
@@ -1384,22 +1412,12 @@ pub async fn switch_steam_account(account_name: String) -> Result<(), String> {
             .set_value("RememberPassword", &1u32)
             .map_err(|e| format!("写入 RememberPassword 失败: {}", e))?;
 
-        // 2. 关闭 Steam
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let _ = std::process::Command::new("taskkill")
-            .args(["/IM", "steam.exe", "/F"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
-
-        // 等待 Steam 退出
-        std::thread::sleep(std::time::Duration::from_secs(2));
-
-        // 3. 启动 Steam
-        let steam_path = get_steam_path().ok_or("未找到 Steam 路径")?;
-        let steam_exe = format!("{}\\steam.exe", steam_path);
-        std::process::Command::new(&steam_exe)
-            .creation_flags(CREATE_NO_WINDOW)
+        // 4. 启动 Steam，附加 -login <账户名> 参数实现自动登录
+        let mut cmd = std::process::Command::new(&steam_exe);
+        if !account_name.is_empty() {
+            cmd.arg("-login").arg(&account_name);
+        }
+        cmd.creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("启动 Steam 失败: {}", e))?;
     }

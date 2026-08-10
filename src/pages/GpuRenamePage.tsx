@@ -30,9 +30,11 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 
 interface GpuInfo {
-  original_name: string;
-  current_name: string;
+  name: string;
+  is_integrated: boolean;
+  original_name: string | null;
   is_backed_up: boolean;
+  key_path: string;
 }
 
 interface GpuOption {
@@ -61,8 +63,11 @@ export default function GpuRenamePage() {
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
 
-  const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
+  const [gpuList, setGpuList] = useState<GpuInfo[]>([]);
   const [gpuOptions, setGpuOptions] = useState<GpuOption[]>([]);
+  // targetGpuKey: 选择要改写哪张显卡（按 key_path 精确指定）
+  const [targetGpuKey, setTargetGpuKey] = useState<string>("");
+  // selectedOption: 选择改写后的目标名字（低端/高端预设）
   const [selectedOption, setSelectedOption] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
@@ -71,6 +76,10 @@ export default function GpuRenamePage() {
   const [customName, setCustomName] = useState("");
   const [restarting, setRestarting] = useState(false);
 
+  // 当前选中要改写的显卡对象
+  const targetGpu = gpuList.find((g) => g.key_path === targetGpuKey);
+  const anyBackedUp = gpuList.some((g) => g.is_backed_up);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -78,26 +87,24 @@ export default function GpuRenamePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [info, options] = await Promise.all([
-        invoke<GpuInfo>("get_gpu_info"),
+      const [list, options] = await Promise.all([
+        invoke<GpuInfo[]>("get_gpu_list"),
         invoke<GpuOption[]>("get_gpu_options"),
       ]);
-      setGpuInfo(info);
+      setGpuList(list);
+
+      // 改写后的目标名字只从预设中选择（不再把当前显卡名作为改写目标）
       setGpuOptions(options);
 
-      // 默认选中当前显卡：若已在预设列表中则直接选中，否则作为"当前显卡"选项加入并默认选中
-      if (info?.current_name) {
-        const matched = options.find((opt) => opt.name === info.current_name);
-        if (matched) {
-          setSelectedOption(matched.id);
-        } else {
-          setGpuOptions([
-            { id: "current-gpu", name: info.current_name, category: "current" },
-            ...options,
-          ]);
-          setSelectedOption("current-gpu");
+      // 保留用户已选择的显卡；若之前的选择已失效（不在新列表中），则回退到默认独显
+      setTargetGpuKey((prev) => {
+        if (prev && list.some((g) => g.key_path === prev)) {
+          return prev;
         }
-      }
+        const defaultGpu = list.find((g) => !g.is_integrated) ?? list[0];
+        return defaultGpu?.key_path ?? "";
+      });
+      // 注意：不再重置 selectedOption，保留用户之前选择的改写后名字
     } catch (error) {
       toast({
         title: t("gpuRename.loadError"),
@@ -140,10 +147,21 @@ export default function GpuRenamePage() {
       targetName = selectedGpu.name;
     }
 
+    if (!targetGpuKey) {
+      toast({
+        title: t("gpuRename.selectGpu"),
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
     try {
       setApplying(true);
       const result = await invoke<GpuRenameResult>("apply_gpu_rename", {
         newName: targetName,
+        targetKeyPath: targetGpuKey,
       });
 
       if (result.success) {
@@ -236,6 +254,14 @@ export default function GpuRenamePage() {
     }
   };
 
+  // 当前显卡下拉框的选项：来自实际检测到的显卡列表
+  const targetGpuOptions = gpuList.map((g) => ({
+    value: g.key_path,
+    label: g.is_integrated
+      ? `${g.name} (${t("gpuRename.integrated")})`
+      : `${g.name} (${t("gpuRename.discrete")})`,
+  }));
+
   const content = (
     <VStack align="start" spacing={6}>
       <HStack>
@@ -257,41 +283,45 @@ export default function GpuRenamePage() {
       ) : (
         <>
           <VStack align="start" spacing={3} w="full">
-            <HStack spacing={6} w="full" align="start">
-              <Box flex={1}>
-                <Text color={textColor} fontSize="sm" mb={1}>
-                  {t("gpuRename.currentGpu")}
-                </Text>
-                <Text color={headingColor} fontWeight="medium" wordBreak="break-all">
-                  {gpuInfo?.current_name || "-"}
-                </Text>
-              </Box>
+            <Box w="full">
+              <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
+                {t("gpuRename.currentGpu")}
+              </Text>
+              <CustomSelect
+                value={targetGpuKey}
+                onChange={setTargetGpuKey}
+                options={targetGpuOptions}
+                placeholder={t("gpuRename.selectPlaceholder")}
+                width="100%"
+              />
+            </Box>
 
+            <HStack spacing={6} w="full" align="start">
               <Box flex={1}>
                 <Text color={textColor} fontSize="sm" mb={1}>
                   {t("gpuRename.backupStatus")}
                 </Text>
                 <Text
-                  color={gpuInfo?.is_backed_up ? "green.500" : "orange.500"}
+                  color={anyBackedUp ? "green.500" : "orange.500"}
                   fontWeight="medium"
                 >
-                  {gpuInfo?.is_backed_up
+                  {anyBackedUp
                     ? t("gpuRename.backedUp")
                     : t("gpuRename.notBackedUp")}
                 </Text>
               </Box>
-            </HStack>
 
-            {gpuInfo?.is_backed_up && (
-              <Box w="full">
-                <Text color={textColor} fontSize="sm" mb={1}>
-                  {t("gpuRename.originalGpu")}
-                </Text>
-                <Text color={headingColor} fontWeight="medium" wordBreak="break-all">
-                  {gpuInfo.original_name}
-                </Text>
-              </Box>
-            )}
+              {targetGpu?.original_name && (
+                <Box flex={1}>
+                  <Text color={textColor} fontSize="sm" mb={1}>
+                    {t("gpuRename.originalGpu")}
+                  </Text>
+                  <Text color={headingColor} fontWeight="medium" wordBreak="break-all">
+                    {targetGpu.original_name}
+                  </Text>
+                </Box>
+              )}
+            </HStack>
           </VStack>
 
           <Tabs index={tabIndex} onChange={setTabIndex} variant="enclosed" w="full" mt={4}>
@@ -301,22 +331,6 @@ export default function GpuRenamePage() {
             </TabList>
             <TabPanels>
               <TabPanel px={0}>
-                {gpuOptions.some((option) => option.category === "current") && (
-                  <Box w="full" mb={4}>
-                    <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
-                      {t("gpuRename.currentGpu")}
-                    </Text>
-                    <CustomSelect
-                      value={selectedOption}
-                      onChange={setSelectedOption}
-                      options={gpuOptions
-                        .filter((option) => option.category === "current")
-                        .map((option) => ({ value: option.id, label: option.name }))}
-                      placeholder={t("gpuRename.selectPlaceholder")}
-                      width="100%"
-                    />
-                  </Box>
-                )}
                 <Box w="full">
                   <Text color={textColor} fontSize="sm" mb={2} fontWeight="600">
                     {t("gpuRename.lowEnd")}
@@ -386,7 +400,7 @@ export default function GpuRenamePage() {
               {t("gpuRename.apply")}
             </Button>
 
-            {gpuInfo?.is_backed_up && (
+            {anyBackedUp && (
               <Button
                 colorScheme="orange"
                 onClick={handleRestore}

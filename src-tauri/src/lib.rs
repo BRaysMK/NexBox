@@ -44,6 +44,7 @@ mod speedtest;
 mod storage_clean;
 mod thirdparty_tools;
 mod tray;
+mod uapi;
 mod utils;
 mod video_bg;
 mod wmi_query;
@@ -197,6 +198,12 @@ pub fn run() {
                             let _ = display_filter::toggle_filter_sync(app);
                         } else if shortcut.id() == hotkey::get_autoclicker_shortcut_id() {
                             let _ = autoclicker::toggle(app);
+                        } else if shortcut.id() == hotkey::get_music_prev_shortcut_id() {
+                            hotkey::trigger_music_action(app, "prev");
+                        } else if shortcut.id() == hotkey::get_music_next_shortcut_id() {
+                            hotkey::trigger_music_action(app, "next");
+                        } else if shortcut.id() == hotkey::get_music_playpause_shortcut_id() {
+                            hotkey::trigger_music_action(app, "play-pause");
                         }
                     }
                 })
@@ -250,6 +257,11 @@ pub fn run() {
                 );
             }
             sensor::start_sensor_process(app);
+
+            // 桌面歌词窗口：安装 WM_MOVING 拦截，拖动时实时钳制窗口在工作区内
+            // （碰撞体），任何部分都不允许移出屏幕外或压住任务栏。
+            let _ = utils::cursor::install_lyrics_move_clamp(app.handle());
+
             utils::sys_info::check_and_send_statistics(app);
             overlay_panel::start_hardware_poller();
             hardware_report::start_recording();
@@ -326,12 +338,18 @@ pub fn run() {
             let crosshair_hotkey = hotkey::load_saved_hotkey(app.handle(), "crosshair-hotkey", "Shift+F9");
             let filter_hotkey = hotkey::load_saved_hotkey(app.handle(), "filter-hotkey", "Shift+F8");
             let autoclicker_hotkey = hotkey::load_saved_hotkey(app.handle(), "autoclicker-hotkey", "F8");
+            let music_prev_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-prev-hotkey", "Alt+[");
+            let music_next_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-next-hotkey", "Alt+]");
+            let music_playpause_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-playpause-hotkey", "Alt+Space");
             hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
 
             let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
             let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
             let _ = hotkey::init_filter(app.handle(), &filter_hotkey);
             let _ = hotkey::init_autoclicker(app.handle(), &autoclicker_hotkey);
+            let _ = hotkey::init_music_prev(app.handle(), &music_prev_hotkey);
+            let _ = hotkey::init_music_next(app.handle(), &music_next_hotkey);
+            let _ = hotkey::init_music_playpause(app.handle(), &music_playpause_hotkey);
 
             Ok(())
         })
@@ -426,6 +444,10 @@ pub fn run() {
         downloader::download_update,
         downloader::install_update,
         downloader::delete_download_file,
+        downloader::mark_pending_install,
+        downloader::clear_pending_install,
+        downloader::cancel_download,
+        downloader::reset_download_cancel,
         optimization::optimize_memory,
         optimization::get_memory_status,
         optimization::kill_wallpaper_engine,
@@ -490,6 +512,7 @@ pub fn run() {
         network_optimize::check_network_tweak_states,
         network_optimize::batch_network_enable,
         network_optimize::batch_network_disable,
+        network_optimize::get_public_ip,
         startup_manager::scan_startup_items,
         startup_manager::disable_startup_item,
         startup_manager::enable_startup_item,
@@ -593,6 +616,12 @@ pub fn run() {
         hotkey::set_filter_hotkey,
         hotkey::get_autoclicker_hotkey,
         hotkey::set_autoclicker_hotkey,
+        hotkey::get_music_prev_hotkey,
+        hotkey::set_music_prev_hotkey,
+        hotkey::get_music_next_hotkey,
+        hotkey::set_music_next_hotkey,
+        hotkey::get_music_playpause_hotkey,
+        hotkey::set_music_playpause_hotkey,
         hotkey::set_hotkeys_enabled_cmd,
         hotkey::get_hotkeys_enabled_cmd,
         autoclicker::autoclicker_start,
@@ -624,6 +653,7 @@ pub fn run() {
         game_launcher::select_exe_file,
         game_launcher::get_file_icon,
         gpu_rename::get_gpu_info,
+        gpu_rename::get_gpu_list,
         gpu_rename::get_gpu_options,
         gpu_rename::apply_gpu_rename,
         gpu_rename::restore_gpu_name,
@@ -662,6 +692,8 @@ pub fn run() {
             // === MCTier 命令 ===
             utils::cursor::get_cursor_position,
             utils::cursor::set_desktop_lyrics_click_through,
+            utils::cursor::clamp_lyrics_window_position,
+            utils::cursor::center_lyrics_window,
             utils::lyrics_btn::show_lyrics_unlock_btn,
             utils::lyrics_btn::hide_lyrics_unlock_btn,
                         utils::lyrics_btn::unlock_lyrics,
@@ -676,6 +708,13 @@ pub fn run() {
         cpu_scheduler::save_rule,
         cpu_scheduler::delete_rule,
         cpu_scheduler::apply_rule_by_name,
+        cpu_scheduler::apply_core_isolation,
+        cpu_scheduler::restore_core_isolation,
+        cpu_scheduler::get_isolation_state,
+        cpu_scheduler::get_isolation_rules,
+        cpu_scheduler::save_isolation_rule,
+        cpu_scheduler::delete_isolation_rule,
+        cpu_scheduler::apply_isolation_rule_by_name,
 
         // === Steam 集成 ===
         steam::get_steam_install_info,
@@ -701,6 +740,9 @@ pub fn run() {
         speedtest::stop_speedtest,
         speedtest::is_speedtest_running,
 
+        // === UAPI 随机图片 ===
+        uapi::get_random_image,
+        uapi::save_random_image_bytes,
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -708,6 +750,17 @@ pub fn run() {
     app.run(|app_handle, event| {
         match event {
             tauri::RunEvent::ExitRequested { .. } => {
+                // 若存在已下载未安装的更新包，退出前异步启动安装向导（不阻塞退出）
+                // 后端兜底：静默更新已关闭时不启动安装向导
+                if downloader::auto_update_enabled() {
+                    if let Some(path) = downloader::take_pending_install() {
+                        if std::path::Path::new(&path).exists() {
+                            if let Err(e) = downloader::launch_installer_sync(&path) {
+                                log::error!("[Update] 退出时自动启动安装向导失败: {e}");
+                            }
+                        }
+                    }
+                }
                 // 退出流程开始前隐藏所有窗口，避免 WebView2 销毁后闪现原生标题栏
                 for label in &["main", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
                     if let Some(w) = app_handle.get_webview_window(label) {

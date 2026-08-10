@@ -26,9 +26,12 @@ import {
   Tooltip,
   useColorModeValue,
   ButtonGroup,
+  Switch,
 } from "@chakra-ui/react";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { useMusicStore } from "@/stores/music-store";
+import { centerLyricsWindow } from "@/lib/desktop-lyrics-window";
+import { LocateFixed } from "lucide-react";
 
 interface DesktopLyricsSettingsModalProps {
   isOpen: boolean;
@@ -77,6 +80,7 @@ function DesktopLyricsSettingsModalInner({
   const desktopLyricsHighlightColor = useMusicStore((s) => s.desktopLyricsHighlightColor);
   const desktopLyricsBaseColor = useMusicStore((s) => s.desktopLyricsBaseColor);
   const desktopLyricsLineCount = useMusicStore((s) => s.desktopLyricsLineCount);
+  const desktopLyricsShowTranslation = useMusicStore((s) => s.desktopLyricsShowTranslation);
 
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
@@ -195,6 +199,57 @@ function DesktopLyricsSettingsModalInner({
               </ButtonGroup>
             </Box>
 
+            {/* 显示翻译 */}
+            <Box>
+              <HStack justify="space-between" align="center">
+                <Box>
+                  <Text color={labelColor} fontSize="sm" fontWeight="medium">
+                    显示翻译
+                  </Text>
+                  <Text color={subLabelColor} fontSize="xs">
+                    在歌词下方显示翻译内容
+                  </Text>
+                </Box>
+                <Switch
+                  size="lg"
+                  isChecked={desktopLyricsShowTranslation}
+                  onChange={(e) =>
+                    useMusicStore.getState().setDesktopLyricsShowTranslation(
+                      (e.target as HTMLInputElement).checked
+                    )
+                  }
+                  sx={{
+                    "& .chakra-switch__track": {
+                      bg: desktopLyricsShowTranslation ? accentColor : undefined,
+                    },
+                  }}
+                />
+              </HStack>
+            </Box>
+
+            {/* 复位到屏幕中央 */}
+            <Box>
+              <Text color={labelColor} fontSize="sm" fontWeight="medium" mb={2}>
+                窗口位置
+              </Text>
+              <Button
+                size="sm"
+                variant="outline"
+                w="100%"
+                leftIcon={<LocateFixed size={14} />}
+                onClick={() => centerLyricsWindow()}
+                borderColor={modalBorderColor}
+                color={labelColor}
+                _hover={{
+                  borderColor: accentColor,
+                  color: accentColor,
+                  bg: `${accentColor}11`,
+                }}
+              >
+                复位到屏幕中央
+              </Button>
+            </Box>
+
             {/* 预览 */}
             <Box>
               <Text color={subLabelColor} fontSize="xs" mb={2}>
@@ -237,6 +292,20 @@ function DesktopLyricsSettingsModalInner({
                       {previewLines[0].text}
                     </span>
                   </Box>
+                  {/* 当前行翻译预览 */}
+                  {desktopLyricsShowTranslation && (
+                    <span
+                      style={{
+                        fontSize: `${Math.max(18, Math.round(desktopLyricsFontSize * 0.6 * 0.65))}px`,
+                        fontWeight: "bold",
+                        color: desktopLyricsBaseColor,
+                        opacity: 0.8,
+                        textShadow: "-1px -1px 0 rgba(0,0,0,0.9), 1px -1px 0 rgba(0,0,0,0.9), -1px 1px 0 rgba(0,0,0,0.9), 1px 1px 0 rgba(0,0,0,0.9)",
+                      }}
+                    >
+                      You are my most beautiful accident
+                    </span>
+                  )}
                   {/* 下一行预览 */}
                   {desktopLyricsLineCount === 2 && (
                     <span

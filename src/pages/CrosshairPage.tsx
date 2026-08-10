@@ -57,6 +57,9 @@ interface CrosshairSettings {
   offset_y: number;
   screen_width?: number;
   screen_height?: number;
+  outline_enabled: boolean;
+  outline_color: string;
+  outline_thickness: number;
 }
 
 interface DisplayInfo {
@@ -98,6 +101,9 @@ const DEFAULT_SETTINGS: CrosshairSettings = {
   offset_y: 0,
   screen_width: 0,
   screen_height: 0,
+  outline_enabled: false,
+  outline_color: "#000000",
+  outline_thickness: 1,
 };
 
 const STYLE_OPTIONS = [
@@ -223,9 +229,10 @@ export default function CrosshairPage() {
       if (isDefault) {
         const saved = await store.get<CrosshairSettings>(CROSSHAIR_STORE_KEY);
         if (saved) {
-          saved.enabled = status.enabled;
-          setSettings(saved);
-          await invoke("update_crosshair_settings", { settings: saved });
+          const merged = { ...DEFAULT_SETTINGS, ...saved };
+          merged.enabled = status.enabled;
+          setSettings(merged);
+          await invoke("update_crosshair_settings", { settings: merged });
           return;
         }
       }
@@ -609,6 +616,63 @@ export default function CrosshairPage() {
                 ))}
                 <CustomColorPicker color={settings.color} onChange={(c) => updateSetting("color", c)} />
               </HStack>
+
+              {/* 描边设置 */}
+              <Box>
+                <HStack
+                  justify="space-between"
+                  align="center"
+                  bg={settings.outline_enabled ? hexToRgba(getActiveColor(), 0.08) : "transparent"}
+                  px={3}
+                  py={2}
+                  borderRadius="lg"
+                  border="1px solid"
+                  borderColor={settings.outline_enabled ? getActiveColor() : cardBorder}
+                >
+                  <Text color={textColor} fontSize="sm" fontWeight="medium">{t("crosshair.outline")}</Text>
+                  <ThemeSwitch
+                    isChecked={settings.outline_enabled}
+                    onChange={(e) => updateSetting("outline_enabled", e.target.checked)}
+                    isDisabled={isLoading}
+                  />
+                </HStack>
+                {settings.outline_enabled && (
+                  <VStack align="stretch" spacing={3} mt={3}>
+                    <Box>
+                      <Text color={subTextColor} fontSize="xs" mb={2}>{t("crosshair.outlineColor")}</Text>
+                      <HStack flexWrap="wrap" gap={2}>
+                        {COLOR_PRESETS.map((color) => (
+                          <Box
+                            key={color.value}
+                            w={7}
+                            h={7}
+                            bg={color.value}
+                            borderRadius="md"
+                            cursor="pointer"
+                            border="2px solid"
+                            borderColor={settings.outline_color === color.value ? getActiveColor() : "transparent"}
+                            onClick={() => updateSetting("outline_color", color.value)}
+                            _hover={{ transform: "scale(1.15)" }}
+                            transition="all 0.15s"
+                            boxShadow={settings.outline_color === color.value ? `0 0 6px ${color.value}` : "none"}
+                          />
+                        ))}
+                        <CustomColorPicker color={settings.outline_color} onChange={(c) => updateSetting("outline_color", c)} compact />
+                      </HStack>
+                    </Box>
+                    <Box>
+                      <HStack justify="space-between" mb={1}>
+                        <Text color={textColor} fontSize="sm">{t("crosshair.outlineThickness")}</Text>
+                        <Text color={getActiveColor()} fontSize="sm" fontWeight="bold">{settings.outline_thickness}</Text>
+                      </HStack>
+                      <Slider value={settings.outline_thickness} min={1} max={5} step={1} onChange={(val) => updateSetting("outline_thickness", val)}>
+                        <SliderTrack bg={sliderBg}><SliderFilledTrack bg={getActiveColor()} /></SliderTrack>
+                        <SliderThumb />
+                      </Slider>
+                    </Box>
+                  </VStack>
+                )}
+              </Box>
             </VStack>
           </SettingCard>
           )}
