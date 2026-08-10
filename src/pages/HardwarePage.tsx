@@ -32,6 +32,7 @@ import {
   Trash2,
   ChevronDown,
   Activity,
+  Copy,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -533,12 +534,17 @@ export default function HardwarePage() {
     },
   ] : [];
 
-  const gpuDisplayInfos: DisplayInfo[][] = hardwareInfo ? hardwareInfo.gpu.map((gpu) => [
-    { name: t("hardware.model"), value: gpu.name },
-    { name: t("hardware.vendor"), value: gpu.vendor },
-    { name: t("hardware.memory"), value: `${gpu.memory_gb.toFixed(1)} GB` },
-    { name: t("hardware.driverVersion"), value: gpu.driver_version },
-  ]) : [];
+  const gpuDisplayInfos: DisplayInfo[][] = hardwareInfo ? hardwareInfo.gpu.map((gpu) => {
+    const items: DisplayInfo[] = [
+      { name: t("hardware.model"), value: gpu.name },
+      { name: t("hardware.vendor"), value: gpu.vendor },
+    ];
+    if (gpu.memory_gb != null && gpu.memory_gb > 0) {
+      items.push({ name: t("hardware.memory"), value: `${gpu.memory_gb.toFixed(1)} GB` });
+    }
+    items.push({ name: t("hardware.driverVersion"), value: gpu.driver_version });
+    return items;
+  }) : [];
 
   const totalCapacity = hardwareInfo ? hardwareInfo.memory.reduce((sum, mem) => sum + mem.capacity_gb, 0) : 0;
   const memoryDisplayInfo: DisplayInfo[] = hardwareInfo ? [
@@ -596,21 +602,28 @@ export default function HardwarePage() {
     { label: t("hardware.voltageCaps") || "电压能力", value: cpu.voltage_caps || "--" },
   ];
 
-  const buildGpuSpecs = (gpu: GpuInfo, idx: number): SpecItem[] => [
-    { label: t("hardware.model"), value: gpu.name },
-    { label: t("hardware.vendor"), value: gpu.vendor },
-    { label: t("hardware.videoProcessor") || "核心架构", value: gpu.video_processor || "--" },
-    { label: t("hardware.memory"), value: `${gpu.memory_gb.toFixed(1)} GB` },
-    { label: t("hardware.videoMemoryType") || "显存类型", value: gpu.video_memory_type || "--" },
-    { label: t("hardware.driverVersion"), value: gpu.driver_version },
-    { label: t("hardware.driverDate") || "驱动日期", value: gpu.driver_date || "--" },
-    { label: t("hardware.infFilename") || "INF文件", value: gpu.inf_filename || "--" },
-    { label: t("hardware.deviceId") || "设备ID", value: gpu.device_id || "--" },
-    { label: t("hardware.pnpDeviceId") || "PNP ID", value: gpu.pnp_device_id || "--" },
-    { label: t("hardware.resolution"), value: gpu.resolution_width && gpu.resolution_height ? `${gpu.resolution_width} x ${gpu.resolution_height}` : "--" },
-    { label: t("hardware.refreshRate") || "刷新率", value: gpu.refresh_rate ? `${gpu.refresh_rate} Hz` : "--" },
-    { label: t("hardware.status"), value: gpu.status || "--" },
-  ];
+  const buildGpuSpecs = (gpu: GpuInfo, idx: number): SpecItem[] => {
+    const specs: SpecItem[] = [
+      { label: t("hardware.model"), value: gpu.name },
+      { label: t("hardware.vendor"), value: gpu.vendor },
+      { label: t("hardware.videoProcessor") || "核心架构", value: gpu.video_processor || "--" },
+    ];
+    if (gpu.memory_gb != null && gpu.memory_gb > 0) {
+      specs.push({ label: t("hardware.memory"), value: `${gpu.memory_gb.toFixed(1)} GB` });
+    }
+    specs.push(
+      { label: t("hardware.videoMemoryType") || "显存类型", value: gpu.video_memory_type || "--" },
+      { label: t("hardware.driverVersion"), value: gpu.driver_version },
+      { label: t("hardware.driverDate") || "驱动日期", value: gpu.driver_date || "--" },
+      { label: t("hardware.infFilename") || "INF文件", value: gpu.inf_filename || "--" },
+      { label: t("hardware.deviceId") || "设备ID", value: gpu.device_id || "--" },
+      { label: t("hardware.pnpDeviceId") || "PNP ID", value: gpu.pnp_device_id || "--" },
+      { label: t("hardware.resolution"), value: gpu.resolution_width && gpu.resolution_height ? `${gpu.resolution_width} x ${gpu.resolution_height}` : "--" },
+      { label: t("hardware.refreshRate") || "刷新率", value: gpu.refresh_rate ? `${gpu.refresh_rate} Hz` : "--" },
+      { label: t("hardware.status"), value: gpu.status || "--" },
+    );
+    return specs;
+  };
 
   const buildMemorySpecs = (mems: MemoryInfo[]): SpecItem[] => {
     const specs: SpecItem[] = [];
@@ -713,6 +726,70 @@ export default function HardwarePage() {
     return specs;
   };
 
+  // ─── 复制所有硬件信息 ───
+  // 将分类的 SpecItem 列表转成对齐的分段文本
+  const formatSpecSection = (title: string, specs: SpecItem[]): string => {
+    if (specs.length === 0) return "";
+    const header = `========== ${title} ==========`;
+    // 计算 label 最大宽度，实现整齐对齐
+    const maxLabelLen = Math.max(...specs.map((s) => s.label.length));
+    const body = specs.map((s) => `  ${s.label.padEnd(maxLabelLen)} : ${s.value}`).join("\n");
+    return `${header}\n${body}`;
+  };
+
+  const handleCopyHardwareInfo = async () => {
+    if (!hardwareInfo) {
+      toast({
+        title: t("hardware.copyFailed") || "复制失败",
+        description: t("hardware.noData") || "暂无硬件信息",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const sections: string[] = [];
+    sections.push(formatSpecSection(t("hardware.processor"), buildCpuSpecs(hardwareInfo.cpu)));
+    hardwareInfo.gpu.forEach((gpu, i) => {
+      sections.push(formatSpecSection(t("hardware.gpu"), buildGpuSpecs(gpu, i)));
+    });
+    sections.push(formatSpecSection(t("hardware.ram"), buildMemorySpecs(hardwareInfo.memory)));
+    sections.push(formatSpecSection(t("hardware.motherboard"), buildMotherboardSpecs(hardwareInfo.motherboard)));
+    if (hardwareInfo.disk?.length) {
+      sections.push(formatSpecSection(t("hardware.storage"), buildStorageSpecs(hardwareInfo.disk)));
+    }
+    if (hardwareInfo.sound_card?.length) {
+      sections.push(formatSpecSection(t("hardware.soundCard"), buildSoundCardSpecs(hardwareInfo.sound_card)));
+    }
+    if (hardwareInfo.network_card?.length) {
+      sections.push(formatSpecSection(t("hardware.networkCard"), buildNetworkCardSpecs(hardwareInfo.network_card)));
+    }
+    if (hardwareInfo.monitor?.length) {
+      sections.push(formatSpecSection(t("hardware.monitor") || "显示器", buildMonitorSpecs(hardwareInfo.monitor)));
+    }
+
+    const text = sections.filter(Boolean).join("\n\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: t("hardware.copySuccess") || "已复制到剪贴板",
+        description: t("hardware.copyDesc") || "硬件信息已按分类复制",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (e) {
+      console.error("Failed to copy hardware info:", e);
+      toast({
+        title: t("hardware.copyFailed") || "复制失败",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   return (
     <Box pt={8}>
       <HStack justify="space-between" mb={6}>
@@ -737,6 +814,15 @@ export default function HardwarePage() {
             onClick={onPawnioModalOpen}
           >
             安装驱动（获取CPU温度）
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            colorScheme="teal"
+            leftIcon={<Copy size={15} />}
+            onClick={handleCopyHardwareInfo}
+          >
+            {t("hardware.copyAll") || "复制所有硬件信息"}
           </Button>
           <Button
             leftIcon={<Trash2 size={16} />}

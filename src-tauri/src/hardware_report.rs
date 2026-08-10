@@ -916,10 +916,14 @@ function populateHardwareOverview() {
     ], cpuSvg);
     // GPU
     hw.gpu.forEach(function(gpu, i) {
-        html += hwCard('GPU ' + (i + 1), '#e74c3c', [
+        var gpuItems = [
             ['型号', gpu.name], ['厂商', gpu.vendor],
-            ['显存', gpu.memory_gb.toFixed(1) + ' GB'], ['驱动版本', gpu.driver_version],
-        ], gpuSvg);
+        ];
+        if (gpu.memory_gb != null && gpu.memory_gb > 0) {
+            gpuItems.push(['显存', gpu.memory_gb.toFixed(1) + ' GB']);
+        }
+        gpuItems.push(['驱动版本', gpu.driver_version]);
+        html += hwCard('GPU ' + (i + 1), '#e74c3c', gpuItems, gpuSvg);
     });
     // 内存
     var totalMem = hw.memory.reduce(function(s, m) { return s + m.capacity_gb; }, 0);

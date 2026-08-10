@@ -38,8 +38,12 @@ pub struct SensorBridge {
 }
 
 impl SensorBridge {
-    /// 发送读取命令，返回传感器数据
+    /// 发送读取命令，返回传感器数据。
+    /// 读取带超时保护：NexBoxMonitor 子进程若卡死/不响应，会在超时后返回错误，
+    /// 由调用方决定是否强制重启子进程，避免管道阻塞导致全局互斥锁被永久占用。
     pub fn read_sensors(&mut self) -> Result<SensorsResponse, String> {
+        use std::io::Read;
+
         // 发送命令
         writeln!(self.writer, r#"{{"cmd":"read"}}"#)
             .map_err(|e| format!("写入管道失败: {}", e))?;
@@ -47,27 +51,47 @@ impl SensorBridge {
             .flush()
             .map_err(|e| format!("刷新管道失败: {}", e))?;
 
-        // 读取响应
-        let mut line = String::new();
-        self.reader
-            .read_line(&mut line)
-            .map_err(|e| format!("读取管道失败: {}", e))?;
+        // 逐字节读取直到换行，每步先通过 WaitForSingleObject 检查管道可读性并带超时
+        let timeout = std::time::Duration::from_secs(8);
+        let deadline = std::time::Instant::now() + timeout;
+        let mut line_bytes: Vec<u8> = Vec::with_capacity(4096);
+        let mut byte = [0u8; 1];
 
-        if line.trim().is_empty() {
+        loop {
+            if !wait_pipe_readable(&mut self.reader, deadline) {
+                return Err("读取管道超时".to_string());
+            }
+            match self.reader.read(&mut byte) {
+                Ok(0) => return Err("子进程返回空响应".to_string()),
+                Ok(_) => {
+                    if byte[0] == b'\n' {
+                        break;
+                    }
+                    line_bytes.push(byte[0]);
+                }
+                Err(e) => return Err(format!("读取管道失败: {}", e)),
+            }
+        }
+
+        // 子进程 (net48) 的 stdout 可能使用系统 ANSI 编码（如 GBK），
+        // 用 lossy 转换保证 JSON 结构不因编码问题而整体解析失败
+        let line = String::from_utf8_lossy(&line_bytes);
+        let line = line.trim();
+        if line.is_empty() {
             return Err("子进程返回空响应".to_string());
         }
 
         // 先尝试解析为 SensorsResponse
-        match serde_json::from_str::<SensorsResponse>(&line) {
+        match serde_json::from_str::<SensorsResponse>(line) {
             Ok(response) => Ok(response),
             Err(_) => {
                 // 如果失败，检查是否是子进程报错 JSON（{"error":"..."}）
-                if let Ok(err_obj) = serde_json::from_str::<serde_json::Value>(&line) {
+                if let Ok(err_obj) = serde_json::from_str::<serde_json::Value>(line) {
                     if let Some(err_msg) = err_obj.get("error").and_then(|v| v.as_str()) {
                         return Err(format!("NexBoxMonitor 子进程报错: {}", err_msg));
                     }
                 }
-                Err(format!("解析传感器JSON失败: {}", line.trim()))
+                Err(format!("解析传感器JSON失败: {}", line))
             }
         }
     }
@@ -105,6 +129,42 @@ impl SensorBridge {
             }
         }
     }
+}
+
+/// 检查子进程 stdout 管道是否可读，带截止时间（Windows 用 WaitForSingleObject 等待管道句柄）。
+/// 有数据可读或管道关闭时返回 true；超过 deadline 返回 false。
+#[cfg(target_os = "windows")]
+fn wait_pipe_readable(
+    reader: &mut std::io::BufReader<std::process::ChildStdout>,
+    deadline: std::time::Instant,
+) -> bool {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{HANDLE, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::WaitForSingleObject;
+
+    let handle = reader.get_ref().as_raw_handle() as HANDLE;
+    loop {
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            return false;
+        }
+        let remaining = deadline - now;
+        let wait_ms = remaining.as_millis().min(200) as u32;
+        // 管道有数据或已关闭（EOF）时返回 WAIT_OBJECT_0；超时返回 WAIT_TIMEOUT
+        let ret = unsafe { WaitForSingleObject(handle, wait_ms) };
+        if ret == WAIT_OBJECT_0 {
+            return true;
+        }
+        // WAIT_TIMEOUT 或其它错误：继续循环直到 deadline
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn wait_pipe_readable(
+    _reader: &mut std::io::BufReader<std::process::ChildStdout>,
+    _deadline: std::time::Instant,
+) -> bool {
+    true
 }
 
 /// 全局传感器桥接
@@ -314,7 +374,23 @@ pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
             }
             // 重启成功或进程正常，重置计数
             RESTART_ATTEMPT_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
-            let mut response = bridge.read_sensors()?;
+            let mut response = match bridge.read_sensors() {
+                Ok(resp) => resp,
+                Err(e) => {
+                    // 子进程卡死（读取超时）/ 空响应 / EOF：强制重启，避免管道阻塞导致永久无数据
+                    if e.contains("超时") || e.contains("空响应") || e.contains("EOF") {
+                        log::warn!("NexBoxMonitor 读取异常，强制重启子进程: {e}");
+                        let _ = bridge.child.kill();
+                        let _ = bridge.child.wait();
+                        // 清空 bridge，让下次调用重新拉起子进程
+                        *guard = None;
+                        RESTART_ATTEMPT_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
+                        LAST_RESTART_TIME.store(0, std::sync::atomic::Ordering::Relaxed);
+                        return Err(format!("NexBoxMonitor 读取异常，已重启子进程: {e}"));
+                    }
+                    return Err(e);
+                }
+            };
             // 过滤掉虚拟内存传感器（"全部传感器"列表中不展示）
             response.sensors.retain(|s| {
                 let name = s.name.to_lowercase();
@@ -449,7 +525,7 @@ fn spawn_sensor() -> std::io::Result<Option<SensorBridge>> {
     let mut cmd = Command::new(&exe_path);
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::piped());
 
     // Windows 下隐藏控制台窗口
     #[cfg(windows)]
@@ -463,6 +539,22 @@ fn spawn_sensor() -> std::io::Result<Option<SensorBridge>> {
 
     let stdin = child.stdin.take().expect("无法获取子进程 stdin");
     let stdout = child.stdout.take().expect("无法获取子进程 stdout");
+
+    // 捕获子进程 stderr 到日志，避免管道积压阻塞，也便于排查子进程异常
+    if let Some(stderr) = child.stderr.take() {
+        std::thread::spawn(move || {
+            let mut reader = std::io::BufReader::new(stderr);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match reader.read_line(&mut line) {
+                    Ok(0) => break,
+                    Ok(_) => log::info!("[NexBoxMonitor] {}", line.trim()),
+                    Err(_) => break,
+                }
+            }
+        });
+    }
 
     let bridge = SensorBridge {
         child,
@@ -513,7 +605,7 @@ pub fn restart_sensor_process_internal() -> Result<(), String> {
                     let mut cmd = Command::new(exe_path);
                     cmd.stdin(Stdio::piped())
                         .stdout(Stdio::piped())
-                        .stderr(Stdio::piped());
+                        .stderr(Stdio::null());
                     #[cfg(windows)]
                     {
                         use std::os::windows::process::CommandExt;

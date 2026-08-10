@@ -63,14 +63,15 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { useFont } from "@/contexts/font-context";
 import { PRESET_COLORS, hexToRgba } from "@/lib/color-utils";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
-import { fetchLatestRelease, compareVersions, fetchReleaseByTag, type GiteeRelease } from "@/lib/update-checker";
+import { fetchReleaseByTag, type GiteeRelease } from "@/lib/update-checker";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { CustomSelect } from "@/components/special/custom-select";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { useSearchParams } from "react-router-dom";
+import { useUpdate } from "@/contexts/update-context";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { MouseHotkeyRecorder } from "@/components/mouse-hotkey-recorder";
 import { useAppStartup } from "@/contexts/app-startup-context";
@@ -196,6 +197,7 @@ function GeneralSettings() {
   const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  const [randomImageEnabled, setRandomImageEnabled] = useState(true);
   const [homeUsername, setHomeUsername] = useState("");
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
   const [closeBehavior, setCloseBehavior] = useState<string>(() => {
@@ -216,6 +218,7 @@ function GeneralSettings() {
   const [pageTransitionMode, setPageTransitionMode] = useState<"slide" | "fade" | "off">("fade");
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
+  const { autoUpdateEnabled, setAutoUpdateEnabled } = useUpdate();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
@@ -346,6 +349,15 @@ function GeneralSettings() {
         if (ls !== null) setFeedbackEnabled(ls === "true");
       }
 
+      // 主页随机图片卡片显示（store 持久化，默认开启）
+      v = await store.get<boolean>("nexbox_random_image_enabled");
+      if (v !== null && v !== undefined) {
+        setRandomImageEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_random_image_enabled");
+        if (ls !== null) setRandomImageEnabled(ls === "true");
+      }
+
       // 标题用户名（空 = 使用系统用户名）
       let uname = await store.get<string>("nexbox_home_username");
       if (uname !== null && uname !== undefined) {
@@ -461,8 +473,15 @@ function GeneralSettings() {
       setGameWinKeyCardEnabled(e.detail);
     };
     window.addEventListener("game-win-key-card-setting-changed", handleWinKeyCardSync as EventListener);
+
+    const handleRandomImageSync = (e: CustomEvent) => {
+      setRandomImageEnabled(e.detail);
+    };
+    window.addEventListener("random-image-setting-changed", handleRandomImageSync as EventListener);
+
     return () => {
       window.removeEventListener("game-win-key-card-setting-changed", handleWinKeyCardSync as EventListener);
+      window.removeEventListener("random-image-setting-changed", handleRandomImageSync as EventListener);
     };
   }, []);
 
@@ -540,6 +559,14 @@ function GeneralSettings() {
     store.set("nexbox_feedback_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_feedback_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("feedback-setting-changed", { detail: newValue }));
+  };
+
+  const handleRandomImageToggle = () => {
+    const newValue = !randomImageEnabled;
+    setRandomImageEnabled(newValue);
+    store.set("nexbox_random_image_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_random_image_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("random-image-setting-changed", { detail: newValue }));
   };
 
   // 标题用户名：留空时使用系统用户名
@@ -698,6 +725,16 @@ function GeneralSettings() {
               isChecked={autoStart}
               onChange={handleAutoStartToggle}
               isDisabled={autoStartLoading}
+            />
+          </HStack>
+          <HStack justify="space-between" py={2}>
+            <Text fontSize="sm" color={labelColor} fontWeight="medium">
+              {t("settings.generalSettings.autoUpdate")}
+            </Text>
+            <ThemeSwitch
+              size="md"
+              isChecked={autoUpdateEnabled}
+              onChange={(e) => setAutoUpdateEnabled(e.target.checked)}
             />
           </HStack>
         </LiquidGlassCard>
@@ -888,6 +925,22 @@ function GeneralSettings() {
                 size="md"
                 isChecked={gameWinKeyCardEnabled}
                 onChange={handleGameWinKeyCardToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.randomImageLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.randomImageDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={randomImageEnabled}
+                onChange={handleRandomImageToggle}
               />
             </HStack>
             <Divider />
@@ -2534,12 +2587,18 @@ function SponsorSettings() {
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const [sponsors, setSponsors] = useState<SponsorItem[]>([]);
+  const [totalAmount, setTotalAmount] = useState<string>("");
   const [sponsorsLoading, setSponsorsLoading] = useState(true);
   const [sponsorsError, setSponsorsError] = useState(false);
 
   useEffect(() => {
-    invoke<{ update_time: string; list: SponsorItem[] }>("get_sponsors")
-      .then((data) => setSponsors(data.list))
+    invoke<{ update_time: string; total_amount: string; list: SponsorItem[] }>(
+      "get_sponsors",
+    )
+      .then((data) => {
+        setSponsors(data.list);
+        setTotalAmount(data.total_amount ?? "");
+      })
       .catch(() => setSponsorsError(true))
       .finally(() => setSponsorsLoading(false));
   }, []);
@@ -2625,6 +2684,25 @@ function SponsorSettings() {
         <Text fontSize="lg" fontWeight="bold" mb={4} color={titleColor}>
           {t("settings.sponsorSettings.sponsorList.title")}
         </Text>
+        {totalAmount && (
+          <HStack spacing={2} justify="center" mb={4}>
+            <Text fontSize="sm" color={subLabelColor}>
+              {t("settings.sponsorSettings.sponsorList.totalAmount")}
+            </Text>
+            <Box
+              display="inline-block"
+              px={3}
+              py={1}
+              borderRadius="lg"
+              bg={getActiveColor()}
+              color={getContrastTextColor()}
+              fontSize="sm"
+              fontWeight="bold"
+            >
+              ¥ {totalAmount}
+            </Box>
+          </HStack>
+        )}
         {sponsorsLoading ? (
           <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
             {t("settings.sponsorSettings.sponsorList.loading")}
@@ -2894,7 +2972,6 @@ function PawnioSettings() {
 
 function AboutSettings() {
   const { t } = useTranslation();
-  const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
@@ -2902,44 +2979,22 @@ function AboutSettings() {
   const appNameColor = useColorModeValue("gray.400", "#ffffff");
   const graphicLogoSrc = useColorModeValue("/logo/NBB.png", "/logo/NBW.png");
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
-  const modalBg = useColorModeValue("white", "#111111");
-  const modalBorderColor = useColorModeValue("gray.200", "#333333");
 
-  const currentVersion = "7.1.3";
-  const [isChecking, setIsChecking] = useState(false);
-  const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
-  const [isUpdateAvailable, setIsUpdateAvailable] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [isDownloadComplete, setIsDownloadComplete] = useState(false);
-  const [downloadedFilePath, setDownloadedFilePath] = useState<string>("");
+  const currentVersion = "7.2.8";
   const [currentRelease, setCurrentRelease] = useState<GiteeRelease | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
-  useEffect(() => {
-    const unlisten = listen<{ progress: number; total: number }>("download-progress", (event) => {
-      setDownloadProgress(event.payload.progress);
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  const {
+    hasUpdate,
+    isChecking,
+    isDownloading,
+    downloadProgress,
+    isDownloadComplete,
+    handleCheckUpdate,
+    openModal,
+  } = useUpdate();
 
   useEffect(() => {
-    const checkUpdateSilently = async () => {
-      try {
-        const release = await fetchLatestRelease();
-        if (release) {
-          setLatestRelease(release);
-          const hasUpdate = compareVersions(currentVersion, release.tag_name);
-          setIsUpdateAvailable(hasUpdate);
-        }
-      } catch (error) {
-        console.error("Failed to check for updates silently:", error);
-      }
-    };
-
     const fetchCurrentRelease = async () => {
       try {
         setIsLoadingChangelog(true);
@@ -2958,7 +3013,6 @@ function AboutSettings() {
       }
     };
 
-    checkUpdateSilently();
     fetchCurrentRelease();
   }, []);
 
@@ -2969,114 +3023,6 @@ function AboutSettings() {
     } catch (error) {
       console.error("Failed to open link:", error);
     }
-  };
-
-  const handleCheckUpdate = async () => {
-    setIsChecking(true);
-    try {
-      const release = await fetchLatestRelease();
-      if (release) {
-        setLatestRelease(release);
-        const hasUpdate = compareVersions(currentVersion, release.tag_name);
-        setIsUpdateAvailable(hasUpdate);
-        if (hasUpdate) {
-          setIsModalOpen(true);
-        } else {
-          toast({
-            title: t("settings.aboutSettings.noUpdate") || "已是最新版本",
-            status: "success",
-            duration: 2000,
-            isClosable: true,
-          });
-        }
-      } else {
-        toast({
-          title: t("settings.aboutSettings.checkFailed") || "检查失败",
-          status: "error",
-          duration: 2000,
-          isClosable: true,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to check for updates:", error);
-      toast({
-        title: t("settings.aboutSettings.checkFailed") || "检查失败",
-        status: "error",
-        duration: 2000,
-        isClosable: true,
-      });
-    } finally {
-      setIsChecking(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!latestRelease) return;
-    
-    setIsDownloading(true);
-    setDownloadProgress(0);
-    setIsDownloadComplete(false);
-    
-    try {
-      const asset = latestRelease.assets.find(a => 
-        a.name.endsWith('.msi') || a.name.endsWith('.exe')
-      );
-      
-      if (asset) {
-        const filePath = await invoke<string>("download_update", {
-          url: asset.browser_download_url,
-          fileName: asset.name,
-        });
-        setDownloadedFilePath(filePath);
-        setIsDownloadComplete(true);
-      } else {
-        await handleOpenLink(latestRelease.html_url);
-        setIsDownloading(false);
-      }
-    } catch (error) {
-      console.error("Failed to download:", error);
-      toast({
-        title: t("settings.aboutSettings.downloadFailed") || "下载失败",
-        status: "error",
-        duration: 2000,
-        isClosable: true,
-      });
-      setIsDownloading(false);
-    }
-  };
-
-  const handleInstall = async () => {
-    if (!downloadedFilePath) return;
-    
-    try {
-      await invoke("install_update", {
-        filePath: downloadedFilePath,
-      });
-    } catch (error) {
-      console.error("Failed to install:", error);
-      toast({
-        title: t("settings.aboutSettings.installFailed") || "安装失败",
-        status: "error",
-        duration: 2000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const handleSkip = async () => {
-    if (downloadedFilePath) {
-      try {
-        await invoke("delete_download_file", {
-          filePath: downloadedFilePath,
-        });
-      } catch (error) {
-        console.error("Failed to delete file:", error);
-      }
-    }
-    setIsModalOpen(false);
-    setIsDownloadComplete(false);
-    setDownloadedFilePath("");
-    setIsDownloading(false);
   };
 
   return (
@@ -3110,13 +3056,38 @@ function AboutSettings() {
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
                 v{currentVersion}
               </Text>
-              {isUpdateAvailable ? (
+              {isDownloading && !isDownloadComplete ? (
+                <LiquidGlassButton
+                  size="xs"
+                  variant="solid"
+                  borderRadius="lg"
+                  colorScheme="teal"
+                  fontVariantNumeric="tabular-nums"
+                  onClick={openModal}
+                  leftIcon={<LuDownload size={12} />}
+                >
+                  {t("settings.aboutSettings.downloadingWithProgress", {
+                    progress: Math.round(downloadProgress),
+                  })}
+                </LiquidGlassButton>
+              ) : isDownloadComplete ? (
+                <LiquidGlassButton
+                  size="xs"
+                  variant="solid"
+                  borderRadius="lg"
+                  colorScheme="green"
+                  onClick={openModal}
+                  leftIcon={<LuRefreshCw size={12} />}
+                >
+                  {t("settings.aboutSettings.pendingInstall")}
+                </LiquidGlassButton>
+              ) : hasUpdate ? (
                 <LiquidGlassButton
                   size="xs"
                   variant="solid"
                   borderRadius="lg"
                   colorScheme="orange"
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={openModal}
                   leftIcon={<LuDownload size={12} />}
                 >
                   {t("settings.aboutSettings.newVersion")}
@@ -3264,101 +3235,29 @@ function AboutSettings() {
           </Box>
         )}
       </LiquidGlassCard>
-
-      <Modal isOpen={isModalOpen} onClose={() => !isDownloading && !isDownloadComplete && setIsModalOpen(false)} isCentered closeOnOverlayClick={!isDownloading && !isDownloadComplete}>
-        <ModalOverlay />
-        <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="xl">
-          <ModalHeader color={labelColor}>{t("settings.aboutSettings.updateModal.title")}</ModalHeader>
-          {!isDownloading && !isDownloadComplete && <ModalCloseButton />}
-          <ModalBody>
-            <VStack align="start" spacing={4}>
-              <HStack>
-                <Text color={subLabelColor} fontSize="sm">
-                  {t("settings.aboutSettings.updateModal.version")}:
-                </Text>
-                <Text color={labelColor} fontWeight="medium">
-                  {latestRelease?.tag_name}
-                </Text>
-              </HStack>
-              <Box w="full">
-                <Text color={subLabelColor} fontSize="sm" mb={2}>
-                  {t("settings.aboutSettings.updateModal.releaseNotes")}:
-                </Text>
-                <Box
-                  p={3}
-                  borderRadius="lg"
-                  bg={useColorModeValue("gray.50", "#1a1a1a")}
-                  maxH="200px"
-                  overflowY="auto"
-                >
-                  <Text color={labelColor} fontSize="sm" whiteSpace="pre-wrap">
-                    {latestRelease?.body || "无更新说明"}
-                  </Text>
-                </Box>
-              </Box>
-              {isDownloading && !isDownloadComplete && (
-                <Box w="full">
-                  <Progress value={downloadProgress} size="sm" colorScheme="teal" borderRadius="full" />
-                  <Text color={subLabelColor} fontSize="xs" mt={1}>
-                    {t("settings.aboutSettings.updateModal.downloading")} {downloadProgress}%
-                  </Text>
-                </Box>
-              )}
-              {isDownloadComplete && (
-                <Box w="full" p={3} borderRadius="lg" bg={useColorModeValue("green.50", "rgba(72, 187, 120, 0.1)")} border="1px solid" borderColor={useColorModeValue("green.200", "rgba(72, 187, 120, 0.3)")}>
-                  <Text color={useColorModeValue("green.600", "green.300")} fontSize="sm" fontWeight="medium">
-                    {t("settings.aboutSettings.updateModal.downloadComplete")}
-                  </Text>
-                </Box>
-              )}
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            {isDownloadComplete ? (
-              <>
-                <Button variant="ghost" mr={3} onClick={handleSkip}>
-                  {t("settings.aboutSettings.updateModal.skip")}
-                </Button>
-                <LiquidGlassButton
-                  colorScheme="teal"
-                  onClick={handleInstall}
-                  leftIcon={<LuRefreshCw size={14} />}
-                >
-                  {t("settings.aboutSettings.updateModal.restartInstall")}
-                </LiquidGlassButton>
-              </>
-            ) : (
-              <>
-                {!isDownloading && (
-                  <Button variant="ghost" mr={3} onClick={() => setIsModalOpen(false)}>
-                    {t("settings.aboutSettings.updateModal.cancel")}
-                  </Button>
-                )}
-                <LiquidGlassButton
-                  colorScheme="teal"
-                  onClick={handleDownload}
-                  isDisabled={isDownloading}
-                  isLoading={isDownloading}
-                  leftIcon={!isDownloading ? <LuDownload size={14} /> : undefined}
-                >
-                  {isDownloading ? t("settings.aboutSettings.updateModal.downloading") : t("settings.aboutSettings.updateModal.download")}
-                </LiquidGlassButton>
-              </>
-            )}
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
     </Box>
   );
 }
 
 function HotkeySettings() {
   const { t } = useTranslation();
-  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, autoclickerHotkey, saveAutoclickerHotkey, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
+  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, autoclickerHotkey, saveAutoclickerHotkey, musicPrevHotkey, saveMusicPrevHotkey, musicNextHotkey, saveMusicNextHotkey, musicPlayPauseHotkey, saveMusicPlayPauseHotkey, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
   const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
+  const { getHoverColor, getBorderColor } = useThemeColor();
+  // 悬停主题色：背景为主题色半透明，边框为主题色
+  const hotkeyHoverBg = getHoverColor();
+  const hotkeyHoverBorder = getBorderColor();
+  // 所有热键卡片共用的悬停样式
+  // 注意：LiquidGlassCard 内部已有 transition，这里只传 _hover，避免覆盖 backdrop-filter 过渡
+  const hotkeyCardHover = {
+    _hover: {
+      bg: hotkeyHoverBg,
+      borderColor: hotkeyHoverBorder,
+    },
+  };
 
   return (
     <Box>
@@ -3368,7 +3267,7 @@ function HotkeySettings() {
 
       {/* 全部热键总开关 */}
       <Box mb={6}>
-        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+        <LiquidGlassCard px={4} py={3} boxShadow="sm" {...hotkeyCardHover}>
           <HStack justify="space-between">
             <Box flex={1}>
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -3398,7 +3297,7 @@ function HotkeySettings() {
         >
           {t("hotkeySettings.overlay") || "悬浮框"}
         </Text>
-        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+        <LiquidGlassCard px={4} py={3} boxShadow="sm" {...hotkeyCardHover}>
           <HStack justify="space-between">
             <Box flex={1}>
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -3437,7 +3336,7 @@ function HotkeySettings() {
         >
           {t("hotkeySettings.crosshair") || "准心"}
         </Text>
-        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+        <LiquidGlassCard px={4} py={3} boxShadow="sm" {...hotkeyCardHover}>
           <HStack justify="space-between">
             <Box flex={1}>
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -3476,7 +3375,7 @@ function HotkeySettings() {
         >
           {t("hotkeySettings.filter") || "滤镜"}
         </Text>
-        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+        <LiquidGlassCard px={4} py={3} boxShadow="sm" {...hotkeyCardHover}>
           <HStack justify="space-between">
             <Box flex={1}>
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -3515,7 +3414,7 @@ function HotkeySettings() {
         >
           {t("hotkeySettings.autoclicker") || "连点器"}
         </Text>
-        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+        <LiquidGlassCard px={4} py={3} boxShadow="sm" {...hotkeyCardHover}>
           <HStack justify="space-between">
             <Box flex={1}>
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -3543,16 +3442,112 @@ function HotkeySettings() {
         </LiquidGlassCard>
       </Box>
 
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
+          {t("hotkeySettings.music") || "音乐"}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm" {...hotkeyCardHover}>
+          <HStack justify="space-between" mb={4}>
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("hotkeySettings.musicPrev") || "上一曲"}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("hotkeySettings.musicPrevDesc") || "使用快捷键切换到上一曲"}
+              </Text>
+            </Box>
+            <HotkeyRecorder
+              value={musicPrevHotkey}
+              onChange={async (val) => {
+                const ok = await saveMusicPrevHotkey(val);
+                toast({
+                  title: ok
+                    ? (t("hotkeySettings.saved") || "快捷键已保存")
+                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                  status: ok ? "success" : "error",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
+            />
+          </HStack>
+          <HStack justify="space-between" mb={4}>
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("hotkeySettings.musicNext") || "下一曲"}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("hotkeySettings.musicNextDesc") || "使用快捷键切换到下一曲"}
+              </Text>
+            </Box>
+            <HotkeyRecorder
+              value={musicNextHotkey}
+              onChange={async (val) => {
+                const ok = await saveMusicNextHotkey(val);
+                toast({
+                  title: ok
+                    ? (t("hotkeySettings.saved") || "快捷键已保存")
+                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                  status: ok ? "success" : "error",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
+            />
+          </HStack>
+          <HStack justify="space-between">
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("hotkeySettings.musicPlayPause") || "播放 / 暂停"}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("hotkeySettings.musicPlayPauseDesc") || "使用快捷键播放或暂停音乐"}
+              </Text>
+            </Box>
+            <HotkeyRecorder
+              value={musicPlayPauseHotkey}
+              onChange={async (val) => {
+                const ok = await saveMusicPlayPauseHotkey(val);
+                toast({
+                  title: ok
+                    ? (t("hotkeySettings.saved") || "快捷键已保存")
+                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
+                  status: ok ? "success" : "error",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box>
+
     </Box>
   );
 }
 
 export default function SettingsPage() {
   const [activeItem, setActiveItem] = useState("general");
+  const [searchParams] = useSearchParams();
   const { t } = useTranslation();
   const { config } = useThemeColor();
   const { jellyBounceEnabled } = useBackground();
   const isFirstRender = useRef(true);
+
+  // 支持通过 URL ?section=xxx 定位子菜单（如托盘"检查更新"导航到 /settings?section=about）
+  useEffect(() => {
+    const section = searchParams.get("section");
+    if (section && settingItems.some((item) => item.id === section)) {
+      setActiveItem(section);
+    }
+  }, [searchParams]);
 
   // 子菜单切换时触发果冻弹跳动画（跳过首次挂载，避免与路由切换动画重复）
   useEffect(() => {

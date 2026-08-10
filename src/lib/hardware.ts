@@ -34,7 +34,8 @@ export interface CpuInfo {
 export interface GpuInfo {
   name: string;
   vendor: GpuVendor;
-  memory_gb: number;
+  /** 显存总量（GB）；获取不到时为 null（如核显），前端不显示显存项 */
+  memory_gb: number | null;
   driver_version: string;
   temperature: number | null;
   usage: number | null;

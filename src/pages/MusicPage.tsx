@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useAppStartup } from "@/contexts/app-startup-context";
 import {
   Box,
   VStack,
@@ -649,6 +650,9 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const [isClosing, setIsClosing] = useState(false);
   const [rightTab, setRightTab] = useState<"lyrics" | "comments">("lyrics");
 
+  // 音乐控制热键（用于按钮 tooltip 展示）
+  const { musicPrevHotkey, musicNextHotkey, musicPlayPauseHotkey } = useAppStartup();
+
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const activeColor = getActiveColor();
   const contrastText = getContrastTextColor();
@@ -1143,6 +1147,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               onClick={() => useMusicStore.getState().togglePlayMode()}
             />
           </Tooltip>
+          <Tooltip label={`上一曲 (${musicPrevHotkey})`}>
           <IconButton
             aria-label="Prev"
             icon={<SkipBackBtn size={24} />}
@@ -1151,6 +1156,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             onClick={() => useMusicStore.getState().prevTrack()}
             sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
           />
+          </Tooltip>
+          <Tooltip label={`播放/暂停 (${musicPlayPauseHotkey})`}>
           <IconButton
             aria-label="Play/Pause"
             icon={isPlaying ? <PauseIcon size={24} /> : <PlayBtn size={24} />}
@@ -1159,6 +1166,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             sx={{ color: effectiveTextColor, _hover: { bg: activeColor, color: contrastText } }}
             onClick={() => useMusicStore.getState().togglePlay()}
           />
+          </Tooltip>
+          <Tooltip label={`下一曲 (${musicNextHotkey})`}>
           <IconButton
             aria-label="Next"
             icon={<SkipForwardBtn size={24} />}
@@ -1167,6 +1176,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             onClick={() => useMusicStore.getState().nextTrack()}
             sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
           />
+          </Tooltip>
           {/* 音量控制：悬停向右展开滑块 */}
           <Box
             role="group"
@@ -2386,6 +2396,36 @@ export default function MusicPage() {
       return 1;
     }
   });
+  // MV 音量条展开状态 — 仅悬停音量按钮/音量条本身时展开，移开后自动收缩
+  const [mvVolumeOpen, setMvVolumeOpen] = useState(false);
+  const mvVolumeCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openMvVolume = useCallback(() => {
+    if (mvVolumeCloseTimerRef.current) {
+      clearTimeout(mvVolumeCloseTimerRef.current);
+      mvVolumeCloseTimerRef.current = null;
+    }
+    setMvVolumeOpen(true);
+  }, []);
+
+  const scheduleCloseMvVolume = useCallback(() => {
+    if (mvVolumeCloseTimerRef.current) {
+      clearTimeout(mvVolumeCloseTimerRef.current);
+    }
+    mvVolumeCloseTimerRef.current = setTimeout(() => {
+      setMvVolumeOpen(false);
+      mvVolumeCloseTimerRef.current = null;
+    }, 120);
+  }, []);
+
+  // 卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (mvVolumeCloseTimerRef.current) {
+        clearTimeout(mvVolumeCloseTimerRef.current);
+      }
+    };
+  }, []);
 
   // 音量变化时持久化，重进/重开播放器后保持用户设置
   useEffect(() => {
@@ -3250,10 +3290,11 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                       {formatTime(mvDuration)}
                     </Text>
                     <Box
-                      role="group"
                       position="relative"
                       display="flex"
                       alignItems="center"
+                      onMouseEnter={openMvVolume}
+                      onMouseLeave={scheduleCloseMvVolume}
                     >
                       <IconButton
                         aria-label="Mute"
@@ -3269,17 +3310,19 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                           setMvVolume(next);
                         }}
                       />
-                      {/* 垂直音量条 — 从按钮正上方弹出，上下调节 */}
+                      {/* 垂直音量条 — 从按钮正上方弹出，上下调节；仅在悬停音量按钮/音量条时展开，移开自动收缩 */}
                       <Box
                         className="mv-volume-slider"
                         position="absolute"
                         left="50%"
                         bottom="100%"
-                        mb="0px"
+                        mb={mvVolumeOpen ? "8px" : "0px"}
                         w="90px"
-                        h="0px"
-                        opacity={0}
-                        pointerEvents="none"
+                        h={mvVolumeOpen ? "90px" : "0px"}
+                        opacity={mvVolumeOpen ? 1 : 0}
+                        pointerEvents={mvVolumeOpen ? "auto" : "none"}
+                        onMouseEnter={openMvVolume}
+                        onMouseLeave={scheduleCloseMvVolume}
                         sx={{
                           transform: "translateX(-50%)",
                           display: "flex",
@@ -3287,7 +3330,6 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                           justifyContent: "center",
                           overflow: "hidden",
                           transition: "height 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease",
-                          _groupHover: { h: "90px", opacity: 1, pointerEvents: "auto", mb: "8px" },
                         }}
                       >
                         <Box

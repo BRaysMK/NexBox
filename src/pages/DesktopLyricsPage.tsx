@@ -262,6 +262,7 @@ export default function DesktopLyricsPage() {
           baseColor={settings.baseColor}
           lineCount={settings.lineCount}
           isPlaying={isPlaying}
+          showTranslation={settings.showTranslation}
         />
       </div>
 

@@ -15,7 +15,7 @@ import {
   useToast,
   Spinner,
 } from "@chakra-ui/react";
-import { ArrowLeft, Globe, RefreshCw } from "lucide-react";
+import { ArrowLeft, Copy, Globe, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -57,6 +57,11 @@ export default function NetworkOptimizerPage() {
   const [customPrimary, setCustomPrimary] = useState("");
   const [customSecondary, setCustomSecondary] = useState("");
   const [isApplyingCustomDns, setIsApplyingCustomDns] = useState(false);
+
+  // 公网 IP
+  const [publicIp, setPublicIp] = useState("");
+  const [isLoadingIp, setIsLoadingIp] = useState(false);
+  const [ipLoadFailed, setIpLoadFailed] = useState(false);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -144,6 +149,65 @@ export default function NetworkOptimizerPage() {
       await store.save();
     } catch {}
   }, []);
+
+  // 获取公网 IPv4 地址
+  const fetchPublicIp = useCallback(
+    async (manual = false) => {
+      setIsLoadingIp(true);
+      setIpLoadFailed(false);
+      try {
+        const ip = await invoke<string>("get_public_ip");
+        setPublicIp(ip);
+        if (manual) {
+          toast({
+            title: t("networkOptimize.publicIp.updated"),
+            status: "success",
+            duration: 2000,
+            isClosable: true,
+          });
+        }
+      } catch {
+        setIpLoadFailed(true);
+        if (manual) {
+          toast({
+            title: t("networkOptimize.publicIp.fetchFailed"),
+            status: "error",
+            duration: 3000,
+            isClosable: true,
+          });
+        }
+      } finally {
+        setIsLoadingIp(false);
+      }
+    },
+    [toast, t],
+  );
+
+  // 复制公网 IP 到剪贴板
+  const copyPublicIp = useCallback(async () => {
+    if (!publicIp) return;
+    try {
+      await navigator.clipboard.writeText(publicIp);
+      toast({
+        title: t("networkOptimize.publicIp.copied"),
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch {
+      toast({
+        title: t("networkOptimize.publicIp.copyFailed"),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  }, [publicIp, toast, t]);
+
+  // 页面加载时自动查询公网 IP
+  useEffect(() => {
+    fetchPublicIp();
+  }, [fetchPublicIp]);
 
   // 重新扫描（不覆盖用户手动操作的状态）
   const doRescan = useCallback(async () => {
@@ -678,6 +742,99 @@ export default function NetworkOptimizerPage() {
           </Button>
         </HStack>
       </Flex>
+
+      {/* Section 0: 公网 IP */}
+      <Box w="full">
+        <Heading
+          as="h3"
+          fontSize="md"
+          fontWeight="bold"
+          color={headingColor}
+          mb={3}
+          position="relative"
+          pl={3}
+          sx={{
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              left: 0,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: "3px",
+              height: "16px",
+              borderRadius: "full",
+              bg: activeColor,
+            },
+          }}
+        >
+          {t("networkOptimize.publicIp.title")}
+        </Heading>
+        {(() => {
+          const ipCardContent = (
+            <HStack justify="space-between" align="center" gap={3} flexWrap="wrap">
+              <VStack align="start" spacing={1} flex={1} minW={0}>
+                <Text fontSize="xs" color={subTextColor}>
+                  {t("networkOptimize.publicIp.label")}
+                </Text>
+                {isLoadingIp ? (
+                  <HStack spacing={2}>
+                    <Spinner size="sm" color={activeColor} thickness="2px" />
+                    <Text fontSize="sm" color={subTextColor}>
+                      {t("networkOptimize.publicIp.loading")}
+                    </Text>
+                  </HStack>
+                ) : ipLoadFailed ? (
+                  <Text fontSize="sm" fontWeight="bold" color="red.400">
+                    {t("networkOptimize.publicIp.failed")}
+                  </Text>
+                ) : (
+                  <Text
+                    fontSize="2xl"
+                    fontWeight="bold"
+                    color={headingColor}
+                    fontFamily="'Consolas', 'Courier New', monospace"
+                    wordBreak="break-all"
+                  >
+                    {publicIp}
+                  </Text>
+                )}
+              </VStack>
+              <HStack spacing={2}>
+                <Button
+                  size="sm"
+                  onClick={copyPublicIp}
+                  isDisabled={!publicIp || ipLoadFailed}
+                  variant="outline"
+                  sx={{
+                    borderColor: activeColor,
+                    color: activeColor,
+                    _hover: { bg: hoverBg },
+                  }}
+                >
+                  {t("networkOptimize.publicIp.copy")}
+                </Button>
+                <IconButton
+                  aria-label={t("networkOptimize.publicIp.refresh")}
+                  icon={<RefreshCw size={14} />}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => fetchPublicIp(true)}
+                  isLoading={isLoadingIp}
+                  color={subTextColor}
+                />
+              </HStack>
+            </HStack>
+          );
+          if (liquidGlassEnabled) {
+            return <LiquidGlassCard w="full" p={4}>{ipCardContent}</LiquidGlassCard>;
+          }
+          return (
+            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4}>
+              {ipCardContent}
+            </Box>
+          );
+        })()}
+      </Box>
 
       {/* Section 1: DNS 设置 */}
       <Box w="full">

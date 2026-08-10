@@ -9,6 +9,9 @@ const DEFAULT_OVERLAY_HOTKEY = "Shift+F10";
 const DEFAULT_CROSSHAIR_HOTKEY = "Shift+F9";
 const DEFAULT_FILTER_HOTKEY = "Shift+F8";
 const DEFAULT_AUTOCLICKER_HOTKEY = "F8";
+const DEFAULT_MUSIC_PREV_HOTKEY = "Alt+[";
+const DEFAULT_MUSIC_NEXT_HOTKEY = "Alt+]";
+const DEFAULT_MUSIC_PLAYPAUSE_HOTKEY = "Alt+Space";
 
 interface DisplayItem {
   id: string;
@@ -88,6 +91,12 @@ interface AppStartupContextType {
   saveFilterHotkey: (shortcut: string) => Promise<boolean>;
   autoclickerHotkey: string;
   saveAutoclickerHotkey: (shortcut: string) => Promise<boolean>;
+  musicPrevHotkey: string;
+  saveMusicPrevHotkey: (shortcut: string) => Promise<boolean>;
+  musicNextHotkey: string;
+  saveMusicNextHotkey: (shortcut: string) => Promise<boolean>;
+  musicPlayPauseHotkey: string;
+  saveMusicPlayPauseHotkey: (shortcut: string) => Promise<boolean>;
   hotkeysEnabled: boolean;
   saveHotkeysEnabled: (enabled: boolean) => Promise<void>;
 }
@@ -145,6 +154,12 @@ const AppStartupContext = createContext<AppStartupContextType>({
   saveFilterHotkey: async () => false,
   autoclickerHotkey: DEFAULT_AUTOCLICKER_HOTKEY,
   saveAutoclickerHotkey: async () => false,
+  musicPrevHotkey: DEFAULT_MUSIC_PREV_HOTKEY,
+  saveMusicPrevHotkey: async () => false,
+  musicNextHotkey: DEFAULT_MUSIC_NEXT_HOTKEY,
+  saveMusicNextHotkey: async () => false,
+  musicPlayPauseHotkey: DEFAULT_MUSIC_PLAYPAUSE_HOTKEY,
+  saveMusicPlayPauseHotkey: async () => false,
   hotkeysEnabled: true,
   saveHotkeysEnabled: async () => {},
 });
@@ -164,6 +179,9 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [crosshairHotkey, setCrosshairHotkey] = useState(DEFAULT_CROSSHAIR_HOTKEY);
   const [filterHotkey, setFilterHotkey] = useState(DEFAULT_FILTER_HOTKEY);
   const [autoclickerHotkey, setAutoclickerHotkey] = useState(DEFAULT_AUTOCLICKER_HOTKEY);
+  const [musicPrevHotkey, setMusicPrevHotkey] = useState(DEFAULT_MUSIC_PREV_HOTKEY);
+  const [musicNextHotkey, setMusicNextHotkey] = useState(DEFAULT_MUSIC_NEXT_HOTKEY);
+  const [musicPlayPauseHotkey, setMusicPlayPauseHotkey] = useState(DEFAULT_MUSIC_PLAYPAUSE_HOTKEY);
   const [hotkeysEnabled, setHotkeysEnabled] = useState(true);
   const hasStarted = useRef(false);
 
@@ -401,6 +419,76 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loadMusicPrevHotkey = async () => {
+    try {
+      // 热键已由 Rust 端在启动时读取持久化配置注册，这里只同步 UI 显示值
+      const saved = await invoke<string>("get_music_prev_hotkey");
+      if (saved) {
+        setMusicPrevHotkey(saved);
+      }
+    } catch (error) {
+      console.error("Failed to load music prev hotkey:", error);
+    }
+  };
+
+  const saveMusicPrevHotkey = async (shortcut: string): Promise<boolean> => {
+    try {
+      await invoke("set_music_prev_hotkey", { shortcut });
+      await store.set("music-prev-hotkey", shortcut);
+      setMusicPrevHotkey(shortcut);
+      return true;
+    } catch (error) {
+      console.error("Failed to save music prev hotkey:", error);
+      return false;
+    }
+  };
+
+  const loadMusicNextHotkey = async () => {
+    try {
+      const saved = await invoke<string>("get_music_next_hotkey");
+      if (saved) {
+        setMusicNextHotkey(saved);
+      }
+    } catch (error) {
+      console.error("Failed to load music next hotkey:", error);
+    }
+  };
+
+  const saveMusicNextHotkey = async (shortcut: string): Promise<boolean> => {
+    try {
+      await invoke("set_music_next_hotkey", { shortcut });
+      await store.set("music-next-hotkey", shortcut);
+      setMusicNextHotkey(shortcut);
+      return true;
+    } catch (error) {
+      console.error("Failed to save music next hotkey:", error);
+      return false;
+    }
+  };
+
+  const loadMusicPlayPauseHotkey = async () => {
+    try {
+      const saved = await invoke<string>("get_music_playpause_hotkey");
+      if (saved) {
+        setMusicPlayPauseHotkey(saved);
+      }
+    } catch (error) {
+      console.error("Failed to load music play/pause hotkey:", error);
+    }
+  };
+
+  const saveMusicPlayPauseHotkey = async (shortcut: string): Promise<boolean> => {
+    try {
+      await invoke("set_music_playpause_hotkey", { shortcut });
+      await store.set("music-playpause-hotkey", shortcut);
+      setMusicPlayPauseHotkey(shortcut);
+      return true;
+    } catch (error) {
+      console.error("Failed to save music play/pause hotkey:", error);
+      return false;
+    }
+  };
+
   const loadHotkeysEnabled = async () => {
     try {
       // 总开关已由 Rust 端在启动时恢复，这里只同步 UI 显示值
@@ -458,6 +546,9 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         { name: "crosshair-settings", fn: loadCrosshairSettings, weight: 1 },
         { name: "filter-hotkey", fn: loadFilterHotkey, weight: 1 },
         { name: "autoclicker-hotkey", fn: loadAutoclickerHotkey, weight: 1 },
+        { name: "music-prev-hotkey", fn: loadMusicPrevHotkey, weight: 1 },
+        { name: "music-next-hotkey", fn: loadMusicNextHotkey, weight: 1 },
+        { name: "music-playpause-hotkey", fn: loadMusicPlayPauseHotkey, weight: 1 },
         { name: "hotkeys-enabled", fn: loadHotkeysEnabled, weight: 1 },
         {
           name: "filter-restore",
@@ -532,6 +623,12 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         saveFilterHotkey,
         autoclickerHotkey,
         saveAutoclickerHotkey,
+        musicPrevHotkey,
+        saveMusicPrevHotkey,
+        musicNextHotkey,
+        saveMusicNextHotkey,
+        musicPlayPauseHotkey,
+        saveMusicPlayPauseHotkey,
         hotkeysEnabled,
         saveHotkeysEnabled,
       }}

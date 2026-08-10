@@ -71,7 +71,58 @@ const PROP_ORIG_PROC: &[u16] = &[
     b'g' as u16, b'_' as u16, b'p' as u16, b'r' as u16, b'o' as u16, b'c' as u16, 0,
 ];
 
-/// 子窗口的 hook 窗口过程（备用方案，与 EnableWindow 双保险）
+/// 将窗口矩形钳制到所在（最近的）显示器工作区内，保证窗口完全可见
+/// （rcWork 已排除任务栏，用于拖动时的"碰撞体"）
+#[cfg(windows)]
+unsafe fn clamp_rect_to_work_area(rect: &mut windows_sys::Win32::Foundation::RECT) {
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromRect, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+
+    let w = rect.right - rect.left;
+    let h = rect.bottom - rect.top;
+    let monitor = MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST);
+    let mut info: MONITORINFO = std::mem::zeroed();
+    info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+    if GetMonitorInfoW(monitor, &mut info) == 0 {
+        return;
+    }
+    let wa = info.rcWork;
+    let mut left = rect.left;
+    let mut top = rect.top;
+    if left < wa.left {
+        left = wa.left;
+    }
+    if left + w > wa.right {
+        left = wa.right - w;
+    }
+    if top < wa.top {
+        top = wa.top;
+    }
+    if top + h > wa.bottom {
+        top = wa.bottom - h;
+    }
+    // 兜底：窗口比工作区还大时，保证左上角不跑到工作区外
+    if left < wa.left {
+        left = wa.left;
+    }
+    if top < wa.top {
+        top = wa.top;
+    }
+    rect.left = left;
+    rect.top = top;
+    rect.right = left + w;
+    rect.bottom = top + h;
+}
+
+/// 桌面歌词窗口的 hook 窗口过程（父窗口 + 子窗口共用）
+///
+/// 父窗口（本模块安装）：拦截 WM_MOVING，拖动时把窗口矩形钳制在
+/// 工作区内 —— 这是真正的"碰撞体"，由系统拖动循环直接使用修正后的
+/// 矩形，不会闪烁、不会越界。
+///
+/// 子窗口（鼠标穿透时安装）：WM_NCHITTEST 返回 HTTRANSPARENT，
+/// 与 EnableWindow 双保险实现穿透。
 #[cfg(windows)]
 unsafe extern "system" fn hook_wndproc(
     hwnd: windows_sys::Win32::Foundation::HWND,
@@ -79,13 +130,24 @@ unsafe extern "system" fn hook_wndproc(
     wparam: usize,
     lparam: isize,
 ) -> isize {
+    use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CallWindowProcW, DefWindowProcW, GetPropW, HTTRANSPARENT, WM_NCHITTEST, WNDPROC,
+        CallWindowProcW, DefWindowProcW, GetPropW, HTTRANSPARENT, WM_MOVING, WM_NCHITTEST,
+        WNDPROC,
     };
 
     // 穿透模式下，WM_NCHITTEST 返回 HTTRANSPARENT
     if msg == WM_NCHITTEST && CLICK_THROUGH.load(Ordering::Relaxed) {
         return HTTRANSPARENT as isize;
+    }
+
+    // 拖动中拦截 WM_MOVING：钳制窗口矩形，任何部分都不允许越出工作区
+    if msg == WM_MOVING {
+        let rect = lparam as *mut RECT;
+        if !rect.is_null() {
+            clamp_rect_to_work_area(&mut *rect);
+        }
+        return 0; // 系统会使用修正后的矩形继续移动
     }
 
     // 其他消息：调用原始窗口过程
@@ -96,6 +158,50 @@ unsafe extern "system" fn hook_wndproc(
     }
 
     DefWindowProcW(hwnd, msg, wparam, lparam)
+}
+
+/// 给桌面歌词窗口安装 WM_MOVING 拦截（幂等）。
+/// 启动时调用一次即可，此后用户拖动窗口时系统会实时钳制其位置，
+/// 保证窗口永远不越出屏幕外、不压住任务栏。
+#[cfg(windows)]
+pub fn install_lyrics_move_clamp(app_handle: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetPropW, GetWindowLongPtrW, SetPropW, SetWindowLongPtrW, GWLP_WNDPROC,
+    };
+
+    let window = app_handle
+        .get_webview_window("desktop-lyrics")
+        .ok_or_else(|| "desktop-lyrics window not found".to_string())?;
+    let hwnd = window
+        .hwnd()
+        .map_err(|e| format!("Failed to get lyrics window HWND: {}", e))?;
+    let hwnd_raw = hwnd.0 as windows_sys::Win32::Foundation::HWND;
+
+    unsafe {
+        // 幂等：已安装过则跳过
+        if !GetPropW(hwnd_raw, PROP_ORIG_PROC.as_ptr()).is_null() {
+            return Ok(());
+        }
+        let current = GetWindowLongPtrW(hwnd_raw, GWLP_WNDPROC);
+        if current == 0 {
+            return Err("Failed to get original window proc".to_string());
+        }
+        SetPropW(hwnd_raw, PROP_ORIG_PROC.as_ptr(), current as HANDLE);
+        SetWindowLongPtrW(
+            hwnd_raw,
+            GWLP_WNDPROC,
+            hook_wndproc as *const () as usize as isize,
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn install_lyrics_move_clamp(_app_handle: &tauri::AppHandle) -> Result<(), String> {
+    Ok(())
 }
 
 /// EnumChildWindows 回调：为每个子窗口安装 hook + 禁用输入
@@ -185,4 +291,114 @@ pub fn set_desktop_lyrics_click_through(
     _ignore: bool,
 ) -> Result<bool, String> {
     Err("set_desktop_lyrics_click_through is only supported on Windows".to_string())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 桌面歌词窗口边界约束
+// ═══════════════════════════════════════════════════════════════
+//
+// 将歌词窗口完全钳制在所在显示器的工作区（排除任务栏）内，
+// 防止被拖出屏幕外或压住任务栏。
+// 通过 MonitorFromWindow 找到窗口所在（最近）的显示器，
+// 再用 GetMonitorInfoW 取其 rcWork（工作区矩形），
+// 最后把窗口左上角调整到窗口完全落在工作区内。
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn clamp_lyrics_window_position(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    use tauri::Manager;
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+
+    let window = app_handle
+        .get_webview_window("desktop-lyrics")
+        .ok_or_else(|| "desktop-lyrics window not found".to_string())?;
+
+    let pos = window
+        .outer_position()
+        .map_err(|e| format!("Failed to get lyrics window position: {}", e))?;
+    let size = window
+        .outer_size()
+        .map_err(|e| format!("Failed to get lyrics window size: {}", e))?;
+    let hwnd = window
+        .hwnd()
+        .map_err(|e| format!("Failed to get lyrics window hwnd: {}", e))?;
+
+    let mut clamped = false;
+
+    unsafe {
+        let monitor = MonitorFromWindow(hwnd.0 as HWND, MONITOR_DEFAULTTONEAREST);
+        if !monitor.is_null() {
+            let mut info: MONITORINFO = std::mem::zeroed();
+            info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+            if GetMonitorInfoW(monitor, &mut info) != 0 {
+                let wa = info.rcWork;
+                let win_w = size.width as i32;
+                let win_h = size.height as i32;
+
+                let mut x = pos.x;
+                let mut y = pos.y;
+
+                if x < wa.left {
+                    x = wa.left;
+                }
+                if x + win_w > wa.right {
+                    x = wa.right - win_w;
+                }
+                if y < wa.top {
+                    y = wa.top;
+                }
+                if y + win_h > wa.bottom {
+                    y = wa.bottom - win_h;
+                }
+
+                // 兜底：若窗口比工作区还大，上面的减法可能把左上角推到
+                // 工作区左侧/上侧之外，这里再钳制一次，保证窗口左上角可见。
+                if x < wa.left {
+                    x = wa.left;
+                }
+                if y < wa.top {
+                    y = wa.top;
+                }
+
+                if x != pos.x || y != pos.y {
+                    clamped = true;
+                    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+                }
+            }
+        }
+    }
+
+    Ok(clamped)
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn clamp_lyrics_window_position(_app_handle: tauri::AppHandle) -> Result<bool, String> {
+    Err("clamp_lyrics_window_position is only supported on Windows".to_string())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 桌面歌词窗口复位（居中到屏幕中央）
+// ═══════════════════════════════════════════════════════════════
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn center_lyrics_window(app_handle: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+
+    let window = app_handle
+        .get_webview_window("desktop-lyrics")
+        .ok_or_else(|| "desktop-lyrics window not found".to_string())?;
+    window
+        .center()
+        .map_err(|e| format!("Failed to center lyrics window: {}", e))
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn center_lyrics_window(_app_handle: tauri::AppHandle) -> Result<(), String> {
+    Err("center_lyrics_window is only supported on Windows".to_string())
 }

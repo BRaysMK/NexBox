@@ -211,6 +211,18 @@
       "description": "優化網路參數與 DNS 設定",
       "loadFailed": "載入狀態失敗",
       "restore": "恢復預設",
+      "publicIp": {
+        "title": "公網 IP",
+        "label": "目前網路的公網 IPv4 位址",
+        "loading": "查詢中...",
+        "failed": "取得失敗，請檢查網路連線",
+        "refresh": "重新整理",
+        "copy": "複製",
+        "copied": "公網 IP 已複製到剪貼簿",
+        "copyFailed": "複製失敗",
+        "updated": "公網 IP 已更新",
+        "fetchFailed": "公網 IP 取得失敗"
+      },
       "tcpCongestion": {
         "title": "TCP 擁塞控制",
         "description": "設定 TCP 擁塞控制協定為 CTCP/CUBIC，提升網路吞吐量"
@@ -428,7 +440,47 @@
       "warning": "警告",
       "warningText": "修改核心親和性可能影響進程效能，請謹慎操作。部分系統進程不建議修改。",
       "hybridNotSupported": "目前CPU不支援P核/E核區分，所有核心將統一顯示",
-      "error": "操作失敗"
+      "error": "操作失敗",
+      "coreIsolation": {
+        "tab": "核心隔離",
+        "assignmentTab": "進程核心分配",
+        "description": "選擇若干核心作為隔離區，其他軟體將被限制執行在這些核心上，僅讓所選遊戲獨佔其排程資源。",
+        "selectCores": "選擇隔離核心",
+        "selectCoresHint": "被隔離的核心將不再分配給其他進程，遊戲進程不受影響。",
+        "excludeProcess": "選擇遊戲進程",
+        "excludeProcessHint": "遊戲進程保持全核心排程，可自由使用隔離核心；其餘軟體將被限制在隔離核心之外。再次點擊可取消選擇。",
+        "noExcludeProcess": "無",
+        "noCoreSelected": "請至少選擇一個要隔離的核心",
+        "allCoresForbidden": "不允許隔離全部核心",
+        "apply": "應用隔離",
+        "applying": "隔離中...",
+        "restore": "恢復隔離",
+        "restoring": "恢復中...",
+        "applied": "核心隔離已應用",
+        "restored": "核心隔離已恢復",
+        "applyResult": "成功修改 {{modified}} 個進程，失敗 {{failed}} 個",
+        "failedList": "失敗進程",
+        "permissionHint": "提示：如失敗進程較多，請以管理員身分執行 NexBox 後重試。",
+        "activeState": "核心隔離已生效",
+        "idleState": "目前未啟用核心隔離",
+        "isolatedMaskLabel": "隔離核心遮罩",
+        "excludeProcessLabel": "豁免進程",
+        "modifiedCount": "已隔離 {{count}} 個進程",
+        "saveRule": "儲存為隔離規則",
+        "saveRuleBtn": "儲存規則",
+        "ruleNameRequired": "請輸入規則名稱",
+        "ruleNamePlaceholder": "輸入名稱",
+        "autoApply": "啟動新境盒自動應用",
+        "autoApplyHint": "勾選後啟動新境盒時自動套用此隔離規則",
+        "autoApplyBadge": "自動",
+        "restoreRule": "恢復",
+        "activeBadge": "生效中",
+        "ruleSaved": "隔離規則已儲存",
+        "ruleDeleted": "隔離規則已刪除",
+        "rulesTitle": "已儲存的隔離規則",
+        "exempted": "豁免",
+        "warningText": "核心隔離會限制其他軟體的排程範圍，可能影響系統整體回應速度。請勿隔離全部核心，並謹慎選擇隔離範圍。"
+      }
     }
   },
   "home": {
@@ -448,6 +500,27 @@
       "loading": "載入中...",
       "title": "遊戲時停用 Win 鍵",
       "subtitle": "偵測到名單內遊戲執行時自動屏蔽 Win 鍵"
+    },
+    "randomImage": {
+      "loading": "載入中...",
+      "title": "隨機圖片",
+      "subtitle": "點擊開啟隨機圖片",
+      "refresh": "換一張",
+      "retry": "重試",
+      "error": "圖片載入失敗",
+      "modalTitle": "隨機圖片",
+      "categoryLabel": "類別",
+      "typeLabel": "子類別",
+      "anyCategory": "全域隨機",
+      "anyType": "不指定",
+      "typeNotSupported": "目前類別不支援子類別",
+      "generate": "產生",
+      "download": "下載",
+      "downloadTitle": "儲存隨機圖片",
+      "downloadSuccess": "圖片已儲存",
+      "downloadFailed": "圖片儲存失敗",
+      "noImageYet": "尚無可下載的圖片",
+      "previewAlt": "隨機圖片預覽"
     }
   },
   "hardware": {
@@ -482,7 +555,12 @@
     "macAddress": "MAC位址",
     "linkSpeed": "鏈路速率",
     "deltaPasswordFetched": "已取得",
-    "deltaPasswordNotFetched": "--"
+    "deltaPasswordNotFetched": "--",
+    "copyAll": "複製所有硬體資訊",
+    "copySuccess": "已複製到剪貼簿",
+    "copyDesc": "硬體資訊已依分類複製",
+    "copyFailed": "複製失敗",
+    "noData": "暫無硬體資訊"
   },
   "tools": {
     "title": "工具",
@@ -931,6 +1009,8 @@
     "loading": "載入中...",
     "loadError": "載入失敗",
     "currentGpu": "目前顯卡",
+    "integrated": "內顯",
+    "discrete": "獨顯",
     "originalGpu": "原始顯卡",
     "backupStatus": "備份狀態",
     "backedUp": "已備份",
@@ -1042,6 +1122,8 @@
       "feedbackDesc": "在首頁顯示圖片輪播",
       "gameWinKeyLabel": "Win 鍵停用卡片",
       "gameWinKeyDesc": "在首頁顯示遊戲時停用 Win 鍵卡片",
+      "randomImageLabel": "隨機圖片",
+      "randomImageDesc": "在首頁顯示隨機圖片卡片",
       "splash": "動畫",
       "splashLogoLabel": "啟動動畫 Logo",
       "splashLogoDesc": "自訂啟動動畫中顯示的 Logo 圖片",
@@ -1069,6 +1151,7 @@
       "autoStartDisabled": "開機自啟已關閉",
       "autoStartError": "開機自啟設定失敗",
       "autoStartErrorHint": "請檢查防毒軟體是否攔截，或嘗試以系統管理員身分執行",
+      "autoUpdate": "自動靜默更新",
       "closeBehavior": "關閉行為",
       "closeBehaviorLabel": "點擊關閉按鈕時",
       "closeBehaviorDesc": "選擇點擊關閉按鈕時的行為",
@@ -1165,7 +1248,8 @@
         "title": "贊助者名單",
         "loading": "載入中...",
         "error": "載入失敗",
-        "empty": "暫無贊助者"
+        "empty": "暫無贊助者",
+        "totalAmount": "累計贊助總額："
       }
     },
     "aboutSettings": {
@@ -1185,6 +1269,10 @@
       "changelogTitle": "當前版本更新內容",
       "noChangelog": "暫無更新日誌",
       "loadingChangelog": "載入中...",
+      "newVersionDownloading": "新版本下載中",
+      "autoUpdateDisabledHint": "已關閉，開啟後自動更新",
+      "downloadingWithProgress": "下載中 {{progress}}%",
+      "pendingInstall": "待重新啟動安裝",
       "updateModal": {
         "title": "發現新版本",
         "version": "版本",
@@ -1275,6 +1363,13 @@
     "filter": "濾鏡",
     "filterToggle": "切換濾鏡",
     "filterToggleDesc": "使用快速鍵開啟或關閉濾鏡",
+    "music": "音樂",
+    "musicPrev": "上一曲",
+    "musicPrevDesc": "使用快速鍵切換到上一曲",
+    "musicNext": "下一曲",
+    "musicNextDesc": "使用快速鍵切換到下一曲",
+    "musicPlayPause": "播放 / 暫停",
+    "musicPlayPauseDesc": "使用快速鍵播放或暫停音樂",
     "saved": "快速鍵已保存",
     "masterToggle": "全部熱鍵總開關",
     "masterToggleDesc": "關閉後所有全域熱鍵將不生效"

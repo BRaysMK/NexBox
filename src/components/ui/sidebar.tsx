@@ -1,4 +1,4 @@
-import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image } from "@chakra-ui/react";
+import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image, useColorMode } from "@chakra-ui/react";
 import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Music, LayoutGrid, Gamepad2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -7,15 +7,18 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 import { store } from "@/lib/store";
-import deltaForceIcon from "@/assets/deltaforce.png";
+import deltaForceIconLight from "@/assets/deltaforce-light.png";
+import deltaForceIconDark from "@/assets/deltaforce-dark.png";
 import epicGamesIcon from "@/assets/epic-games.png";
-import steamIcon from "@/assets/tools/Steam.png";
+import steamIconLight from "@/assets/tools/Steam-light.png";
+import steamIconDark from "@/assets/tools/Steam-dark.png";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 interface NavItem {
   path: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }> | null;
   customIcon?: string;
+  customIconDark?: string;
   customIconSize?: string;
   ariaLabel: string;
   beta?: boolean;
@@ -32,8 +35,9 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
   activeIconColor: string;
   showLabel: boolean;
 }) {
-  const isCustom = !!item.customIcon;
+  const isCustom = !!item.customIcon || !!item.customIconDark;
   const { getActiveColor } = useThemeColor();
+  const { colorMode } = useColorMode();
   const activeColor = getActiveColor();
   const [bursts, setBursts] = useState<Array<{id: number, x: number, y: number}>>([]);
   const nextId = useRef(0);
@@ -49,9 +53,14 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
     }, 450);
   }, []);
 
+  // 浅色模式用 light 图标（hei黑底），深色模式用 dark 图标（bai白底）
+  const resolvedCustomIcon = colorMode === "dark"
+    ? (item.customIconDark || item.customIcon)
+    : (item.customIcon || item.customIconDark);
+
   const iconElement = isCustom ? (
     <Image
-      src={item.customIcon}
+      src={resolvedCustomIcon}
       alt={item.ariaLabel}
       w={item.customIconSize || "22px"}
       h={item.customIconSize || "22px"}
@@ -384,8 +393,8 @@ export function Sidebar() {
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
     { path: "/music", icon: Music, ariaLabel: t("sidebar.music") },
-    { path: "/delta-force", icon: null, customIcon: deltaForceIcon, ariaLabel: t("sidebar.deltaForce") },
-    { path: "/steam", icon: null, customIcon: steamIcon, customIconSize: "44px", ariaLabel: t("sidebar.steam") },
+    { path: "/delta-force", icon: null, customIcon: deltaForceIconLight, customIconDark: deltaForceIconDark, customIconSize: "20px", ariaLabel: t("sidebar.deltaForce") },
+    { path: "/steam", icon: null, customIcon: steamIconLight, customIconDark: steamIconDark, customIconSize: "44px", ariaLabel: t("sidebar.steam") },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
     { path: "/custom", icon: LayoutGrid, ariaLabel: t("sidebar.custom") },

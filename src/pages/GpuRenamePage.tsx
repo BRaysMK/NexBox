@@ -30,8 +30,9 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 
 interface GpuInfo {
-  original_name: string;
-  current_name: string;
+  name: string;
+  is_integrated: boolean;
+  original_name: string | null;
   is_backed_up: boolean;
 }
 
@@ -61,7 +62,7 @@ export default function GpuRenamePage() {
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
 
-  const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
+  const [gpuList, setGpuList] = useState<GpuInfo[]>([]);
   const [gpuOptions, setGpuOptions] = useState<GpuOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -71,6 +72,10 @@ export default function GpuRenamePage() {
   const [customName, setCustomName] = useState("");
   const [restarting, setRestarting] = useState(false);
 
+  // 默认显卡（优先独显）与整体备份状态
+  const primaryGpu = gpuList.find((g) => !g.is_integrated) ?? gpuList[0];
+  const anyBackedUp = gpuList.some((g) => g.is_backed_up);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -78,25 +83,23 @@ export default function GpuRenamePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [info, options] = await Promise.all([
-        invoke<GpuInfo>("get_gpu_info"),
+      const [list, options] = await Promise.all([
+        invoke<GpuInfo[]>("get_gpu_list"),
         invoke<GpuOption[]>("get_gpu_options"),
       ]);
-      setGpuInfo(info);
-      setGpuOptions(options);
+      setGpuList(list);
 
-      // 默认选中当前显卡：若已在预设列表中则直接选中，否则作为"当前显卡"选项加入并默认选中
-      if (info?.current_name) {
-        const matched = options.find((opt) => opt.name === info.current_name);
-        if (matched) {
-          setSelectedOption(matched.id);
-        } else {
-          setGpuOptions([
-            { id: "current-gpu", name: info.current_name, category: "current" },
-            ...options,
-          ]);
-          setSelectedOption("current-gpu");
-        }
+      // 把检测到的全部显卡（独显 + 核显）加入"当前显卡"下拉列表，默认选中独显
+      const currentOptions: GpuOption[] = list.map((g) => ({
+        id: `current-${g.name}`,
+        name: g.name,
+        category: "current",
+      }));
+      setGpuOptions([...currentOptions, ...options]);
+
+      const defaultGpu = list.find((g) => !g.is_integrated) ?? list[0];
+      if (defaultGpu) {
+        setSelectedOption(`current-${defaultGpu.name}`);
       }
     } catch (error) {
       toast({
@@ -263,7 +266,7 @@ export default function GpuRenamePage() {
                   {t("gpuRename.currentGpu")}
                 </Text>
                 <Text color={headingColor} fontWeight="medium" wordBreak="break-all">
-                  {gpuInfo?.current_name || "-"}
+                  {primaryGpu?.name || "-"}
                 </Text>
               </Box>
 
@@ -272,23 +275,23 @@ export default function GpuRenamePage() {
                   {t("gpuRename.backupStatus")}
                 </Text>
                 <Text
-                  color={gpuInfo?.is_backed_up ? "green.500" : "orange.500"}
+                  color={anyBackedUp ? "green.500" : "orange.500"}
                   fontWeight="medium"
                 >
-                  {gpuInfo?.is_backed_up
+                  {anyBackedUp
                     ? t("gpuRename.backedUp")
                     : t("gpuRename.notBackedUp")}
                 </Text>
               </Box>
             </HStack>
 
-            {gpuInfo?.is_backed_up && (
+            {anyBackedUp && primaryGpu?.original_name && (
               <Box w="full">
                 <Text color={textColor} fontSize="sm" mb={1}>
                   {t("gpuRename.originalGpu")}
                 </Text>
                 <Text color={headingColor} fontWeight="medium" wordBreak="break-all">
-                  {gpuInfo.original_name}
+                  {primaryGpu.original_name}
                 </Text>
               </Box>
             )}
@@ -311,7 +314,15 @@ export default function GpuRenamePage() {
                       onChange={setSelectedOption}
                       options={gpuOptions
                         .filter((option) => option.category === "current")
-                        .map((option) => ({ value: option.id, label: option.name }))}
+                        .map((option) => {
+                          const gpu = gpuList.find((g) => g.name === option.name);
+                          return {
+                            value: option.id,
+                            label: gpu?.is_integrated
+                              ? `${option.name} (${t("gpuRename.integrated")})`
+                              : `${option.name} (${t("gpuRename.discrete")})`,
+                          };
+                        })}
                       placeholder={t("gpuRename.selectPlaceholder")}
                       width="100%"
                     />
@@ -386,7 +397,7 @@ export default function GpuRenamePage() {
               {t("gpuRename.apply")}
             </Button>
 
-            {gpuInfo?.is_backed_up && (
+            {anyBackedUp && (
               <Button
                 colorScheme="orange"
                 onClick={handleRestore}

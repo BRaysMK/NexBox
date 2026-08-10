@@ -458,3 +458,72 @@ foreach ($adapter in $adapters) {
 Write-Output 'OK'
 "#)
 }
+
+// === 8. 公网 IP 查询（国内可访问的免费 API，多源 fallback，仅返回 IPv4） ===
+
+#[derive(Clone, Copy)]
+enum PublicIpProvider {
+    /// 返回纯 IP 文本
+    Plain,
+    /// 返回 key=value 文本（cloudflare trace），需解析 ip= 字段
+    Trace,
+}
+
+/// 国内可访问的免费公网 IPv4 查询 API，按顺序 fallback
+const PUBLIC_IP_PROVIDERS: &[(&str, PublicIpProvider)] = &[
+    ("https://4.ipw.cn", PublicIpProvider::Plain),
+    ("https://ip.3322.net", PublicIpProvider::Plain),
+    ("https://myip.ipip.net", PublicIpProvider::Plain),
+    ("https://api.ip.sb/ip", PublicIpProvider::Plain),
+    ("https://api.ipify.org", PublicIpProvider::Plain),
+    ("https://cloudflare.com/cdn-cgi/trace", PublicIpProvider::Trace),
+];
+
+/// 校验是否为合法的 IPv4 地址
+fn is_valid_ipv4(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+    parts.len() == 4
+        && parts.iter().all(|p| {
+            !p.is_empty()
+                && p.len() <= 3
+                && p.bytes().all(|b| b.is_ascii_digit())
+                && p.parse::<u32>().map(|n| n <= 255).unwrap_or(false)
+        })
+}
+
+/// 从任意文本中提取第一个 IPv4 地址
+fn find_ipv4(text: &str) -> Option<String> {
+    text.split(|c: char| !c.is_ascii_digit() && c != '.')
+        .find(|s| is_valid_ipv4(s))
+        .map(|s| s.to_string())
+}
+
+fn extract_ipv4(text: &str, provider: PublicIpProvider) -> Option<String> {
+    match provider {
+        PublicIpProvider::Plain => find_ipv4(text),
+        PublicIpProvider::Trace => text
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("ip=").and_then(find_ipv4)),
+    }
+}
+
+/// 获取当前网络的公网 IPv4 地址（多 API 顺序 fallback，国内可访问）
+#[tauri::command]
+pub async fn get_public_ip() -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("初始化 HTTP 客户端失败: {}", e))?;
+
+    for &(url, provider) in PUBLIC_IP_PROVIDERS {
+        if let Ok(resp) = client.get(url).send().await {
+            if let Ok(text) = resp.text().await {
+                if let Some(ip) = extract_ipv4(&text, provider) {
+                    return Ok(ip);
+                }
+            }
+        }
+    }
+
+    Err("无法获取公网 IPv4 地址，请检查网络连接".to_string())
+}

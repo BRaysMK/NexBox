@@ -211,6 +211,18 @@
       "description": "Netzwerkparameter und DNS optimieren",
       "loadFailed": "Status laden fehlgeschlagen",
       "restore": "Standard wiederherstellen",
+      "publicIp": {
+        "title": "Öffentliche IP",
+        "label": "Öffentliche IPv4-Adresse des aktuellen Netzwerks",
+        "loading": "Wird abgerufen...",
+        "failed": "Abruf fehlgeschlagen, bitte Netzwerkverbindung prüfen",
+        "refresh": "Aktualisieren",
+        "copy": "Kopieren",
+        "copied": "Öffentliche IP in die Zwischenablage kopiert",
+        "copyFailed": "Kopieren fehlgeschlagen",
+        "updated": "Öffentliche IP aktualisiert",
+        "fetchFailed": "Abruf der öffentlichen IP fehlgeschlagen"
+      },
       "tcpCongestion": {
         "title": "TCP-Überlastungssteuerung",
         "description": "TCP-Überlastungssteuerung auf CTCP/CUBIC setzen"
@@ -446,7 +458,47 @@
       "warning": "Warnung",
       "warningText": "Das Ändern der Kernaffinität kann die Prozessleistung beeinflussen. Mit Vorsicht verwenden.",
       "hybridNotSupported": "Aktuelle CPU unterstützt keine P-Kern/E-Kern-Unterscheidung",
-      "error": "Vorgang fehlgeschlagen"
+      "error": "Vorgang fehlgeschlagen",
+      "coreIsolation": {
+        "tab": "Kern-Isolation",
+        "assignmentTab": "Kern-Zuweisung",
+        "description": "Reservieren Sie ausgewählte Kerne als Isolationszone. Andere Software wird daran gehindert, auf diesen Kernen zu laufen, sodass sie exklusiv für das ausgewählte Spiel verfügbar sind.",
+        "selectCores": "Zu isolierende Kerne wählen",
+        "selectCoresHint": "Isolierte Kerne werden anderen Prozessen nicht mehr zugewiesen. Das freigestellte Spiel ist nicht betroffen.",
+        "excludeProcess": "Spielprozess auswählen",
+        "excludeProcessHint": "Das Spiel behält die Planung auf allen Kernen und kann isolierte Kerne frei nutzen ; andere Software ist von den isolierten Kernen ausgeschlossen. Erneut klicken zum Abwählen.",
+        "noExcludeProcess": "Keine",
+        "noCoreSelected": "Bitte mindestens einen Kern zum Isolieren wählen",
+        "allCoresForbidden": "Das Isolieren aller Kerne ist nicht erlaubt",
+        "apply": "Isolation anwenden",
+        "applying": "Isoliere...",
+        "restore": "Isolation aufheben",
+        "restoring": "Wiederherstellen...",
+        "applied": "Kern-Isolation angewendet",
+        "restored": "Kern-Isolation aufgehoben",
+        "applyResult": "{{modified}} Prozesse geändert, {{failed}} fehlgeschlagen",
+        "failedList": "Fehlgeschlagene Prozesse",
+        "permissionHint": "Tipp: Wenn viele Prozesse fehlschlagen, führen Sie NexBox als Administrator aus und versuchen Sie es erneut.",
+        "activeState": "Kern-Isolation aktiv",
+        "idleState": "Keine aktive Kern-Isolation",
+        "isolatedMaskLabel": "Isolationsmaske",
+        "excludeProcessLabel": "Freigestellter Prozess",
+        "modifiedCount": "{{count}} Prozesse isoliert",
+        "saveRule": "Als Isolationsregel speichern",
+        "saveRuleBtn": "Regel speichern",
+        "ruleNameRequired": "Bitte einen Regelnamen eingeben",
+        "ruleNamePlaceholder": "Name eingeben",
+        "autoApply": "Beim NexBox-Start automatisch anwenden",
+        "autoApplyHint": "Diese Regel beim Start von NexBox anwenden",
+        "autoApplyBadge": "Auto",
+        "restoreRule": "Aufheben",
+        "activeBadge": "Aktiv",
+        "ruleSaved": "Isolationsregel gespeichert",
+        "ruleDeleted": "Isolationsregel gelöscht",
+        "rulesTitle": "Gespeicherte Isolationsregeln",
+        "exempted": "Freigestellt",
+        "warningText": "Die Kern-Isolation schränkt die Planung anderer Software ein und kann die Systemreaktion beeinflussen. Isolieren Sie nicht alle Kerne und wählen Sie den Bereich sorgfältig."
+      }
     }
   },
   "home": {
@@ -466,6 +518,27 @@
       "loading": "Wird geladen...",
       "title": "Win-Taste beim Spielen deaktivieren",
       "subtitle": "Blockiert die Win-Taste automatisch, wenn ein gelistetes Spiel läuft"
+    },
+    "randomImage": {
+      "loading": "Wird geladen...",
+      "title": "Zufallsbild",
+      "subtitle": "Klicken, um ein Zufallsbild zu öffnen",
+      "refresh": "Neues Bild",
+      "retry": "Erneut versuchen",
+      "error": "Bild konnte nicht geladen werden",
+      "modalTitle": "Zufallsbild",
+      "categoryLabel": "Kategorie",
+      "typeLabel": "Unterkategorie",
+      "anyCategory": "Global zufällig",
+      "anyType": "Automatisch",
+      "typeNotSupported": "Diese Kategorie unterstützt keine Unterkategorien",
+      "generate": "Generieren",
+      "download": "Herunterladen",
+      "downloadTitle": "Zufallsbild speichern",
+      "downloadSuccess": "Bild gespeichert",
+      "downloadFailed": "Bild konnte nicht gespeichert werden",
+      "noImageYet": "Noch kein Bild zum Herunterladen",
+      "previewAlt": "Zufallsbild-Vorschau"
     }
   },
   "hardware": {
@@ -500,7 +573,12 @@
     "macAddress": "MAC-Adresse",
     "linkSpeed": "Verbindungsgeschwindigkeit",
     "deltaPasswordFetched": "Abgerufen",
-    "deltaPasswordNotFetched": "--"
+    "deltaPasswordNotFetched": "--",
+    "copyAll": "Alle Hardware-Infos kopieren",
+    "copySuccess": "In die Zwischenablage kopiert",
+    "copyDesc": "Hardware-Infos nach Kategorie kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen",
+    "noData": "Keine Hardware-Informationen"
   },
   "tools": {
     "title": "Werkzeuge",
@@ -949,6 +1027,8 @@
     "loading": "Laden...",
     "loadError": "Laden fehlgeschlagen",
     "currentGpu": "Aktuelle GPU",
+    "integrated": "Integriert",
+    "discrete": "Diskret",
     "originalGpu": "Ursprüngliche GPU",
     "backupStatus": "Sicherungsstatus",
     "backedUp": "Gesichert",
@@ -1060,6 +1140,8 @@
       "feedbackDesc": "Bilderkarussell auf der Startseite anzeigen",
       "gameWinKeyLabel": "Win-Taste-Deaktivierungskarte",
       "gameWinKeyDesc": "Karte zur Deaktivierung der Win-Taste beim Spielen auf der Startseite anzeigen",
+      "randomImageLabel": "Zufallsbild",
+      "randomImageDesc": "Zufallsbild-Karte auf der Startseite anzeigen",
       "splash": "Animation",
       "splashLogoLabel": "Startlogo",
       "splashLogoDesc": "Passen Sie das beim Start angezeigte Logo an",
@@ -1087,6 +1169,7 @@
       "autoStartDisabled": "Autostart deaktiviert",
       "autoStartError": "Autostart-Einrichtung fehlgeschlagen",
       "autoStartErrorHint": "Bitte prüfen Sie, ob Antivirus blockiert, oder versuchen Sie es als Administrator",
+      "autoUpdate": "Automatisches stilles Update",
       "closeBehavior": "Schließverhalten",
       "closeBehaviorLabel": "Beim Klicken auf Schließen",
       "closeBehaviorDesc": "Wählen Sie, was beim Klicken auf den Schließen-Button passiert",
@@ -1182,7 +1265,8 @@
         "title": "Sponsorenliste",
         "loading": "Laden...",
         "error": "Laden fehlgeschlagen",
-        "empty": "Noch keine Sponsoren"
+        "empty": "Noch keine Sponsoren",
+        "totalAmount": "Gesamtspenden:"
       }
     },
     "aboutSettings": {
@@ -1202,6 +1286,10 @@
       "changelogTitle": "Aktuelle Versionsaktualisierungen",
       "noChangelog": "Kein Änderungsprotokoll verfügbar",
       "loadingChangelog": "Lädt...",
+      "newVersionDownloading": "Neue Version wird heruntergeladen",
+      "autoUpdateDisabledHint": "Deaktiviert. Aktivieren Sie die automatische Aktualisierung",
+      "downloadingWithProgress": "Lädt herunter {{progress}}%",
+      "pendingInstall": "Neu starten zum Installieren",
       "updateModal": {
         "title": "Neue Version verfügbar",
         "version": "Version",
@@ -1292,6 +1380,13 @@
     "filter": "Filter",
     "filterToggle": "Filter umschalten",
     "filterToggleDesc": "Tastenkürzel zum Ein- und Ausschalten des Anzeigefilters",
+    "music": "Musik",
+    "musicPrev": "Vorheriger Titel",
+    "musicPrevDesc": "Tastenkürzel zum Wechseln zum vorherigen Titel",
+    "musicNext": "Nächster Titel",
+    "musicNextDesc": "Tastenkürzel zum Wechseln zum nächsten Titel",
+    "musicPlayPause": "Abspielen / Pause",
+    "musicPlayPauseDesc": "Tastenkürzel zum Abspielen oder Pausieren von Musik",
     "saved": "Tastenkürzel gespeichert",
     "masterToggle": "Globaler Hotkey-Schalter",
     "masterToggleDesc": "Wenn ausgeschaltet, funktionieren keine globalen Hotkeys"

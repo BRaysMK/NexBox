@@ -432,10 +432,12 @@ function GpuInfoCard() {
             {gpuInfo.name}
           </Text>
         </HStack>
-        <HStack justify="space-between">
-          <Text fontSize="xs" color={subTextColor}>显存</Text>
-          <Text fontSize="sm" fontWeight="bold" color={textColor}>{gpuInfo.memory_gb.toFixed(0)} GB</Text>
-        </HStack>
+        {gpuInfo.memory_gb != null && gpuInfo.memory_gb > 0 && (
+          <HStack justify="space-between">
+            <Text fontSize="xs" color={subTextColor}>显存</Text>
+            <Text fontSize="sm" fontWeight="bold" color={textColor}>{gpuInfo.memory_gb.toFixed(0)} GB</Text>
+          </HStack>
+        )}
         <HStack justify="space-between">
           <Text fontSize="xs" color={subTextColor}>驱动</Text>
           <Text fontSize="sm" fontWeight="bold" color={textColor}>{gpuInfo.driver_version}</Text>

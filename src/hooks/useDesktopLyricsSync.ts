@@ -18,6 +18,7 @@ export interface DesktopLyricsSettings {
   baseColor: string;
   lineCount: 1 | 2;
   isLocked: boolean;
+  showTranslation: boolean;
 }
 
 const DEFAULT_SETTINGS: DesktopLyricsSettings = {
@@ -26,6 +27,7 @@ const DEFAULT_SETTINGS: DesktopLyricsSettings = {
   baseColor: "rgba(255,255,255,0.35)",
   lineCount: 2,
   isLocked: false,
+  showTranslation: true,
 };
 
 export type ControlAction =

@@ -18,11 +18,17 @@ import {
   Divider,
   IconButton,
   Tooltip,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
+import CpuIsolationPanel from "@/pages/CpuIsolationPanel";
 import {
   ArrowLeft,
   AlertTriangle,
@@ -375,6 +381,44 @@ export default function CpuSchedulerPage() {
         <Box w="100px" />
       </HStack>
 
+      {/* ── 模式切换 Tab ── */}
+      <Tabs variant="soft-rounded" defaultIndex={0} isLazy w="full">
+        <TabList gap={2} mb={4}>
+          <Tab
+            _selected={{
+              bg: themeColorHex,
+              color: contrastText,
+              boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+            }}
+            _hover={{ bg: themeColorRgba(0.15) }}
+            borderRadius="full"
+            fontWeight="600"
+            fontSize="sm"
+            px={6}
+            py={2}
+          >
+            <Cpu size={15} style={{ marginRight: 6 }} />
+            {t("optimization.cpuScheduler.coreIsolation.assignmentTab")}
+          </Tab>
+          <Tab
+            _selected={{
+              bg: themeColorHex,
+              color: contrastText,
+              boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+            }}
+            _hover={{ bg: themeColorRgba(0.15) }}
+            borderRadius="full"
+            fontWeight="600"
+            fontSize="sm"
+            px={6}
+            py={2}
+          >
+            <Layers size={15} style={{ marginRight: 6 }} />
+            {t("optimization.cpuScheduler.coreIsolation.tab")}
+          </Tab>
+        </TabList>
+        <TabPanels>
+          <TabPanel px={0} pt={0}>
       {/* ── CPU Topology ── */}
       <Box w="full">
         <HStack justify="space-between" align="center" mb={3}>
@@ -848,6 +892,17 @@ export default function CpuSchedulerPage() {
           <strong>{t("optimization.cpuScheduler.warning")}:</strong> {t("optimization.cpuScheduler.warningText")}
         </AlertDescription>
       </Alert>
+          </TabPanel>
+
+          <TabPanel px={0} pt={0}>
+            <CpuIsolationPanel
+              topology={topology}
+              processes={processes}
+              loadProcesses={loadProcesses}
+            />
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
     </VStack>
   );
 

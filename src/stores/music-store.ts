@@ -105,6 +105,7 @@ interface MusicState {
   desktopLyricsBaseColor: string;
   desktopLyricsLineCount: 1 | 2;
   desktopLyricsLocked: boolean;
+  desktopLyricsShowTranslation: boolean;
 
   // UI 状态
   searching: boolean;
@@ -159,6 +160,7 @@ interface MusicState {
   setDesktopLyricsBaseColor: (color: string) => Promise<void>;
   setDesktopLyricsLineCount: (count: 1 | 2) => Promise<void>;
   setDesktopLyricsLocked: (locked: boolean) => Promise<void>;
+  setDesktopLyricsShowTranslation: (show: boolean) => Promise<void>;
   emitDesktopLyricsSettings: () => void;
   emitDesktopLyricsData: () => void;
 
@@ -388,6 +390,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   desktopLyricsBaseColor: "rgba(255,255,255,0.35)",
   desktopLyricsLineCount: 2,
   desktopLyricsLocked: false,
+  desktopLyricsShowTranslation: true,
 
   searching: false,
   loadingPlaylists: false,
@@ -418,6 +421,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const dlBaseColor = await store.get<string>("desktopLyricsBaseColor");
       const dlLineCount = await store.get<1 | 2>("desktopLyricsLineCount");
       const dlLocked = await store.get<boolean>("desktopLyricsLocked");
+      const dlShowTranslation = await store.get<boolean>("desktopLyricsShowTranslation");
       if (vol != null) set({ volume: vol, prevVolume: vol > 0 ? vol : 0.7 });
       if (mode) set({ playMode: mode });
       if (quality) set({ playbackQuality: quality });
@@ -433,6 +437,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (dlHighlightColor) set({ desktopLyricsHighlightColor: dlHighlightColor });
       if (dlBaseColor) set({ desktopLyricsBaseColor: dlBaseColor });
       if (dlLineCount) set({ desktopLyricsLineCount: dlLineCount });
+      if (dlShowTranslation != null) set({ desktopLyricsShowTranslation: dlShowTranslation });
       if (dlLocked != null) {
         // 锁定状态仅在当前会话有效，启动时始终重置为 false
         // 防止跨会话残留导致桌面歌词未开但解锁按钮仍在的问题
@@ -492,6 +497,24 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             break;
           case "close":
             get().setDesktopLyricsVisible(false);
+            break;
+        }
+      })
+    );
+
+    // 全局音乐控制热键事件监听（上一曲/下一曲/播放暂停）
+    unlistenFns.push(
+      await listen<{ action: string }>("music-hotkey", (event) => {
+        const { action } = event.payload;
+        switch (action) {
+          case "play-pause":
+            get().togglePlay();
+            break;
+          case "prev":
+            get().prevTrack();
+            break;
+          case "next":
+            get().nextTrack();
             break;
         }
       })
@@ -1137,6 +1160,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             baseColor: get().desktopLyricsBaseColor,
             lineCount: get().desktopLyricsLineCount,
             isLocked: false,
+            showTranslation: get().desktopLyricsShowTranslation,
           });
           try {
             await invoke("hide_lyrics_unlock_btn");
@@ -1181,6 +1205,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     await s.save();
   },
 
+  setDesktopLyricsShowTranslation: async (show) => {
+    set({ desktopLyricsShowTranslation: show });
+    getStore().then((s) => s.set("desktopLyricsShowTranslation", show).then(() => s.save()));
+    get().emitDesktopLyricsSettings();
+  },
+
   emitDesktopLyricsSettings: () => {
     const s = get();
     emit("desktop-lyrics:settings", {
@@ -1189,6 +1219,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       baseColor: s.desktopLyricsBaseColor,
       lineCount: s.desktopLyricsLineCount,
       isLocked: s.desktopLyricsLocked,
+      showTranslation: s.desktopLyricsShowTranslation,
     });
   },
 
