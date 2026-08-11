@@ -32,7 +32,6 @@ import {
   Cpu,
   Shield,
   Zap,
-  RefreshCw,
   Settings2,
 } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -87,6 +86,7 @@ function OptionRow({
   gameRunning,
   needsAdmin,
   onApply,
+  onRestore,
   onSettings,
   titleBadge,
 }: {
@@ -98,6 +98,7 @@ function OptionRow({
   gameRunning: boolean | null;
   needsAdmin?: boolean;
   onApply: () => void;
+  onRestore?: () => void;
   onSettings?: () => void;
   titleBadge?: string;
 }) {
@@ -111,7 +112,7 @@ function OptionRow({
   const { getActiveColor } = useThemeColor();
 
   const content = (
-    <HStack align="flex-start" spacing={4}>
+    <HStack align="flex-start" spacing={4} flexWrap="wrap" gap={3}>
       <Box
         w={10} h={10}
         borderRadius="lg"
@@ -126,7 +127,7 @@ function OptionRow({
       >
         {icon}
       </Box>
-      <VStack align="flex-start" spacing={1} flex={1}>
+      <VStack align="flex-start" spacing={1} flex={1} minW="0">
         <HStack spacing={2} align="center" wrap="wrap">
           <Text fontSize="sm" fontWeight="bold" color={textColor}>
             {title}
@@ -173,6 +174,21 @@ function OptionRow({
           >
             {isApplied ? t("optimization.aceOptimize.applied") : t("optimization.aceOptimize.apply")}
           </Button>
+          {onRestore && (
+            <Button
+              size="sm"
+              variant="outline"
+              colorScheme="red"
+              onClick={onRestore}
+              isLoading={isLoading}
+              loadingText=""
+              px={4}
+              borderRadius="lg"
+              minW="72px"
+            >
+              {t("optimization.aceOptimize.restore")}
+            </Button>
+          )}
         </HStack>
         {gameRunning !== null && (
           <Badge
@@ -282,14 +298,12 @@ function CoreSelectionModal({
   isOpen,
   onClose,
   coreCount,
-  target,
   currentSavedMask,
   onSave,
 }: {
   isOpen: boolean;
   onClose: () => void;
   coreCount: number;
-  target: "delta" | "ace";
   currentSavedMask: number;
   onSave: (mask: number) => void;
 }) {
@@ -304,7 +318,7 @@ function CoreSelectionModal({
   useEffect(() => {
     const cores: number[] = [];
     for (let i = 0; i < coreCount; i++) {
-      if (currentSavedMask & (1 << i)) {
+      if (((currentSavedMask / Math.pow(2, i)) % 2) >= 1) {
         cores.push(i);
       }
     }
@@ -328,12 +342,11 @@ function CoreSelectionModal({
   };
 
   const handleSave = () => {
-    const mask = selectedCores.reduce((acc, core) => acc | (1 << core), 0);
+    const mask = selectedCores.reduce((acc, core) => acc + Math.pow(2, core), 0);
     onSave(mask);
     onClose();
   };
 
-  const isDefaultForDelta = coreCount > 0 && currentSavedMask === ((1 << coreCount) - 2);
   const isDefaultForAce = currentSavedMask === 1;
 
   return (
@@ -349,7 +362,7 @@ function CoreSelectionModal({
         <ModalCloseButton />
         <ModalBody>
           <VStack align="stretch" spacing={1}>
-            <HStack justify="space-between" mb={2}>
+            <HStack justify="space-between" mb={2} flexWrap="wrap" gap={2}>
               <Text fontSize="xs" color="gray.500">
                 CPU0 - CPU{coreCount - 1}
               </Text>
@@ -370,7 +383,7 @@ function CoreSelectionModal({
                 "&::-webkit-scrollbar-thumb": { bg: "gray.600", borderRadius: "full" },
               }}
             >
-              <SimpleGrid columns={4} spacing={2}>
+              <SimpleGrid columns={{ base: 3, sm: 4, md: 6 }} spacing={2}>
                 {Array.from({ length: coreCount }, (_, i) => (
                   <Checkbox
                     key={i}
@@ -396,10 +409,8 @@ function CoreSelectionModal({
               </SimpleGrid>
             </Box>
             <Text fontSize="2xs" color="gray.500" mt={2}>
-              {target === "delta"
-                ? t("optimization.aceOptimize.affinitySettings.deltaDefault")
-                : t("optimization.aceOptimize.affinitySettings.aceDefault")}
-              {isDefaultForDelta || isDefaultForAce ? " ✓" : ""}
+              {t("optimization.aceOptimize.affinitySettings.aceDefault")}
+              {isDefaultForAce ? " ✓" : ""}
             </Text>
           </VStack>
         </ModalBody>
@@ -428,24 +439,18 @@ export default function AceOptimizePage() {
 
   const { liquidGlassEnabled } = useBackground();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const borderColorVal = useColorModeValue("gray.200", "#333333");
   const { getActiveColor } = useThemeColor();
 
-  const [deltaPriority, setDeltaPriority] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
-  const [deltaAffinity, setDeltaAffinity] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
   const [acePriority, setAcePriority] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
   const [aceAffinity, setAceAffinity] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
   const [aceEfficiency, setAceEfficiency] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
-  const [optimizeAllLoading, setOptimizeAllLoading] = useState(false);
+  const [aceRegistry, setAceRegistry] = useState<OptionState>({ running: false, message: "", foundCount: 0, modifiedCount: 0 });
 
   // 核心选择配置
-  const [deltaAffinityMask, setDeltaAffinityMask] = useState<number | null>(null);
   const [aceAffinityMask, setAceAffinityMask] = useState<number | null>(null);
   const [coreCount, setCoreCount] = useState(0);
-  const [settingsTarget, setSettingsTarget] = useState<"delta" | "ace">("delta");
   const { isOpen: isSettingsOpen, onOpen: onSettingsOpen, onClose: onSettingsClose } = useDisclosure();
 
-  const getDefaultDeltaMask = useCallback((cores: number) => cores > 0 ? (1 << cores) - 2 : 0, []);
   const getDefaultAceMask = useCallback(() => 1, []);
 
   // 从 Store 加载已保存的配置
@@ -454,13 +459,12 @@ export default function AceOptimizePage() {
     setCoreCount(cores);
 
     const loadConfig = async () => {
-      const savedDelta = await STORE.get<number>("delta_affinity_mask");
       const savedAce = await STORE.get<number>("ace_affinity_mask");
-      setDeltaAffinityMask(savedDelta ?? getDefaultDeltaMask(cores));
-      setAceAffinityMask(savedAce ?? getDefaultAceMask());
+      // 过滤无效的旧值（JS 32 位位移曾产生负数），避免再次传给后端
+      setAceAffinityMask(savedAce !== undefined && savedAce > 0 ? savedAce : getDefaultAceMask());
     };
     loadConfig();
-  }, [getDefaultDeltaMask, getDefaultAceMask]);
+  }, [getDefaultAceMask]);
 
   // ACE 自动检测状态
   const [autoDetectEnabled, setAutoDetectEnabled] = useState<boolean | null>(null); // null = 加载中
@@ -527,39 +531,6 @@ export default function AceOptimizePage() {
     }
   }, [toast, t]);
 
-  const applyDeltaPriority = useCallback(async () => {
-    setDeltaPriority(prev => ({ ...prev, running: true }));
-    try {
-      const result = await invoke<{ success: boolean; message: string; was_running: boolean }>("boost_delta_force_priority");
-      setDeltaPriority({ running: false, message: result.message, foundCount: result.was_running ? 1 : 0, modifiedCount: result.was_running ? 1 : 0 });
-      toast({
-        title: result.was_running ? t("optimization.aceOptimize.deltaBoost.success") : t("optimization.aceOptimize.deltaBoost.notRunning"),
-        status: result.was_running ? "success" : "info",
-        duration: 2000,
-      });
-    } catch (e: any) {
-      setDeltaPriority({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
-      toast({ title: String(e), status: "error", duration: 2000 });
-    }
-  }, [toast, t]);
-
-  const applyDeltaAffinity = useCallback(async () => {
-    setDeltaAffinity(prev => ({ ...prev, running: true }));
-    try {
-      const mask = deltaAffinityMask ?? getDefaultDeltaMask(coreCount);
-      const result = await invoke<{ success: boolean; message: string; was_running: boolean }>("boost_delta_force_affinity_with_mask", { mask });
-      setDeltaAffinity({ running: false, message: result.message, foundCount: result.was_running ? 1 : 0, modifiedCount: result.was_running ? 1 : 0 });
-      toast({
-        title: result.was_running ? t("optimization.aceOptimize.deltaBoost.affinitySuccess") : t("optimization.aceOptimize.deltaBoost.notRunning"),
-        status: result.was_running ? "success" : "info",
-        duration: 2000,
-      });
-    } catch (e: any) {
-      setDeltaAffinity({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
-      toast({ title: String(e), status: "error", duration: 2000 });
-    }
-  }, [toast, t, deltaAffinityMask, getDefaultDeltaMask, coreCount]);
-
   const applyAcePriority = useCallback(async () => {
     setAcePriority(prev => ({ ...prev, running: true }));
     try {
@@ -621,53 +592,55 @@ export default function AceOptimizePage() {
     }
   }, [toast, t]);
 
-  const openDeltaSettings = useCallback(() => {
-    setSettingsTarget("delta");
-    onSettingsOpen();
-  }, [onSettingsOpen]);
+  const applyAceRegistry = useCallback(async () => {
+    setAceRegistry(prev => ({ ...prev, running: true }));
+    try {
+      const result = await invoke<{ success: boolean; message: string }>("apply_ace_registry_limits");
+      setAceRegistry({ running: false, message: result.message, foundCount: 0, modifiedCount: result.success ? 1 : 0 });
+      toast({
+        title: result.success
+          ? t("optimization.aceOptimize.aceRegistry.success")
+          : result.message,
+        status: result.success ? "success" : "error",
+        duration: 3000,
+      });
+    } catch (e: any) {
+      setAceRegistry({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
+      toast({ title: String(e), status: "error", duration: 3000 });
+    }
+  }, [toast, t]);
 
-  const openAceSettings = useCallback(() => {
-    setSettingsTarget("ace");
+  const restoreAceRegistry = useCallback(async () => {
+    setAceRegistry(prev => ({ ...prev, running: true }));
+    try {
+      const result = await invoke<{ success: boolean; message: string }>("restore_ace_registry_limits");
+      setAceRegistry({ running: false, message: result.message, foundCount: 0, modifiedCount: 0 });
+      toast({
+        title: result.success
+          ? t("optimization.aceOptimize.aceRegistry.restored")
+          : result.message,
+        status: result.success ? "success" : "error",
+        duration: 3000,
+      });
+    } catch (e: any) {
+      setAceRegistry({ running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
+      toast({ title: String(e), status: "error", duration: 3000 });
+    }
+  }, [toast, t]);
+
+  const handleOpenAceSettings = useCallback(() => {
     onSettingsOpen();
   }, [onSettingsOpen]);
 
   const handleSaveAffinityConfig = useCallback(async (mask: number) => {
-    if (settingsTarget === "delta") {
-      setDeltaAffinityMask(mask);
-      await STORE.set("delta_affinity_mask", mask);
-    } else {
-      setAceAffinityMask(mask);
-      await STORE.set("ace_affinity_mask", mask);
-    }
+    setAceAffinityMask(mask);
+    await STORE.set("ace_affinity_mask", mask);
     toast({
       title: t("optimization.aceOptimize.affinitySettings.configSaved"),
       status: "success",
       duration: 2000,
     });
-  }, [settingsTarget, t, toast]);
-
-  const applyAll = useCallback(async () => {
-    setOptimizeAllLoading(true);
-    try {
-      const result = await invoke<{ success: boolean; message: string; delta_boosted: boolean; ace_limited: boolean; ace_count: number }>("optimize_all_game_processes");
-      if (result.delta_boosted) {
-        setDeltaPriority({ running: false, message: t("optimization.aceOptimize.status.optimized"), foundCount: 1, modifiedCount: 1 });
-        setDeltaAffinity({ running: false, message: t("optimization.aceOptimize.status.optimized"), foundCount: 1, modifiedCount: 1 });
-      }
-      if (result.ace_limited) {
-        setAcePriority({ running: false, message: t("optimization.aceOptimize.status.optimized"), foundCount: result.ace_count, modifiedCount: result.ace_count });
-        setAceAffinity({ running: false, message: t("optimization.aceOptimize.status.optimized"), foundCount: result.ace_count, modifiedCount: result.ace_count });
-      }
-      toast({
-        title: result.message,
-        status: result.success ? "success" : "info",
-        duration: 3000,
-      });
-    } catch (e: any) {
-      toast({ title: String(e), status: "error", duration: 2000 });
-    }
-    setOptimizeAllLoading(false);
-  }, [toast, t]);
+  }, [t, toast]);
 
   return (
     <Box pt={8} pb={8}>
@@ -686,36 +659,7 @@ export default function AceOptimizePage() {
         </HStack>
       </HStack>
 
-      <SimpleGrid columns={2} spacing={5} mb={5}>
-        <SettingCard
-          title={t("optimization.aceOptimize.deltaSection.title")}
-          subTitle={t("optimization.aceOptimize.deltaSection.subtitle")}
-          icon={<Gauge size={18} />}
-          color={getActiveColor()}
-        >
-          <VStack align="stretch" spacing={3}>
-            <OptionRow
-              icon={<Cpu size={18} />}
-              title={t("optimization.aceOptimize.deltaBoost.title")}
-              description={t("optimization.aceOptimize.deltaBoost.description")}
-              isLoading={deltaPriority.running}
-              isApplied={deltaPriority.modifiedCount > 0}
-              gameRunning={deltaPriority.foundCount > 0 ? true : (deltaPriority.message ? false : null)}
-              onApply={applyDeltaPriority}
-            />
-            <OptionRow
-              icon={<Cpu size={18} />}
-              title={t("optimization.aceOptimize.deltaBoost.affinityTitle")}
-              description={t("optimization.aceOptimize.deltaBoost.affinityDescription")}
-              isLoading={deltaAffinity.running}
-              isApplied={deltaAffinity.modifiedCount > 0}
-              gameRunning={deltaAffinity.foundCount > 0 ? true : (deltaAffinity.message ? false : null)}
-              onApply={applyDeltaAffinity}
-              onSettings={openDeltaSettings}
-            />
-          </VStack>
-        </SettingCard>
-
+      <Box maxW="900px" mx="auto" mb={5}>
         <SettingCard
           title={t("optimization.aceOptimize.aceSection.title")}
           subTitle={t("optimization.aceOptimize.aceSection.subtitle")}
@@ -742,7 +686,7 @@ export default function AceOptimizePage() {
               gameRunning={aceAffinity.foundCount > 0 ? true : (aceAffinity.message ? false : null)}
               needsAdmin={aceAffinity.foundCount > 0 && aceAffinity.modifiedCount === 0}
               onApply={applyAceAffinity}
-              onSettings={openAceSettings}
+              onSettings={handleOpenAceSettings}
             />
             <OptionRow
               icon={<Zap size={18} />}
@@ -754,6 +698,17 @@ export default function AceOptimizePage() {
               needsAdmin={aceEfficiency.foundCount > 0 && aceEfficiency.modifiedCount === 0}
               onApply={applyAceEfficiency}
             />
+            <OptionRow
+              icon={<Settings2 size={18} />}
+              title={t("optimization.aceOptimize.aceRegistry.title")}
+              description={t("optimization.aceOptimize.aceRegistry.description")}
+              isLoading={aceRegistry.running}
+              isApplied={aceRegistry.modifiedCount > 0}
+              gameRunning={null}
+              onApply={applyAceRegistry}
+              onRestore={restoreAceRegistry}
+              titleBadge={t("optimization.aceOptimize.aceRegistry.badge")}
+            />
 
             {/* 自动检测并优化 */}
             <Box
@@ -762,13 +717,13 @@ export default function AceOptimizePage() {
               borderTop="1px solid"
               borderColor={useColorModeValue("gray.200", "#333333")}
             >
-              <HStack justify="space-between" align="center">
+              <HStack justify="space-between" align="center" flexWrap="wrap" gap={3}>
                 <VStack align="flex-start" spacing={2}>
                   <Text fontWeight="bold" fontSize="sm" color={headingColor}>
                     {t("optimization.aceOptimize.autoDetect.title")}
                   </Text>
                   {autoDetectStatus && (
-                    <HStack spacing={2} align="center">
+                    <HStack spacing={2} align="center" flexWrap="wrap">
                       <Text fontSize="xs" color="gray.500">
                         {t("optimization.aceOptimize.autoDetect.lastCheck")}:{" "}
                         {autoDetectStatus.last_check
@@ -808,56 +763,13 @@ export default function AceOptimizePage() {
             </Box>
           </VStack>
         </SettingCard>
-      </SimpleGrid>
-
-      {(() => {
-        const optimizeAllContent = (
-          <HStack justify="space-between">
-            <VStack align="flex-start" spacing={1}>
-              <HStack>
-                <RefreshCw size={16} color={getActiveColor()} />
-                <Text fontWeight="bold" fontSize="sm" color={headingColor}>
-                  {t("optimization.aceOptimize.optimizeAll.title")}
-                </Text>
-              </HStack>
-              <Text fontSize="xs" color="gray.500">
-                {t("optimization.aceOptimize.optimizeAll.description")}
-              </Text>
-            </VStack>
-            <Button
-              size="md"
-              bg={getActiveColor()}
-              color="white"
-              _hover={{ bg: getActiveColor(), opacity: 0.9 }}
-              onClick={applyAll}
-              isLoading={optimizeAllLoading}
-              loadingText={t("optimization.aceOptimize.optimizeAll.optimizing")}
-              px={6}
-              borderRadius="lg"
-              leftIcon={<Zap size={16} />}
-            >
-              {t("optimization.aceOptimize.optimizeAll.button")}
-            </Button>
-          </HStack>
-        );
-
-        if (liquidGlassEnabled) {
-          return <LiquidGlassCard p={5}>{optimizeAllContent}</LiquidGlassCard>;
-        }
-
-        return (
-          <Box bg={useColorModeValue("white", "#111111")} borderRadius="xl" p={5} border="1px solid" borderColor={borderColorVal}>
-            {optimizeAllContent}
-          </Box>
-        );
-      })()}
+      </Box>
 
       <CoreSelectionModal
         isOpen={isSettingsOpen}
         onClose={onSettingsClose}
         coreCount={coreCount}
-        target={settingsTarget}
-        currentSavedMask={settingsTarget === "delta" ? (deltaAffinityMask ?? getDefaultDeltaMask(coreCount)) : (aceAffinityMask ?? getDefaultAceMask())}
+        currentSavedMask={aceAffinityMask ?? getDefaultAceMask()}
         onSave={handleSaveAffinityConfig}
       />
     </Box>

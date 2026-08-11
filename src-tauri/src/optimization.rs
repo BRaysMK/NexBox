@@ -65,11 +65,7 @@ extern "system" {
 
 fn enable_process_efficiency_mode(pid: u32) -> bool {
     unsafe {
-        let handle = OpenProcess(
-            PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION,
-            0,
-            pid,
-        );
+        let handle = open_process_any(pid);
         if handle.is_null() {
             return false;
         }
@@ -124,28 +120,115 @@ fn enable_process_efficiency_mode(pid: u32) -> bool {
     }
 }
 
+/// 启用当前进程的 SeDebugPrivilege（管理员令牌默认禁用），
+/// 提升打开受保护进程句柄的能力（与任务管理器一致）
+pub(crate) fn enable_se_debug_privilege() {
+    unsafe {
+        use windows_sys::Win32::Foundation::{CloseHandle, LUID};
+        use windows_sys::Win32::Security::{
+            AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED,
+            TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+        };
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+        let mut token: HANDLE = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &mut token) == 0
+        {
+            return;
+        }
+        let mut luid = LUID {
+            LowPart: 0,
+            HighPart: 0,
+        };
+        let name: Vec<u16> = "SeDebugPrivilege\0".encode_utf16().collect();
+        if LookupPrivilegeValueW(std::ptr::null(), name.as_ptr(), &mut luid) != 0 {
+            let mut tp = TOKEN_PRIVILEGES {
+                PrivilegeCount: 1,
+                Privileges: [LUID_AND_ATTRIBUTES {
+                    Luid: luid,
+                    Attributes: SE_PRIVILEGE_ENABLED,
+                }],
+            };
+            AdjustTokenPrivileges(
+                token,
+                0,
+                &mut tp,
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+        }
+        CloseHandle(token);
+    }
+}
+
+/// 尽力打开目标进程句柄：先用最小权限（最易被放行），
+/// 失败后启用 SeDebugPrivilege 并逐步扩大权限，最后尝试完整权限。
+pub(crate) fn open_process_any(pid: u32) -> HANDLE {
+    unsafe {
+        let desired = PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION;
+        let handle = OpenProcess(desired, 0, pid);
+        if !handle.is_null() {
+            return handle;
+        }
+        enable_se_debug_privilege();
+        let wider = PROCESS_SET_INFORMATION
+            | PROCESS_QUERY_LIMITED_INFORMATION
+            | 0x0008 // PROCESS_QUERY_INFORMATION
+            | 0x0400; // PROCESS_SYNCHRONIZE
+        let h2 = OpenProcess(wider, 0, pid);
+        if !h2.is_null() {
+            return h2;
+        }
+        // 最后尝试完整权限（PROCESS_ALL_ACCESS）
+        OpenProcess(0x001FFFFF, 0, pid)
+    }
+}
+
+/// 当前进程是否以管理员（提升令牌）身份运行
+pub(crate) fn is_admin() -> bool {
+    unsafe {
+        use std::mem::size_of;
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::Security::{
+            GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+        };
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+        let mut token: HANDLE = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return false;
+        }
+        let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+        let mut ret_len = 0u32;
+        let ok = GetTokenInformation(
+            token,
+            TokenElevation,
+            &mut elevation as *mut TOKEN_ELEVATION as *mut _,
+            size_of::<TOKEN_ELEVATION>() as u32,
+            &mut ret_len,
+        ) != 0;
+        CloseHandle(token);
+        ok && elevation.TokenIsElevated != 0
+    }
+}
+
 fn set_process_low_priority(pid: u32) -> bool {
     unsafe {
-        let handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid);
+        let handle = open_process_any(pid);
         if handle.is_null() {
             return false;
         }
-
-        let ok = if SetPriorityClass(handle, IDLE_PRIORITY_CLASS) == 0 {
-            false
-        } else {
-            true
-        };
-
+        let ok = SetPriorityClass(handle, IDLE_PRIORITY_CLASS) != 0;
         CloseHandle(handle);
         ok
     }
 }
 
 /// 设置进程优先级为实时（对应 .NET ProcessPriorityClass::RealTime）
-fn set_process_realtime_priority(pid: u32) -> bool {
+pub(crate) fn set_process_realtime_priority(pid: u32) -> bool {
     unsafe {
-        let handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid);
+        let handle = open_process_any(pid);
         if handle.is_null() {
             return false;
         }
@@ -156,14 +239,24 @@ fn set_process_realtime_priority(pid: u32) -> bool {
 }
 
 /// 设置进程 CPU 亲和性掩码（直接 Win32 API，无需 PowerShell）
-fn set_process_affinity(pid: u32, mask: u64) -> bool {
+/// 失败时用 ntdll 层 NtSetInformationProcess 兜底（任务管理器同款调用路径）
+pub(crate) fn set_process_affinity(pid: u32, mask: u64) -> bool {
     unsafe {
-        let handle = OpenProcess(PROCESS_SET_INFORMATION, 0, pid);
+        let handle = open_process_any(pid);
         if handle.is_null() {
             return false;
         }
         // SetProcessAffinityMask 第二参数为 usize（ULONG_PTR），64 位系统为 u64
-        let ok = SetProcessAffinityMask(handle, mask as usize) != 0;
+        let mut ok = SetProcessAffinityMask(handle, mask as usize) != 0;
+        if !ok {
+            let m = mask as usize;
+            ok = NtSetInformationProcess(
+                handle,
+                5, // ProcessAffinityMask
+                &m as *const usize as *const std::ffi::c_void,
+                std::mem::size_of::<usize>() as u32,
+            ) == 0;
+        }
         CloseHandle(handle);
         ok
     }
@@ -425,6 +518,9 @@ pub async fn optimize_ace_processes() -> Result<AceOptimizeResult, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
+    if !is_admin() {
+        return Err("修改 ACE 进程需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
+    }
 
     let mut optimized_processes = Vec::new();
     let mut system = System::new();
@@ -470,6 +566,9 @@ pub struct AceEfficiencyResult {
 pub async fn set_ace_efficiency_mode() -> Result<AceEfficiencyResult, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
+    }
+    if !is_admin() {
+        return Err("修改 ACE 进程需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
     }
 
     let mut found = 0u32;
@@ -1471,7 +1570,7 @@ pub async fn boost_delta_force_priority() -> Result<ProcessOptimizeResult, Strin
         Ok(ProcessOptimizeResult {
             success: false,
             message: if found {
-                "三角洲进程已运行，但优先级修改失败（请以管理员身份运行本应用）".to_string()
+                "三角洲进程已运行，但优先级修改失败（进程受保护或权限不足）".to_string()
             } else {
                 "三角洲游戏未运行，请先启动游戏".to_string()
             },
@@ -1522,7 +1621,7 @@ pub async fn boost_delta_force_affinity() -> Result<PriorityResult, String> {
         message: if applied {
             "三角洲进程已设置为使用所有处理器核心".to_string()
         } else if found {
-            "三角洲进程已运行，但核心分配修改失败（请以管理员身份运行本应用）".to_string()
+            "三角洲进程已运行，但核心分配修改失败（进程受保护或权限不足）".to_string()
         } else {
             "三角洲游戏未运行，请先启动游戏".to_string()
         },
@@ -1539,20 +1638,20 @@ pub struct AcePartialResult {
     pub found_count: u32,
 }
 
-/// 根据 found/count 生成统一文案，区分"未找到"、"需要管理员权限"、"部分成功"、"全部成功"
+/// 根据 found/count 生成统一文案，区分"未找到"、"受保护无法修改"、"部分成功"、"全部成功"
 fn ace_message(found: u32, count: u32, ok_template: &str) -> String {
     if found == 0 {
         return "未找到运行中的 ACE 进程".to_string();
     }
     if count == 0 {
         return format!(
-            "发现 {} 个 ACE 进程，但无法修改（请以管理员身份运行本应用）",
+            "发现 {} 个 ACE 进程，但无法修改（ACE 反作弊保护了这些进程）",
             found
         );
     }
     if count < found {
         return format!(
-            "{}（另有 {} 个需管理员权限）",
+            "{}（另有 {} 个受 ACE 反作弊保护无法修改）",
             ok_template.replace("{}", &count.to_string()),
             found - count
         );
@@ -1564,6 +1663,9 @@ fn ace_message(found: u32, count: u32, ok_template: &str) -> String {
 pub async fn limit_ace_priority() -> Result<AcePartialResult, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
+    }
+    if !is_admin() {
+        return Err("修改 ACE 进程需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
     }
 
     let mut found = 0u32;
@@ -1612,6 +1714,10 @@ pub async fn restrict_ace_affinity_with_mask(mask: u64) -> Result<AcePartialResu
 
 /// ACE 亲和性限制的统一实现：直接 Win32 API，不走 PowerShell
 fn restrict_ace_affinity_impl(mask: u64, ok_template: &str) -> Result<AcePartialResult, String> {
+    if !is_admin() {
+        return Err("修改 ACE 进程需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
+    }
+
     let mut found = 0u32;
     let mut count = 0u32;
 
@@ -1634,6 +1740,87 @@ fn restrict_ace_affinity_impl(mask: u64, ok_template: &str) -> Result<AcePartial
         message: ace_message(found, count, ok_template),
         count,
         found_count: found,
+    })
+}
+
+// ===== 注册表强制限制（IFEO PerfOptions）=====
+// 原理：Windows Image File Execution Options 的 PerfOptions 会在进程启动时
+// 由系统直接应用 CPU 优先级 / I/O 优先级，无需进程运行时注入，且对
+// 受保护的 ACE 内核进程也生效（进程无法自行改回，除非删除注册表项）。
+// 注意：这是注册表级持久设置，会一直生效直到被恢复。
+
+const ACE_IFEO_PERF: &[(&str, &[(&str, u32)])] = &[
+    (
+        "DeltaForceClient-Win64-Shipping.exe",
+        &[("CpuPriorityClass", 3u32), ("IoPriority", 3u32)],
+    ),
+    (
+        "SGuard64.exe",
+        &[("CpuPriorityClass", 1u32), ("IoPriority", 1u32)],
+    ),
+    (
+        "SGuardSvc64.exe",
+        &[("CpuPriorityClass", 1u32), ("IoPriority", 1u32)],
+    ),
+];
+
+fn ifeo_perf_options_path(process_name: &str) -> String {
+    format!(
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{}\PerfOptions",
+        process_name
+    )
+}
+
+/// 应用注册表强制限制（IFEO PerfOptions），需要管理员权限
+#[tauri::command]
+pub async fn apply_ace_registry_limits() -> Result<PerfTweakResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+    if !is_admin() {
+        return Err("写入注册表需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
+    }
+
+    for &(proc_name, values) in ACE_IFEO_PERF {
+        let path = ifeo_perf_options_path(proc_name);
+        let (key, _) = RegKey::predef(HKEY_LOCAL_MACHINE)
+            .create_subkey(&path)
+            .map_err(|e| format!("创建注册表键失败 ({}): {}", proc_name, e))?;
+        for &(value_name, value) in values {
+            key.set_value(value_name, &value)
+                .map_err(|e| format!("写入注册表失败 ({} \\ {}): {}", proc_name, value_name, e))?;
+        }
+    }
+
+    Ok(PerfTweakResult {
+        success: true,
+        message: "注册表强制限制已应用（进程启动时自动生效，需重启游戏/相关进程后生效）".to_string(),
+    })
+}
+
+/// 恢复注册表强制限制：删除对应 PerfOptions 值（不影响其他自定义项）
+#[tauri::command]
+pub async fn restore_ace_registry_limits() -> Result<PerfTweakResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+    if !is_admin() {
+        return Err("写入注册表需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
+    }
+
+    for &(proc_name, values) in ACE_IFEO_PERF {
+        let path = ifeo_perf_options_path(proc_name);
+        let key = RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey(&path)
+            .map_err(|e| format!("打开注册表键失败 ({}): {}", proc_name, e))?;
+        for &(value_name, _) in values {
+            let _ = key.delete_value(value_name);
+        }
+    }
+
+    Ok(PerfTweakResult {
+        success: true,
+        message: "注册表强制限制已恢复（相关进程重启后生效）".to_string(),
     })
 }
 
@@ -1663,7 +1850,7 @@ pub async fn boost_delta_force_affinity_with_mask(mask: u64) -> Result<PriorityR
         message: if applied {
             "三角洲进程已设置为使用指定处理器核心".to_string()
         } else if found {
-            "三角洲进程已运行，但核心分配修改失败（请以管理员身份运行本应用）".to_string()
+            "三角洲进程已运行，但核心分配修改失败（进程受保护或权限不足）".to_string()
         } else {
             "三角洲游戏未运行，请先启动游戏".to_string()
         },

@@ -448,13 +448,22 @@ fn get_gpus_from_lhml() -> Vec<GpuInfo> {
     let response = match crate::sensor::read_lhm_sensors() {
         Ok(r) => r,
         Err(e) => {
-            log::warn!("LHML GPU 查询失败: {}", e);
+            // 传感器启动早期（LHML 初始化需数秒）未就绪是正常现象，降级为 debug 日志
+            if e.contains("尚未就绪") {
+                log::debug!("LHML GPU 查询跳过: {}", e);
+            } else {
+                log::warn!("LHML GPU 查询失败: {}", e);
+            }
             // LHML（NexBoxMonitor）可能尚未就绪，等 200ms 后重试一次
             std::thread::sleep(std::time::Duration::from_millis(200));
             match crate::sensor::read_lhm_sensors() {
                 Ok(r) => r,
                 Err(e) => {
-                    log::warn!("LHML GPU 重试仍失败: {}", e);
+                    if e.contains("尚未就绪") {
+                        log::debug!("LHML GPU 重试仍跳过: {}", e);
+                    } else {
+                        log::warn!("LHML GPU 重试仍失败: {}", e);
+                    }
                     return Vec::new();
                 }
             }

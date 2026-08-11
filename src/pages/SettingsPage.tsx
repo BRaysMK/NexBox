@@ -2972,6 +2972,7 @@ function PawnioSettings() {
 
 function AboutSettings() {
   const { t } = useTranslation();
+  const toast = useToast();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
@@ -2980,9 +2981,40 @@ function AboutSettings() {
   const graphicLogoSrc = useColorModeValue("/logo/NBB.png", "/logo/NBW.png");
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
 
-  const currentVersion = "7.3.3";
+  const currentVersion = "7.4.7";
   const [currentRelease, setCurrentRelease] = useState<GiteeRelease | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
+
+  // LOGO 连续点击 5 次跳转原神官网的彩蛋
+  // 用 useRef 同步计数，避免 React 异步 setState 在快速连点 5 次内计数不生效的问题
+  const logoClickCountRef = useRef(0);
+  const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleLogoClicks = () => {
+    logoClickCountRef.current += 1;
+    const remaining = 5 - logoClickCountRef.current;
+    console.log("[AboutSettings] logo click count:", logoClickCountRef.current);
+    toast({
+      title: `彩蛋触发中 ${logoClickCountRef.current}/5`,
+      description: `还差 ${remaining} 次`,
+      status: "info",
+      duration: 800,
+      isClosable: false,
+    });
+    if (logoClickTimer.current) {
+      clearTimeout(logoClickTimer.current);
+    }
+    logoClickTimer.current = setTimeout(() => {
+      logoClickCountRef.current = 0;
+    }, 2000);
+    if (logoClickCountRef.current >= 5) {
+      logoClickCountRef.current = 0;
+      if (logoClickTimer.current) {
+        clearTimeout(logoClickTimer.current);
+      }
+      console.log("[AboutSettings] logo clicked 5 times, opening browser...");
+      handleOpenLink("https://ys.mihoyo.com/main/?from_fab=1");
+    }
+  };
 
   const {
     hasUpdate,
@@ -3017,11 +3049,29 @@ function AboutSettings() {
   }, []);
 
   const handleOpenLink = async (url: string) => {
+    console.log("[AboutSettings] handleOpenLink:", url);
+    // 第一层：Rust 端 ShellExecuteW 系统浏览器打开（最可靠）
     try {
-      const { open } = await import("@tauri-apps/plugin-shell");
-      await open(url);
+      await invoke("open_system_browser", { url });
+      console.log("[AboutSettings] open_system_browser ok");
+      return;
     } catch (error) {
-      console.error("Failed to open link:", error);
+      console.error("[AboutSettings] open_system_browser failed:", error);
+    }
+    // 第二层：plugin-opener 打开
+    try {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(url);
+      console.log("[AboutSettings] openUrl ok");
+      return;
+    } catch (error) {
+      console.error("[AboutSettings] openUrl failed:", error);
+    }
+    // 第三层：window.open 兜底
+    try {
+      window.open(url, "_blank");
+    } catch (fallbackError) {
+      console.error("[AboutSettings] window.open failed:", fallbackError);
     }
   };
 
@@ -3032,16 +3082,25 @@ function AboutSettings() {
       </Text>
 
       <LiquidGlassCard p={6} boxShadow="sm" mb={6}>
-        <HStack spacing={4} justify="center" align="center" mb={4}>
+        <HStack
+          spacing={4}
+          justify="center"
+          align="center"
+          mb={4}
+          cursor="pointer"
+          userSelect="none"
+          onClick={handleLogoClicks}
+          _hover={{ opacity: 0.8 }}
+        >
           <img
             src={graphicLogoSrc}
             alt="NexBox"
-            style={{ height: "72px", width: "auto", objectFit: "contain" }}
+            style={{ height: "72px", width: "auto", objectFit: "contain", pointerEvents: "none" }}
           />
           <img
             src={textLogoSrc}
             alt="新境盒"
-            style={{ height: "40px", width: "auto", objectFit: "contain" }}
+            style={{ height: "40px", width: "auto", objectFit: "contain", pointerEvents: "none" }}
           />
         </HStack>
 
@@ -3310,12 +3369,12 @@ function HotkeySettings() {
             <HotkeyRecorder
               value={overlayHotkey}
               onChange={async (val) => {
-                const ok = await saveOverlayHotkey(val);
+                const err = await saveOverlayHotkey(val);
                 toast({
-                  title: ok
-                    ? (t("hotkeySettings.saved") || "快捷键已保存")
-                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                  status: ok ? "success" : "error",
+                  title: err
+                    ? err
+                    : (t("hotkeySettings.saved") || "快捷键已保存"),
+                  status: err ? "error" : "success",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3349,12 +3408,12 @@ function HotkeySettings() {
             <HotkeyRecorder
               value={crosshairHotkey}
               onChange={async (val) => {
-                const ok = await saveCrosshairHotkey(val);
+                const err = await saveCrosshairHotkey(val);
                 toast({
-                  title: ok
-                    ? (t("hotkeySettings.saved") || "快捷键已保存")
-                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                  status: ok ? "success" : "error",
+                  title: err
+                    ? err
+                    : (t("hotkeySettings.saved") || "快捷键已保存"),
+                  status: err ? "error" : "success",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3388,12 +3447,12 @@ function HotkeySettings() {
             <HotkeyRecorder
               value={filterHotkey}
               onChange={async (val) => {
-                const ok = await saveFilterHotkey(val);
+                const err = await saveFilterHotkey(val);
                 toast({
-                  title: ok
-                    ? (t("hotkeySettings.saved") || "快捷键已保存")
-                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                  status: ok ? "success" : "error",
+                  title: err
+                    ? err
+                    : (t("hotkeySettings.saved") || "快捷键已保存"),
+                  status: err ? "error" : "success",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3427,12 +3486,12 @@ function HotkeySettings() {
             <MouseHotkeyRecorder
               value={autoclickerHotkey}
               onChange={async (val) => {
-                const ok = await saveAutoclickerHotkey(val);
+                const err = await saveAutoclickerHotkey(val);
                 toast({
-                  title: ok
-                    ? (t("hotkeySettings.saved") || "快捷键已保存")
-                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                  status: ok ? "success" : "error",
+                  title: err
+                    ? err
+                    : (t("hotkeySettings.saved") || "快捷键已保存"),
+                  status: err ? "error" : "success",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3490,12 +3549,12 @@ function HotkeySettings() {
             <HotkeyRecorder
               value={musicNextHotkey}
               onChange={async (val) => {
-                const ok = await saveMusicNextHotkey(val);
+                const err = await saveMusicNextHotkey(val);
                 toast({
-                  title: ok
-                    ? (t("hotkeySettings.saved") || "快捷键已保存")
-                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                  status: ok ? "success" : "error",
+                  title: err
+                    ? err
+                    : (t("hotkeySettings.saved") || "快捷键已保存"),
+                  status: err ? "error" : "success",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3514,12 +3573,12 @@ function HotkeySettings() {
             <HotkeyRecorder
               value={musicPlayPauseHotkey}
               onChange={async (val) => {
-                const ok = await saveMusicPlayPauseHotkey(val);
+                const err = await saveMusicPlayPauseHotkey(val);
                 toast({
-                  title: ok
-                    ? (t("hotkeySettings.saved") || "快捷键已保存")
-                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                  status: ok ? "success" : "error",
+                  title: err
+                    ? err
+                    : (t("hotkeySettings.saved") || "快捷键已保存"),
+                  status: err ? "error" : "success",
                   duration: 2000,
                   isClosable: true,
                 });

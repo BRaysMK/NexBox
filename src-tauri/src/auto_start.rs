@@ -31,9 +31,11 @@ fn get_startup_folder() -> Result<PathBuf, String> {
 
 // ========== 方案1：任务计划程序（主方案） ==========
 
-/// 创建任务计划：用户登录时启动 NexBox
-/// schtasks /create /tn "NexBox" /tr "\"path\"" /sc onlogon /f
-/// 注意：不指定 /rl highest，避免要求管理员权限
+/// 创建任务计划：用户登录时以最高权限启动 NexBox
+/// schtasks /create /tn "NexBox" /tr "\"path\"" /sc onlogon /rl highest /f
+/// 必须指定 /rl highest：NexBox 的 manifest 是 requireAdministrator，
+/// 若不指定，计划任务启动的实例不带管理员令牌，
+/// 会导致修改 ACE 等受保护进程失败（表现为"有的电脑可以、有的不行"）
 #[cfg(windows)]
 fn create_scheduled_task(exe_path: &str) -> Result<(), String> {
     let quoted_exe = format!("\"{}\"", exe_path);
@@ -43,6 +45,7 @@ fn create_scheduled_task(exe_path: &str) -> Result<(), String> {
         "/tn", TASK_NAME,
         "/tr", &quoted_exe,
         "/sc", "onlogon",
+        "/rl", "highest",
         "/f",
     ])?;
 

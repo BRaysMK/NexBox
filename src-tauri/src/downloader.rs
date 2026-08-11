@@ -39,6 +39,46 @@ pub fn auto_update_enabled() -> bool {
     true
 }
 
+/// 使用系统 ShellExecuteW 在系统默认浏览器中打开指定 URL
+#[tauri::command]
+pub fn open_system_browser(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let url_wide: Vec<u16> = url
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let verb: Vec<u16> = "open\0".encode_utf16().collect();
+
+        // 使用 ShellExecuteW 调用系统默认浏览器，无需 cmd 中介
+        let hinst = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                verb.as_ptr(),
+                url_wide.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+
+        // ShellExecuteW 返回值 <= 32 表示错误
+        if hinst as isize <= 32 {
+            return Err(format!("Failed to open url (error: {})", hinst as isize));
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // 非 Windows 平台回退到 xdg-open / open
+        let _ = Command::new("xdg-open").arg(&url).spawn();
+        let _ = Command::new("open").arg(&url).spawn();
+    }
+    Ok(())
+}
+
 /// 以 SW_SHOWNORMAL 方式异步启动安装向导，立即返回（不等待安装完成）
 pub fn launch_installer_sync(file_path: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]

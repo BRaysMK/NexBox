@@ -52,7 +52,8 @@
     "diskHealth": "ディスク健全性",
 "screenRecord": "画面録画",
     "audioEq": "EQチューニング",
-    "custom": "カスタム"
+    "custom": "カスタム",
+    "runtimeRepair": "ランタイム修復"
   },
 "customPage": {
 "title": "カスタムページ",
@@ -353,8 +354,8 @@
         "error": "クリーニングに失敗しました"
     },
     "aceOptimize": {
-        "title": "デルタフォース/ACE最適化",
-        "description": "デルタフォースプロセスの最適化とACEアンチチートのリソース制限",
+        "title": "ACEアンチチート最適化",
+        "description": "ACEアンチチートプロセスのリソース使用を制限し、ゲームにより多くのパフォーマンスを解放",
         "deltaSection": {
             "title": "デルタフォース最適化",
             "subtitle": "デルタフォースのゲームパフォーマンスを向上"
@@ -393,6 +394,13 @@
             "success": "すべての最適化が完了しました",
             "partial": "一部の最適化が完了しました。詳細を確認してください"
         },
+        "aceRegistry": {
+            "title": "レジストリ強制制限",
+            "description": "システムのIFEOレジストリでDelta ForceとSGuardプロセスのCPU/I/O優先度を強制的に制限（プロセス起動時に即適用、アンチチートによる変更不可；プロセス再起動後に有効、リスクあり）",
+            "badge": "リスクの可能性",
+            "success": "レジストリ強制制限を適用しました",
+            "restored": "レジストリ強制制限を復元しました"
+        },
         "autoDetect": {
             "title": "ACEプロセスの自動検出と最適化",
             "description": "バックグラウンドで継続的に監視 - ACE-Tray/SGuardプロセス検出時に自動的に優先度とコア親和性を制限（5秒ごとにチェック）",
@@ -416,7 +424,12 @@
         },
         "apply": "適用",
         "applied": "適用済み",
+        "restore": "復元",
         "error": "最適化に失敗しました"
+    },
+    "gameProcessOptimize": {
+      "title": "ゲームプロセス最適化",
+      "description": "ゲームごとにプロセス優先度とCPUコア割り当てを設定"
     },
     "cpuScheduler": {
       "title": "CPUコアスケジューラ",
@@ -1067,7 +1080,63 @@
     "dlssPresetDesc": "DLSSモデルプリセットを切り替えてゲームグラフィックを最適化",
     "diskHealthDesc": "ディスクの健全性とSMART情報を確認",
 "screenRecordDesc": "高性能画面録画（ハードウェアエンコード）",
-    "audioEqDesc": "システムレベルのオーディオイコライザー調整"
+    "audioEqDesc": "システムレベルのオーディオイコライザー調整",
+    "runtimeRepairDesc": "不足している VC++ / .NET / DirectX ランタイムを検出・修復"
+  },
+  "gameProcessOptimize": {
+    "title": "ゲームプロセス最適化",
+    "subtitle": "ゲーム単位でプロセス最適化とCPUコア割り当てを管理。プロセス自動最適化とコア自動最適化は個別に有効化可能",
+    "needsAdmin": "管理者権限が必要",
+    "fromExe": "実行ファイルを選択",
+    "fromExeDesc": "ファイルダイアログでゲームの.exeを選択。プロセス名を自動抽出",
+    "fromProcess": "実行中プロセスを選択",
+    "fromProcessDesc": "実行中のプロセス一覧からゲームを選択",
+    "fromFilterList": "フィルターゲームリストから選択",
+    "fromFilterListDesc": "フィルターの内蔵/カスタムゲームリストから選択して追加",
+    "emptyTitle": "ゲームがまだありません",
+    "emptyDesc": "上のいずれかの方法で最初のゲームを追加してください",
+    "processOptimize": {
+      "title": "プロセス最適化",
+      "description": "ゲームプロセスの優先度を「リアルタイム」に上げ、CPUリソースを優先配分"
+    },
+    "affinityOptimize": {
+      "title": "コア最適化",
+      "description": "ゲームプロセスに特定のCPUコアを割り当て、マルチコア性能を発揮"
+    },
+    "apply": "適用",
+    "optimizeNow": "今すぐ最適化",
+    "optimizeNowDone": "このゲームにプロセス最適化＋コア最適化を適用しました",
+    "autoOptimize": {
+      "title": "起動時自動最適化",
+      "description": "ゲーム起動時に、下で有効化した項目を自動適用",
+      "priority": "プロセス自動最適化",
+      "affinity": "コア自動最適化",
+      "enabled": "自動最適化が有効",
+      "disabled": "自動最適化が無効"
+    },
+    "status": {
+      "running": "実行中",
+      "optimized": "最適化済み",
+      "applied": "適用済み"
+    },
+    "delete": "削除",
+    "deleteConfirm": "ゲーム「{{name}}」を削除しますか？",
+    "gameAdded": "ゲームを追加しました",
+    "gameExists": "このゲームは既に存在します",
+    "gameDeleted": "ゲームを削除しました",
+    "searchProcess": "プロセス名を検索...",
+    "searchGame": "ゲーム名またはプロセスを検索...",
+    "noResults": "一致する項目がありません",
+    "affinitySettings": {
+      "title": "コア選択",
+      "description": "割り当てるCPUコアを選択（合計 {{count}} 個の論理コア）",
+      "selectAll": "すべて選択",
+      "clearAll": "クリア",
+      "defaultHint": "デフォルト：CPU0以外のすべてのコア（すべて選択して保存するとデフォルト）",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "configSaved": "コア設定を保存しました"
+    }
   },
   "gpuRename": {
     "title": "GPU名前変更",
@@ -1114,7 +1183,15 @@
     "height": "高さ",
     "pixels": "ピクセル",
     "standard": "標準",
-    "tip": "解像度タイプを選択すると、3つの一般的なアスペクト比の特定の解像度値が下に表示され、ゲームで画面比率設定を調整するのに役立ちます。"
+    "tip": "解像度タイプを選択すると、3つの一般的なアスペクト比の特定の解像度値が下に表示され、ゲームで画面比率設定を調整するのに役立ちます。",
+    "custom": "カスタム",
+    "customPlaceholder": "カスタム解像度",
+    "widthInputPlaceholder": "幅",
+    "heightInputPlaceholder": "高さ",
+    "refreshRate": "リフレッシュレート",
+    "refreshRateInputPlaceholder": "リフレッシュレート",
+    "applyCustomResolution": "カスタム解像度を適用",
+    "customResolutionHint": "カスタム解像度を入力し、必要に応じてリフレッシュレートを設定して現在のディスプレイに適用します"
   },
   "systemOptimizer": {
     "pageTitle": "システム最適化",

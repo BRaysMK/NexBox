@@ -52,7 +52,8 @@
     "diskHealth": "Festplatten-Gesundheit",
 "screenRecord": "Bildschirmaufnahme",
     "audioEq": "EQ-Tuner",
-    "custom": "Benutzerdefiniert"
+    "custom": "Benutzerdefiniert",
+    "runtimeRepair": "Laufzeitbibliotheken reparieren"
   },
 "customPage": {
 "title": "Benutzerdefinierte Seite",
@@ -353,8 +354,8 @@
         "error": "Bereinigung fehlgeschlagen"
     },
     "aceOptimize": {
-        "title": "Delta Force/ACE Optimierung",
-        "description": "Optimierung der Delta Force-Prozesse und Einschränkung der ACE-Anti-Cheat-Ressourcen",
+        "title": "ACE Anti-Cheat-Optimierung",
+        "description": "Begrenzen Sie die Ressourcennutzung der ACE-Anti-Cheat-Prozesse, um mehr Leistung für das Spiel freizugeben",
         "deltaSection": {
             "title": "Delta Force Optimierung",
             "subtitle": "Steigern Sie die Spielleistung von Delta Force"
@@ -393,6 +394,13 @@
             "success": "Alle Optimierungen abgeschlossen",
             "partial": "Teilweise Optimierung abgeschlossen, Details prüfen"
         },
+        "aceRegistry": {
+            "title": "Registrierungs-Zwangslimit",
+            "description": "Erzwingt die CPU-/I/O-Priorität der Delta Force- und SGuard-Prozesse über die systemweite IFEO-Registrierung (gilt beim Prozessstart, kann nicht durch Anti-Cheat zurückgesetzt werden; wirksam nach Neustart der Prozesse, gewisses Risiko)",
+            "badge": "Möglicherweise riskant",
+            "success": "Registrierungs-Zwangslimit angewendet",
+            "restored": "Registrierungs-Zwangslimit entfernt"
+        },
         "autoDetect": {
             "title": "Automatische Erkennung und Optimierung von ACE-Prozessen",
             "description": "Hintergrundüberwachung - erkennt ACE-Tray/SGuard-Prozesse automatisch und begrenzt Priorität und Kernaffinität (Prüfung alle 5 Sekunden)",
@@ -416,7 +424,12 @@
         },
         "apply": "Anwenden",
         "applied": "Angewendet",
+        "restore": "Wiederherstellen",
         "error": "Optimierung fehlgeschlagen"
+    },
+    "gameProcessOptimize": {
+      "title": "Spielprozess-Optimierung",
+      "description": "Prozesspriorität und CPU-Kern-Zuweisung für jedes Spiel konfigurieren"
     },
     "cpuScheduler": {
       "title": "CPU-Kern-Planer",
@@ -1024,7 +1037,63 @@
     "dlssPresetDesc": "DLSS-Modell-Voreinstellungen wechseln, um Spielgrafiken zu optimieren",
     "diskHealthDesc": "Festplatten-Gesundheit und SMART-Informationen prüfen",
 "screenRecordDesc": "Hochleistungs-Bildschirmaufnahme (Hardware-Codierung)",
-    "audioEqDesc": "Systemweite Audio-Equalizer-Anpassung"
+    "audioEqDesc": "Systemweite Audio-Equalizer-Anpassung",
+    "runtimeRepairDesc": "Fehlende VC++ / .NET / DirectX-Laufzeitbibliotheken erkennen und reparieren"
+  },
+  "gameProcessOptimize": {
+    "title": "Spielprozess-Optimierung",
+    "subtitle": "Verwalten Sie Prozessoptimierung und CPU-Kern-Zuweisung pro Spiel. Prozess- und Kern-Auto-Optimierung können unabhängig aktiviert werden",
+    "needsAdmin": "Administratorrechte erforderlich",
+    "fromExe": "Ausführbare Datei wählen",
+    "fromExeDesc": "Spiel-.exe über den Dateidialog auswählen, Prozessname wird automatisch extrahiert",
+    "fromProcess": "Laufenden Prozess wählen",
+    "fromProcessDesc": "Einen Prozess aus der Liste der laufenden Prozesse auswählen",
+    "fromFilterList": "Aus Filter-Spielliste",
+    "fromFilterListDesc": "Aus der eingebauten / benutzerdefinierten Filter-Spielliste auswählen",
+    "emptyTitle": "Noch keine Spiele",
+    "emptyDesc": "Fügen Sie Ihr erstes Spiel mit einer der Optionen oben hinzu",
+    "processOptimize": {
+      "title": "Prozess-Optimierung",
+      "description": "Spielprozess-Priorität auf „Echtzeit\" erhöhen für bevorzugte CPU-Zuteilung"
+    },
+    "affinityOptimize": {
+      "title": "Kern-Optimierung",
+      "description": "Bestimmte CPU-Kerne dem Spielprozess zuweisen für Mehrkern-Leistung"
+    },
+    "apply": "Anwenden",
+    "optimizeNow": "Jetzt optimieren",
+    "optimizeNowDone": "Prozess- und Kern-Optimierung für dieses Spiel angewendet",
+    "autoOptimize": {
+      "title": "Auto-Optimierung beim Start",
+      "description": "Beim Spielstart werden die unten aktivierten Optimierungen automatisch angewendet",
+      "priority": "Prozess-Auto-Optimierung",
+      "affinity": "Kern-Auto-Optimierung",
+      "enabled": "Auto-Optimierung aktiviert",
+      "disabled": "Auto-Optimierung deaktiviert"
+    },
+    "status": {
+      "running": "Läuft",
+      "optimized": "Optimiert",
+      "applied": "Angewendet"
+    },
+    "delete": "Löschen",
+    "deleteConfirm": "Spiel „{{name}}\" löschen?",
+    "gameAdded": "Spiel hinzugefügt",
+    "gameExists": "Dieses Spiel existiert bereits",
+    "gameDeleted": "Spiel gelöscht",
+    "searchProcess": "Prozessnamen suchen...",
+    "searchGame": "Spielname oder Prozess suchen...",
+    "noResults": "Keine Treffer",
+    "affinitySettings": {
+      "title": "Kernauswahl",
+      "description": "CPU-Kerne auswählen ({{count}} logische Kerne insgesamt)",
+      "selectAll": "Alle auswählen",
+      "clearAll": "Leeren",
+      "defaultHint": "Standard: alle Kerne außer CPU0 (Alle auswählen und speichern für Standard)",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "configSaved": "Kernkonfiguration gespeichert"
+    }
   },
   "gpuRename": {
     "title": "GPU-Umbenennung",
@@ -1071,7 +1140,15 @@
     "height": "Höhe",
     "pixels": "Pixel",
     "standard": "Standard",
-    "tip": "Nach der Auswahl des Auflösungstyps werden unten die spezifischen Auflösungswerte für drei gängige Seitenverhältnisse angezeigt, die Ihnen helfen, die Seitenverhältnis-Einstellungen im Spiel anzupassen."
+    "tip": "Nach der Auswahl des Auflösungstyps werden unten die spezifischen Auflösungswerte für drei gängige Seitenverhältnisse angezeigt, die Ihnen helfen, die Seitenverhältnis-Einstellungen im Spiel anzupassen.",
+    "custom": "Benutzerdefiniert",
+    "customPlaceholder": "Benutzerdefinierte Auflösung",
+    "widthInputPlaceholder": "Breite",
+    "heightInputPlaceholder": "Höhe",
+    "refreshRate": "Bildwiederholrate",
+    "refreshRateInputPlaceholder": "Bildwiederholrate",
+    "applyCustomResolution": "Benutzerdefinierte Auflösung anwenden",
+    "customResolutionHint": "Geben Sie eine benutzerdefinierte Auflösung ein und wenden Sie sie optional mit einer Bildwiederholrate auf den aktuellen Monitor an"
   },
   "shaderCache": {
     "title": "Shader-Cache-Bereinigung",

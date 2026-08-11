@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "7.3.3"
+version = "7.4.7"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -77,6 +77,9 @@ hex = "0.4"
 # QQ 音乐搜索签名
 sha1 = "0.10"
 encoding_rs = "0.8"
+
+# 本地音频元数据解析（封面/标题/艺术家/时长）
+lofty = "0.21"
 
 [target.'cfg(windows)'.dependencies]
 mslnk = "0.1"

@@ -14,27 +14,27 @@ const LS_KEY = "nexbox_page_transition";
 const EVENT_NAME = "page-transition-setting-changed";
 
 export const slideVariants: Variants = {
-  initial: { opacity: 0, x: 20 },
-  enter: { opacity: 1, x: 0, transition: { duration: 0.3, ease: "easeOut" } },
-  exit: { opacity: 0, x: -20, transition: { duration: 0.3, ease: "easeIn" } },
+  initial: { opacity: 0, x: 10 },
+  enter: { opacity: 1, x: 0, transition: { duration: 0.18, ease: "easeOut" } },
+  exit: { opacity: 0, x: -10, transition: { duration: 0.15, ease: "easeIn" } },
 };
 
 export const fadeVariants: Variants = {
   initial: { opacity: 0 },
-  enter: { opacity: 1, transition: { duration: 0.3, ease: "easeOut" } },
-  exit: { opacity: 0, transition: { duration: 0.2, ease: "easeIn" } },
+  enter: { opacity: 1, transition: { duration: 0.18, ease: "easeOut" } },
+  exit: { opacity: 0, transition: { duration: 0.15, ease: "easeIn" } },
 };
 
 export const slideTransition: Transition = {
   type: "tween",
   ease: "easeOut",
-  duration: 0.3,
+  duration: 0.18,
 };
 
 export const fadeTransition: Transition = {
   type: "tween",
   ease: "easeOut",
-  duration: 0.3,
+  duration: 0.18,
 };
 
 export function getVariants(mode: TransitionMode): Variants {

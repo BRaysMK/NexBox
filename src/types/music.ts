@@ -22,6 +22,8 @@ export interface Song {
   res_hash?: string;
   // === QQ 音乐扩展字段 ===
   qq_song_id?: number;
+  // === 本地导入扩展字段 ===
+  _localPath?: string;
 }
 
 export interface Artist {

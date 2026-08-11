@@ -13,6 +13,7 @@ import {
   Spinner,
   useToast,
   Badge,
+  Input,
 } from "@chakra-ui/react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
@@ -25,7 +26,7 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { CustomSelect } from "@/components/special/custom-select";
 
-type ResolutionType = "1K" | "1.5K" | "2K" | "2.5K" | "3K" | "4K";
+type ResolutionType = "1K" | "1.5K" | "2K" | "2.5K" | "3K" | "4K" | "custom";
 
 interface ResolutionInfo {
   width: number;
@@ -60,7 +61,7 @@ interface InjectedResolution {
   height: number;
 }
 
-const RESOLUTION_PRESETS: Record<ResolutionType, { width: number; height: number }> = {
+const RESOLUTION_PRESETS: Record<Exclude<ResolutionType, "custom">, { width: number; height: number }> = {
   "1K": { width: 1920, height: 1080 },
   "1.5K": { width: 1920, height: 1200 },
   "2K": { width: 2560, height: 1440 },
@@ -261,10 +262,11 @@ function ResolutionSelector({
     { type: "2.5K", label: t("resolutionConverter.resolution2_5K"), subLabel: "2560×1600" },
     { type: "3K", label: t("resolutionConverter.resolution3K"), subLabel: "3200×1800" },
     { type: "4K", label: t("resolutionConverter.resolution4K"), subLabel: "3840×2160" },
+    { type: "custom", label: t("resolutionConverter.custom"), subLabel: t("resolutionConverter.customPlaceholder") },
   ];
 
   return (
-    <SimpleGrid columns={{ base: 2, md: 3, lg: 6 }} spacing={3} w="full">
+    <SimpleGrid columns={{ base: 2, md: 3, lg: 7 }} spacing={3} w="full">
       {options.map((option) => {
         const isActive = selected === option.type;
         return (
@@ -325,6 +327,12 @@ export default function ResolutionConverterPage() {
   const [applyingResKey, setApplyingResKey] = useState<string>("");
   const [injectedResolutions, setInjectedResolutions] = useState<InjectedResolution[]>([]);
 
+  // 自定义分辨率输入
+  const [customWidth, setCustomWidth] = useState("");
+  const [customHeight, setCustomHeight] = useState("");
+  const [customRefreshRate, setCustomRefreshRate] = useState("");
+  const [isApplyingCustom, setIsApplyingCustom] = useState(false);
+
   // 去重后的分辨率列表（按面积降序），用于两级联动下拉
   const availableResolutions = useMemo(() => {
     const seen = new Set<string>();
@@ -373,6 +381,7 @@ export default function ResolutionConverterPage() {
   const cardBorder = useColorModeValue("gray.200", "#333333");
 
   const resolutions = useMemo(() => {
+    if (selectedResolution === "custom") return [];
     const base = RESOLUTION_PRESETS[selectedResolution];
     return ASPECT_RATIOS.map((aspect) => {
       const width = calculateResolution(
@@ -553,23 +562,111 @@ export default function ResolutionConverterPage() {
         />
       </VStack>
 
-      <VStack align="start" spacing={4} w="full">
-        <Text color={textColor} fontSize="md" fontWeight="600">
-          {t("resolutionConverter.aspectRatios")}
-        </Text>
-        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} w="full">
-          {resolutions.map((res) => (
-            <ResolutionCard
-              key={res.ratio}
-              resolution={res}
-              color={res.color}
-              isActive={res.isActive}
-              onApply={() => applyCustomResolution(res.width, res.height)}
-              isApplying={applyingResKey === `${res.width}x${res.height}`}
-            />
-          ))}
-        </SimpleGrid>
-      </VStack>
+      {selectedResolution === "custom" ? (
+        <VStack align="start" spacing={4} w="full">
+          <Text color={textColor} fontSize="md" fontWeight="600">
+            {t("resolutionConverter.custom")}
+          </Text>
+          <LiquidGlassCard w="full" p={5} boxShadow="2xl">
+            <VStack spacing={3} align="stretch">
+              <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3} w="full">
+                <Box>
+                  <Text fontWeight="medium" fontSize="xs" color={subTextColor} mb={1}>
+                    {t("resolutionConverter.width")}
+                  </Text>
+                  <Input
+                    type="number"
+                    value={customWidth}
+                    onChange={(e) => setCustomWidth(e.target.value)}
+                    placeholder={t("resolutionConverter.widthInputPlaceholder")}
+                    bg={useColorModeValue("white", "#1a1a1a")}
+                  />
+                </Box>
+                <Box>
+                  <Text fontWeight="medium" fontSize="xs" color={subTextColor} mb={1}>
+                    {t("resolutionConverter.height")}
+                  </Text>
+                  <Input
+                    type="number"
+                    value={customHeight}
+                    onChange={(e) => setCustomHeight(e.target.value)}
+                    placeholder={t("resolutionConverter.heightInputPlaceholder")}
+                    bg={useColorModeValue("white", "#1a1a1a")}
+                  />
+                </Box>
+                <Box>
+                  <Text fontWeight="medium" fontSize="xs" color={subTextColor} mb={1}>
+                    {t("resolutionConverter.refreshRate")}
+                  </Text>
+                  <Input
+                    type="number"
+                    value={customRefreshRate}
+                    onChange={(e) => setCustomRefreshRate(e.target.value)}
+                    placeholder={t("resolutionConverter.refreshRateInputPlaceholder")}
+                    bg={useColorModeValue("white", "#1a1a1a")}
+                  />
+                </Box>
+              </SimpleGrid>
+              <Button
+                bg={getActiveColor()}
+                color={getContrastTextColor()}
+                size="md"
+                borderRadius="lg"
+                isLoading={isApplyingCustom}
+                loadingText={t("resolutionConverter.applying")}
+                isDisabled={!customWidth || !customHeight || Number(customWidth) <= 0 || Number(customHeight) <= 0}
+                onClick={async () => {
+                  const w = parseInt(customWidth);
+                  const h = parseInt(customHeight);
+                  if (!w || !h) return;
+                  const rr = customRefreshRate ? parseFloat(customRefreshRate) : undefined;
+                  if (rr && rr <= 0) {
+                    toast({
+                      title: t("resolutionConverter.applyFailed"),
+                      description: t("resolutionConverter.customResolutionHint"),
+                      status: "error",
+                      duration: 3000,
+                      isClosable: true,
+                    });
+                    return;
+                  }
+                  setIsApplyingCustom(true);
+                  try {
+                    await applyCustomResolution(w, h, rr);
+                  } finally {
+                    setIsApplyingCustom(false);
+                  }
+                }}
+                _hover={{ filter: 'brightness(0.85)' }}
+                w="full"
+              >
+                {t("resolutionConverter.applyCustomResolution")}
+              </Button>
+              <Text fontSize="xs" color={subTextColor}>
+                {t("resolutionConverter.customResolutionHint")}
+              </Text>
+            </VStack>
+          </LiquidGlassCard>
+        </VStack>
+      ) : (
+        <VStack align="start" spacing={4} w="full">
+          <Text color={textColor} fontSize="md" fontWeight="600">
+            {t("resolutionConverter.aspectRatios")}
+          </Text>
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} w="full">
+            {resolutions.map((res) => (
+              <ResolutionCard
+                key={res.ratio}
+                resolution={res}
+                color={res.color}
+                isActive={res.isActive}
+                onApply={() => applyCustomResolution(res.width, res.height)}
+                isApplying={applyingResKey === `${res.width}x${res.height}`}
+              />
+            ))}
+          </SimpleGrid>
+        </VStack>
+      )}
 
       <Box
         w="full"

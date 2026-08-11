@@ -3029,6 +3029,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "lofty"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8bc4717ff10833a623b009e9254ae8667c7a59edc3cfb01c37aeeef4b6d54a7"
+dependencies = [
+ "byteorder",
+ "data-encoding",
+ "flate2",
+ "lofty_attr",
+ "log",
+ "ogg_pager",
+ "paste",
+]
+
+[[package]]
+name = "lofty_attr"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed9983e64b2358522f745c1251924e3ab7252d55637e80f6a0a3de642d6a9efc"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3234,7 +3260,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nexbox"
-version = "7.3.3"
+version = "7.4.7"
 dependencies = [
  "aes",
  "async-stream",
@@ -3253,6 +3279,7 @@ dependencies = [
  "hex",
  "jpeg-encoder",
  "libloading 0.8.9",
+ "lofty",
  "log",
  "md-5",
  "mslnk",
@@ -3654,6 +3681,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ogg_pager"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87b0bef808533c5890ab77279538212efdbbbd9aa4ef1ccdfcfbf77a42f7e6fa"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3815,6 +3851,12 @@ dependencies = [
  "smallvec",
  "windows-link 0.2.1",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "pathdiff"

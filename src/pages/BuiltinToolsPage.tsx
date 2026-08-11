@@ -17,6 +17,7 @@ import {
   Volume2,
   MousePointerClick,
   Gauge,
+  Braces,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
@@ -135,6 +136,14 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.speedtest",
     descriptionKey: "builtinTools.speedtestDesc",
     color: "#00B4D8",
+  },
+  {
+    id: "runtime-repair",
+    path: "/runtime-repair",
+    icon: Braces,
+    titleKey: "sidebar.runtimeRepair",
+    descriptionKey: "builtinTools.runtimeRepairDesc",
+    color: "#4A90E2",
   },
 ];
 

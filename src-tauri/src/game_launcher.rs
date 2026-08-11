@@ -29,22 +29,15 @@ pub async fn launch_game(game_path: String) -> Result<(), String> {
         return Err(format!("游戏路径不存在: {}", game_path));
     }
 
-    let path_lower = game_path.to_lowercase();
-
-    // .exe: 直接启动，跳过 cmd.exe 中间层，大幅减少等待时间
-    if path_lower.ends_with(".exe") {
-        Command::new(&game_path)
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| format!("启动游戏失败: {}", e))?;
-    } else {
-        // 非 .exe（如 steam://、文件夹等），通过 cmd /c start 间接启动
-        Command::new("cmd")
-            .args(["/c", "start", "", &game_path])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| format!("启动失败: {}", e))?;
-    }
+    // 统一通过 explorer.exe 启动（支持 .exe / .lnk / 文件夹等）。
+    // 原因：NexBox 的 manifest 为 requireAdministrator，自身以管理员身份运行，
+    // 直接 Command::new 启动的子进程会继承提升令牌而同样以管理员身份运行；
+    // 而 explorer 运行在非提升的桌面 shell 中，由它代为启动即回到与正常双击一致的普通权限。
+    Command::new("explorer")
+        .arg(&game_path)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("启动失败: {}", e))?;
 
     Ok(())
 }

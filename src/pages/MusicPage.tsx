@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import {
   Box,
@@ -58,6 +59,9 @@ import {
   ChevronRight,
   X,
   Maximize2,
+  Trash2,
+  FolderOpen,
+  FileMusic,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -720,6 +724,9 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   const isLiked = likedSongIds.has(currentSong.id);
 
+  // 本地导入歌曲：去掉右侧歌词/评论区域，封面居中展示
+  const isLocalSong = currentSong.provider === "local";
+
   const handleCloseWithAnimation = useCallback(() => {
     setIsClosing(true);
     closeTimerRef.current = setTimeout(() => onClose(), 300);
@@ -784,10 +791,28 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         </HStack>
       </HStack>
 
-      {/* 主体：左（封面+信息）+ 右（歌词） */}
-      <HStack flex={1} spacing={8} px={8} pb={2} align="stretch" overflow="hidden" minH={0}>
+      {/* 主体：左（封面+信息）+ 右（歌词）；本地歌曲时去掉右侧，封面居中 */}
+      <HStack
+        flex={1}
+        spacing={8}
+        px={8}
+        pb={2}
+        align="stretch"
+        overflow="hidden"
+        minH={0}
+        justify={isLocalSong ? "center" : undefined}
+      >
         {/* 左侧：封面 + 歌曲信息 */}
-        <VStack spacing={6} align="center" justify="center" flex={1} minW={0}>
+        <VStack
+          spacing={6}
+          align="center"
+          justify="center"
+          flex={isLocalSong ? "0 0 auto" : 1}
+          flexShrink={isLocalSong ? 0 : undefined}
+          minW={0}
+          w={isLocalSong ? "400px" : undefined}
+          maxW={isLocalSong ? "460px" : undefined}
+        >
           {/* 碟片模式 */}
           {coverFilmEffect ? (
             <Box
@@ -1010,7 +1035,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </VStack>
         </VStack>
 
-        {/* 右侧：歌词 / 评论 */}
+        {/* 右侧：歌词 / 评论（本地歌曲不显示） */}
+        {!isLocalSong && (
         <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden" justify="flex-start" spacing={2}>
           {/* Tab 切换 */}
           <HStack spacing={1} flexShrink={0} justify="center">
@@ -1072,6 +1098,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             />
           )}
         </VStack>
+        )}
       </HStack>
 
       {/* 底部：播放控制 + 进度条（全宽居中） */}
@@ -2023,6 +2050,132 @@ const SongRow = memo(function SongRow({
 });
 
 // ═══════════════════════════════════════════════
+// LocalSongRow — 本地导入歌曲行
+// ═══════════════════════════════════════════════
+interface LocalSongRowProps {
+  song: Song;
+  queue: Song[];
+  isCurrent: boolean;
+  isPlaying: boolean;
+  proxyPort: number;
+  activeColor: string;
+  hoverBg: string;
+  itemHoverBg: string;
+  itemActiveBg: string;
+  textColor: string;
+  subTextColor: string;
+  liquidGlassEnabled: boolean;
+  onPlay: (song: Song, queue: Song[]) => void;
+  onTogglePlay: () => void;
+  onRemove: (id: string) => void;
+}
+
+const LocalSongRow = memo(function LocalSongRow({
+  song,
+  queue,
+  isCurrent,
+  isPlaying,
+  proxyPort,
+  activeColor,
+  hoverBg,
+  itemHoverBg,
+  itemActiveBg,
+  textColor,
+  subTextColor,
+  liquidGlassEnabled,
+  onPlay,
+  onTogglePlay,
+  onRemove,
+}: LocalSongRowProps) {
+  return (
+    <HStack
+      spacing={3}
+      p={2}
+      borderRadius="lg"
+      cursor="pointer"
+      _hover={{ bg: liquidGlassEnabled ? hoverBg : itemHoverBg }}
+      bg={isCurrent ? itemActiveBg : "transparent"}
+      onClick={() => onPlay(song, queue)}
+      transition="background 0.15s"
+    >
+      <Box
+        w="40px"
+        h="40px"
+        borderRadius="md"
+        flexShrink={0}
+        position="relative"
+        overflow="hidden"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        bg={useColorModeValue("gray.200", "rgba(255,255,255,0.08)")}
+      >
+        {song.cover ? (
+          <ChakraImage
+            src={song.cover.startsWith("data:") ? song.cover : coverProxyUrl(song.cover, proxyPort)}
+            alt=""
+            w="100%"
+            h="100%"
+            objectFit="cover"
+            fallback={<FileMusic size={20} color={subTextColor} />}
+          />
+        ) : (
+          <FileMusic size={20} color={subTextColor} />
+        )}
+      </Box>
+      <VStack spacing={0} align="start" flex={1} minW={0}>
+        <Text color={textColor} fontSize="sm" noOfLines={1} fontWeight={isCurrent ? "bold" : "normal"}>
+          {song.name}
+        </Text>
+        <HStack spacing={1} minW={0}>
+          <Text color={subTextColor} fontSize="xs" noOfLines={1}>
+            {song.artist !== "本地音乐" ? song.artist : "本地音乐"}
+          </Text>
+          {song.album && (
+            <Text color={subTextColor} fontSize="xs" noOfLines={1}>
+              {" "}- {song.album}
+            </Text>
+          )}
+        </HStack>
+      </VStack>
+      <Text color={subTextColor} fontSize="xs" flexShrink={0}>
+        {song.duration > 0 ? formatTime(song.duration / 1000) : ""}
+      </Text>
+      <Tooltip label="移除">
+        <IconButton
+          aria-label="Remove"
+          icon={<Trash2 size={14} />}
+          size="xs"
+          variant="ghost"
+          sx={{ color: subTextColor, _hover: { bg: hoverBg, color: "#e53e3e" } }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(song.id);
+          }}
+        />
+      </Tooltip>
+      <Tooltip label="播放">
+        <IconButton
+          aria-label="Play"
+          icon={isCurrent && isPlaying ? <PauseIcon size={14} /> : <PlayBtn size={14} />}
+          size="xs"
+          variant="ghost"
+          sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isCurrent) {
+              onTogglePlay();
+            } else {
+              onPlay(song, queue);
+            }
+          }}
+        />
+      </Tooltip>
+    </HStack>
+  );
+});
+
+// ═══════════════════════════════════════════════
 // SearchBox — 独立 memo 组件，管理搜索状态
 // 不订阅 currentTime/duration，播放时不会重渲染
 // ═══════════════════════════════════════════════
@@ -2305,6 +2458,7 @@ export default function MusicPage() {
   const isPlaying = useMusicStore((s) => s.isPlaying);
   const searchResults = useMusicStore((s) => s.searchResults);
   const userPlaylists = useMusicStore((s) => s.userPlaylists);
+  const localSongs = useMusicStore((s) => s.localSongs);
   const leftPlaylistTracks = useMusicStore((s) => s.leftPlaylistTracks);
   const leftPlaylistMeta = useMusicStore((s) => s.leftPlaylistMeta);
   const rightPlaylistTracks = useMusicStore((s) => s.rightPlaylistTracks);
@@ -2372,7 +2526,7 @@ export default function MusicPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searchTab, setSearchTab] = useState<"songs" | "playlists" | "artists">("songs");
   const previousViewRef = useRef<typeof viewMode>("main");
-  const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks">("playlists");
+  const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks" | "local">("playlists");
   const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks" | "daily">("recommendations");
   const [expandedPlayer, setExpandedPlayer] = useState(false);
   const [artistTab, setArtistTab] = useState<"songs" | "albums" | "mvs" | "info">("songs");
@@ -2460,6 +2614,7 @@ export default function MusicPage() {
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
 
   const activeColor = getActiveColor();
+  const contrastText = getContrastTextColor();
   const hoverBg = getHoverColor(false);
 
   const borderColor = useColorModeValue("gray.200", "#333333");
@@ -2607,6 +2762,57 @@ setRightPanelView("recommendations");
     setLeftPanelView("playlists");
   }, []);
 
+  // ── 本地导入歌曲 ──
+  const handleImportLocal = useCallback(async () => {
+    try {
+      const selected = await open({
+        multiple: true,
+        title: "导入本地歌曲",
+        filters: [
+          {
+            name: "音频文件",
+            extensions: ["mp3", "wav", "ogg", "m4a", "flac", "aac", "opus", "wma", "aiff", "ape", "oga"],
+          },
+        ],
+      });
+      if (!selected) return;
+      const paths = (Array.isArray(selected) ? selected : [selected]).filter((p): p is string => typeof p === "string");
+      if (paths.length === 0) return;
+      const result = await storeActions.importLocalSongs(paths);
+      if (result.count > 0) {
+        const noCover = result.noCoverCount > 0
+          ? `，${result.noCoverCount} 首未检测到封面`
+          : "";
+        toast({
+          title: "导入成功",
+          description: `已导入 ${result.count} 首本地歌曲${noCover}`,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+        setLeftPanelView("local");
+      } else {
+        toast({ title: "导入失败", description: "未找到支持的音频文件", status: "warning", duration: 2500, isClosable: true });
+      }
+    } catch (e) {
+      console.error("Import local music error:", e);
+      toast({ title: "导入失败", description: String(e) || "打开文件失败", status: "error", duration: 2500, isClosable: true });
+    }
+  }, [storeActions, toast]);
+
+  // ── 点击本地歌曲：播放 ──
+  const handleLocalPlay = useCallback((song: Song, queue: Song[]) => {
+    storeActions.playSong(song, queue && queue.length > 0 ? queue : useMusicStore.getState().localSongs);
+  }, [storeActions]);
+
+  const handleRemoveLocalSong = useCallback((id: string) => {
+    storeActions.removeLocalSong(id);
+  }, [storeActions]);
+
+  const handleClearLocalSongs = useCallback(() => {
+    storeActions.clearLocalSongs();
+  }, [storeActions]);
+
 // ── 推荐歌单点击：在右侧面板切换到曲目视图 ──
 const handleRecPlaylistClick = useCallback((pl: Playlist) => {
 storeActions.loadRightPlaylistTracks(pl.id);
@@ -2719,6 +2925,30 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
   const renderDailyTrackItem = useCallback(
     (song: Song, i: number) => renderSongRow(song, i, recommendSongs),
     [renderSongRow, recommendSongs]
+  );
+
+  // 本地导入歌曲行渲染
+  const renderLocalTrackItem = useCallback(
+    (song: Song, _i: number) => (
+      <LocalSongRow
+        song={song}
+        queue={localSongs}
+        isCurrent={currentSong?.id === song.id}
+        isPlaying={isPlaying}
+        proxyPort={proxyPort}
+        activeColor={activeColor}
+        hoverBg={hoverBg}
+        itemHoverBg={itemHoverBg}
+        itemActiveBg={itemActiveBg}
+        textColor={textColor}
+        subTextColor={subTextColor}
+        liquidGlassEnabled={liquidGlassEnabled}
+        onPlay={handleLocalPlay}
+        onTogglePlay={onTogglePlay}
+        onRemove={handleRemoveLocalSong}
+      />
+    ),
+    [localSongs, currentSong, isPlaying, proxyPort, activeColor, hoverBg, itemHoverBg, itemActiveBg, textColor, subTextColor, liquidGlassEnabled, handleLocalPlay, onTogglePlay, handleRemoveLocalSong]
   );
 
   // ── 渲染歌单行（可自定义 onClick）──
@@ -3879,94 +4109,208 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
 
       {/* 主内容区：左右 50/50 */}
       <HStack spacing={4} align="stretch" flex={1} w="100%" minH={0} overflow="hidden">
-        {/* ══ 左侧：我的歌单 / 歌单曲目 ══ */}
-        {loginInfo?.logged_in ? (
-          <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden" minW={0}>
-            {leftPanelView === "tracks" ? (
-              <>
-                {/* 歌单曲目视图 */}
-                <HStack spacing={2} mb={3} flexShrink={0}>
-                  <Tooltip label="返回歌单列表">
+        {/* ══ 左侧：本地音乐 / 我的歌单 / 歌单曲目 ══ */}
+        <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden" minW={0}>
+          {leftPanelView === "tracks" ? (
+            <>
+              {/* 歌单曲目视图 */}
+              <HStack spacing={2} mb={3} flexShrink={0}>
+                <Tooltip label="返回歌单列表">
+                  <IconButton
+                    aria-label="Back"
+                    icon={<ArrowLeft size={16} />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleBackToPlaylists}
+                    sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                  />
+                </Tooltip>
+                <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
+                  {leftPlaylistMeta?.name || "曲目列表"}
+                </Text>
+                <Text color={subTextColor} fontSize="xs" flexShrink={0}>
+                  ({leftPlaylistTracks.length} 首)
+                </Text>
+              </HStack>
+              <VirtualList
+                items={leftPlaylistTracks}
+                itemHeight={60}
+                renderItem={renderLeftTrackItem}
+                getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
+                loading={loadingLeftTracks}
+                loadingText="加载曲目中..."
+                emptyText="暂无曲目"
+                resetKey={leftPlaylistMeta?.id}
+                scrollbarSx={memoScrollbarSx}
+                onEndReached={() => storeActions.loadMoreLeftPlaylistTracks()}
+                hasMore={(leftPlaylistMeta?.track_count ?? 0) > leftPlaylistTracks.length}
+              />
+            </>
+          ) : leftPanelView === "local" ? (
+            <>
+              {/* 本地歌曲视图 */}
+              <HStack spacing={2} mb={3} flexShrink={0}>
+                <Tooltip label="返回歌单列表">
+                  <IconButton
+                    aria-label="Back"
+                    icon={<ArrowLeft size={16} />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleBackToPlaylists}
+                    sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                  />
+                </Tooltip>
+                <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
+                  本地音乐
+                </Text>
+                <Text color={subTextColor} fontSize="xs" flexShrink={0}>
+                  ({localSongs.length} 首)
+                </Text>
+                <Box flex={1} />
+                <Tooltip label="导入本地歌曲">
+                  <IconButton
+                    aria-label="导入本地歌曲"
+                    icon={<FolderOpen size={15} />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleImportLocal}
+                    sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                  />
+                </Tooltip>
+                {localSongs.length > 0 && (
+                  <Tooltip label="清空本地音乐">
                     <IconButton
-                      aria-label="Back"
-                      icon={<ArrowLeft size={16} />}
+                      aria-label="清空本地音乐"
+                      icon={<Trash2 size={15} />}
                       size="sm"
                       variant="ghost"
-                      onClick={handleBackToPlaylists}
-                      sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                      onClick={handleClearLocalSongs}
+                      sx={{ color: subTextColor, _hover: { bg: hoverBg, color: "#e53e3e" } }}
                     />
                   </Tooltip>
-                  <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
-                    {leftPlaylistMeta?.name || "曲目列表"}
-                  </Text>
-                  <Text color={subTextColor} fontSize="xs" flexShrink={0}>
-                    ({leftPlaylistTracks.length} 首)
-                  </Text>
-                </HStack>
-                <VirtualList
-                  items={leftPlaylistTracks}
-                  itemHeight={60}
-                  renderItem={renderLeftTrackItem}
-                  getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
-                  loading={loadingLeftTracks}
-                  loadingText="加载曲目中..."
-                  emptyText="暂无曲目"
-                  resetKey={leftPlaylistMeta?.id}
-                  scrollbarSx={memoScrollbarSx}
-                  onEndReached={() => storeActions.loadMoreLeftPlaylistTracks()}
-                  hasMore={(leftPlaylistMeta?.track_count ?? 0) > leftPlaylistTracks.length}
-                />
-              </>
-            ) : (
-              <>
-                {/* 歌单列表视图 */}
-                <Text fontSize="sm" fontWeight="bold" color={textColor} mb={3} flexShrink={0}>
-                  我的歌单
+                )}
+              </HStack>
+              <VirtualList
+                items={localSongs}
+                itemHeight={60}
+                renderItem={renderLocalTrackItem}
+                getKey={(song, i) => `local-${song.id}-${i}`}
+                loading={false}
+                loadingText="加载中..."
+                emptyText="暂无本地歌曲，点击右上角导入"
+                resetKey="local"
+                scrollbarSx={memoScrollbarSx}
+              />
+            </>
+          ) : (
+            <>
+              {/* 顶部：本地音乐入口 + 导入按钮（始终显示） */}
+              <HStack spacing={2} mb={2} flexShrink={0}>
+                <ListMusic size={16} color={activeColor} />
+                <Text fontSize="sm" fontWeight="bold" color={textColor} flex={1} noOfLines={1}>
+                  本地音乐
                 </Text>
-                <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
-                  {loadingPlaylists ? (
-                    <VStack py={6}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
-                  ) : userPlaylists.length > 0 ? (
-                    <motion.div variants={listContainerVariants} initial="hidden" animate="visible" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      {userPlaylists.map((pl) => (
-                        <motion.div key={pl.id} variants={listItemVariants}>{renderPlaylistRow(pl)}</motion.div>
-                      ))}
-                    </motion.div>
-                  ) : (
-                    <VStack py={4} spacing={2}>
-                      <Text color={subTextColor} fontSize="xs" textAlign="center">
-                        {userPlaylistsError ? "歌单获取失败" : "暂无歌单"}
-                      </Text>
-                      {userPlaylistsError ? (
-                        <>
-                          <Text color={subTextColor} fontSize="2xs" textAlign="center" wordBreak="break-all" px={2}>
-                            {userPlaylistsError}
-                          </Text>
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            color={activeColor}
-                            onClick={() => useMusicStore.getState().openLoginWindow(playbackSource)}
-                            alignSelf="center"
-                          >
-                            重新登录
-                          </Button>
-                        </>
-                      ) : null}
-                    </VStack>
-                  )}
-                </Box>
-              </>
-            )}
-          </LiquidGlassCard>
-        ) : (
-          <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" alignItems="center" justifyContent="center" overflow="hidden">
-            <VStack spacing={3}>
-              <MusicIcon size={32} color={subTextColor} />
-              <Text color={subTextColor} fontSize="sm" textAlign="center">登录后查看歌单</Text>
-            </VStack>
-          </LiquidGlassCard>
-        )}
+                <Text color={subTextColor} fontSize="xs" flexShrink={0}>
+                  {localSongs.length} 首
+                </Text>
+                <Button
+                  size="xs"
+                  leftIcon={<FolderOpen size={14} />}
+                  variant="solid"
+                  flexShrink={0}
+                  bg={activeColor}
+                  color={contrastText}
+                  _hover={{ opacity: 0.9 }}
+                  _active={{ transform: "scale(0.97)" }}
+                  onClick={handleImportLocal}
+                >
+                  本地导入
+                </Button>
+              </HStack>
+              <Box
+                p={2}
+                borderRadius="lg"
+                cursor="pointer"
+                mb={3}
+                _hover={{ bg: liquidGlassEnabled ? hoverBg : itemHoverBg }}
+                onClick={() => setLeftPanelView("local")}
+                transition="background 0.15s"
+                flexShrink={0}
+              >
+                <HStack spacing={3}>
+                  <Box
+                    w="44px"
+                    h="44px"
+                    borderRadius="md"
+                    flexShrink={0}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    bg={useColorModeValue(`${activeColor}1a`, `${activeColor}26`)}
+                  >
+                    <FileMusic size={22} color={activeColor} />
+                  </Box>
+                  <VStack spacing={0} align="start" flex={1} minW={0}>
+                    <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
+                      本地导入的歌单
+                    </Text>
+                    <Text color={subTextColor} fontSize="xs">
+                      {localSongs.length > 0 ? `${localSongs.length} 首歌曲` : "导入本地音频文件"}
+                    </Text>
+                  </VStack>
+                  <ChevronRight size={16} color={subTextColor} />
+                </HStack>
+              </Box>
+
+              {/* 登录后的歌单列表 */}
+              {loginInfo?.logged_in ? (
+                <>
+                  <Text fontSize="sm" fontWeight="bold" color={textColor} mb={2} flexShrink={0}>
+                    我的歌单
+                  </Text>
+                  <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
+                    {loadingPlaylists ? (
+                      <VStack py={6}><Spinner size="sm" sx={{ color: activeColor }} /></VStack>
+                    ) : userPlaylists.length > 0 ? (
+                      <motion.div variants={listContainerVariants} initial="hidden" animate="visible" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {userPlaylists.map((pl) => (
+                          <motion.div key={pl.id} variants={listItemVariants}>{renderPlaylistRow(pl)}</motion.div>
+                        ))}
+                      </motion.div>
+                    ) : (
+                      <VStack py={4} spacing={2}>
+                        <Text color={subTextColor} fontSize="xs" textAlign="center">
+                          {userPlaylistsError ? "歌单获取失败" : "暂无歌单"}
+                        </Text>
+                        {userPlaylistsError ? (
+                          <>
+                            <Text color={subTextColor} fontSize="2xs" textAlign="center" wordBreak="break-all" px={2}>
+                              {userPlaylistsError}
+                            </Text>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              color={activeColor}
+                              onClick={() => useMusicStore.getState().openLoginWindow(playbackSource)}
+                              alignSelf="center"
+                            >
+                              重新登录
+                            </Button>
+                          </>
+                        ) : null}
+                      </VStack>
+                    )}
+                  </Box>
+                </>
+              ) : (
+                <VStack flex={1} spacing={3} justify="center">
+                  <MusicIcon size={32} color={subTextColor} />
+                  <Text color={subTextColor} fontSize="sm" textAlign="center">登录后查看云端歌单</Text>
+                </VStack>
+              )}
+            </>
+          )}
+        </LiquidGlassCard>
 
         {/* ══ 右侧：搜索 + 推荐 ══ */}
         <VStack spacing={4} align="stretch" flex={1} minW={0} overflow="hidden">

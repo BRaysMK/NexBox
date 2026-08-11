@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicPtr, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
@@ -9,6 +9,73 @@ static OVERLAY_HANDLE: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::nu
 static DRAG_MODE: AtomicBool = AtomicBool::new(false);
 static POSITION_CHANGED: AtomicBool = AtomicBool::new(false);
 static BACKGROUND_POLLER_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+// ═══ 网络时间同步 ═══
+// NET_TIME_OFFSET_MS = 网络标准时间 - 本地系统时间（毫秒）。
+// 悬浮框时间 = 本地时间 + 该偏移量，从而得到不依赖系统时区的网络标准时间。
+static NET_TIME_OFFSET_MS: AtomicI64 = AtomicI64::new(i64::MIN);
+static NET_TIME_SYNC_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// 获取网络时间偏移量（毫秒）。若尚未同步成功，返回 None。
+fn get_net_offset_ms() -> Option<i64> {
+    let v = NET_TIME_OFFSET_MS.load(Ordering::SeqCst);
+    if v == i64::MIN { None } else { Some(v) }
+}
+
+/// 后台线程周期性从 HTTP 响应头 Date 字段同步网络时间。
+/// 从多个端点轮流尝试，任意一个成功即可。
+fn start_net_time_sync() {
+    if NET_TIME_SYNC_ACTIVE.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    thread::spawn(|| {
+        let endpoints = [
+            "https://www.baidu.com",
+            "https://www.taobao.com",
+            "https://www.qq.com",
+            "https://cloud.tencent.com",
+        ];
+        // 每 30 分钟同步一次；初始立即同步一次
+        loop {
+            for url in &endpoints {
+                if let Some(server_date) = fetch_http_date(url) {
+                    let local_before = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as i64)
+                        .unwrap_or(0);
+                    let server_ms = server_date * 1000;
+                    // 粗略补偿网络往返（取请求发出到收到之间的中点）：
+                    // 这里简单用响应到达时刻 - 单程估计（200ms）
+                    let offset = server_ms - (local_before - 200);
+                    NET_TIME_OFFSET_MS.store(offset, Ordering::SeqCst);
+                    log::info!("overlay: 网络时间同步成功 offset_ms={} (endpoint={})", offset, url);
+                    break;
+                }
+            }
+            // 等待 30 分钟
+            for _ in 0..(30 * 60) {
+                if !NET_TIME_SYNC_ACTIVE.load(Ordering::SeqCst) {
+                    return;
+                }
+                thread::sleep(Duration::from_secs(1));
+            }
+        }
+    });
+}
+
+/// 请求 URL，从响应头 Date 解析 Unix 秒。失败返回 None。
+fn fetch_http_date(url: &str) -> Option<i64> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .ok()?;
+    let resp = client.get(url).send().ok()?;
+    let date_header = resp.headers().get("date")?.to_str().ok()?;
+    // HTTP Date 格式: Wed, 21 Oct 2015 07:28:00 GMT（RFC 7231）
+    chrono::DateTime::parse_from_rfc2822(date_header)
+        .ok()
+        .map(|dt| dt.timestamp())
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DisplayItem {
@@ -41,6 +108,7 @@ fn default_font_color() -> String {
 
 fn default_display_items() -> DisplayItems {
         vec![
+            DisplayItem { id: "time".to_string(), label: "时间".to_string(), enabled: false },
             DisplayItem { id: "fps".to_string(), label: "FPS".to_string(), enabled: false },
             DisplayItem { id: "fps_1low".to_string(), label: "1% Low".to_string(), enabled: false },
             DisplayItem { id: "fps_01low".to_string(), label: "0.1% Low".to_string(), enabled: false },
@@ -164,6 +232,8 @@ pub struct OverlayHardwareData {
     gpu_voltage: Option<f64>,
     cpu_power: Option<f64>,
     ssd_temp: Option<f64>,
+    /// 网络标准时间偏移量（毫秒）：net_time = 本地时间 + 该偏移。None 表示尚未同步成功
+    pub net_time_offset_ms: Option<i64>,
     /// 所有 GPU 的传感器数据（支持多 GPU 切换）
     pub gpu_sensors: Vec<GpuSensorData>,
     /// 当前选中的 GPU 索引
@@ -195,6 +265,7 @@ impl Default for OverlayHardwareData {
             gpu_voltage: None,
             cpu_power: None,
             ssd_temp: None,
+            net_time_offset_ms: None,
             gpu_sensors: Vec::new(),
             active_gpu_index: 0,
         }
@@ -673,7 +744,12 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                 (cpu_usage, cpu_temp, cpu_clock, cpu_voltage, cpu_power, cpu_fan_speed, ssd_temp, memory_usage, gpu_temp, gpu_usage, gpu_fan_speed, gpu_power, gpu_clock, gpu_vram_used, gpu_vram_total, gpu_memory_clock, gpu_voltage, gpu_sensors, active_gpu_index)
             }
             Err(e) => {
-                log::warn!("LHML 传感器读取失败: {e}");
+                // 传感器启动早期未就绪是正常现象，降级为 debug 日志
+                if e.contains("尚未就绪") {
+                    log::debug!("LHML 传感器读取跳过: {e}");
+                } else {
+                    log::warn!("LHML 传感器读取失败: {e}");
+                }
                 (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Vec::new(), 0)
             }
         }
@@ -702,6 +778,7 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
         gpu_voltage,
         cpu_power,
         ssd_temp,
+        net_time_offset_ms: get_net_offset_ms(),
         gpu_sensors,
         active_gpu_index,
     };
@@ -732,6 +809,7 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
             gpu_voltage: new_data.gpu_voltage.or(prev.gpu_voltage),
             cpu_power: new_data.cpu_power.or(prev.cpu_power),
             ssd_temp: new_data.ssd_temp.or(prev.ssd_temp),
+            net_time_offset_ms: new_data.net_time_offset_ms.or(prev.net_time_offset_ms),
             gpu_sensors: if has_new_gpu_data { new_data.gpu_sensors } else { prev.gpu_sensors },
             active_gpu_index: if has_new_gpu_data { new_data.active_gpu_index } else { prev.active_gpu_index },
         }
@@ -1114,6 +1192,27 @@ mod win32 {
                 continue;
             }
             match display_item.id.as_str() {
+                "time" => {
+                    // 优先使用网络标准时间；未同步成功时回退到北京时间（UTC+8）
+                    let now = if let Some(offset_ms) = super::get_net_offset_ms() {
+                        let now_ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis() as i64)
+                            .unwrap_or(0)
+                            + offset_ms;
+                        chrono::DateTime::from_timestamp_millis(now_ms)
+                            .map(|dt| dt.with_timezone(&chrono::FixedOffset::east_opt(8 * 3600).unwrap()))
+                    } else {
+                        Some(chrono::Utc::now().with_timezone(&chrono::FixedOffset::east_opt(8 * 3600).unwrap()))
+                    };
+                    if let Some(now) = now {
+                        items.push(DisplayItem {
+                            label: String::new(),
+                            value: now.format("%H:%M:%S").to_string(),
+                            label_width: 0, value_width: 0, total_width: 0, custom_color: None,
+                        });
+                    }
+                }
                 "cpu_usage" => {
                     let val = data.cpu_usage.map(|v| format!("{}%", v)).unwrap_or_else(|| "--%".to_string());
                     items.push(DisplayItem { label: "CPU".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
@@ -1865,6 +1964,8 @@ pub fn start_overlay(settings: OverlaySettings) -> Result<OverlayResult, String>
 
         crate::game_ping::start_ping_thread();
         crate::game_fps::start_fps_monitor();
+        // 启动网络时间同步（悬浮框时间使用网络标准时间）
+        start_net_time_sync();
 
         let com_initialized = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).is_ok() };
         if !com_initialized {
