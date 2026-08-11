@@ -56,7 +56,8 @@
     "screenRecord": "Screen Record",
     "audioEq": "EQ Tuner",
     "custom": "Custom",
-    "speedtest": "Speed Test"
+    "speedtest": "Speed Test",
+    "runtimeRepair": "Runtime Repair"
   },
   "customPage": {
     "title": "Custom Dashboard",
@@ -456,8 +457,8 @@
       "configSaved": "Auto clean config saved"
     },
     "aceOptimize": {
-      "title": "Delta/ACE Optimize",
-      "description": "Delta Force process optimization and ACE anti-cheat resource limiting",
+      "title": "ACE Anti-Cheat Optimize",
+      "description": "Limit ACE anti-cheat resource usage, free more performance for the game",
       "deltaSection": {
         "title": "Delta Force Optimize",
         "subtitle": "Boost Delta Force gaming performance"
@@ -489,6 +490,13 @@
         "description": "Enable background power-saving scheduling for ACE processes: Below Normal priority + background I/O throttle + low memory priority, significantly reducing background resource usage",
         "success": "Scheduling optimization enabled for {{count}} ACE process(es)",
         "notRunning": "No running ACE processes found"
+      },
+      "aceRegistry": {
+        "title": "Registry Force Limit",
+        "description": "Force-limit Delta Force and SGuard process CPU/I/O priority via system IFEO registry (applied at process startup, cannot be reverted by anti-cheat; takes effect after restarting the processes, some risk)",
+        "badge": "May be risky",
+        "success": "Registry force limit applied",
+        "restored": "Registry force limit restored"
       },
       "optimizeAll": {
         "button": "Optimize All",
@@ -532,7 +540,12 @@
       },
       "apply": "Apply",
       "applied": "Applied",
+      "restore": "Restore",
       "error": "Optimization failed"
+    },
+    "gameProcessOptimize": {
+      "title": "Game Process Optimize",
+      "description": "Configure process priority and CPU core allocation per game"
     },
     "cpuScheduler": {
       "title": "CPU Core Scheduler",
@@ -1236,7 +1249,63 @@
     "screenRecordDesc": "High-performance screen recording (hardware encoding)",
     "audioEqDesc": "System-level audio equalizer tuning",
     "nvidiaDriverDownloadDesc": "Search and download NVIDIA GPU drivers (including older versions)",
-    "speedtestDesc": "Test network download/upload speed, latency and jitter"
+    "speedtestDesc": "Test network download/upload speed, latency and jitter",
+    "runtimeRepairDesc": "Detect and repair missing VC++ / .NET / DirectX runtime libraries"
+  },
+  "gameProcessOptimize": {
+    "title": "Game Process Optimize",
+    "subtitle": "Manage process optimization and CPU core allocation per game. Process auto-optimize and core auto-optimize can be enabled independently",
+    "needsAdmin": "Admin required",
+    "fromExe": "Pick Executable",
+    "fromExeDesc": "Select a game .exe via file dialog, process name extracted automatically",
+    "fromProcess": "Pick Running Process",
+    "fromProcessDesc": "Pick a process from the currently running process list",
+    "fromFilterList": "From Filter Game List",
+    "fromFilterListDesc": "Pick from the filter's built-in / custom game list",
+    "emptyTitle": "No games yet",
+    "emptyDesc": "Use one of the options above to add your first game",
+    "processOptimize": {
+      "title": "Process Optimize",
+      "description": "Boost game process priority to Realtime for prioritized CPU allocation"
+    },
+    "affinityOptimize": {
+      "title": "Core Optimize",
+      "description": "Assign specific CPU cores to the game process for multi-core performance"
+    },
+    "apply": "Apply",
+    "optimizeNow": "Optimize Now",
+    "optimizeNowDone": "Applied process optimize + core optimize to this game",
+    "autoOptimize": {
+      "title": "Auto Optimize on Launch",
+      "description": "When this game starts, automatically apply the enabled options below",
+      "priority": "Process auto-optimize",
+      "affinity": "Core auto-optimize",
+      "enabled": "Auto optimize enabled",
+      "disabled": "Auto optimize disabled"
+    },
+    "status": {
+      "running": "Running",
+      "optimized": "Optimized",
+      "applied": "Applied"
+    },
+    "delete": "Delete",
+    "deleteConfirm": "Delete game \"{{name}}\"?",
+    "gameAdded": "Game added",
+    "gameExists": "This game already exists",
+    "gameDeleted": "Game deleted",
+    "searchProcess": "Search process name...",
+    "searchGame": "Search game name or process...",
+    "noResults": "No matches found",
+    "affinitySettings": {
+      "title": "Core Selection",
+      "description": "Select CPU cores to assign ({{count}} logical cores total)",
+      "selectAll": "Select All",
+      "clearAll": "Clear",
+      "defaultHint": "Default: all cores except CPU0 (select all then save for default)",
+      "save": "Save",
+      "cancel": "Cancel",
+      "configSaved": "Core config saved"
+    }
   },
   "speedtest": {
     "title": "Speed Test",
@@ -1562,7 +1631,15 @@
     "height": "H",
     "pixels": "px",
     "standard": "Standard",
-    "tip": "Select a resolution type to see the specific resolution values for three common aspect ratios below, helping you adjust aspect ratio settings in games."
+    "tip": "Select a resolution type to see the specific resolution values for three common aspect ratios below, helping you adjust aspect ratio settings in games.",
+    "custom": "Custom",
+    "customPlaceholder": "Custom Resolution",
+    "widthInputPlaceholder": "Width",
+    "heightInputPlaceholder": "Height",
+    "refreshRate": "Refresh Rate",
+    "refreshRateInputPlaceholder": "Refresh Rate",
+    "applyCustomResolution": "Apply Custom Resolution",
+    "customResolutionHint": "Enter a custom resolution and optionally a refresh rate to apply to the current display"
   },
   "systemOptimizer": {
     "pageTitle": "System Optimizer",

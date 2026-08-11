@@ -52,7 +52,8 @@
     "diskHealth": "Santé du disque",
 "screenRecord": "Enregistrement d'écran",
     "audioEq": "Égaliseur EQ",
-    "custom": "Personnalisé"
+    "custom": "Personnalisé",
+    "runtimeRepair": "Réparation des bibliothèques"
   },
 "customPage": {
 "title": "Page Personnalisée",
@@ -353,8 +354,8 @@
         "error": "Échec du nettoyage"
     },
     "aceOptimize": {
-        "title": "Optimisation Delta Force/ACE",
-        "description": "Optimisation des processus Delta Force et limitation des ressources anti-triche ACE",
+        "title": "Optimisation anti-triche ACE",
+        "description": "Limiter l'utilisation des ressources des processus anti-triche ACE pour libérer plus de performances pour le jeu",
         "deltaSection": {
             "title": "Optimisation Delta Force",
             "subtitle": "Améliorez les performances du jeu Delta Force"
@@ -393,6 +394,13 @@
             "success": "Toutes les optimisations terminées",
             "partial": "Optimisation partielle terminée, vérifiez les détails"
         },
+        "aceRegistry": {
+            "title": "Limitation forcée via registre",
+            "description": "Limiter de force la priorité CPU/I/O des processus Delta Force et SGuard via le registre IFEO du système (appliqué au démarrage du processus, non réversible par l'anti-triche ; prend effet après redémarrage des processus, risque modéré)",
+            "badge": "Risque possible",
+            "success": "Limitation via registre appliquée",
+            "restored": "Limitation via registre supprimée"
+        },
         "autoDetect": {
             "title": "Détection et optimisation automatique des processus ACE",
             "description": "Surveillance en arrière-plan - limite automatiquement la priorité et l'affinité des cœurs lors de la détection des processus ACE-Tray/SGuard (vérification toutes les 5 secondes)",
@@ -416,7 +424,12 @@
         },
         "apply": "Appliquer",
         "applied": "Appliqué",
+        "restore": "Restaurer",
         "error": "Échec de l'optimisation"
+    },
+    "gameProcessOptimize": {
+      "title": "Optimisation des processus de jeu",
+      "description": "Configurer la priorité des processus et l'allocation des cœurs CPU par jeu"
     },
     "cpuScheduler": {
       "title": "Planificateur de cœurs CPU",
@@ -1024,7 +1037,63 @@
     "dlssPresetDesc": "Changer les préréglages de modèle DLSS pour optimiser les graphismes du jeu",
     "diskHealthDesc": "Vérifier l'état de santé du disque et les informations SMART",
 "screenRecordDesc": "Enregistrement d'écran haute performance (encodage matériel)",
-    "audioEqDesc": "Réglage d'égaliseur audio au niveau système"
+    "audioEqDesc": "Réglage d'égaliseur audio au niveau système",
+    "runtimeRepairDesc": "Détecter et réparer les bibliothèques d'exécution VC++ / .NET / DirectX manquantes"
+  },
+  "gameProcessOptimize": {
+    "title": "Optimisation des processus de jeu",
+    "subtitle": "Gérez l'optimisation des processus et l'allocation des cœurs CPU par jeu. L'auto-optimisation des processus et des cœurs peut être activée indépendamment",
+    "needsAdmin": "Administrateur requis",
+    "fromExe": "Choisir un exécutable",
+    "fromExeDesc": "Sélectionnez un .exe de jeu via la boîte de dialogue, nom du processus extrait automatiquement",
+    "fromProcess": "Choisir un processus en cours",
+    "fromProcessDesc": "Choisissez un processus dans la liste des processus en cours d'exécution",
+    "fromFilterList": "Depuis la liste de filtres",
+    "fromFilterListDesc": "Choisissez dans la liste de jeux intégrée / personnalisée du filtre",
+    "emptyTitle": "Aucun jeu pour le moment",
+    "emptyDesc": "Utilisez l'une des options ci-dessus pour ajouter votre premier jeu",
+    "processOptimize": {
+      "title": "Optimisation des processus",
+      "description": "Augmentez la priorité du processus de jeu à « Temps réel » pour une allocation CPU prioritaire"
+    },
+    "affinityOptimize": {
+      "title": "Optimisation des cœurs",
+      "description": "Attribuez des cœurs CPU spécifiques au processus de jeu pour des performances multicœurs"
+    },
+    "apply": "Appliquer",
+    "optimizeNow": "Optimiser maintenant",
+    "optimizeNowDone": "Optimisation des processus + cœurs appliquée à ce jeu",
+    "autoOptimize": {
+      "title": "Auto-optimisation au lancement",
+      "description": "Au démarrage du jeu, appliquez automatiquement les options activées ci-dessous",
+      "priority": "Auto-optimisation des processus",
+      "affinity": "Auto-optimisation des cœurs",
+      "enabled": "Auto-optimisation activée",
+      "disabled": "Auto-optimisation désactivée"
+    },
+    "status": {
+      "running": "En cours",
+      "optimized": "Optimisé",
+      "applied": "Appliqué"
+    },
+    "delete": "Supprimer",
+    "deleteConfirm": "Supprimer le jeu « {{name}} » ?",
+    "gameAdded": "Jeu ajouté",
+    "gameExists": "Ce jeu existe déjà",
+    "gameDeleted": "Jeu supprimé",
+    "searchProcess": "Rechercher un nom de processus...",
+    "searchGame": "Rechercher un nom de jeu ou processus...",
+    "noResults": "Aucun résultat trouvé",
+    "affinitySettings": {
+      "title": "Sélection des cœurs",
+      "description": "Sélectionnez les cœurs CPU à attribuer ({{count}} cœurs logiques au total)",
+      "selectAll": "Tout sélectionner",
+      "clearAll": "Effacer",
+      "defaultHint": "Par défaut : tous les cœurs sauf CPU0 (tout sélectionner puis enregistrer pour le défaut)",
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "configSaved": "Configuration des cœurs enregistrée"
+    }
   },
   "gpuRename": {
     "title": "Renommage GPU",
@@ -1071,7 +1140,15 @@
     "height": "Hauteur",
     "pixels": "Pixels",
     "standard": "Standard",
-    "tip": "Après avoir sélectionné le type de résolution, les valeurs de résolution spécifiques pour trois ratios d'aspect courants s'affichent ci-dessous, vous aidant à ajuster les paramètres de proportion d'image dans le jeu."
+    "tip": "Après avoir sélectionné le type de résolution, les valeurs de résolution spécifiques pour trois ratios d'aspect courants s'affichent ci-dessous, vous aidant à ajuster les paramètres de proportion d'image dans le jeu.",
+    "custom": "Personnalisé",
+    "customPlaceholder": "Résolution personnalisée",
+    "widthInputPlaceholder": "Largeur",
+    "heightInputPlaceholder": "Hauteur",
+    "refreshRate": "Taux de rafraîchissement",
+    "refreshRateInputPlaceholder": "Taux de rafraîchissement",
+    "applyCustomResolution": "Appliquer la résolution personnalisée",
+    "customResolutionHint": "Saisissez une résolution personnalisée, éventuellement avec un taux de rafraîchissement, à appliquer à l'écran actuel"
   },
   "shaderCache": {
     "title": "Nettoyage du cache de shader",

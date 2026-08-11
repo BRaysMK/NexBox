@@ -397,12 +397,12 @@ export default function CrosshairPage() {
                   <HotkeyRecorder
                     value={crosshairHotkey}
                     onChange={async (val) => {
-                      const ok = await saveCrosshairHotkey(val);
+                      const err = await saveCrosshairHotkey(val);
                       toast({
-                        title: ok
-                          ? (t("crosshair.hotkeySaved") || "快捷键已保存")
-                          : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                        status: ok ? "success" : "error",
+                        title: err
+                          ? err
+                          : (t("crosshair.hotkeySaved") || "快捷键已保存"),
+                        status: err ? "error" : "success",
                         duration: 2000,
                         isClosable: true,
                       });

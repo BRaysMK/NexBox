@@ -243,16 +243,16 @@ export default function StartupManagerPage() {
           borderColor={tableBorder}
           overflow="hidden"
         >
-          <Table variant="unstyled" size="sm">
+          <Table variant="unstyled" size="sm" layout="fixed">
             <Thead bg={headerBg}>
               <Tr>
-                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider">
+                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="30%">
                   {t("optimization.startupManager.columnName")}
                 </Th>
                 <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="45%">
                   {t("optimization.startupManager.columnPath")}
                 </Th>
-                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="130px">
+                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="140px">
                   {t("optimization.startupManager.columnActions")}
                 </Th>
               </Tr>

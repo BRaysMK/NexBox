@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { Store } from "@tauri-apps/plugin-store";
 import type {
@@ -35,6 +35,9 @@ interface MusicState {
   playMode: PlayMode;
   playQueue: Song[];
   currentIndex: number;
+
+  // 本地导入歌曲
+  localSongs: Song[];
 
   // 登录状态 (多平台)
   loginInfo: LoginInfo | null; // 当前播放源的登录信息 (向后兼容)
@@ -127,6 +130,12 @@ interface MusicState {
   init: () => Promise<void>;
   setAudioRef: (audio: HTMLAudioElement | null) => void;
 
+  // 本地导入歌曲 Actions
+  loadLocalSongs: () => Promise<void>;
+  importLocalSongs: (paths: string[]) => Promise<{ count: number; noCoverCount: number }>;
+  removeLocalSong: (id: string) => Promise<void>;
+  clearLocalSongs: () => Promise<void>;
+
   search: (keywords: string) => Promise<void>;
   searchArtists: (keywords: string) => Promise<void>;
   loadArtistSongs: (artistId: string, offset?: number) => Promise<void>;
@@ -205,6 +214,25 @@ const getStore = async (): Promise<Store> => {
   }
   return storeInstance;
 };
+
+// 序列化本地歌曲对象用于持久化，确保字段完整
+function serializeLocalSong(song: Song): Record<string, unknown> {
+  return {
+    provider: "local",
+    id: song.id,
+    name: song.name,
+    artist: song.artist,
+    artists: song.artists || [],
+    album: song.album,
+    cover: song.cover || "",
+    duration: song.duration,
+    fee: song.fee ?? 0,
+    playable: song.playable ?? true,
+    language: song.language ?? 0,
+    hash: song.hash,
+    _localPath: song._localPath,
+  };
+}
 
 // 桌面歌词时间同步定时器
 let timeSyncTimer: ReturnType<typeof setInterval> | null = null;
@@ -326,6 +354,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   playQueue: [],
   currentIndex: -1,
 
+  localSongs: [],
+
   loginInfo: null,
   loginInfos: { netease: null, kugou: null, qqmusic: null },
   playbackSource: "netease",
@@ -400,7 +430,111 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   audioRef: null,
 
+  // ── 本地导入歌曲 Actions ──
+  loadLocalSongs: async () => {
+    try {
+      const s = await getStore();
+      const stored = await s.get<Song[]>("localSongs");
+      set({ localSongs: Array.isArray(stored) ? stored : [] });
+    } catch {
+      set({ localSongs: [] });
+    }
+  },
+
+  importLocalSongs: async (paths) => {
+    try {
+      const infos = await invoke<Array<{
+        id: string;
+        name: string;
+        path: string;
+        size: number;
+        extension: string;
+        title: string;
+        artist: string;
+        album: string;
+        duration_ms: number;
+        cover: string;
+        cover_source: string;
+      }>>("import_local_music", { paths });
+
+      if (infos.length === 0) return { count: 0, noCoverCount: 0 };
+
+      const newSongs: Song[] = infos.map((info) => ({
+        provider: "local",
+        id: info.id,
+        // 优先使用音频标签中的标题，回退到文件名
+        name: info.title || info.name,
+        artist: info.artist || "本地音乐",
+        artists: info.artist ? [{ name: info.artist }] : [],
+        album: info.album,
+        // 内嵌封面（data URI 或空字符串）
+        cover: info.cover || "",
+        duration: info.duration_ms,
+        fee: 0,
+        playable: true,
+        language: 0,
+        // 本地歌曲专用：文件绝对路径，用于 convertFileSrc 播放
+        // 复用 hash 字段存放绝对路径，避免修改 Song 结构
+        hash: info.path,
+        _localPath: info.path,
+      }));
+
+      set((state) => {
+        // 已存在的歌曲更新元数据（封面/标题/艺术家/专辑/时长），新歌曲追加
+        const merged = [...state.localSongs];
+        for (const song of newSongs) {
+          const idx = merged.findIndex((s) => s.id === song.id);
+          if (idx >= 0) {
+            merged[idx] = song;
+          } else {
+            merged.push(song);
+          }
+        }
+        return { localSongs: merged };
+      });
+
+      // 持久化完整 Song 对象，确保重启后 provider 等字段不丢失
+      const s = await getStore();
+      const finalList = get().localSongs.map(serializeLocalSong);
+      await s.set("localSongs", finalList);
+      await s.save();
+
+      // 统计没有封面的歌曲数量，用于前端提示
+      const noCoverCount = infos.filter((info) => !info.cover).length;
+      return { count: newSongs.length, noCoverCount };
+    } catch (e) {
+      console.error("Import local songs failed:", e);
+      return { count: 0, noCoverCount: 0 };
+    }
+  },
+
+  removeLocalSong: async (id) => {
+    set((state) => ({ localSongs: state.localSongs.filter((s) => s.id !== id) }));
+    try {
+      const s = await getStore();
+      const list = get().localSongs.map(serializeLocalSong);
+      await s.set("localSongs", list);
+      await s.save();
+    } catch (e) {
+      console.error("Remove local song persist failed:", e);
+    }
+  },
+
+  clearLocalSongs: async () => {
+    set({ localSongs: [] });
+    try {
+      const s = await getStore();
+      await s.set("localSongs", []);
+      await s.save();
+    } catch (e) {
+      console.error("Clear local songs persist failed:", e);
+    }
+  },
+
   init: async () => {
+    // 加载本地导入的歌曲（不阻塞其余初始化）
+    get().loadLocalSongs();
+
     try {
       const port = await invoke<number>("cmd_get_proxy_port");
       set({ proxyPort: port });
@@ -823,6 +957,32 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     get().loadLyricsForSong(song);
 
     try {
+      // ── 本地歌曲：直接播放本地文件，无需获取网络 URL ──
+      if (song.provider === "local") {
+        const localPath = song._localPath || song.hash;
+        if (!localPath) {
+          set({ isPlaying: false });
+          return;
+        }
+        if (mySeq !== playSongSeq) return;
+        const audioUrl = convertFileSrc(localPath);
+        audio.src = audioUrl;
+        audio.volume = state.volume;
+        try {
+          await audio.play();
+          if (mySeq !== playSongSeq) return;
+          set({ isPlaying: true, currentQuality: "本地", currentBitrate: 0 });
+        } catch (err) {
+          if (mySeq !== playSongSeq) return;
+          console.error("Play local song failed:", err);
+          set({
+            isPlaying: false,
+            musicToast: { type: "warning", message: "无法播放该本地音频文件，请检查格式是否受支持" },
+          });
+        }
+        return;
+      }
+
       // 根据歌曲 provider 调用对应 API
       const result = song.provider === "kugou"
         ? await invoke<SongUrlResult>("kugou_song_url", {
@@ -931,6 +1091,27 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         const song = state.currentSong;
         if (song) {
           const savedTime = audioRef.currentTime;
+          // 本地歌曲：直接重设 src 重试
+          if (song.provider === "local") {
+            const localPath = song._localPath || song.hash;
+            if (localPath) {
+              audioRef.src = convertFileSrc(localPath);
+              audioRef.currentTime = savedTime;
+              try {
+                await audioRef.play();
+                set({ isPlaying: true });
+                if (get().desktopLyricsVisible) {
+                  emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
+                }
+                return;
+              } catch {}
+            }
+            set({ isPlaying: false });
+            if (get().desktopLyricsVisible) {
+              emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
+            }
+            return;
+          }
           try {
             const result = song.provider === "kugou"
               ? await invoke<SongUrlResult>("kugou_song_url", {
@@ -1618,6 +1799,35 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   loadLyricsForSong: async (song) => {
+    // 本地导入歌曲：读取同目录的同名 .lrc 歌词文件
+    if (song.provider === "local") {
+      set({ loadingLyrics: true });
+      try {
+        const localPath = song._localPath || song.hash || "";
+        if (localPath) {
+          const lrcText = await invoke<string>("get_local_lyric", { path: localPath });
+          if (lrcText && lrcText.trim()) {
+            set({ currentLyrics: { lyric: lrcText } });
+            if (get().desktopLyricsVisible) {
+              get().emitDesktopLyricsData();
+            }
+            return;
+          }
+        }
+        set({ currentLyrics: null });
+        if (get().desktopLyricsVisible) {
+          get().emitDesktopLyricsData();
+        }
+      } catch {
+        set({ currentLyrics: null });
+        if (get().desktopLyricsVisible) {
+          get().emitDesktopLyricsData();
+        }
+      } finally {
+        set({ loadingLyrics: false });
+      }
+      return;
+    }
     set({ loadingLyrics: true });
     try {
       const lyrics = song.provider === "kugou"

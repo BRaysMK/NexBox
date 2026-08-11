@@ -99,6 +99,7 @@ interface HardwareData {
 }
 
 const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
+  { id: "time", label: "时间", enabled: false },
   { id: "fps", label: "FPS", enabled: false },
   { id: "fps_1low", label: "1% Low", enabled: false },
   { id: "fps_01low", label: "0.1% Low", enabled: false },
@@ -736,12 +737,12 @@ export default function OverlayPanelPage() {
               <HotkeyRecorder
                 value={overlayHotkey}
                 onChange={async (val) => {
-                  const ok = await saveOverlayHotkey(val);
+                  const err = await saveOverlayHotkey(val);
                   toast({
-                    title: ok
-                      ? (t("overlayPanel.hotkeySaved") || "快捷键已保存")
-                      : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                    status: ok ? "success" : "error",
+                    title: err
+                      ? err
+                      : (t("overlayPanel.hotkeySaved") || "快捷键已保存"),
+                    status: err ? "error" : "success",
                     duration: 2000,
                     isClosable: true,
                   });

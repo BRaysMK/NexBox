@@ -52,7 +52,8 @@
     "diskHealth": "磁碟健康",
 "screenRecord": "螢幕錄製",
     "audioEq": "EQ調音",
-    "custom": "自訂"
+    "custom": "自訂",
+    "runtimeRepair": "執行庫修復"
   },
 "customPage": {
 "title": "自訂頁面",
@@ -353,8 +354,8 @@
         "error": "清理失敗"
     },
     "aceOptimize": {
-        "title": "ACE/遊戲最佳化",
-        "description": "最佳化遊戲程序優先順序，限制反作弊程序資源佔用",
+        "title": "ACE 反作弊最佳化",
+        "description": "限制 ACE 反作弊程序的資源佔用，釋放更多效能給遊戲",
         "deltaBoost": {
             "title": "三角洲優先順序提升",
             "description": "提升 DeltaForceClient-Win64-Shipping.exe 程序優先順序為「即時」，提升遊戲流暢度",
@@ -379,6 +380,13 @@
             "success": "全部最佳化完成",
             "partial": "部分最佳化完成，請檢視詳情"
         },
+        "aceRegistry": {
+            "title": "註冊表強制限制",
+            "description": "透過系統 IFEO 註冊表強制限制三角洲與 SGuard 進程的 CPU/I/O 優先級（進程啟動時即生效，無法被反作弊改回；需重啟相關進程後生效，有一定風險）",
+            "badge": "可能有風險",
+            "success": "註冊表強制限制已套用",
+            "restored": "註冊表強制限制已恢復"
+        },
         "autoDetect": {
             "title": "自動偵測並優化 ACE 進程",
             "description": "背景持續監測，發現 ACE-Tray/SGuard 進程自動限制優先級和核心親和性（每 5 秒檢測一次）",
@@ -400,7 +408,12 @@
             "processNotRunning": "進程未運行",
             "needsAdmin": "需管理員權限"
         },
+        "restore": "恢復",
         "error": "最佳化失敗"
+    },
+    "gameProcessOptimize": {
+      "title": "遊戲進程最佳化",
+      "description": "為每個遊戲單獨設定進程優先順序與 CPU 核心分配"
     },
     "cpuScheduler": {
       "title": "CPU核心調度",
@@ -1008,7 +1021,63 @@
     "dlssPresetDesc": "切換DLSS模型預設以優化遊戲畫質",
     "diskHealthDesc": "檢測硬碟健康狀態與SMART資訊",
 "screenRecordDesc": "高效能螢幕錄製（硬體編碼）",
-    "audioEqDesc": "系統級音訊等化器調音"
+    "audioEqDesc": "系統級音訊等化器調音",
+    "runtimeRepairDesc": "偵測並修復缺失的 VC++ / .NET / DirectX 執行庫"
+  },
+  "gameProcessOptimize": {
+    "title": "遊戲進程最佳化",
+    "subtitle": "以遊戲為單位管理進程最佳化與 CPU 核心分配，進程自動最佳化與核心自動最佳化可獨立開啟",
+    "needsAdmin": "需管理員權限",
+    "fromExe": "選擇可執行檔",
+    "fromExeDesc": "透過檔案對話框選擇遊戲主程式 .exe，自動提取進程名",
+    "fromProcess": "選擇執行中進程",
+    "fromProcessDesc": "從目前正在執行的進程清單中選擇一個作為遊戲",
+    "fromFilterList": "從濾鏡名單選擇",
+    "fromFilterListDesc": "從濾鏡已有的內建/自訂遊戲名單中選擇新增",
+    "emptyTitle": "還沒有遊戲",
+    "emptyDesc": "點擊上方任一方式新增你的第一個遊戲",
+    "processOptimize": {
+      "title": "進程最佳化",
+      "description": "將遊戲進程優先順序提升至「即時」，優先分配 CPU 資源"
+    },
+    "affinityOptimize": {
+      "title": "核心最佳化",
+      "description": "為遊戲進程分配指定 CPU 核心，發揮多核心效能"
+    },
+    "apply": "套用",
+    "optimizeNow": "立即最佳化",
+    "optimizeNowDone": "已對該遊戲套用進程最佳化 + 核心最佳化",
+    "autoOptimize": {
+      "title": "啟動遊戲自動最佳化",
+      "description": "遊戲啟動時自動套用下方已開啟的最佳化項目",
+      "priority": "進程自動最佳化",
+      "affinity": "核心自動最佳化",
+      "enabled": "自動最佳化已開啟",
+      "disabled": "自動最佳化已關閉"
+    },
+    "status": {
+      "running": "執行中",
+      "optimized": "已最佳化",
+      "applied": "已套用"
+    },
+    "delete": "刪除",
+    "deleteConfirm": "確定刪除遊戲「{{name}}」嗎？",
+    "gameAdded": "遊戲已新增",
+    "gameExists": "該遊戲已存在，請勿重複新增",
+    "gameDeleted": "遊戲已刪除",
+    "searchProcess": "搜尋進程名稱...",
+    "searchGame": "搜尋遊戲名稱或進程...",
+    "noResults": "未找到符合項目",
+    "affinitySettings": {
+      "title": "核心選擇",
+      "description": "選擇要分配的 CPU 核心（共 {{count}} 個邏輯核心）",
+      "selectAll": "全選",
+      "clearAll": "清空",
+      "defaultHint": "預設：除 CPU0 外的所有核心（勾選全選後儲存即為預設）",
+      "save": "儲存",
+      "cancel": "取消",
+      "configSaved": "核心設定已儲存"
+    }
   },
   "gpuRename": {
     "title": "顯卡改寫",
@@ -1055,7 +1124,15 @@
     "height": "高",
     "pixels": "畫素",
     "standard": "標準",
-    "tip": "選擇解析度類型後，下方將顯示三種常見畫面比例的具體解析度值，方便您在遊戲中調整畫面比例設定。"
+    "tip": "選擇解析度類型後，下方將顯示三種常見畫面比例的具體解析度值，方便您在遊戲中調整畫面比例設定。",
+    "custom": "自訂",
+    "customPlaceholder": "自訂解析度",
+    "widthInputPlaceholder": "寬度",
+    "heightInputPlaceholder": "高度",
+    "refreshRate": "更新率",
+    "refreshRateInputPlaceholder": "更新率",
+    "applyCustomResolution": "套用自訂解析度",
+    "customResolutionHint": "輸入自訂解析度，可結合更新率套用到目前顯示器"
   },
   "shaderCache": {
     "title": "著色器快取清理",

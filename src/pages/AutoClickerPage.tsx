@@ -177,7 +177,16 @@ export default function AutoClickerPage() {
       });
     } catch (e) {
       console.error("Failed to save autoclicker hotkey:", e);
-      toast({ title: String(e), status: "error", duration: 2000, isClosable: true });
+      const msg = typeof e === "string" ? e : e instanceof Error ? e.message : String(e);
+      toast({
+        title:
+          msg && msg.trim() && msg !== "[object Object]"
+            ? msg
+            : t("autoclicker.hotkeySavedFailed") || "快捷键保存失败",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
     }
   };
 

@@ -18,6 +18,7 @@ import {
   Network,
   MousePointer2,
   Download,
+  Gamepad2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
@@ -127,6 +128,14 @@ const defaultTools: ViewItem[] = [
     descriptionKey: "optimization.cpuScheduler.description",
     color: "#3182CE",
     beta: true,
+  },
+  {
+    id: "game-process-optimize",
+    path: "/optimize/game-process-optimize",
+    icon: Gamepad2,
+    titleKey: "optimization.gameProcessOptimize.title",
+    descriptionKey: "optimization.gameProcessOptimize.description",
+    color: "#8B5CF6",
   },
 ];
 

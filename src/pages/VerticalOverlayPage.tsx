@@ -27,6 +27,7 @@ import {
   Activity,
   Battery,
   Monitor,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -81,11 +82,13 @@ interface HardwareData {
   game_ping: number | null;
   gpu_vram_used: number | null;
   gpu_vram_total: number | null;
+  net_time_offset_ms: number | null;
 }
 
 // ===== 图标映射 =====
 
 const ITEM_ICONS: Record<string, LucideIcon> = {
+  time: Clock,
   fps: Gauge,
   fps_1low: Gauge,
   fps_01low: Gauge,
@@ -112,6 +115,7 @@ const ITEM_ICONS: Record<string, LucideIcon> = {
 // ===== 默认值 =====
 
 const DEFAULT_DISPLAY_ITEMS: DisplayItemConfig[] = [
+  { id: "time", label: "时间", enabled: false },
   { id: "fps", label: "FPS", enabled: false },
   { id: "fps_1low", label: "1% Low", enabled: false },
   { id: "fps_01low", label: "0.1% Low", enabled: false },
@@ -150,6 +154,8 @@ const DEFAULT_SETTINGS: OverlaySettings = {
 
 /** 根据 item.id 和 hardwareData 获取显示值 */
 function getItemValue(item: DisplayItemConfig, data: HardwareData | null): string {
+  // 时间项：优先网络时间
+  if (item.id === "time") return formatNow(data);
   if (!data) return "--";
   switch (item.id) {
     case "fps":
@@ -202,6 +208,25 @@ function getItemValue(item: DisplayItemConfig, data: HardwareData | null): strin
   }
 }
 
+/** 格式化毫秒时间戳为 HH:MM:SS（北京时间 UTC+8） */
+function formatBeijingTime(ts: number): string {
+  const d = new Date(ts + 8 * 3600 * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  // 已偏移到东八区，用 UTC 方法读取
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+}
+
+/**
+ * 格式化当前时间为 HH:MM:SS。
+ * 优先使用网络标准时间（data.net_time_offset_ms 校正），否则回退到北京时间。
+ */
+function formatNow(data: HardwareData | null): string {
+  if (data?.net_time_offset_ms != null) {
+    return formatBeijingTime(Date.now() + data.net_time_offset_ms);
+  }
+  return formatBeijingTime(Date.now());
+}
+
 /** 获取数值颜色（绿→黄→红），仅温度/占用/FPS 使用动态色，其余用 fallback */
 function getValueColor(value: string, fallback: string = "#ffffff"): string {
   if (value === "--" || value === "") return fallback;
@@ -236,12 +261,20 @@ export default function VerticalOverlayPage() {
   const [hardwareData, setHardwareData] = useState<HardwareData | null>(null);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  // 每秒 tick：驱动时间显示刷新
+  const [, setTick] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const win = getCurrentWindow();
 
   // 页面渲染完成后通知 Rust 端 show 窗口（避免加载时的白屏闪烁）
   useEffect(() => {
     invoke("vertical_overlay_ready");
+  }, []);
+
+  // 每秒刷新（驱动时间显示）
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   // 强制背景透明（与桌面歌词窗口相同处理）

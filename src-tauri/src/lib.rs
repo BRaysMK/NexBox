@@ -15,6 +15,7 @@ mod downloader;
 mod game_fps;
 mod game_filter;
 mod game_launcher;
+mod game_process_optimize;
 mod game_win_key;
 mod game_ping;
 mod gpu_rename;
@@ -28,6 +29,7 @@ mod network_optimize;
 mod netease_lyrics;
 mod nvapi;
 mod nvidia_driver_download;
+mod runtime_repair;
 mod optimization;
 mod overlay_panel;
 mod vertical_overlay;
@@ -290,6 +292,12 @@ pub fn run() {
                 let _ = game_win_key::init(app_handle_for_game_win_key).await;
             });
 
+            // 初始化游戏进程优化（恢复持久化配置，首次预置三角洲；启动自动优化线程）
+            let app_handle_for_game_opt = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = game_process_optimize::init(app_handle_for_game_opt).await;
+            });
+
             // Main window: intercept taskbar Close / Alt+F4 → hide instead of destroy，
             // 并通知前端窗口可见性变化（最小化/隐藏到托盘时暂停动态背景视频，降低 CPU 占用）
             if let Some(main_window) = app.get_webview_window("main") {
@@ -366,6 +374,8 @@ pub fn run() {
         hardware::get_os_version,
         hardware::get_disk_health_info,
         music::get_music_files,
+        music::import_local_music,
+        music::get_local_lyric,
         // === 音乐播放器 API ===
         music_api::music_search,
         music_api::music_song_url,
@@ -440,6 +450,7 @@ pub fn run() {
         music_api::music_get_playback_source,
         music_api::audio_proxy::cmd_get_proxy_port,
         downloader::download_file,
+        downloader::open_system_browser,
         downloader::open_installer,
         downloader::download_update,
         downloader::install_update,
@@ -473,6 +484,8 @@ pub fn run() {
         optimization::restrict_ace_affinity,
         optimization::restrict_ace_affinity_with_mask,
         optimization::set_ace_efficiency_mode,
+        optimization::apply_ace_registry_limits,
+        optimization::restore_ace_registry_limits,
         optimization::optimize_all_game_processes,
         optimization::set_ace_auto_detect,
         optimization::get_ace_auto_detect_status,
@@ -546,6 +559,16 @@ pub fn run() {
         game_filter::set_game_filter_enabled,
         game_filter::add_custom_game,
         game_filter::remove_custom_game,
+        // === 游戏进程优化 ===
+        game_process_optimize::get_game_optimize_configs,
+        game_process_optimize::save_game_optimize_configs,
+        game_process_optimize::optimize_game_priority,
+        game_process_optimize::optimize_game_affinity,
+        game_process_optimize::set_game_auto_optimize,
+        game_process_optimize::get_game_auto_optimize_status,
+        game_process_optimize::select_game_executable,
+        game_process_optimize::list_running_processes,
+        game_process_optimize::check_game_optimize_admin,
         game_win_key::get_game_win_key_status,
         game_win_key::set_game_win_key_enabled,
         // === EQ 调音命令 ===
@@ -676,6 +699,9 @@ pub fn run() {
         // === NVIDIA 驱动下载 ===
         nvidia_driver_download::fetch_nvidia_drivers,
         nvidia_driver_download::detect_current_nvidia_gpu,
+        // === 运行库补全/修复 ===
+        runtime_repair::get_runtime_statuses,
+        runtime_repair::repair_runtime,
             storage_clean::scan_storage_items,
             storage_clean::clean_storage_items,
             storage_clean::empty_recycle_bin_cmd,

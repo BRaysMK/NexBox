@@ -5,6 +5,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { store } from "@/lib/store";
 import { type HardwareInfo, getHardwareInfo } from "@/lib/hardware";
 
+/** 从 invoke 错误中提取可读的中文提示，避免显示 [object Object] */
+function extractError(error: unknown, fallback = "快捷键保存失败"): string {
+  if (typeof error === "string") return error.trim() || fallback;
+  if (error instanceof Error && error.message) return error.message;
+  const msg = String(error);
+  return msg && msg.trim() && msg !== "[object Object]" ? msg : fallback;
+}
+
 const DEFAULT_OVERLAY_HOTKEY = "Shift+F10";
 const DEFAULT_CROSSHAIR_HOTKEY = "Shift+F9";
 const DEFAULT_FILTER_HOTKEY = "Shift+F8";
@@ -84,25 +92,26 @@ interface AppStartupContextType {
   overlaySettings: OverlaySettings | null;
   saveOverlaySettings: (settings: OverlaySettings) => Promise<void>;
   overlayHotkey: string;
-  saveOverlayHotkey: (shortcut: string) => Promise<boolean>;
+  saveOverlayHotkey: (shortcut: string) => Promise<string | null>;
   crosshairHotkey: string;
-  saveCrosshairHotkey: (shortcut: string) => Promise<boolean>;
+  saveCrosshairHotkey: (shortcut: string) => Promise<string | null>;
   filterHotkey: string;
-  saveFilterHotkey: (shortcut: string) => Promise<boolean>;
+  saveFilterHotkey: (shortcut: string) => Promise<string | null>;
   autoclickerHotkey: string;
-  saveAutoclickerHotkey: (shortcut: string) => Promise<boolean>;
+  saveAutoclickerHotkey: (shortcut: string) => Promise<string | null>;
   musicPrevHotkey: string;
-  saveMusicPrevHotkey: (shortcut: string) => Promise<boolean>;
+  saveMusicPrevHotkey: (shortcut: string) => Promise<string | null>;
   musicNextHotkey: string;
-  saveMusicNextHotkey: (shortcut: string) => Promise<boolean>;
+  saveMusicNextHotkey: (shortcut: string) => Promise<string | null>;
   musicPlayPauseHotkey: string;
-  saveMusicPlayPauseHotkey: (shortcut: string) => Promise<boolean>;
+  saveMusicPlayPauseHotkey: (shortcut: string) => Promise<string | null>;
   hotkeysEnabled: boolean;
   saveHotkeysEnabled: (enabled: boolean) => Promise<void>;
 }
 
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   display_items: [
+    { id: "time", label: "时间", enabled: false },
     { id: "fps", label: "FPS", enabled: true },
     { id: "fps_1low", label: "1% Low", enabled: false },
     { id: "fps_01low", label: "0.1% Low", enabled: false },
@@ -147,19 +156,19 @@ const AppStartupContext = createContext<AppStartupContextType>({
   overlaySettings: null,
   saveOverlaySettings: async () => {},
   overlayHotkey: DEFAULT_OVERLAY_HOTKEY,
-  saveOverlayHotkey: async () => false,
+  saveOverlayHotkey: async () => null,
   crosshairHotkey: DEFAULT_CROSSHAIR_HOTKEY,
-  saveCrosshairHotkey: async () => false,
+  saveCrosshairHotkey: async () => null,
   filterHotkey: DEFAULT_FILTER_HOTKEY,
-  saveFilterHotkey: async () => false,
+  saveFilterHotkey: async () => null,
   autoclickerHotkey: DEFAULT_AUTOCLICKER_HOTKEY,
-  saveAutoclickerHotkey: async () => false,
+  saveAutoclickerHotkey: async () => null,
   musicPrevHotkey: DEFAULT_MUSIC_PREV_HOTKEY,
-  saveMusicPrevHotkey: async () => false,
+  saveMusicPrevHotkey: async () => null,
   musicNextHotkey: DEFAULT_MUSIC_NEXT_HOTKEY,
-  saveMusicNextHotkey: async () => false,
+  saveMusicNextHotkey: async () => null,
   musicPlayPauseHotkey: DEFAULT_MUSIC_PLAYPAUSE_HOTKEY,
-  saveMusicPlayPauseHotkey: async () => false,
+  saveMusicPlayPauseHotkey: async () => null,
   hotkeysEnabled: true,
   saveHotkeysEnabled: async () => {},
 });
@@ -311,17 +320,17 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveOverlayHotkey = async (shortcut: string): Promise<boolean> => {
+  const saveOverlayHotkey = async (shortcut: string): Promise<string | null> => {
     try {
       // Rust 端负责注册并写入 settings.json；这里仅同步前端 store 内存，
       // 避免后续保存其他设置时整体写回把热键覆盖成旧值
       await invoke("set_overlay_hotkey", { shortcut });
       await store.set("overlay-hotkey", shortcut);
       setOverlayHotkey(shortcut);
-      return true;
+      return null;
     } catch (error) {
       console.error("Failed to save overlay hotkey:", error);
-      return false;
+      return extractError(error);
     }
   };
 
@@ -337,16 +346,16 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveCrosshairHotkey = async (shortcut: string): Promise<boolean> => {
+  const saveCrosshairHotkey = async (shortcut: string): Promise<string | null> => {
     try {
       // Rust 端负责注册并写入 settings.json；这里仅同步前端 store 内存
       await invoke("set_crosshair_hotkey", { shortcut });
       await store.set("crosshair-hotkey", shortcut);
       setCrosshairHotkey(shortcut);
-      return true;
+      return null;
     } catch (error) {
       console.error("Failed to save crosshair hotkey:", error);
-      return false;
+      return extractError(error);
     }
   };
 
@@ -381,16 +390,16 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveFilterHotkey = async (shortcut: string): Promise<boolean> => {
+  const saveFilterHotkey = async (shortcut: string): Promise<string | null> => {
     try {
       // Rust 端负责注册并写入 settings.json；这里仅同步前端 store 内存
       await invoke("set_filter_hotkey", { shortcut });
       await store.set("filter-hotkey", shortcut);
       setFilterHotkey(shortcut);
-      return true;
+      return null;
     } catch (error) {
       console.error("Failed to save filter hotkey:", error);
-      return false;
+      return extractError(error);
     }
   };
 
@@ -406,16 +415,16 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveAutoclickerHotkey = async (shortcut: string): Promise<boolean> => {
+  const saveAutoclickerHotkey = async (shortcut: string): Promise<string | null> => {
     try {
       // Rust 端负责注册并写入 settings.json；这里仅同步前端 store 内存
       await invoke("set_autoclicker_hotkey", { shortcut });
       await store.set("autoclicker-hotkey", shortcut);
       setAutoclickerHotkey(shortcut);
-      return true;
+      return null;
     } catch (error) {
       console.error("Failed to save autoclicker hotkey:", error);
-      return false;
+      return extractError(error);
     }
   };
 
@@ -431,15 +440,15 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveMusicPrevHotkey = async (shortcut: string): Promise<boolean> => {
+  const saveMusicPrevHotkey = async (shortcut: string): Promise<string | null> => {
     try {
       await invoke("set_music_prev_hotkey", { shortcut });
       await store.set("music-prev-hotkey", shortcut);
       setMusicPrevHotkey(shortcut);
-      return true;
+      return null;
     } catch (error) {
       console.error("Failed to save music prev hotkey:", error);
-      return false;
+      return extractError(error);
     }
   };
 
@@ -454,15 +463,15 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveMusicNextHotkey = async (shortcut: string): Promise<boolean> => {
+  const saveMusicNextHotkey = async (shortcut: string): Promise<string | null> => {
     try {
       await invoke("set_music_next_hotkey", { shortcut });
       await store.set("music-next-hotkey", shortcut);
       setMusicNextHotkey(shortcut);
-      return true;
+      return null;
     } catch (error) {
       console.error("Failed to save music next hotkey:", error);
-      return false;
+      return extractError(error);
     }
   };
 
@@ -477,15 +486,15 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveMusicPlayPauseHotkey = async (shortcut: string): Promise<boolean> => {
+  const saveMusicPlayPauseHotkey = async (shortcut: string): Promise<string | null> => {
     try {
       await invoke("set_music_playpause_hotkey", { shortcut });
       await store.set("music-playpause-hotkey", shortcut);
       setMusicPlayPauseHotkey(shortcut);
-      return true;
+      return null;
     } catch (error) {
       console.error("Failed to save music play/pause hotkey:", error);
-      return false;
+      return extractError(error);
     }
   };
 

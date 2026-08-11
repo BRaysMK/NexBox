@@ -38,8 +38,10 @@ import DesktopLyricsPage from "./pages/DesktopLyricsPage";
 import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
 import SensorMonitorPage from "./pages/SensorMonitorPage";
+import RuntimeRepairPage from "./pages/RuntimeRepairPage";
 import AudioEqPage from "./pages/AudioEqPage";
 import AutoClickerPage from "./pages/AutoClickerPage";
+import GameProcessOptimizePage from "./pages/GameProcessOptimizePage";
 import CpuSchedulerPage from "./pages/CpuSchedulerPage";
 import SpeedTestPage from "./pages/SpeedTestPage";
 import CustomPage from "./pages/CustomPage";
@@ -98,7 +100,7 @@ function App() {
         {/* <MiniMusicPlayer /> */}
         <MainLayout>
         {pageTransitionMode !== "off" ? (
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" initial={false}>
             <Routes location={location} key={location.pathname}>
               <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
               <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
@@ -108,6 +110,7 @@ function App() {
               <Route path="/optimize" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
               <Route path="/optimize/memory-cleanup" element={<AnimatedPage><MemoryCleanupPage /></AnimatedPage>} />
               <Route path="/optimize/ace-optimize" element={<AnimatedPage><AceOptimizePage /></AnimatedPage>} />
+              <Route path="/optimize/game-process-optimize" element={<AnimatedPage><GameProcessOptimizePage /></AnimatedPage>} />
               <Route path="/optimize/memory-limit" element={<AnimatedPage><MemoryLimitPage /></AnimatedPage>} />
               <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
               <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
@@ -138,6 +141,7 @@ function App() {
               <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
               <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
               <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
+              <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
         </Routes>
       </AnimatePresence>
     ) : (
@@ -150,6 +154,7 @@ function App() {
             <Route path="/optimize" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
             <Route path="/optimize/memory-cleanup" element={<AnimatedPage><MemoryCleanupPage /></AnimatedPage>} />
             <Route path="/optimize/ace-optimize" element={<AnimatedPage><AceOptimizePage /></AnimatedPage>} />
+            <Route path="/optimize/game-process-optimize" element={<AnimatedPage><GameProcessOptimizePage /></AnimatedPage>} />
             <Route path="/optimize/memory-limit" element={<AnimatedPage><MemoryLimitPage /></AnimatedPage>} />
             <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
             <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
@@ -180,6 +185,7 @@ function App() {
             <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
             <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
             <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
+            <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
       </Routes>
     )}
 

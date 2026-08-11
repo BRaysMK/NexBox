@@ -72,7 +72,7 @@ pub fn update_overlay(app_handle: &tauri::AppHandle, new_shortcut: &str) -> Resu
                 if !old_shortcut.is_empty() {
                     let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
                 }
-                return Err(format!("注册悬浮框热键失败: {}", e));
+                return Err(hotkey_register_error("注册悬浮框热键", new_shortcut, e));
             }
         }
     }
@@ -139,7 +139,7 @@ pub fn update_crosshair(app_handle: &tauri::AppHandle, new_shortcut: &str) -> Re
                 if !old_shortcut.is_empty() {
                     let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
                 }
-                return Err(format!("注册准心热键失败: {}", e));
+                return Err(hotkey_register_error("注册准心热键", new_shortcut, e));
             }
         }
     }
@@ -206,7 +206,7 @@ pub fn update_filter(app_handle: &tauri::AppHandle, new_shortcut: &str) -> Resul
                 if !old_shortcut.is_empty() {
                     let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
                 }
-                return Err(format!("注册滤镜热键失败: {}", e));
+                return Err(hotkey_register_error("注册滤镜热键", new_shortcut, e));
             }
         }
     }
@@ -238,6 +238,35 @@ fn set_filter_shortcut(shortcut: &str) {
 /// 鼠标键热键（tauri 的 global-shortcut 不支持，需用低级鼠标钩子处理）
 fn is_mouse_key(shortcut: &str) -> bool {
     shortcut.starts_with("Mouse")
+}
+
+/// 将全局快捷键注册失败转换为具体的中文错误提示
+fn hotkey_register_error(action: &str, shortcut: &str, err: impl std::fmt::Display) -> String {
+    // 鼠标键走低级钩子，不在此校验
+    if !is_mouse_key(shortcut) {
+        match tauri_plugin_global_shortcut::Shortcut::from_str(shortcut) {
+            Ok(hotkey) => {
+                // Windows 的 RegisterHotKey 要求带修饰键，否则注册必然失败
+                if hotkey.mods.is_empty() {
+                    return format!(
+                        "{}失败：快捷键必须包含 Ctrl、Alt、Shift 或 Win 修饰键，请重新录制",
+                        action
+                    );
+                }
+            }
+            Err(_) => {
+                return format!("{}失败：快捷键格式无效，请重新录制", action);
+            }
+        }
+    }
+
+    let msg = err.to_string();
+    let lower = msg.to_lowercase();
+    if lower.contains("already registered") || lower.contains("in use") {
+        format!("{}失败：该快捷键已被其他程序占用，请更换组合键", action)
+    } else {
+        format!("{}失败：{}", action, msg)
+    }
 }
 
 pub fn init_autoclicker(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
@@ -295,7 +324,7 @@ pub fn update_autoclicker(app_handle: &tauri::AppHandle, new_shortcut: &str) -> 
                             let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
                         }
                     }
-                    return Err(format!("注册连点器热键失败: {}", e));
+                    return Err(hotkey_register_error("注册连点器热键", new_shortcut, e));
                 }
             }
         }
@@ -369,7 +398,7 @@ pub fn update_music_prev(app_handle: &tauri::AppHandle, new_shortcut: &str) -> R
                 if !old_shortcut.is_empty() {
                     let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
                 }
-                return Err(format!("注册上一曲热键失败: {}", e));
+                return Err(hotkey_register_error("注册上一曲热键", new_shortcut, e));
             }
         }
     }
@@ -434,7 +463,7 @@ pub fn update_music_next(app_handle: &tauri::AppHandle, new_shortcut: &str) -> R
                 if !old_shortcut.is_empty() {
                     let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
                 }
-                return Err(format!("注册下一曲热键失败: {}", e));
+                return Err(hotkey_register_error("注册下一曲热键", new_shortcut, e));
             }
         }
     }
@@ -499,7 +528,7 @@ pub fn update_music_playpause(app_handle: &tauri::AppHandle, new_shortcut: &str)
                 if !old_shortcut.is_empty() {
                     let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
                 }
-                return Err(format!("注册播放/暂停热键失败: {}", e));
+                return Err(hotkey_register_error("注册播放/暂停热键", new_shortcut, e));
             }
         }
     }

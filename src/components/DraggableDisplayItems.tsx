@@ -37,6 +37,7 @@ interface DraggableDisplayItemsProps {
 }
 
 const ITEM_ICONS: Record<string, React.FC<{ size?: number }>> = {
+  time: Clock,
   cpu_usage: Cpu,
   cpu_temp: Thermometer,
   cpu_clock: Clock,

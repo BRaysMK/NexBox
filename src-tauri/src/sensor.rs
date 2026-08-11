@@ -35,6 +35,9 @@ pub struct SensorBridge {
     child: Child,
     reader: BufReader<std::process::ChildStdout>,
     writer: std::process::ChildStdin,
+    /// 子进程启动时间。net48 + LHML 初始化需要数秒，
+    /// 启动早期读管道会卡满超时，用于判断传感器是否已就绪
+    started_at: std::time::Instant,
 }
 
 impl SensorBridge {
@@ -42,6 +45,13 @@ impl SensorBridge {
     /// 读取带超时保护：NexBoxMonitor 子进程若卡死/不响应，会在超时后返回错误，
     /// 由调用方决定是否强制重启子进程，避免管道阻塞导致全局互斥锁被永久占用。
     pub fn read_sensors(&mut self) -> Result<SensorsResponse, String> {
+        // 子进程刚启动时 LHML 仍在初始化（通常需 2~4 秒），
+        // 此时发命令会卡满 8 秒管道超时。启动早期直接快速失败，
+        // 让调用方（如硬件信息采集）立即返回静态数据，避免阻塞启动。
+        if self.started_at.elapsed() < std::time::Duration::from_secs(5) {
+            return Err("NexBoxMonitor 传感器尚未就绪".to_string());
+        }
+
         // 发送命令
         writeln!(self.writer, r#"{{"cmd":"read"}}"#)
             .map_err(|e| format!("写入管道失败: {}", e))?;
@@ -247,7 +257,11 @@ pub async fn get_lhm_cpu_load() -> Result<Option<u16>, String> {
             Ok(None)
         }
         Err(e) => {
-            log::warn!("LHML CPU load 读取失败: {e}");
+            if e.contains("尚未就绪") {
+                log::debug!("LHML CPU load 读取跳过: {e}");
+            } else {
+                log::warn!("LHML CPU load 读取失败: {e}");
+            }
             Ok(None)
         }
     }
@@ -283,7 +297,11 @@ pub async fn get_lhm_cpu_status() -> Result<(Option<u16>, Option<f64>), String> 
             Ok((load, temp))
         }
         Err(e) => {
-            log::warn!("LHML CPU status 读取失败: {e}");
+            if e.contains("尚未就绪") {
+                log::debug!("LHML CPU status 读取跳过: {e}");
+            } else {
+                log::warn!("LHML CPU status 读取失败: {e}");
+            }
             Ok((None, None))
         }
     }
@@ -329,7 +347,11 @@ pub async fn get_lhm_gpu_status() -> Result<Vec<(Option<f64>, Option<u32>)>, Str
             Ok(results)
         }
         Err(e) => {
-            log::warn!("LHML GPU status 读取失败: {e}");
+            if e.contains("尚未就绪") {
+                log::debug!("LHML GPU status 读取跳过: {e}");
+            } else {
+                log::warn!("LHML GPU status 读取失败: {e}");
+            }
             Ok(Vec::new())
         }
     }
@@ -570,6 +592,7 @@ fn spawn_sensor() -> std::io::Result<Option<SensorBridge>> {
         child,
         reader: BufReader::new(stdout),
         writer: stdin,
+        started_at: std::time::Instant::now(),
     };
 
     Ok(Some(bridge))
@@ -629,6 +652,7 @@ pub fn restart_sensor_process_internal() -> Result<(), String> {
                                 child,
                                 reader: BufReader::new(stdout),
                                 writer: stdin,
+                                started_at: std::time::Instant::now(),
                             };
                             log::info!(
                                 "[restart_monitor] 通过缓存路径重启成功 (pid={})",

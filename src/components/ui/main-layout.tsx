@@ -303,6 +303,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         overflowY="auto" 
         h="calc(100vh)"
         sx={{
+          scrollbarGutter: "stable",
           "&::-webkit-scrollbar": {
             width: "6px",
             height: "6px",

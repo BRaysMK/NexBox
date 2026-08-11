@@ -59,7 +59,8 @@
     "audioEq": "EQ调音",
     "custom": "自定义",
     "autoclicker": "连点器",
-    "speedtest": "网络测速"
+    "speedtest": "网络测速",
+    "runtimeRepair": "运行库修复"
   },
   "customPage": {
     "title": "自定义页面",
@@ -291,8 +292,8 @@
       "configSaved": "定时清理配置已保存"
     },
     "aceOptimize": {
-      "title": "三角洲/ACE优化",
-      "description": "三角洲进程优化与 ACE 反作弊进程资源限制",
+      "title": "ACE反作弊优化",
+      "description": "限制 ACE 反作弊进程的资源占用，释放更多性能给游戏",
       "deltaSection": {
         "title": "三角洲优化",
         "subtitle": "提升三角洲行动游戏性能表现"
@@ -324,6 +325,13 @@
         "description": "对 ACE 反作弊进程启用后台节能调度：优先级降为低于正常 + 后台 I/O 节流 + 低内存优先级，大幅减少后台资源占用",
         "success": "已为 {{count}} 个 ACE 进程开启调度优化",
         "notRunning": "未找到运行中的 ACE 进程"
+      },
+      "aceRegistry": {
+        "title": "注册表强制限制",
+        "description": "通过系统 IFEO 注册表强制限制三角洲与 SGuard 进程的 CPU/I/O 优先级（进程启动时即生效，无法被反作弊改回；需重启相关进程后生效，有一定风险）",
+        "badge": "可能有风险",
+        "success": "注册表强制限制已应用",
+        "restored": "注册表强制限制已恢复"
       },
       "optimizeAll": {
         "button": "一键全部优化",
@@ -367,7 +375,12 @@
       },
       "apply": "应用",
       "applied": "已应用",
+      "restore": "恢复",
       "error": "优化失败"
+    },
+    "gameProcessOptimize": {
+      "title": "游戏进程优化",
+      "description": "为每个游戏单独配置进程优先级与 CPU 核心分配"
     },
     "cpuScheduler": {
       "title": "CPU核心调度",
@@ -1109,11 +1122,67 @@
     "audioEqDesc": "系统级音频均衡器调音",
     "autoclickerDesc": "自动连点鼠标，支持左右键、频率预设与热键",
     "speedtestDesc": "测试网络下载/上传速度、延迟与抖动",
+    "runtimeRepairDesc": "检测并修复缺失的 VC++ / .NET / DirectX 运行库",
     "resolutionManagement": "显示器分辨率管理",
     "selectDisplay": "选择显示器",
     "selectResolution": "选择分辨率",
     "applyResolution": "应用分辨率",
     "resolutionApplied": "分辨率已应用"
+  },
+  "gameProcessOptimize": {
+    "title": "游戏进程优化",
+    "subtitle": "以游戏为单位管理进程优化与 CPU 核心分配，进程自动优化与核心自动优化可独立开启",
+    "needsAdmin": "需管理员权限",
+    "fromExe": "选择可执行文件",
+    "fromExeDesc": "通过文件对话框选择游戏主程序 .exe，自动提取进程名",
+    "fromProcess": "选择运行进程",
+    "fromProcessDesc": "从当前正在运行的进程列表中选择一个作为游戏",
+    "fromFilterList": "从滤镜名单选择",
+    "fromFilterListDesc": "从滤镜已有的内置/自定义游戏名单中选择添加",
+    "emptyTitle": "还没有游戏",
+    "emptyDesc": "点击上方任一方式添加你的第一个游戏",
+    "processOptimize": {
+      "title": "进程优化",
+      "description": "将游戏进程优先级提升至「实时」，优先分配 CPU 资源"
+    },
+    "affinityOptimize": {
+      "title": "核心优化",
+      "description": "为游戏进程分配指定 CPU 核心，发挥多核性能"
+    },
+    "apply": "应用",
+    "optimizeNow": "立即优化",
+    "optimizeNowDone": "已对该游戏应用进程优化 + 核心优化",
+    "autoOptimize": {
+      "title": "启动游戏自动优化",
+      "description": "游戏启动时自动应用下方已开启的优化项",
+      "priority": "进程自动优化",
+      "affinity": "核心自动优化",
+      "enabled": "自动优化已开启",
+      "disabled": "自动优化已关闭"
+    },
+    "status": {
+      "running": "运行中",
+      "optimized": "已优化",
+      "applied": "已应用"
+    },
+    "delete": "删除",
+    "deleteConfirm": "确定删除游戏「{{name}}」吗？",
+    "gameAdded": "游戏已添加",
+    "gameExists": "该游戏已存在，请勿重复添加",
+    "gameDeleted": "游戏已删除",
+    "searchProcess": "搜索进程名称...",
+    "searchGame": "搜索游戏名称或进程...",
+    "noResults": "未找到匹配项",
+    "affinitySettings": {
+      "title": "核心选择",
+      "description": "选择要分配的 CPU 核心（共 {{count}} 个逻辑核心）",
+      "selectAll": "全选",
+      "clearAll": "清空",
+      "defaultHint": "默认：除 CPU0 外的所有核心（勾选全选后保存即为默认）",
+      "save": "保存",
+      "cancel": "取消",
+      "configSaved": "核心配置已保存"
+    }
   },
   "speedtest": {
     "title": "网络测速",
@@ -1469,7 +1538,15 @@
     "resolutionApplied": "分辨率已应用",
     "applyFailed": "应用分辨率失败",
     "applyCustom": "应用此分辨率",
-    "selectDisplayFirst": "请先在下方选择显示器"
+    "selectDisplayFirst": "请先在下方选择显示器",
+    "custom": "自定义",
+    "customPlaceholder": "自定义分辨率",
+    "widthInputPlaceholder": "宽度",
+    "heightInputPlaceholder": "高度",
+    "refreshRate": "刷新率",
+    "refreshRateInputPlaceholder": "刷新率",
+    "applyCustomResolution": "应用自定义分辨率",
+    "customResolutionHint": "输入自定义分辨率后，可结合刷新率应用到当前显示器"
   },
   "systemOptimizer": {
     "pageTitle": "系统优化",

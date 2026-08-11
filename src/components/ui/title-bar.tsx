@@ -3,7 +3,7 @@
 import { Box, Flex, HStack, IconButton, Image, useColorModeValue } from "@chakra-ui/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { LuMinus, LuX } from "react-icons/lu";
+import { LuMinus, LuSquare, LuCopy, LuX } from "react-icons/lu";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { GlobalSearch } from "./global-search";
 import { UpdateProgressIndicator } from "./update-progress-indicator";
@@ -22,6 +22,7 @@ export function TitleBar() {
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [searchBarVisible, setSearchBarVisible] = useState(true);
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
+  const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -99,6 +100,40 @@ export function TitleBar() {
       await appWindow.minimize();
     } catch (error) {
       console.error("Failed to minimize window:", error);
+    }
+  };
+
+  // 同步窗口最大化状态（拖拽到屏幕边缘触发最大化时也能同步图标）
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        setIsMaximized(await appWindow.isMaximized());
+        unlisten = await appWindow.onResized(async () => {
+          setIsMaximized(await appWindow.isMaximized());
+        });
+      } catch (error) {
+        console.error("Failed to init maximize state:", error);
+      }
+    })();
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  const handleMaximize = async () => {
+    try {
+      const appWindow = getCurrentWindow();
+      const maximized = await appWindow.isMaximized();
+      if (maximized) {
+        await appWindow.unmaximize();
+      } else {
+        await appWindow.maximize();
+      }
+      setIsMaximized(await appWindow.isMaximized());
+    } catch (error) {
+      console.error("Failed to toggle maximize:", error);
     }
   };
 
@@ -187,6 +222,23 @@ export function TitleBar() {
                 bg: minimizeHoverBg,
               }}
               onClick={handleMinimize}
+            />
+            <IconButton
+              icon={isMaximized ? <LuCopy size={15} /> : <LuSquare size={15} />}
+              aria-label={isMaximized ? "还原" : "最大化"}
+              variant="solid"
+              borderRadius="full"
+              bg={bgColor}
+              backdropFilter="blur(10px)"
+              color={iconColor}
+              h="36px"
+              minW="36px"
+              w="36px"
+              _hover={{
+                color: hoverColor,
+                bg: minimizeHoverBg,
+              }}
+              onClick={handleMaximize}
             />
             <IconButton
               icon={<LuX size={18} />}
