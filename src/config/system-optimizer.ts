@@ -30,6 +30,21 @@ import {
   Camera,
   Map as MapIcon,
   Search,
+  Megaphone,
+  SlidersHorizontal,
+  MicOff,
+  Sparkles,
+  CloudOff,
+  Image as ImageIcon,
+  Bot,
+  CameraOff,
+  Ban,
+  Brain,
+  Cog,
+  Plug,
+  Boxes,
+  Globe,
+  Layers,
 } from "lucide-react";
 
 export type OptimizerCategory =
@@ -38,6 +53,7 @@ export type OptimizerCategory =
   | "amd"
   | "performance"
   | "privacy"
+  | "ai"
   | "services"
   | "disk"
   | "apps";
@@ -51,6 +67,16 @@ export interface OptimizerItem {
   titleKey: string;
   descKey: string;
   requiresReboot: boolean;
+  /** 渲染类型：toggle（默认开关）| select（下拉选择） */
+  type?: "toggle" | "select";
+  /** select 类型的选项列表 */
+  options?: {
+    value: string;
+    labelKey: string;
+    regName: string;
+  }[];
+  /** select 类型的默认选中值 */
+  defaultSelectValue?: string;
 }
 
 // 预定义颜色池（固定顺序，避免刷新变化）
@@ -181,6 +207,80 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.gaming.disableAutoColorMgmt",
     descKey: "systemOptimizer.gaming.disableAutoColorMgmtDesc",
     requiresReboot: false,
+  },
+  {
+    id: "gameMode",
+    regName: "游戏模式",
+    category: "gaming",
+    icon: Gamepad2,
+    color: COLORS[12],
+    titleKey: "systemOptimizer.gaming.gameMode",
+    descKey: "systemOptimizer.gaming.gameModeDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "win32Priority",
+    regName: "调整处理器以获得最佳性能",
+    category: "gaming",
+    icon: Cpu,
+    color: COLORS[13],
+    titleKey: "systemOptimizer.gaming.win32Priority",
+    descKey: "systemOptimizer.gaming.win32PriorityDesc",
+    requiresReboot: false,
+    type: "select",
+    defaultSelectValue: "program",
+    options: [
+      {
+        value: "program",
+        labelKey: "systemOptimizer.gaming.win32PriorityProgram",
+        regName: "调整处理器以获得最佳性能-程序",
+      },
+      {
+        value: "background",
+        labelKey: "systemOptimizer.gaming.win32PriorityBackground",
+        regName: "调整处理器以获得最佳性能-后台服务",
+      },
+    ],
+  },
+  {
+    id: "systemResponsiveness",
+    regName: "游戏系统响应能力",
+    category: "gaming",
+    icon: Activity,
+    color: COLORS[14],
+    titleKey: "systemOptimizer.gaming.systemResponsiveness",
+    descKey: "systemOptimizer.gaming.systemResponsivenessDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "hags",
+    regName: "硬件加速GPU调度",
+    category: "gaming",
+    icon: Monitor,
+    color: COLORS[0],
+    titleKey: "systemOptimizer.gaming.hags",
+    descKey: "systemOptimizer.gaming.hagsDesc",
+    requiresReboot: true,
+  },
+  {
+    id: "backgroundServices",
+    regName: "优化后台服务",
+    category: "gaming",
+    icon: Server,
+    color: COLORS[1],
+    titleKey: "systemOptimizer.gaming.backgroundServices",
+    descKey: "systemOptimizer.gaming.backgroundServicesDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableMpo",
+    regName: "禁用MPO",
+    category: "gaming",
+    icon: Layers,
+    color: COLORS[2],
+    titleKey: "systemOptimizer.gaming.disableMpo",
+    descKey: "systemOptimizer.gaming.disableMpoDesc",
+    requiresReboot: true,
   },
 
   // ============== NVIDIA 显卡优化（11 项） ==============
@@ -490,6 +590,178 @@ export const optimizerItems: OptimizerItem[] = [
     descKey: "systemOptimizer.privacy.disableErrorReportingDesc",
     requiresReboot: false,
   },
+  {
+    id: "disableAdvertisingId",
+    regName: "关闭广告ID",
+    category: "privacy",
+    icon: Megaphone,
+    color: COLORS[10],
+    titleKey: "systemOptimizer.privacy.disableAdvertisingId",
+    descKey: "systemOptimizer.privacy.disableAdvertisingIdDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableAdsPromotional",
+    regName: "关闭广告建议和推广",
+    category: "privacy",
+    icon: SlidersHorizontal,
+    color: COLORS[11],
+    titleKey: "systemOptimizer.privacy.disableAdsPromotional",
+    descKey: "systemOptimizer.privacy.disableAdsPromotionalDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableOnlineSpeechRecognition",
+    regName: "关闭在线语音识别",
+    category: "privacy",
+    icon: MicOff,
+    color: COLORS[12],
+    titleKey: "systemOptimizer.privacy.disableOnlineSpeechRecognition",
+    descKey: "systemOptimizer.privacy.disableOnlineSpeechRecognitionDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableTailoredExperiences",
+    regName: "关闭定制体验",
+    category: "privacy",
+    icon: Sparkles,
+    color: COLORS[13],
+    titleKey: "systemOptimizer.privacy.disableTailoredExperiences",
+    descKey: "systemOptimizer.privacy.disableTailoredExperiencesDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableMsaCloudSearch",
+    regName: "关闭MSA云搜索",
+    category: "privacy",
+    icon: CloudOff,
+    color: COLORS[14],
+    titleKey: "systemOptimizer.privacy.disableMsaCloudSearch",
+    descKey: "systemOptimizer.privacy.disableMsaCloudSearchDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableLockScreenSpotlight",
+    regName: "关闭锁屏Spotlight",
+    category: "privacy",
+    icon: ImageIcon,
+    color: COLORS[0],
+    titleKey: "systemOptimizer.privacy.disableLockScreenSpotlight",
+    descKey: "systemOptimizer.privacy.disableLockScreenSpotlightDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableInkingDictionary",
+    regName: "关闭墨迹书写词典",
+    category: "privacy",
+    icon: Pen,
+    color: COLORS[1],
+    titleKey: "systemOptimizer.privacy.disableInkingDictionary",
+    descKey: "systemOptimizer.privacy.disableInkingDictionaryDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableFeedbackRequests",
+    regName: "禁止Windows反馈请求",
+    category: "privacy",
+    icon: MessageSquare,
+    color: COLORS[2],
+    titleKey: "systemOptimizer.privacy.disableFeedbackRequests",
+    descKey: "systemOptimizer.privacy.disableFeedbackRequestsDesc",
+    requiresReboot: false,
+  },
+
+  // ============== Windows AI 优化（9 项） ==============
+  {
+    id: "disableCopilot",
+    regName: "关闭Windows Copilot",
+    category: "ai",
+    icon: Bot,
+    color: COLORS[0],
+    titleKey: "systemOptimizer.ai.disableCopilot",
+    descKey: "systemOptimizer.ai.disableCopilotDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableRecallSnapshots",
+    regName: "关闭Recall快照",
+    category: "ai",
+    icon: CameraOff,
+    color: COLORS[1],
+    titleKey: "systemOptimizer.ai.disableRecallSnapshots",
+    descKey: "systemOptimizer.ai.disableRecallSnapshotsDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "blockRecallEnablement",
+    regName: "阻止启用Recall",
+    category: "ai",
+    icon: Ban,
+    color: COLORS[2],
+    titleKey: "systemOptimizer.ai.blockRecallEnablement",
+    descKey: "systemOptimizer.ai.blockRecallEnablementDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableAiDataAnalysis",
+    regName: "关闭AI数据分析",
+    category: "ai",
+    icon: Brain,
+    color: COLORS[3],
+    titleKey: "systemOptimizer.ai.disableAiDataAnalysis",
+    descKey: "systemOptimizer.ai.disableAiDataAnalysisDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableClickToDo",
+    regName: "关闭Click to Do",
+    category: "ai",
+    icon: MousePointer,
+    color: COLORS[4],
+    titleKey: "systemOptimizer.ai.disableClickToDo",
+    descKey: "systemOptimizer.ai.disableClickToDoDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableAiSettingsAgent",
+    regName: "关闭AI设置代理",
+    category: "ai",
+    icon: Cog,
+    color: COLORS[5],
+    titleKey: "systemOptimizer.ai.disableAiSettingsAgent",
+    descKey: "systemOptimizer.ai.disableAiSettingsAgentDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableAgentConnectors",
+    regName: "关闭AI Agent连接器",
+    category: "ai",
+    icon: Plug,
+    color: COLORS[6],
+    titleKey: "systemOptimizer.ai.disableAgentConnectors",
+    descKey: "systemOptimizer.ai.disableAgentConnectorsDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableAgentWorkspaces",
+    regName: "关闭AI Agent工作区",
+    category: "ai",
+    icon: Boxes,
+    color: COLORS[7],
+    titleKey: "systemOptimizer.ai.disableAgentWorkspaces",
+    descKey: "systemOptimizer.ai.disableAgentWorkspacesDesc",
+    requiresReboot: false,
+  },
+  {
+    id: "disableRemoteAgentConnectors",
+    regName: "关闭远程Agent连接器",
+    category: "ai",
+    icon: Globe,
+    color: COLORS[8],
+    titleKey: "systemOptimizer.ai.disableRemoteAgentConnectors",
+    descKey: "systemOptimizer.ai.disableRemoteAgentConnectorsDesc",
+    requiresReboot: false,
+  },
 
   // ============== 系统服务精简（11 项） ==============
   {
@@ -704,6 +976,7 @@ export const categoryLabels: Record<OptimizerCategory, string> = {
   amd: "systemOptimizer.category.amd",
   performance: "systemOptimizer.category.performance",
   privacy: "systemOptimizer.category.privacy",
+  ai: "systemOptimizer.category.ai",
   services: "systemOptimizer.category.services",
   disk: "systemOptimizer.category.disk",
   apps: "systemOptimizer.category.apps",
@@ -715,6 +988,7 @@ export const categoryOrder: OptimizerCategory[] = [
   "amd",
   "performance",
   "privacy",
+  "ai",
   "services",
   "disk",
   "apps",

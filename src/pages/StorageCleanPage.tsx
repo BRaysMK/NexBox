@@ -11,17 +11,40 @@ import {
   useColorModeValue,
   useToast,
   Spinner,
-  Divider,
   SimpleGrid,
   Icon,
+  Progress,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
+  Tooltip,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItemOption,
+  MenuOptionGroup,
+  AlertDialog,
+  AlertDialogOverlay,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogBody,
+  AlertDialogFooter,
 } from "@chakra-ui/react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
-import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   Trash2,
   RefreshCw,
@@ -31,13 +54,26 @@ import {
   Image,
   AlertTriangle,
   Database,
-  ShieldAlert,
   Folder,
   File,
+  ScanSearch,
+  XCircle,
+  FolderSearch,
+  ShieldCheck,
+  Zap,
+  Check,
+  ChevronDown,
+  FolderOpen,
+  Trash,
 } from "lucide-react";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
+import { hexToRgba } from "@/lib/color-utils";
+
+// ============================================================================
+// Types
+// ============================================================================
 
 interface CleanItem {
   id: string;
@@ -49,7 +85,7 @@ interface CleanItem {
   description: string;
 }
 
-interface ScanResult {
+interface QuickScanResult {
   items: CleanItem[];
   total_size: number;
   total_items: number;
@@ -62,16 +98,104 @@ interface CleanResult {
   skipped_files: string[];
 }
 
+interface JunkFileInfo {
+  path: string;
+  name: string;
+  size: number;
+  original_path?: string | null;
+  modified_time: number;
+  is_dir: boolean;
+  category: string;
+}
+
+interface CategoryScanResult {
+  category: string;
+  display_name: string;
+  description: string;
+  risk_level: number;
+  files: JunkFileInfo[];
+  total_size: number;
+  file_count: number;
+}
+
+interface JunkScanResult {
+  categories: CategoryScanResult[];
+  total_size: number;
+  total_file_count: number;
+  scan_duration_ms: number;
+  scan_timestamp: number;
+}
+
+interface JunkDeleteResult {
+  success_count: number;
+  failed_count: number;
+  reboot_pending_count: number;
+  freed_size: number;
+  needs_reboot: boolean;
+  failed_files: { path: string; reason: string }[];
+}
+
+interface LargeFileEntry {
+  path: string;
+  size: number;
+  modified: number;
+  risk_level: number;
+  source_label: string;
+}
+
+interface LargeFileScanProgress {
+  current_path: string;
+  scanned_count: number;
+  found_count: number;
+  backend: string;
+  stage: string;
+  message: string;
+  elapsed_ms: number;
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
 function formatSize(bytes: number): string {
   if (bytes === 0) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024)
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function getItemIcon(id: string): React.ComponentType<{ size?: number; strokeWidth?: number }> {
+function formatTime(timestamp: number): string {
+  if (!timestamp) return "--";
+  const date = new Date(timestamp * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
+function getRiskColor(level: number): string {
+  switch (level) {
+    case 1:
+      return "green";
+    case 2:
+      return "teal";
+    case 3:
+      return "yellow";
+    case 4:
+      return "orange";
+    case 5:
+      return "red";
+    default:
+      return "gray";
+  }
+}
+
+// ============================================================================
+// 快速清理 - 单项卡片 (memo 优化:切换勾选时只重渲染受影响的卡片)
+// ============================================================================
+
+function getItemIcon(id: string) {
   switch (id) {
     case "temp_user":
     case "temp_system":
@@ -90,8 +214,6 @@ function getItemIcon(id: string): React.ComponentType<{ size?: number; strokeWid
       return AlertTriangle;
     case "windows_logs":
       return FileText;
-    case "d3dscache":
-      return HardDrive;
     case "thumbs_db":
       return Image;
     default:
@@ -99,17 +221,19 @@ function getItemIcon(id: string): React.ComponentType<{ size?: number; strokeWid
   }
 }
 
-function CleanItemCard({
+interface CleanItemCardProps {
+  item: CleanItem;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+  primaryColor: string;
+}
+
+const CleanItemCard = memo(function CleanItemCard({
   item,
   isSelected,
   onToggleSelect,
   primaryColor,
-}: {
-  item: CleanItem;
-  isSelected: boolean;
-  onToggleSelect: () => void;
-  primaryColor: string;
-}) {
+}: CleanItemCardProps) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const headingColor = useColorModeValue("gray.800", "#ffffff");
@@ -139,7 +263,7 @@ function CleanItemCard({
       borderColor={isSelected ? primaryColor : borderColor}
       p={4}
       cursor={hasContent ? "pointer" : "not-allowed"}
-      onClick={hasContent ? onToggleSelect : undefined}
+      onClick={hasContent ? () => onToggleSelect(item.id) : undefined}
       transition="all 0.2s ease"
       _hover={
         hasContent && !isSelected
@@ -155,7 +279,11 @@ function CleanItemCard({
         <HStack spacing={3}>
           <Checkbox
             isChecked={isSelected}
-            onChange={onToggleSelect}
+            onChange={(e) => {
+              // 阻止事件冒泡到卡片 onClick,避免复选框被双重切换
+              e.stopPropagation();
+              onToggleSelect(item.id);
+            }}
             isDisabled={!hasContent}
             sx={{
               "& .chakra-checkbox__control": {
@@ -191,12 +319,7 @@ function CleanItemCard({
         </HStack>
         <VStack align="end" spacing={1}>
           {item.requires_admin && (
-            <Badge
-              size="sm"
-              colorScheme="orange"
-              variant="subtle"
-              fontSize="xs"
-            >
+            <Badge size="sm" colorScheme="orange" variant="subtle" fontSize="xs">
               {t("storageClean.adminRequired")}
             </Badge>
           )}
@@ -216,7 +339,316 @@ function CleanItemCard({
       </Text>
     </Box>
   );
+});
+
+// ============================================================================
+// 垃圾清理 - 分类卡片 (memo 优化 + 文件列表仅展开时渲染)
+// ============================================================================
+
+interface JunkCategoryCardProps {
+  category: CategoryScanResult;
+  isSelected: boolean;
+  isExpanded: boolean;
+  onToggleSelect: (name: string) => void;
+  onToggleExpand: (name: string) => void;
+  primaryColor: string;
 }
+
+const JunkCategoryCard = memo(function JunkCategoryCard({
+  category,
+  isSelected,
+  isExpanded,
+  onToggleSelect,
+  onToggleExpand,
+  primaryColor,
+}: JunkCategoryCardProps) {
+  const { t } = useTranslation();
+  const { liquidGlassEnabled } = useBackground();
+  const headingColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#ffffff");
+  const pathColor = useColorModeValue("gray.400", "#666666");
+  const rowBg = useColorModeValue("#f7fafc", "#232323");
+  const cardBg = liquidGlassEnabled
+    ? "rgba(255,255,255,0.7)"
+    : useColorModeValue("#ffffff", "#1a1a1a");
+  const borderColor = liquidGlassEnabled
+    ? "rgba(255,255,255,0.3)"
+    : useColorModeValue("gray.200", "#333333");
+
+  const hasContent = category.file_count > 0;
+
+  // 展开时一次性渲染全部文件会导致界面卡死(如 WindowsTemp 可能上万条)。
+  // 每次只渲染前 100 条,点击「加载更多」再追加。
+  const PAGE_SIZE = 100;
+  const [fileLimit, setFileLimit] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setFileLimit(PAGE_SIZE);
+  }, [category.display_name]);
+
+  const visibleFiles = category.files.slice(0, fileLimit);
+  const hasMoreFiles = category.files.length > fileLimit;
+
+  return (
+    <Box
+      bg={cardBg}
+      borderRadius="lg"
+      border="1px solid"
+      borderColor={isSelected ? primaryColor : borderColor}
+      overflow="hidden"
+      transition="all 0.2s ease"
+    >
+      <Flex justify="space-between" align="start" p={4}>
+        <HStack spacing={3} align="start">
+          <Checkbox
+            isChecked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onToggleSelect(category.display_name);
+            }}
+            isDisabled={!hasContent}
+            mt={1}
+            sx={{
+              "& .chakra-checkbox__control": {
+                borderColor: isSelected ? primaryColor : undefined,
+              },
+              "& .chakra-checkbox__control[data-checked]": {
+                bg: primaryColor,
+                borderColor: primaryColor,
+                color: "white",
+              },
+            }}
+          />
+          <VStack align="start" spacing={1}>
+            <HStack spacing={2}>
+              <Text fontSize="md" fontWeight="semibold" color={headingColor}>
+                {category.display_name}
+              </Text>
+              <Badge
+                size="sm"
+                colorScheme={getRiskColor(category.risk_level)}
+                variant="subtle"
+                fontSize="xs"
+              >
+                {t(`storageClean.risk${category.risk_level}`)}
+              </Badge>
+            </HStack>
+            <Text fontSize="xs" color={descColor}>
+              {category.description}
+            </Text>
+            {hasContent && (
+              <Button
+                size="xs"
+                variant="ghost"
+                color={primaryColor}
+                mt={1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleExpand(category.display_name);
+                }}
+              >
+                {isExpanded
+                  ? t("storageClean.junkHideFiles")
+                  : `${t("storageClean.junkViewFiles")} (${category.file_count})`}
+              </Button>
+            )}
+          </VStack>
+        </HStack>
+        <VStack align="end" spacing={1}>
+          <Badge
+            size="sm"
+            variant="subtle"
+            fontSize="xs"
+            bg={hasContent ? `${primaryColor}20` : undefined}
+            color={hasContent ? primaryColor : undefined}
+          >
+            {formatSize(category.total_size)}
+          </Badge>
+          <Text fontSize="xs" color={pathColor}>
+            {hasContent ? t("storageClean.junkFiles", { count: category.file_count }) : "0 B"}
+          </Text>
+        </VStack>
+      </Flex>
+
+      {/* 仅展开时才挂载文件列表,避免大量 DOM 常驻导致勾选/切换卡顿 */}
+      {isExpanded && (
+        <Box maxH="320px" overflowY="auto" borderTop="1px solid" borderColor={borderColor}>
+          {visibleFiles.map((file, index) => (
+            <Flex
+              key={`${file.path}-${index}`}
+              justify="space-between"
+              align="center"
+              bg={index % 2 === 0 ? rowBg : "transparent"}
+              px={4}
+              py={1.5}
+            >
+              <VStack align="start" spacing={0} minW={0} flex={1}>
+                <Text fontSize="xs" color={headingColor} isTruncated w="100%" title={file.path}>
+                  {file.path}
+                </Text>
+                <Text fontSize="10px" color={pathColor}>
+                  {file.original_path
+                    ? `原位置: ${file.original_path}`
+                    : formatTime(file.modified_time)}
+                </Text>
+              </VStack>
+              <Text fontSize="xs" color={headingColor} ml={3} flexShrink={0}>
+                {formatSize(file.size)}
+              </Text>
+            </Flex>
+          ))}
+          {hasMoreFiles && (
+            <Button
+              size="xs"
+              variant="ghost"
+              color={primaryColor}
+              w="full"
+              onClick={() => setFileLimit((limit) => limit + PAGE_SIZE)}
+            >
+              {t("storageClean.junkLoadMore", {
+                count: Math.min(category.files.length - fileLimit, PAGE_SIZE),
+              })}
+            </Button>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+});
+
+// ============================================================================
+// 大文件扫描结果表格(memo 化:删除/跳转操作时表格不重渲染,避免卡顿)
+// ============================================================================
+
+interface BigFilesTableProps {
+  files: LargeFileEntry[];
+  revealingPath: string | null;
+  onReveal: (path: string) => void;
+  onDelete: (file: LargeFileEntry) => void;
+  headingColor: string;
+  subTextColor: string;
+  themeColorHex: string;
+  themeColorRgba: (opacity: number) => string;
+}
+
+const BigFilesTable = memo(function BigFilesTable({
+  files,
+  revealingPath,
+  onReveal,
+  onDelete,
+  headingColor,
+  subTextColor,
+  themeColorHex,
+  themeColorRgba,
+}: BigFilesTableProps) {
+  const { t } = useTranslation();
+  const statsBg = useColorModeValue("#f7fafc", "#1e2024");
+  const statsBorder = useColorModeValue("gray.200", "#2d3748");
+
+  return (
+    <Box
+      borderRadius="xl"
+      border="1px solid"
+      borderColor={statsBorder}
+      bg={statsBg}
+      overflow="hidden"
+    >
+      <HStack justify="space-between" px={4} py={3}>
+        <Text fontSize="sm" fontWeight="bold" color={headingColor}>
+          {t("storageClean.bigResults")}
+        </Text>
+        <Badge
+          variant="subtle"
+          fontSize="xs"
+          bg={themeColorRgba(0.15)}
+          color={themeColorHex}
+        >
+          {t("storageClean.bigFound", { count: files.length })}
+        </Badge>
+      </HStack>
+      <Box maxH="480px" overflowY="auto">
+        <Table size="sm" variant="simple">
+          <Thead>
+            <Tr>
+              <Th>#</Th>
+              <Th>{t("storageClean.bigPath")}</Th>
+              <Th isNumeric>{t("storageClean.bigSize")}</Th>
+              <Th>{t("storageClean.bigSource")}</Th>
+              <Th>{t("storageClean.bigRisk")}</Th>
+              <Th>{t("storageClean.bigAction")}</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {files.map((file, index) => (
+              <Tr key={file.path}>
+                <Td fontSize="xs" color={subTextColor}>
+                  {index + 1}
+                </Td>
+                <Td fontSize="xs" maxW="300px">
+                  <Tooltip label={file.path}>
+                    <Text isTruncated color={headingColor}>
+                      {file.path}
+                    </Text>
+                  </Tooltip>
+                </Td>
+                <Td fontSize="xs" isNumeric fontWeight="semibold" color={headingColor}>
+                  {formatSize(file.size)}
+                </Td>
+                <Td fontSize="xs" color={subTextColor}>
+                  {file.source_label}
+                </Td>
+                <Td>
+                  <Badge
+                    size="sm"
+                    colorScheme={getRiskColor(file.risk_level)}
+                    variant="subtle"
+                    fontSize="xs"
+                  >
+                    {t(`storageClean.risk${file.risk_level}`)}
+                  </Badge>
+                </Td>
+                <Td>
+                  <HStack spacing={1}>
+                    <Tooltip label={t("storageClean.bigReveal")}>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        p={1}
+                        minW="auto"
+                        color={themeColorHex}
+                        isLoading={revealingPath === file.path}
+                        onClick={() => onReveal(file.path)}
+                      >
+                        <FolderOpen size={14} />
+                      </Button>
+                    </Tooltip>
+                    <Tooltip label={t("storageClean.bigDelete")}>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        p={1}
+                        minW="auto"
+                        color="red.400"
+                        _hover={{ bg: "red.50", color: "red.500" }}
+                        _dark={{ _hover: { bg: "red.900", color: "red.300" } }}
+                        onClick={() => onDelete(file)}
+                      >
+                        <Trash size={14} />
+                      </Button>
+                    </Tooltip>
+                  </HStack>
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      </Box>
+    </Box>
+  );
+});
+
+// ============================================================================
+// 主页面
+// ============================================================================
 
 export default function StorageCleanPage() {
   const { t } = useTranslation();
@@ -228,49 +660,53 @@ export default function StorageCleanPage() {
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
+  const themeColorHex = themeConfig.primaryColor;
+  const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
+
   const statsBg = liquidGlassEnabled
     ? "rgba(255,255,255,0.6)"
-    : useColorModeValue(
-        "#f7fafc",
-        "#1e2024"
-      );
+    : useColorModeValue("#f7fafc", "#1e2024");
   const statsBorder = liquidGlassEnabled
     ? "rgba(255,255,255,0.3)"
-    : useColorModeValue(
-        "gray.200",
-        "#2d3748"
-      );
+    : useColorModeValue("gray.200", "#2d3748");
 
+  // 使用提示框改为跟随主题色
   const tipBg = liquidGlassEnabled
     ? "rgba(255,255,255,0.5)"
-    : useColorModeValue(
-        "#ebf8ff",
-        "#1a365d"
-      );
+    : useColorModeValue(`${themeColorHex}14`, themeColorRgba(0.08));
   const tipBorder = liquidGlassEnabled
     ? "rgba(255,255,255,0.25)"
-    : useColorModeValue(
-        "blue.200",
-        "#2b6cb0"
-      );
-  const tipTitleColor = useColorModeValue(
-    themeConfig.primaryColor,
-    themeConfig.primaryColor
-  );
-  const tipTextColor = useColorModeValue(
-    "gray.600",
-    "rgba(200,200,200,0.85)"
-  );
+    : useColorModeValue(themeColorRgba(0.25), themeColorRgba(0.3));
+  const tipTitleColor = themeConfig.primaryColor;
+  const tipTextColor = useColorModeValue("gray.600", "rgba(200,200,200,0.85)");
+  const selectBg = useColorModeValue("#ffffff", "#1e2024");
 
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [tabIndex, setTabIndex] = useState(0);
+
+  // ---------- 快速清理 ----------
+  const [scanResult, setScanResult] = useState<QuickScanResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
+  // ---------- 垃圾清理 ----------
+  const [junkResult, setJunkResult] = useState<JunkScanResult | null>(null);
+  const [junkScanning, setJunkScanning] = useState(false);
+  const [junkCleaning, setJunkCleaning] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  // ---------- 大文件扫描 ----------
+  const [drives, setDrives] = useState<string[]>([]);
+  const [selectedDrive, setSelectedDrive] = useState("");
+  const [bigScanning, setBigScanning] = useState(false);
+  const [bigProgress, setBigProgress] = useState<LargeFileScanProgress | null>(null);
+  const [bigResults, setBigResults] = useState<LargeFileEntry[]>([]);
+
   const doScan = useCallback(async () => {
     setIsScanning(true);
     try {
-      const result = await invoke<ScanResult>("scan_storage_items");
+      const result = await invoke<QuickScanResult>("scan_storage_items");
       setScanResult(result);
       const defaultSelected = new Set(
         result.items
@@ -295,30 +731,87 @@ export default function StorageCleanPage() {
     doScan();
   }, [doScan]);
 
-  const handleToggleItem = (id: string) => {
+  const doJunkScan = useCallback(async () => {
+    setJunkScanning(true);
+    try {
+      const result = await invoke<JunkScanResult>("scan_junk_categories", {});
+      setJunkResult(result);
+      const defaultSelected = new Set(
+        result.categories
+          .filter((category) => category.file_count > 0)
+          .map((category) => category.display_name)
+      );
+      setSelectedCategories(defaultSelected);
+    } catch (error) {
+      console.error("Failed to scan junk files:", error);
+      toast({
+        title: t("storageClean.scanError") || "扫描失败",
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setJunkScanning(false);
+  }, [t, toast]);
+
+  // 进入页面自动扫描垃圾文件,无需手动点击
+  useEffect(() => {
+    doJunkScan();
+  }, [doJunkScan]);
+
+  // ---------- 稳定回调(memo 卡片依赖,避免每次渲染重建) ----------
+  const handleToggleItem = useCallback((id: string) => {
     setSelectedItems((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const handleSelectAll = () => {
+  const handleToggleJunkCategory = useCallback((name: string) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const handleToggleJunkExpand = useCallback((name: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllQuick = useCallback(() => {
     if (scanResult) {
       const allIds = scanResult.items
         .filter((item) => item.exists && item.size_bytes > 0)
         .map((item) => item.id);
       setSelectedItems(new Set(allIds));
     }
-  };
+  }, [scanResult]);
 
-  const handleDeselectAll = () => {
+  const handleDeselectAllQuick = useCallback(() => {
     setSelectedItems(new Set());
-  };
+  }, []);
+
+  const handleJunkSelectAll = useCallback(() => {
+    if (junkResult) {
+      setSelectedCategories(
+        new Set(junkResult.categories.filter((c) => c.file_count > 0).map((c) => c.display_name))
+      );
+    }
+  }, [junkResult]);
+
+  const handleJunkDeselectAll = useCallback(() => {
+    setSelectedCategories(new Set());
+  }, []);
 
   const handleClean = async () => {
     if (selectedItems.size === 0) {
@@ -340,9 +833,10 @@ export default function StorageCleanPage() {
       if (result.success) {
         toast({
           title: t("storageClean.cleanSuccess", { size: formatSize(result.freed_bytes) }),
-          description: result.skipped_files.length > 0
-            ? t("storageClean.skippedFiles", { count: result.skipped_files.length })
-            : undefined,
+          description:
+            result.skipped_files.length > 0
+              ? t("storageClean.skippedFiles", { count: result.skipped_files.length })
+              : undefined,
           status: "success",
           duration: 4000,
           isClosable: true,
@@ -371,10 +865,251 @@ export default function StorageCleanPage() {
     await doScan();
   };
 
+  const handleJunkClean = async () => {
+    if (!junkResult || selectedCategories.size === 0) {
+      toast({
+        title: t("storageClean.junkNoSelection"),
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const paths: string[] = [];
+    for (const category of junkResult.categories) {
+      if (selectedCategories.has(category.display_name)) {
+        for (const file of category.files) {
+          paths.push(file.path);
+        }
+      }
+    }
+    if (paths.length === 0) {
+      toast({
+        title: t("storageClean.junkNoSelection"),
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setJunkCleaning(true);
+    try {
+      const result = await invoke<JunkDeleteResult>("delete_junk_files", { paths });
+      const parts: string[] = [];
+      if (result.freed_size > 0) {
+        parts.push(t("storageClean.junkCleanSuccess", { size: formatSize(result.freed_size) }));
+      }
+      if (result.reboot_pending_count > 0) {
+        parts.push(t("storageClean.junkRebootPending", { count: result.reboot_pending_count }));
+      }
+      toast({
+        title: parts.join("，") || t("storageClean.cleanSuccess", { size: "0 B" }),
+        description:
+          result.failed_count > 0
+            ? t("storageClean.junkCleanFailed", { count: result.failed_count })
+            : undefined,
+        status: result.failed_count > 0 ? "warning" : "success",
+        duration: 4000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to delete junk files:", error);
+      toast({
+        title: t("storageClean.cleanError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setJunkCleaning(false);
+
+    await doJunkScan();
+  };
+
+  // ---------- 大文件扫描逻辑 ----------
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await invoke<string[]>("get_drive_list");
+        if (!cancelled) {
+          setDrives(result);
+          if (result.length > 0) setSelectedDrive(result[0]);
+        }
+      } catch (error) {
+        console.error("Failed to get drive list:", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlistenProgress: UnlistenFn | undefined;
+    let unlistenCancelled: UnlistenFn | undefined;
+
+    const setup = async () => {
+      const p = await listen<LargeFileScanProgress>("large-file-scan:progress", (event) => {
+        if (!cancelled) setBigProgress(event.payload);
+      });
+      const c = await listen("large-file-scan:cancelled", () => {
+        if (!cancelled) {
+          setBigScanning(false);
+          toast({
+            title: t("storageClean.bigCancelTip"),
+            status: "info",
+            duration: 2000,
+            isClosable: true,
+          });
+        }
+      });
+      if (cancelled) {
+        p();
+        c();
+      } else {
+        unlistenProgress = p;
+        unlistenCancelled = c;
+      }
+    };
+    setup();
+
+    return () => {
+      cancelled = true;
+      unlistenProgress?.();
+      unlistenCancelled?.();
+    };
+  }, [t, toast]);
+
+  const handleBigScan = async () => {
+    if (!selectedDrive) {
+      toast({
+        title: t("storageClean.bigDriveRequired"),
+        status: "warning",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+    setBigScanning(true);
+    setBigProgress(null);
+    setBigResults([]);
+    try {
+      const result = await invoke<LargeFileEntry[]>("scan_large_files", {
+        driveLetter: selectedDrive,
+      });
+      setBigResults(result);
+    } catch (error) {
+      console.error("Failed to scan large files:", error);
+      toast({
+        title: t("storageClean.bigScanError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setBigScanning(false);
+  };
+
+  const handleBigCancel = async () => {
+    try {
+      await invoke("cancel_large_file_scan");
+    } catch (error) {
+      console.error("Failed to cancel large file scan:", error);
+    }
+  };
+
+  // 大文件操作:跳转到文件位置
+  const [revealingPath, setRevealingPath] = useState<string | null>(null);
+  const handleRevealFile = useCallback(async (path: string) => {
+    setRevealingPath(path);
+    try {
+      await invoke("reveal_large_file", { path });
+    } catch (error) {
+      console.error("Failed to reveal file:", error);
+      toast({
+        title: t("storageClean.bigRevealError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setRevealingPath(null);
+  }, [t, toast]);
+
+  // 大文件操作:强制删除(需弹窗确认)
+  const [deleteTarget, setDeleteTarget] = useState<LargeFileEntry | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
+  const handleDeleteFile = useCallback((file: LargeFileEntry) => {
+    setDeleteTarget(file);
+  }, []);
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const result = await invoke<JunkDeleteResult>("delete_large_file", {
+        paths: [deleteTarget.path],
+      });
+      if (result.freed_size > 0) {
+        toast({
+          title: t("storageClean.bigDeleteSuccess", {
+            size: formatSize(result.freed_size),
+          }),
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      } else if (result.failed_count > 0) {
+        toast({
+          title: t("storageClean.bigDeleteFailed"),
+          description:
+            result.failed_files.map((f) => f.reason).join("; ") || String(result.failed_count),
+          status: "error",
+          duration: 4000,
+          isClosable: true,
+        });
+      }
+      // 从结果列表中移除已删除的文件
+      setBigResults((prev) => prev.filter((f) => f.path !== deleteTarget.path));
+    } catch (error) {
+      console.error("Failed to delete file:", error);
+      toast({
+        title: t("storageClean.bigDeleteError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setDeleting(false);
+    setDeleteTarget(null);
+  };
+
+  // 隐藏无内容(0B)的卡片:快速清理项 / 垃圾分类
+  const quickItems = scanResult
+    ? scanResult.items.filter((item) => item.exists && item.size_bytes > 0)
+    : [];
+  const junkCategories = junkResult
+    ? junkResult.categories.filter((c) => c.file_count > 0)
+    : [];
+
   const selectedSize = scanResult
     ? scanResult.items
         .filter((item) => selectedItems.has(item.id))
         .reduce((sum, item) => sum + item.size_bytes, 0)
+    : 0;
+
+  const junkSelectedSize = junkResult
+    ? junkResult.categories
+        .filter((c) => selectedCategories.has(c.display_name))
+        .reduce((sum, c) => sum + c.total_size, 0)
     : 0;
 
   const transitionMode = useTransitionMode();
@@ -388,7 +1123,7 @@ export default function StorageCleanPage() {
           onClick={() => navigate("/optimization")}
           color={headingColor}
         >
-                        返回
+          返回
         </Button>
         <Heading size="lg" color={headingColor} fontWeight="700">
           {t("storageClean.title")}
@@ -396,116 +1131,517 @@ export default function StorageCleanPage() {
         <Box w="100px" />
       </HStack>
 
-      {scanResult && (
-        <Box
-          p={4}
-          borderRadius="xl"
-          border="1px solid"
-          borderColor={statsBorder}
-          bg={statsBg}
-        >
-          <SimpleGrid columns={3} spacing={4}>
-            <VStack align="center">
-              <Icon as={HardDrive} color={themeConfig.primaryColor} boxSize={6} />
-              <Text fontSize="sm" color={subTextColor}>
-                {t("storageClean.totalScanned")}
-              </Text>
-              <Text fontSize="lg" fontWeight="bold" color={headingColor}>
-                {formatSize(scanResult.total_size)}
-              </Text>
+      <Tabs variant="soft-rounded" index={tabIndex} onChange={setTabIndex} isLazy>
+        <TabList gap={2} mb={4}>
+          <Tab
+            _selected={{
+              bg: themeColorHex,
+              color: getContrastTextColor(),
+              boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+            }}
+            _hover={{ bg: themeColorRgba(0.15) }}
+            borderRadius="full"
+            fontWeight="600"
+            fontSize="sm"
+            px={5}
+            py={1.5}
+          >
+            <Zap size={15} style={{ marginRight: 6 }} />
+            {t("storageClean.tabQuick")}
+          </Tab>
+          <Tab
+            _selected={{
+              bg: themeColorHex,
+              color: getContrastTextColor(),
+              boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+            }}
+            _hover={{ bg: themeColorRgba(0.15) }}
+            borderRadius="full"
+            fontWeight="600"
+            fontSize="sm"
+            px={5}
+            py={1.5}
+          >
+            <Trash2 size={15} style={{ marginRight: 6 }} />
+            {t("storageClean.tabJunk")}
+          </Tab>
+          <Tab
+            _selected={{
+              bg: themeColorHex,
+              color: getContrastTextColor(),
+              boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+            }}
+            _hover={{ bg: themeColorRgba(0.15) }}
+            borderRadius="full"
+            fontWeight="600"
+            fontSize="sm"
+            px={5}
+            py={1.5}
+          >
+            <FolderSearch size={15} style={{ marginRight: 6 }} />
+            {t("storageClean.tabBigFiles")}
+          </Tab>
+        </TabList>
+
+        <TabPanels>
+          {/* ================= 快速清理 ================= */}
+          <TabPanel px={0} pt={0}>
+            <VStack align="stretch" spacing={6}>
+              {scanResult && (
+                <Box
+                  p={4}
+                  borderRadius="xl"
+                  border="1px solid"
+                  borderColor={statsBorder}
+                  bg={statsBg}
+                >
+                  <SimpleGrid columns={3} spacing={4}>
+                    <VStack align="center">
+                      <Icon as={HardDrive} color={themeConfig.primaryColor} boxSize={6} />
+                      <Text fontSize="sm" color={subTextColor}>
+                        {t("storageClean.totalScanned")}
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                        {formatSize(scanResult.total_size)}
+                      </Text>
+                    </VStack>
+                    <VStack align="center">
+                      <Icon as={Folder} color={themeConfig.primaryColor} boxSize={6} />
+                      <Text fontSize="sm" color={subTextColor}>
+                        {t("storageClean.itemsFound")}
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                        {scanResult.total_items}
+                      </Text>
+                    </VStack>
+                    <VStack align="center">
+                      <Icon as={Trash2} color={themeConfig.primaryColor} boxSize={6} />
+                      <Text fontSize="sm" color={subTextColor}>
+                        {t("storageClean.selectedSize")}
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                        {formatSize(selectedSize)}
+                      </Text>
+                    </VStack>
+                  </SimpleGrid>
+                </Box>
+              )}
+
+              <HStack spacing={2}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSelectAllQuick}
+                  borderColor={themeConfig.primaryColor}
+                  color={themeConfig.primaryColor}
+                >
+                  {t("storageClean.selectAll")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleDeselectAllQuick}
+                  color={themeConfig.primaryColor}
+                >
+                  {t("storageClean.deselectAll")}
+                </Button>
+              </HStack>
+
+              {isScanning ? (
+                <VStack py={8}>
+                  <Spinner size="lg" color={themeColorHex} />
+                  <Text color={subTextColor}>{t("storageClean.scanning")}</Text>
+                </VStack>
+              ) : quickItems.length > 0 ? (
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                  {quickItems.map((item) => (
+                    <CleanItemCard
+                      key={item.id}
+                      item={item}
+                      isSelected={selectedItems.has(item.id)}
+                      onToggleSelect={handleToggleItem}
+                      primaryColor={themeConfig.primaryColor}
+                    />
+                  ))}
+                </SimpleGrid>
+              ) : (
+                !isScanning && (
+                  <VStack py={8} spacing={3}>
+                    <Trash2 size={40} color={subTextColor} />
+                    <Text color={subTextColor}>{t("storageClean.junkEmpty")}</Text>
+                  </VStack>
+                )
+              )}
+
+              <HStack spacing={3} justify="start">
+                <LiquidGlassButton
+                  leftIcon={isCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
+                  onClick={handleClean}
+                  isLoading={isCleaning}
+                  loadingText={t("storageClean.cleaning")}
+                  disabled={isScanning || selectedItems.size === 0}
+                  bg={themeConfig.primaryColor}
+                  color={getContrastTextColor()}
+                  _hover={{
+                    bg: themeConfig.primaryColor,
+                    filter: "brightness(0.9)",
+                  }}
+                  _active={{
+                    bg: themeConfig.primaryColor,
+                    filter: "brightness(0.8)",
+                  }}
+                >
+                  {t("storageClean.cleanButton")}
+                </LiquidGlassButton>
+                <LiquidGlassButton
+                  leftIcon={<RefreshCw size={16} />}
+                  onClick={doScan}
+                  isLoading={isScanning}
+                  variant="outline"
+                  colorScheme="gray"
+                >
+                  {t("storageClean.scanButton")}
+                </LiquidGlassButton>
+              </HStack>
             </VStack>
-            <VStack align="center">
-              <Icon as={Folder} color={themeConfig.primaryColor} boxSize={6} />
-              <Text fontSize="sm" color={subTextColor}>
-                {t("storageClean.itemsFound")}
-              </Text>
-              <Text fontSize="lg" fontWeight="bold" color={headingColor}>
-                {scanResult.total_items}
-              </Text>
+          </TabPanel>
+
+          {/* ================= 垃圾清理 ================= */}
+          <TabPanel px={0} pt={0}>
+            <VStack align="stretch" spacing={6}>
+              {junkResult && (
+                <Box
+                  p={4}
+                  borderRadius="xl"
+                  border="1px solid"
+                  borderColor={statsBorder}
+                  bg={statsBg}
+                >
+                  <SimpleGrid columns={3} spacing={4}>
+                    <VStack align="center">
+                      <Icon as={Trash2} color={themeConfig.primaryColor} boxSize={6} />
+                      <Text fontSize="sm" color={subTextColor}>
+                        {t("storageClean.totalScanned")}
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                        {formatSize(junkResult.total_size)}
+                      </Text>
+                    </VStack>
+                    <VStack align="center">
+                      <Icon as={File} color={themeConfig.primaryColor} boxSize={6} />
+                      <Text fontSize="sm" color={subTextColor}>
+                        {t("storageClean.junkFileTotal")}
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                        {junkResult.total_file_count}
+                      </Text>
+                    </VStack>
+                    <VStack align="center">
+                      <Icon as={ShieldCheck} color={themeConfig.primaryColor} boxSize={6} />
+                      <Text fontSize="sm" color={subTextColor}>
+                        {t("storageClean.selectedSize")}
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                        {formatSize(junkSelectedSize)}
+                      </Text>
+                    </VStack>
+                  </SimpleGrid>
+                </Box>
+              )}
+
+              <HStack spacing={2}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleJunkSelectAll}
+                  borderColor={themeConfig.primaryColor}
+                  color={themeConfig.primaryColor}
+                >
+                  {t("storageClean.selectAll")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleJunkDeselectAll}
+                  color={themeConfig.primaryColor}
+                >
+                  {t("storageClean.deselectAll")}
+                </Button>
+              </HStack>
+
+              {junkScanning ? (
+                <VStack py={8}>
+                  <Spinner size="lg" color={themeColorHex} />
+                  <Text color={subTextColor}>{t("storageClean.junkScanning")}</Text>
+                </VStack>
+              ) : junkCategories.length > 0 ? (
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+                  {junkCategories.map((category) => (
+                    <JunkCategoryCard
+                      key={category.display_name}
+                      category={category}
+                      isSelected={selectedCategories.has(category.display_name)}
+                      isExpanded={expandedCategories.has(category.display_name)}
+                      onToggleSelect={handleToggleJunkCategory}
+                      onToggleExpand={handleToggleJunkExpand}
+                      primaryColor={themeConfig.primaryColor}
+                    />
+                  ))}
+                </SimpleGrid>
+              ) : (
+                !junkScanning && (
+                  <VStack py={8} spacing={3}>
+                    <ScanSearch size={40} color={subTextColor} />
+                    <Text color={subTextColor}>{t("storageClean.junkEmpty")}</Text>
+                  </VStack>
+                )
+              )}
+
+              <HStack spacing={3} justify="start">
+                <LiquidGlassButton
+                  leftIcon={junkCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
+                  onClick={handleJunkClean}
+                  isLoading={junkCleaning}
+                  loadingText={t("storageClean.junkCleaning")}
+                  disabled={junkScanning || selectedCategories.size === 0}
+                  bg={themeConfig.primaryColor}
+                  color={getContrastTextColor()}
+                  _hover={{
+                    bg: themeConfig.primaryColor,
+                    filter: "brightness(0.9)",
+                  }}
+                  _active={{
+                    bg: themeConfig.primaryColor,
+                    filter: "brightness(0.8)",
+                  }}
+                >
+                  {t("storageClean.junkCleanButton")}
+                </LiquidGlassButton>
+                <LiquidGlassButton
+                  leftIcon={<ScanSearch size={16} />}
+                  onClick={doJunkScan}
+                  isLoading={junkScanning}
+                  variant="outline"
+                  colorScheme="gray"
+                >
+                  {t("storageClean.junkScanButton")}
+                </LiquidGlassButton>
+              </HStack>
             </VStack>
-            <VStack align="center">
-              <Icon as={Trash2} color={themeConfig.primaryColor} boxSize={6} />
-              <Text fontSize="sm" color={subTextColor}>
-                {t("storageClean.selectedSize")}
-              </Text>
-              <Text fontSize="lg" fontWeight="bold" color={headingColor}>
-                {formatSize(selectedSize)}
-              </Text>
+          </TabPanel>
+
+          {/* ================= 大文件扫描 ================= */}
+          <TabPanel px={0} pt={0}>
+            <VStack align="stretch" spacing={6}>
+              <Box
+                p={4}
+                borderRadius="xl"
+                border="1px solid"
+                borderColor={statsBorder}
+                bg={statsBg}
+              >
+                {/* 磁盘选择 + 开始扫描 同一行,按钮紧贴选择框右侧 */}
+                <HStack spacing={3} alignItems="end" flexWrap="wrap">
+                  <VStack align="start" spacing={2}>
+                    <Text fontSize="sm" color={subTextColor}>
+                      {t("storageClean.bigDrive")}
+                    </Text>
+                    {/* 磁盘选择:ChakraUI Menu,带磁碟图标 + 单选对勾 + 主题色 */}
+                    <Menu isLazy>
+                      <MenuButton
+                        as={Button}
+                        size="sm"
+                        w="150px"
+                        leftIcon={<HardDrive size={15} color={themeColorHex} />}
+                        rightIcon={<ChevronDown size={14} color={subTextColor} />}
+                        isDisabled={bigScanning || drives.length === 0}
+                        bg={selectBg}
+                        border="1px solid"
+                        borderColor={themeColorRgba(0.35)}
+                        borderRadius="lg"
+                        textAlign="left"
+                        fontWeight="medium"
+                        color={headingColor}
+                        _hover={{ borderColor: themeColorHex, bg: themeColorRgba(0.08) }}
+                        _active={{ bg: themeColorRgba(0.15) }}
+                      >
+                        {selectedDrive || "--"}
+                      </MenuButton>
+                      <MenuList
+                        w="150px"
+                        minW="150px"
+                        bg={selectBg}
+                        borderColor={themeColorRgba(0.3)}
+                        boxShadow={`0 8px 24px -6px ${themeColorRgba(0.4)}`}
+                        maxH="260px"
+                        overflowY="auto"
+                      >
+                        <MenuOptionGroup
+                          type="radio"
+                          value={selectedDrive}
+                          onChange={(value) => setSelectedDrive(value as string)}
+                        >
+                          {drives.map((drive) => (
+                            <MenuItemOption
+                              key={drive}
+                              value={drive}
+                              icon={<Check size={14} color={themeColorHex} />}
+                              _selected={{ bg: themeColorRgba(0.12), color: themeColorHex, fontWeight: "600" }}
+                              _hover={{ bg: themeColorRgba(0.08) }}
+                              fontSize="sm"
+                            >
+                              {drive}
+                            </MenuItemOption>
+                          ))}
+                        </MenuOptionGroup>
+                      </MenuList>
+                    </Menu>
+                  </VStack>
+                  <HStack spacing={2}>
+                    <Button
+                      size="sm"
+                      leftIcon={bigScanning ? <Spinner size="sm" /> : <ScanSearch size={15} />}
+                      onClick={handleBigScan}
+                      disabled={bigScanning || !selectedDrive}
+                      bg={themeConfig.primaryColor}
+                      color={getContrastTextColor()}
+                      _hover={{ bg: themeConfig.primaryColor, filter: "brightness(0.9)" }}
+                      _active={{ bg: themeConfig.primaryColor, filter: "brightness(0.8)" }}
+                    >
+                      {bigScanning ? t("storageClean.bigScanning") : t("storageClean.bigScanButton")}
+                    </Button>
+                    {bigScanning && (
+                      <Button
+                        size="sm"
+                        leftIcon={<XCircle size={15} />}
+                        onClick={handleBigCancel}
+                        variant="outline"
+                        colorScheme="red"
+                      >
+                        {t("storageClean.bigCancelButton")}
+                      </Button>
+                    )}
+                  </HStack>
+                </HStack>
+
+                {bigProgress && bigScanning && (
+                  <VStack align="stretch" spacing={2} mt={4}>
+                    <HStack justify="space-between">
+                      <Text fontSize="xs" color={subTextColor} isTruncated>
+                        {bigProgress.current_path}
+                      </Text>
+                      <Text fontSize="xs" color={subTextColor} flexShrink={0}>
+                        {t("storageClean.bigScanned", { count: bigProgress.scanned_count })}
+                      </Text>
+                    </HStack>
+                    <Progress
+                      size="xs"
+                      value={bigProgress.found_count > 0 ? 100 : 35}
+                      isIndeterminate={bigProgress.found_count === 0}
+                      sx={{ "& > div": { bg: themeColorHex } }}
+                      bg={themeColorRgba(0.15)}
+                    />
+                    <Text fontSize="xs" color={subTextColor}>
+                      {t("storageClean.bigFound", { count: bigProgress.found_count })}
+                    </Text>
+                  </VStack>
+                )}
+              </Box>
+
+              {bigResults.length > 0 ? (
+                <BigFilesTable
+                  files={bigResults}
+                  revealingPath={revealingPath}
+                  onReveal={handleRevealFile}
+                  onDelete={handleDeleteFile}
+                  headingColor={headingColor}
+                  subTextColor={subTextColor}
+                  themeColorHex={themeColorHex}
+                  themeColorRgba={themeColorRgba}
+                />
+              ) : (
+                !bigScanning && (
+                  <VStack py={8} spacing={3}>
+                    <FolderSearch size={40} color={subTextColor} />
+                    <Text color={subTextColor}>{t("storageClean.bigEmpty")}</Text>
+                  </VStack>
+                )
+              )}
             </VStack>
-          </SimpleGrid>
-        </Box>
-      )}
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
 
-      <HStack spacing={3} justify="space-between">
-        <HStack spacing={2}>
-          <Button size="sm" variant="outline" onClick={handleSelectAll} borderColor={themeConfig.primaryColor} color={themeConfig.primaryColor}>
-            {t("storageClean.selectAll")}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={handleDeselectAll} color={themeConfig.primaryColor}>
-            {t("storageClean.deselectAll")}
-          </Button>
-        </HStack>
-      </HStack>
-
-      {isScanning ? (
-        <VStack py={8}>
-          <Spinner size="lg" color="teal.500" />
-          <Text color={subTextColor}>{t("storageClean.scanning")}</Text>
-        </VStack>
-      ) : (
-        scanResult && (
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
-            {scanResult.items.map((item) => (
-              <CleanItemCard
-                key={item.id}
-                item={item}
-                isSelected={selectedItems.has(item.id)}
-                onToggleSelect={() => handleToggleItem(item.id)}
-                primaryColor={themeConfig.primaryColor}
-              />
-            ))}
-          </SimpleGrid>
-        )
-      )}
-
-      <HStack spacing={3} justify="start">
-        <LiquidGlassButton
-          leftIcon={isCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
-          onClick={handleClean}
-          isLoading={isCleaning}
-          loadingText={t("storageClean.cleaning")}
-          disabled={isScanning || selectedItems.size === 0}
-          bg={themeConfig.primaryColor}
-          color={getContrastTextColor()}
-          _hover={{
-            bg: themeConfig.primaryColor,
-            filter: "brightness(0.9)",
-          }}
-          _active={{
-            bg: themeConfig.primaryColor,
-            filter: "brightness(0.8)",
-          }}
-        >
-          {t("storageClean.cleanButton")}
-        </LiquidGlassButton>
-        <LiquidGlassButton
-          leftIcon={<RefreshCw size={16} />}
-          onClick={doScan}
-          isLoading={isScanning}
-          variant="outline"
-          colorScheme="gray"
-        >
-          {t("storageClean.scanButton")}
-        </LiquidGlassButton>
-      </HStack>
-
-      <Box
-        p={5}
-        borderRadius="xl"
-        border="1px solid"
-        borderColor={tipBorder}
-        bg={tipBg}
+      {/* 大文件强制删除确认弹窗 */}
+      <AlertDialog
+        isOpen={!!deleteTarget}
+        onClose={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+        leastDestructiveRef={cancelDeleteRef}
+        isCentered
       >
+        <AlertDialogOverlay />
+        <AlertDialogContent bg={selectBg} borderColor={themeColorRgba(0.3)}>
+          <AlertDialogHeader fontSize="md" fontWeight="bold" color={headingColor}>
+            {t("storageClean.bigDeleteConfirmTitle")}
+          </AlertDialogHeader>
+          <AlertDialogBody>
+            <VStack align="start" spacing={2}>
+              <Text fontSize="sm" color={subTextColor}>
+                {t("storageClean.bigDeleteConfirmDesc")}
+              </Text>
+              {deleteTarget && (
+                <Box
+                  w="full"
+                  p={2}
+                  borderRadius="md"
+                  bg={themeColorRgba(0.08)}
+                  border="1px solid"
+                  borderColor={themeColorRgba(0.25)}
+                >
+                  <Text fontSize="xs" color={headingColor} wordBreak="break-all">
+                    {deleteTarget.path}
+                  </Text>
+                  <Text fontSize="xs" color={themeColorHex} mt={1} fontWeight="600">
+                    {formatSize(deleteTarget.size)}
+                  </Text>
+                </Box>
+              )}
+              <Text fontSize="xs" color="red.400" fontWeight="500">
+                {t("storageClean.bigDeleteConfirmWarn")}
+              </Text>
+            </VStack>
+          </AlertDialogBody>
+          <AlertDialogFooter>
+            <Button
+              ref={cancelDeleteRef}
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+              color={subTextColor}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              size="sm"
+              ml={3}
+              leftIcon={deleting ? <Spinner size="sm" /> : <Trash size={14} />}
+              onClick={handleConfirmDelete}
+              isLoading={deleting}
+              loadingText={t("storageClean.bigDeleting")}
+              bg="red.500"
+              color="#fff"
+              _hover={{ bg: "red.600" }}
+              _active={{ bg: "red.700" }}
+            >
+              {t("storageClean.bigDeleteConfirmButton")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Box p={5} borderRadius="xl" border="1px solid" borderColor={tipBorder} bg={tipBg}>
         <HStack mb={3}>
           <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
             {t("storageClean.tip.title")}
@@ -537,8 +1673,6 @@ export default function StorageCleanPage() {
       {content}
     </motion.div>
   ) : (
-    <div>
-      {content}
-    </div>
+    <div>{content}</div>
   );
 }

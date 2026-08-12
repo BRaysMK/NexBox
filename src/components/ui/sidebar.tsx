@@ -22,6 +22,7 @@ interface NavItem {
   customIconSize?: string;
   ariaLabel: string;
   beta?: boolean;
+  alwaysShowLabel?: boolean;
 }
 
 const NAV_ORDER_KEY = "nexbox_nav_order";
@@ -36,6 +37,7 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
   showLabel: boolean;
 }) {
   const isCustom = !!item.customIcon || !!item.customIconDark;
+  const showText = showLabel || item.alwaysShowLabel;
   const { getActiveColor } = useThemeColor();
   const { colorMode } = useColorMode();
   const activeColor = getActiveColor();
@@ -58,12 +60,16 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
     ? (item.customIconDark || item.customIcon)
     : (item.customIcon || item.customIconDark);
 
+  // 仅对始终显示标签的项（如 Steam）在文字模式下放大图标，其他自定义图标项保持原尺寸
+  const resolvedIconSize = (showText && item.alwaysShowLabel && item.customIconSize && item.customIconSize !== "22px")
+    ? "30px"
+    : (item.customIconSize || "22px");
   const iconElement = isCustom ? (
     <Image
       src={resolvedCustomIcon}
       alt={item.ariaLabel}
-      w={item.customIconSize || "22px"}
-      h={item.customIconSize || "22px"}
+      w={resolvedIconSize}
+      h={resolvedIconSize}
       objectFit="contain"
       filter={isActive ? "none" : "grayscale(30%) opacity(0.7)"}
       transition="filter 0.2s"
@@ -75,7 +81,7 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
   return (
     <Link key={item.path} to={item.path} className="jelly-bounce-nav-button" style={{ transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)", flexShrink: 0, display: "flex" }}>
       <ChakraBox position="relative">
-        {showLabel ? (
+        {showText ? (
           <Flex
             direction="column"
             align="center"
@@ -97,7 +103,7 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
             overflow="hidden"
             onClick={handleBurst}
           >
-            <ChakraBox display="flex" alignItems="center" justifyContent="center" lineHeight={0} position="relative" zIndex={1}>
+            <ChakraBox display="flex" alignItems="center" justifyContent="center" lineHeight={0} position="relative" zIndex={1} overflow="visible" sx={item.alwaysShowLabel && showText ? { transform: "scale(1.4)", transformOrigin: "center" } : undefined}>
               {iconElement}
             </ChakraBox>
             <Text fontSize="2xs" fontWeight="medium" noOfLines={1} textAlign="center" lineHeight="1.1" position="relative" zIndex={1}>
@@ -160,7 +166,7 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
             ))}
           </ChakraBox>
         )}
-        {!showLabel && item.beta && (
+        {!showText && item.beta && (
           <Badge
             position="absolute"
             top="-2px"
@@ -394,7 +400,7 @@ export function Sidebar() {
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
     { path: "/music", icon: Music, ariaLabel: t("sidebar.music") },
     { path: "/delta-force", icon: null, customIcon: deltaForceIconLight, customIconDark: deltaForceIconDark, customIconSize: "20px", ariaLabel: t("sidebar.deltaForce") },
-    { path: "/steam", icon: null, customIcon: steamIconLight, customIconDark: steamIconDark, customIconSize: "44px", ariaLabel: t("sidebar.steam") },
+    { path: "/steam", icon: null, customIcon: steamIconLight, customIconDark: steamIconDark, customIconSize: "44px", ariaLabel: t("sidebar.steam"), alwaysShowLabel: true },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
     { path: "/custom", icon: LayoutGrid, ariaLabel: t("sidebar.custom") },

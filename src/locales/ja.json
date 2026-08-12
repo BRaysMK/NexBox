@@ -53,7 +53,8 @@
 "screenRecord": "画面録画",
     "audioEq": "EQチューニング",
     "custom": "カスタム",
-    "runtimeRepair": "ランタイム修復"
+    "runtimeRepair": "ランタイム修復",
+    "vtxVirtualization": "VT-X 仮想化修復"
   },
 "customPage": {
 "title": "カスタムページ",
@@ -67,6 +68,110 @@
 "enterEdit": "レイアウト編集",
 "exitEdit": "編集終了"
 },
+  "powerAdvanced": {
+    "title": "プロセッサー詳細設定",
+    "description": "CPUの性能・冷却・消費電力に関わる詳細な電源オプションを調整します",
+    "currentScheme": "現在の電源プラン",
+    "refresh": "更新",
+    "acLabel": "電源接続 (AC)",
+    "dcLabel": "バッテリー (DC)",
+    "percentUnit": "%",
+    "lockedTitle": "詳細設定はロックされています",
+    "lockedDesc": "プロセッサーの詳細設定はシステムの低レベル電源ポリシーに影響し、消費電力・温度・ハードウェア寿命に影響を与える可能性があります。ロック中は現在値を確認できますが、変更はできません。",
+    "unlockButton": "詳細設定をロック解除",
+    "disclaimerTitle": "免責事項",
+    "disclaimerText": "プロセッサーの詳細設定はWindowsの電源プランの低レベルパラメータを直接変更し、システムの安定性・消費電力・ハードウェア寿命に影響を与える可能性があります。これにより生じたいかなる結果についてもNexBoxは責任を負いません。各設定の意味を理解してから変更し、元に戻せるように現在値を記録しておくことをお勧めします。",
+    "agreeCheck": "リスクを理解し、ロック解除に同意します",
+    "cancel": "キャンセル",
+    "confirmUnlock": "同意してロック解除",
+    "unlockSuccess": "詳細設定のロックを解除しました",
+    "unlockFailed": "ロック解除に失敗しました",
+    "stateRecommended": "推奨",
+    "stateDefault": "既定",
+    "stateCustom": "カスタム",
+    "supported": "現在のハードウェアでサポート",
+    "notSupported": "現在のプランではサポートされていません",
+    "hiddenHint": "この設定は既定でシステムに非表示です。ロック解除後に表示されます",
+    "setRecommended": "推奨値に設定",
+    "setDefault": "既定値に設定",
+    "setRecommendedSuccess": "推奨値を適用しました",
+    "setRecommendedFailed": "推奨値の適用に失敗しました",
+    "setDefaultSuccess": "既定値を適用しました",
+    "setDefaultFailed": "既定値の適用に失敗しました",
+    "applyFailed": "変更に失敗しました",
+    "applySuccess": "変更が適用されました",
+    "applyChanges": "変更を適用",
+    "unlocking": "ロック解除中...",
+    "loadFailed": "プロセッサーの詳細設定の読み込みに失敗しました",
+    "unhideFailed": "一部の設定の非表示解除に失敗しました",
+    "settings": {
+      "processorMinState": {
+        "title": "最小プロセッサの状態",
+        "desc": "最大周波数のパーセンテージとして許可される最小CPU速度を設定します"
+      },
+      "processorMaxState": {
+        "title": "最大プロセッサの状態",
+        "desc": "最大周波数のパーセンテージとして許可される最大CPU速度を設定します"
+      },
+      "systemCoolingPolicy": {
+        "title": "システム冷却ポリシー",
+        "desc": "高温時にプロセッサを先に低速化するか（パッシブ）、ファンを先に高速化するか（アクティブ）を選択します"
+      },
+      "processorBoostMode": {
+        "title": "プロセッサ性能ブーストモード",
+        "desc": "負荷の高いタスクでCPUが基本周波数を超えてブーストする積極性を制御します"
+      },
+      "increasePolicy": {
+        "title": "プロセッサ性能上昇ポリシー",
+        "desc": "ワークロード増加時にCPUが速度を上げる速さを制御します（旧型の非HWPプロセッサ向け）"
+      },
+      "decreasePolicy": {
+        "title": "プロセッサ性能低下ポリシー",
+        "desc": "ワークロード減少時にCPUが速度を下げる速さを制御します（旧型の非HWPプロセッサ向け）"
+      },
+      "coreParkingMin": {
+        "title": "CPUコアパーキング最小コア数",
+        "desc": "アクティブかつ応答性を維持する必要があるCPUコアの最小パーセンテージを設定します"
+      },
+      "coreParkingMax": {
+        "title": "CPUコアパーキング最大コア数",
+        "desc": "アクティブにできるCPUコアの最大パーセンテージを設定します（100%で最高性能）"
+      },
+      "energyPreference": {
+        "title": "プロセッサエネルギー性能設定",
+        "desc": "HWP搭載の現代のCPUで電力効率と性能のバランスを取ります（0=最大性能、100=最大効率）"
+      },
+      "increaseThreshold": {
+        "title": "プロセッサ性能上昇しきい値",
+        "desc": "速度上昇をトリガーするCPU使用率のパーセンテージを設定します（低いほど応答性が高い、旧型の非HWP CPU向け）"
+      },
+      "decreaseThreshold": {
+        "title": "プロセッサ性能低下しきい値",
+        "desc": "速度低下をトリガーするCPU使用率のパーセンテージを設定します（低いほど高性能を維持、旧型の非HWP CPU向け）"
+      }
+    },
+    "options": {
+      "coolingPolicy": {
+        "0": "パッシブ（プロセッサ速度を下げる）",
+        "1": "アクティブ（ファンを速く回す）"
+      },
+      "boostMode": {
+        "0": "無効",
+        "1": "有効",
+        "2": "積極的",
+        "3": "効率的に有効",
+        "4": "効率的に積極的",
+        "5": "保証時に積極的",
+        "6": "保証時に効率的に積極的"
+      },
+      "policy": {
+        "0": "理想",
+        "1": "単一",
+        "2": "ロケット",
+        "3": "理想的に積極的"
+      }
+    }
+  },
   "optimization": {
     "pageTitle": "最適化",
     "pageDesc": "システム最適化とパフォーマンスツール",
@@ -295,6 +400,7 @@
     },
     "powerManagement": {
       "title": "電源管理",
+      "tabPlans": "電源プラン",
       "description": "最適化された電源プランをインポートして有効化し、ゲームパフォーマンスを向上",
       "currentPlan": "現在の電源プラン",
       "builtinPlans": "内蔵電源プラン",
@@ -554,6 +660,34 @@
       "noImageYet": "ダウンロードできる画像がありません",
       "previewAlt": "ランダム画像プレビュー"
     }
+  },
+  "ai": {
+    "name": "箱猫",
+    "personaTag": "猫娘・ヤンデレ",
+    "subtitle": "新境盒専用 AI アシスタント",
+    "liveTag": "AI",
+    "entrySubtitle": "箱猫とチャットしようにゃ~",
+    "welcome": "にゃ~ 私は箱猫！新境盒について何でも私に聞いてね(≧▽≦)にゃ~",
+    "inputPlaceholder": "箱猫に何か話してにゃ~",
+    "inputPlaceholderWeb": "ウェブ検索中…最新のことを聞いてにゃ~",
+    "send": "送信",
+    "clear": "会話をクリア",
+    "memory": "記憶管理",
+    "memoryTitle": "記憶管理",
+    "memoryPlaceholder": "箱猫にあなたについて教えて…",
+    "builtin": "内蔵",
+    "memoryAdd": "記憶を追加",
+    "memoryEmpty": "カスタム記憶はまだないにゃ。箱猫に教えてにゃ~",
+    "web": "検索",
+    "webOn": "ウェブ検索：オン",
+    "webOff": "ウェブ検索：オフ",
+    "webActive": "ウェブ検索オン — 最新の情報に基づいて答えるにゃ~",
+    "searching": "ウェブ検索中：",
+    "searchResultTitle": "ウェブ検索結果",
+    "searchNoResult": "関連するウェブ結果が見つからなかったにゃ",
+    "thinking": "考え中",
+    "stop": "出力を停止",
+    "stopped": "（出力を停止しました）"
   },
   "hardware": {
     "title": "ハードウェア情報",
@@ -1081,8 +1215,41 @@
     "diskHealthDesc": "ディスクの健全性とSMART情報を確認",
 "screenRecordDesc": "高性能画面録画（ハードウェアエンコード）",
     "audioEqDesc": "システムレベルのオーディオイコライザー調整",
-    "runtimeRepairDesc": "不足している VC++ / .NET / DirectX ランタイムを検出・修復"
+    "runtimeRepairDesc": "不足している VC++ / .NET / DirectX ランタイムを検出・修復",
+    "vtxVirtualizationDesc": "メモリ整合性とHyper-Vを無効/復元して仮想化ポップアップを修正"
   },
+  "vtxVirtualization": {
+    "title": "VT-X 仮想化修復",
+    "subtitle": "メモリ整合性・VBS・Hyper-V自動起動を無効化または復元し、ゲーム/ソフトの仮想化ポップアップを解決",
+    "refresh": "再検出",
+    "checking": "現在の仮想化状態を確認中...",
+    "checkFailed": "仮想化状態の確認に失敗しました",
+    "currentStatus": "現在の仮想化状態",
+    "memoryIntegrity": "メモリ整合性（コア分離）",
+    "vbs": "仮想化ベースのセキュリティ（VBS）",
+    "hypervisorLaunch": "Hyper-V起動タイプ",
+    "on": "オン",
+    "off": "オフ",
+    "unknown": "不明",
+    "notConfigured": "未設定",
+    "operations": "操作",
+    "fix": "ワンクリック修復",
+    "restore": "復元",
+    "fixing": "修復中...",
+    "restoring": "復元中...",
+    "fixDone": "修復を実行しました",
+    "restoreDone": "復元を実行しました",
+    "fixFailed": "修復に失敗しました",
+    "restoreFailed": "復元に失敗しました",
+    "rebootHint": "変更はPC再起動後に有効になります。Windows Updateが後でメモリ整合性を再度有効化する場合があります。再度ポップアップが表示されたら再修復してください。",
+    "limitationTitle": "100%ポップアップが出ない保証がない理由",
+    "limitationBody": "本ツールはシステム側のメモリ整合性・VBS・Hyper-V自動起動を無効化し、仮想化設定によるポップアップの大半を解決します。ただしゲーム/アンチチートの検出方式は異なり、一部のケースではポップアップが出る可能性があります：① BIOSのVT-x/SVM設定は手動で有効化が必要な場合があります；② 仮想化に依存するソフト（VMware/VirtualBox/WSL2/Docker/エミュレーター等）と競合する場合があります；③ Windows Updateがシステム設定をリセットする場合があります。",
+    "notAdmin": "管理者権限なし",
+    "adminHint": "管理者権限でない場合、UAC確認ウィンドウが表示されます。[許可]をクリックしてください",
+    "fullyFixed": "仮想化関連の設定はすべて無効化されており、修復状態です。",
+    "fullyRestored": "仮想化関連の設定はすべて復元されており、デフォルト状態です。"
+  },
+
   "gameProcessOptimize": {
     "title": "ゲームプロセス最適化",
     "subtitle": "ゲーム単位でプロセス最適化とCPUコア割り当てを管理。プロセス自動最適化とコア自動最適化は個別に有効化可能",
@@ -1196,14 +1363,19 @@
   "systemOptimizer": {
     "pageTitle": "システム最適化",
     "pageDesc": "システム最適化をワンクリックで切り替え、パフォーマンスとプライバシーを向上",
-    "credits": "1Uツールボックスのシステム最適化サポートに感謝",
     "loading": "読み込み中...",
+    "scanStatus": "状態をスキャン",
+    "scanning": "スキャン中...",
+    "scanComplete": "スキャン完了",
+    "scanResult": "最適化済み {{count}} / {{total}} 項目",
+    "scanError": "スキャンに失敗しました。再試行してください",
     "category": {
       "gaming": "ゲーム＆グラフィック",
       "nvidia": "NVIDIA GPU",
       "amd": "AMD GPU",
       "performance": "システムパフォーマンス",
       "privacy": "プライバシー＆テレメトリ",
+      "ai": "Windows AI 最適化",
       "services": "システムサービス",
       "disk": "ディスク＆ファイルシステム",
       "apps": "アプリ＆UI"
@@ -1232,7 +1404,21 @@
       "disableBcastDVR": "ブロードキャストDVRサービス無効",
       "disableBcastDVRDesc": "BcastDVRUserServiceサービスを無効化",
       "disableAutoColorMgmt": "自動カラーマネジメント無効",
-      "disableAutoColorMgmtDesc": "DirectX自動カラーマネジメントを無効化、GPUオーバーヘッド削減"
+      "disableAutoColorMgmtDesc": "DirectX自動カラーマネジメントを無効化、GPUオーバーヘッド削減",
+      "gameMode": "ゲームモード",
+      "gameModeDesc": "Windowsゲームモードを有効化。ゲーム中にバックグラウンドタスクを自動停止し、リソースを優先的に割り当てます",
+      "win32Priority": "最高のパフォーマンス用にプロセッサを調整",
+      "win32PriorityDesc": "フォアグラウンドアプリとバックグラウンドサービスの間でCPU時間をどのように割り当てるかを設定します。プログラム優先の方が応答性が高い（推奨）",
+      "win32PriorityProgram": "プログラム",
+      "win32PriorityBackground": "バックグラウンドサービス",
+      "systemResponsiveness": "ゲーム向けシステム応答性",
+      "systemResponsivenessDesc": "MMCSSがバックグラウンドに確保するCPU時間を減らし、ゲームにより多くのCPUリソースを割り当てます。注意：「ネットワークとSR応答性の改善」と同じ値を共有するため、どちらか一方のみ使用",
+      "hags": "ハードウェアアクセラレータGPUスケジューリング",
+      "hagsDesc": "GPUが自身のメモリとスケジューリングを管理できるようにし、遅延を低減します（再起動が必要）",
+      "backgroundServices": "バックグラウンドサービスの最適化",
+      "backgroundServicesDesc": "Windowsサービスの起動タイムアウトを60秒から30秒に短縮し、起動を少し高速化します",
+      "disableMpo": "MPO（マルチプレーンオーバーレイ）無効",
+      "disableMpoDesc": "マルチプレーンオーバーレイ合成を無効化し、マルチモニター環境でのちらつき、黒画面、カクつきを修正します（再起動が必要）"
     },
     "nvidia": {
       "lowLatencyThreshold": "NVIDIA低レイテンシしきい値",
@@ -1300,7 +1486,43 @@
       "disableWritingFeedback": "書き込みフィードバック無効",
       "disableWritingFeedbackDesc": "手書き入力フィードバック収集を無効化",
       "disableErrorReporting": "Windowsエラー報告無効",
-      "disableErrorReportingDesc": "WERを無効化、エラーデータアップロード停止"
+      "disableErrorReportingDesc": "WERを無効化、エラーデータアップロード停止",
+      "disableAdvertisingId": "広告ID無効",
+      "disableAdvertisingIdDesc": "パーソナライズ広告IDを無効化し、アプリによる行動追跡とターゲット広告を防止",
+      "disableAdsPromotional": "広告・提案・プロモーション無効",
+      "disableAdsPromotionalDesc": "マスタースイッチ：スタートメニュー、ロック画面、設定、通知センターのすべての広告・提案・プロモーションコンテンツを無効化",
+      "disableOnlineSpeechRecognition": "オンライン音声認識無効",
+      "disableOnlineSpeechRecognitionDesc": "音声データをMicrosoftクラウドへ送信して処理することを防止",
+      "disableTailoredExperiences": "カスタマイズエクスペリエンス無効",
+      "disableTailoredExperiencesDesc": "診断データに基づくパーソナライズされた提案、ヒント、広告を防止",
+      "disableMsaCloudSearch": "MSAクラウド検索無効",
+      "disableMsaCloudSearchDesc": "検索がMicrosoftアカウントのクラウド検索サービスを使用することを防止",
+      "disableLockScreenSpotlight": "ロック画面Spotlight無効",
+      "disableLockScreenSpotlightDesc": "ロック画面でBingデイリー画像とプロモーションコンテンツを表示しない",
+      "disableInkingDictionary": "手書き＆入力辞書無効",
+      "disableInkingDictionaryDesc": "入力履歴と手書きパターンを使用したパーソナライズ辞書の作成を防止",
+      "disableFeedbackRequests": "Windowsフィードバック要求無効",
+      "disableFeedbackRequestsDesc": "Windowsが定期的にフィードバックを求めることを停止"
+    },
+    "ai": {
+      "disableCopilot": "Windows Copilot無効",
+      "disableCopilotDesc": "グループポリシーでCopilotを無効化し、シェル統合、キーボードハードウェアキー、ランタイムを削除",
+      "disableRecallSnapshots": "Recallスナップショット無効",
+      "disableRecallSnapshotsDesc": "Windows Recallがアクティビティのスナップショットを保存することを防止",
+      "blockRecallEnablement": "Recall有効化をブロック",
+      "blockRecallEnablementDesc": "ポリシーによるWindows Recallの有効化を防止",
+      "disableAiDataAnalysis": "AIデータ分析無効",
+      "disableAiDataAnalysisDesc": "Windows AIがユーザーデータを分析してパーソナライズやレコメンドを行うことを防止",
+      "disableClickToDo": "Click to Do無効",
+      "disableClickToDoDesc": "WindowsのClick to Do AI機能を無効化",
+      "disableAiSettingsAgent": "AI設定エージェント無効",
+      "disableAiSettingsAgentDesc": "AI駆動の設定エージェント機能を無効化",
+      "disableAgentConnectors": "AI Agentコネクタ無効",
+      "disableAgentConnectorsDesc": "AIエージェントがコネクタを使用して外部サービスにアクセスすることを防止",
+      "disableAgentWorkspaces": "AI Agentワークスペース無効",
+      "disableAgentWorkspacesDesc": "WindowsのAI Agentワークスペース機能を無効化",
+      "disableRemoteAgentConnectors": "リモートAgentコネクタ無効",
+      "disableRemoteAgentConnectorsDesc": "AIエージェントがリモートコネクタを使用してリモートサービスにアクセスすることを防止"
     },
     "services": {
       "disableSensorSvc": "センサーサービス無効",
@@ -1793,6 +2015,134 @@
     "step2": "インストール後、「エンジン起動」をクリックして EQ オーディオ処理エンジンを起動します",
     "step3": "プリセットを選択するか、バンドスライダーをドラッグして EQ パラメーターを調整します。周波数応答曲線がリアルタイムで更新されます。",
     "step4": "完了したら、「エンジン停止」をクリックしてオーディオ処理を停止します。ドライバーはいつでもアンインストールできます。"
+  },
+  "storageClean": {
+    "title": "ストレージクリーンアップ",
+    "description": "システムの一時ファイル、キャッシュ、不要ファイルを削除してディスク容量を解放します",
+    "totalScanned": "スキャン合計",
+    "itemsFound": "検出項目",
+    "selectedSize": "選択サイズ",
+    "selectAll": "すべて選択",
+    "deselectAll": "すべて解除",
+    "emptyRecycleBin": "ごみ箱を空にする",
+    "scanning": "スキャン中...",
+    "cleanButton": "クリーンアップ開始",
+    "cleaning": "クリーンアップ中...",
+    "scanButton": "再スキャン",
+    "cleanSuccess": "クリーンアップ完了、{{size}} 解放しました",
+    "cleanError": "クリーンアップ失敗",
+    "scanError": "スキャン失敗",
+    "noItemSelected": "クリーンアップする項目を選択してください",
+    "skippedFiles": "使用中のファイル {{count}} 個をスキップしました",
+    "recycleBinEmpty": "ごみ箱を空にしました",
+    "recycleBinError": "ごみ箱を空にできませんでした",
+    "adminRequired": "管理者権限が必要",
+    "tabQuick": "クイッククリーン",
+    "tabJunk": "不要ファイル",
+    "tabBigFiles": "大容量ファイル",
+    "risk1": "安全",
+    "risk2": "低リスク",
+    "risk3": "中リスク",
+    "risk4": "高リスク",
+    "risk5": "危険",
+    "junkFileTotal": "不要ファイル数",
+    "junkScanning": "不要ファイルをスキャン中...",
+    "junkCleanButton": "選択項目を削除",
+    "junkCleaning": "削除中...",
+    "junkNoSelection": "削除するカテゴリを選択してください",
+    "junkCleanSuccess": "クリーンアップ完了、{{size}} 解放しました",
+    "junkCleanFailed": "{{count}} 個のファイルの削除に失敗しました",
+    "junkRebootPending": "{{count}} 個のファイルは再起動後に削除されます",
+    "junkFiles": "{{count}} 個のファイル",
+    "junkViewFiles": "ファイルを表示",
+    "junkHideFiles": "閉じる",
+    "junkEmpty": "削除可能な不要ファイルが見つかりません。「不要ファイルをスキャン」をクリックして開始してください",
+    "junkScanButton": "不要ファイルをスキャン",
+    "junkLoadMore": "さらに読み込む ({{count}})",
+    "bigDrive": "ドライブ選択",
+    "bigTopN": "スキャン件数",
+    "bigScanButton": "スキャン開始",
+    "bigScanning": "スキャン中...",
+    "bigCancelButton": "スキャン中止",
+    "bigScanned": "{{count}} 個のファイルをスキャンしました",
+    "bigFound": "最大のファイル {{count}} 個を検出",
+    "bigPath": "パス",
+    "bigSize": "サイズ",
+    "bigSource": "ソース",
+    "bigRisk": "リスク",
+    "bigEmpty": "データがありません。ドライブを選択してスキャンを開始してください",
+    "bigCancelTip": "スキャンを中止しました",
+    "bigScanError": "スキャン失敗",
+    "bigDriveRequired": "スキャンするドライブを選択してください",
+    "bigResults": "スキャン結果",
+    "bigAction": "操作",
+    "bigReveal": "フォルダーで表示",
+    "bigDelete": "強制削除",
+    "bigRevealError": "ファイルの場所を開けませんでした",
+    "bigDeleteError": "削除に失敗しました",
+    "bigDeleteSuccess": "削除しました、{{size}} 解放",
+    "bigDeleteFailed": "削除に失敗しました",
+    "bigDeleteConfirmTitle": "ファイル削除の確認",
+    "bigDeleteConfirmDesc": "次のファイルを完全に削除してもよろしいですか？この操作は元に戻せません。",
+    "bigDeleteConfirmWarn": "警告：このファイルは完全に削除され、ゴミ箱から復元できません！",
+    "bigDeleteConfirmButton": "削除を確認",
+    "bigDeleting": "削除中...",
+    "items": {
+      "temp_user": {
+        "name": "ユーザー一時ファイル",
+        "description": "プログラム実行時に生成される中間ファイル。安全に削除できます"
+      },
+      "temp_system": {
+        "name": "システム一時ファイル",
+        "description": "システムレベルの一時ファイル。管理者権限が必要です"
+      },
+      "recycle_bin": {
+        "name": "ごみ箱",
+        "description": "削除されたファイルの一時保管場所。空にするとディスク容量が解放されます"
+      },
+      "thumbnail_cache": {
+        "name": "サムネイルキャッシュ",
+        "description": "画像・動画のプレビューキャッシュ。削除後は自動的に再構築されます"
+      },
+      "prefetch": {
+        "name": "プリフェッチファイル",
+        "description": "プログラム起動のプリフェッチデータ。削除後は初回起動が少し遅くなります"
+      },
+      "wer_archive": {
+        "name": "エラー報告アーカイブ",
+        "description": "プログラムクラッシュのエラー報告アーカイブ"
+      },
+      "wer_queue": {
+        "name": "エラー報告キュー",
+        "description": "送信待ちのエラー報告"
+      },
+      "crash_dumps": {
+        "name": "クラッシュダンプ",
+        "description": "アプリケーションのクラッシュダンプファイル"
+      },
+      "memory_dmp": {
+        "name": "完全メモリダンプ",
+        "description": "ブルースクリーン時の完全なメモリダンプファイル"
+      },
+      "minidump": {
+        "name": "ミニダンプ",
+        "description": "ブルースクリーン時のミニダンプファイル。安全に削除できます"
+      },
+      "windows_logs": {
+        "name": "システムログ",
+        "description": "Windowsコンポーネントの実行ログ"
+      },
+      "thumbs_db": {
+        "name": "thumbs.db残骸",
+        "description": "旧Windowsのサムネイルキャッシュ残骸ファイル"
+      }
+    },
+    "tip": {
+      "title": "使い方のヒント",
+      "description": "ストレージクリーンアップでシステムの一時ファイルとキャッシュを安全に削除し、ディスク容量を解放できます。",
+      "note1": "• 管理者権限が必要な項目はクリーンアップ時に自動的に権限を要求します",
+      "note2": "• 使用中のファイルは自動的にスキップされ、システムに影響しません"
+    }
   }
 }
 

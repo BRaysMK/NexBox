@@ -23,6 +23,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
+import PowerAdvancedSettingsPanel from "@/components/power/power-advanced-settings-panel";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -297,19 +298,6 @@ export default function PowerManagementPage() {
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const tipBg = useColorModeValue(
-    "rgba(246,173,85,0.05)",
-    "rgba(246,173,85,0.1)"
-  );
-  const tipBorder = useColorModeValue(
-    "rgba(246,173,85,0.2)",
-    "rgba(246,173,85,0.25)"
-  );
-  const tipTitleColor = useColorModeValue("orange.700", "orange.300");
-  const tipTextColor = useColorModeValue(
-    "gray.600",
-    "rgba(200,200,200,0.85)"
-  );
 
   const [builtinPlans, setBuiltinPlans] = useState<BuiltinPowerPlan[]>([]);
   const [systemPlans, setSystemPlans] = useState<SystemPowerPlan[]>([]);
@@ -616,6 +604,17 @@ export default function PowerManagementPage() {
                     {activePlan.guid}
                   </Text>
                 </VStack>
+                <LiquidGlassButton
+                  size="sm"
+                  leftIcon={<RefreshCw size={14} />}
+                  onClick={loadData}
+                  isLoading={isLoading}
+                  variant="outline"
+                  colorScheme="gray"
+                >
+                  {t("optimization.powerManagement.refresh") ||
+                    t("shaderCache.scanButton")}
+                </LiquidGlassButton>
                 <Badge
                   borderRadius="full"
                   px={3}
@@ -729,39 +728,10 @@ export default function PowerManagementPage() {
             </Box>
           </HStack>
 
-          <HStack spacing={3} justify="start">
-            <LiquidGlassButton
-              leftIcon={<RefreshCw size={16} />}
-              onClick={loadData}
-              isLoading={isLoading}
-              variant="outline"
-              colorScheme="gray"
-            >
-              {t("optimization.powerManagement.refresh") ||
-                t("shaderCache.scanButton")}
-            </LiquidGlassButton>
-          </HStack>
-
-          <Box
-            p={5}
-            borderRadius="xl"
-            border="1px solid"
-            borderColor={tipBorder}
-            bg={tipBg}
-          >
-            <HStack mb={3}>
-              <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
-                {t("optimization.powerManagement.tipTitle")}
-              </Text>
-            </HStack>
-            <VStack align="start" spacing={2} pl={1}>
-              <Text fontSize="xs" color={tipTextColor} lineHeight="tall">
-                {t("optimization.powerManagement.tip")}
-              </Text>
-            </VStack>
-          </Box>
         </>
       )}
+
+      <PowerAdvancedSettingsPanel />
     </VStack>
   );
 

@@ -27,6 +27,14 @@ pub struct DriverStatus {
     pub needs_reboot: bool,
 }
 
+/// 音频输出设备信息（用于 EQ 设备选择）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioDevice {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+}
+
 /// EQ 频段信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EqBand {
@@ -708,8 +716,10 @@ fn schedule_reboot_delete(path: &std::path::Path) {
 }
 
 /// 启动 EQ 引擎（原生 WASAPI），并自动切换默认音频设备到 FxSound
+/// `device_name` 可选：指定要应用 EQ 的物理输出设备名称；
+/// 未指定时使用启动前的系统默认设备。
 #[tauri::command]
-pub async fn start_eq_engine(_app: AppHandle) -> Result<String, String> {
+pub async fn start_eq_engine(_app: AppHandle, device_name: Option<String>) -> Result<String, String> {
     // 检查是否已在运行
     {
         let guard = eq_engine().lock().map_err(|e| format!("锁错误: {}", e))?;
@@ -728,7 +738,19 @@ pub async fn start_eq_engine(_app: AppHandle) -> Result<String, String> {
 
     // 保存当前默认设备，切换到 FxSound 虚拟声卡（原生 COM，无 PowerShell）
     let prev_device = switch_default_audio_to_fxsound()?;
-    let physical_device_name = if prev_device.starts_with("PREV:") {
+    // 用户指定了物理设备则优先使用，否则使用启动前的默认设备
+    let physical_device_name = if let Some(name) = device_name {
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            prev_device.strip_prefix("PREV:").unwrap_or("").to_string()
+        } else {
+            log::info!("[eq] Using user-selected physical device: '{}'", name);
+            // 将用户选择的设备写入临时文件，供停止时恢复默认设备
+            let prev_file = std::env::temp_dir().join("nexbox_eq_prev_device.txt");
+            let _ = fs::write(&prev_file, &name);
+            name
+        }
+    } else if prev_device.starts_with("PREV:") {
         let name = prev_device[5..].to_string();
         log::info!("[eq] Previous device name: '{}'", name);
         name
@@ -958,6 +980,54 @@ pub fn get_default_audio_device() -> Result<String, String> {
 
         native_get_default_name(&enumerator)
             .ok_or_else(|| "No default audio device found".to_string())
+    })
+}
+
+/// 枚举所有活动的音频输出设备（排除 FxSound 虚拟声卡）
+/// 返回设备列表，其中 is_default 标记当前默认设备
+#[tauri::command]
+pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
+    run_com_thread(|| {
+        let enumerator: wa::IMMDeviceEnumerator = unsafe {
+            CoCreateInstance(&wa::MMDeviceEnumerator, None, CLSCTX_ALL)
+        }.map_err(|e| format!("CoCreateInstance failed: {}", e))?;
+
+        unsafe {
+            let collection = enumerator
+                .EnumAudioEndpoints(wa::eRender, wa::DEVICE_STATE_ACTIVE)
+                .map_err(|e| format!("EnumAudioEndpoints failed: {}", e))?;
+            let count = collection
+                .GetCount()
+                .map_err(|e| format!("GetCount failed: {}", e))?;
+
+            let default_id = enumerator
+                .GetDefaultAudioEndpoint(wa::eRender, wa::eConsole)
+                .ok()
+                .and_then(|d| get_device_id(&d).ok())
+                .unwrap_or_default();
+
+            let mut devices = Vec::new();
+            for i in 0..count {
+                let device = match collection.Item(i) {
+                    Ok(d) => d,
+                    Err(_) => continue,
+                };
+                let id = get_device_id(&device).unwrap_or_default();
+                let name = get_device_name(&device);
+                // 排除 FxSound 虚拟声卡
+                if name.to_lowercase().contains("fxsound") {
+                    continue;
+                }
+                let is_default = id == default_id;
+                devices.push(AudioDevice {
+                    id,
+                    name,
+                    is_default,
+                });
+            }
+            log::info!("[eq] Listed {} audio devices", devices.len());
+            Ok(devices)
+        }
     })
 }
 

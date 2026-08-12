@@ -24,6 +24,8 @@ import {
   ModalBody,
   ModalCloseButton,
   useDisclosure,
+  FormControl,
+  FormLabel,
 } from "@chakra-ui/react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -49,6 +51,7 @@ import {
   Save,
 } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { CustomSelect } from "@/components/special/custom-select";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { store } from "@/lib/store";
 
@@ -87,6 +90,12 @@ interface EngineStatus {
   pid: number | null;
 }
 
+interface AudioDevice {
+  id: string;
+  name: string;
+  is_default: boolean;
+}
+
 // ===== EQ 频段常量 =====
 const DEFAULT_EQ_FREQS = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 // 每个频段的固定频率范围
@@ -101,6 +110,7 @@ const EQ_STORE_SAVED = "eq-saved-preset-ids";
 const EQ_STORE_CUSTOM_BANDS = "eq-custom-bands";
 const EQ_STORE_PREAMP = "eq-preamp";
 const EQ_STORE_FX = "eq-effects";
+const EQ_STORE_DEVICE = "eq-device";
 
 // ===== 辅助函数 =====
 /** 将任意数量的 EQ 频段下采样到 10 个标准频段 */
@@ -457,6 +467,8 @@ export default function AudioEqPage() {
   const [preamp, setPreamp] = useState(0);
   const defaultFx = { clarity: 0, ambience: 0, width: 0, dynamics: 0, bass: 0 };
   const [fx, setFx] = useState(defaultFx);
+  const [devices, setDevices] = useState<AudioDevice[]>([]);
+  const [selectedDevice, setSelectedDevice] = useState("");
 
   const { isOpen: saveModalOpen, onOpen: onSaveModalOpen, onClose: onSaveModalClose } = useDisclosure();
   const CUSTOM_PRESET_ID = "__custom__";
@@ -472,7 +484,7 @@ export default function AudioEqPage() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [status, engine, presetList, savedId, savedBands, savedImported, savedUser, savedPreamp, savedFx] = await Promise.all([
+      const [status, engine, presetList, savedId, savedBands, savedImported, savedUser, savedPreamp, savedFx, devList, savedDevice] = await Promise.all([
         invoke<DriverStatus>("check_virtual_audio_driver"),
         invoke<EngineStatus>("get_eq_engine_status"),
         invoke<EqPreset[]>("get_eq_presets"),
@@ -482,6 +494,8 @@ export default function AudioEqPage() {
         store.get<string[]>(EQ_STORE_SAVED),
         store.get<number>(EQ_STORE_PREAMP),
         store.get<typeof defaultFx>(EQ_STORE_FX),
+        invoke<AudioDevice[]>("list_audio_devices"),
+        store.get<string>(EQ_STORE_DEVICE),
       ]);
       setDriverStatus(status);
       setEngineStatus(engine);
@@ -490,6 +504,15 @@ export default function AudioEqPage() {
       setSavedIds(savedUser ?? []);
       setPreamp(savedPreamp ?? 0);
       setFx(savedFx ?? defaultFx);
+      setDevices(devList ?? []);
+      // 恢复已保存的设备选择；若已保存设备仍存在则沿用，否则回退到默认设备
+      const savedDevName = savedDevice?.trim();
+      if (savedDevName && (devList ?? []).some((d) => d.name === savedDevName)) {
+        setSelectedDevice(savedDevName);
+      } else {
+        const def = (devList ?? []).find((d) => d.is_default);
+        setSelectedDevice(def?.name ?? "");
+      }
 
       if (presetList.length === 0) return;
 
@@ -613,7 +636,7 @@ export default function AudioEqPage() {
   const handleStartEngine = async () => {
     setStartingEngine(true);
     try {
-      await invoke("start_eq_engine");
+      await invoke("start_eq_engine", { deviceName: selectedDevice });
       // 引擎启动后，同步当前设置
       const bandTuples = bands.map((b) => [b.freq, b.gain] as [number, number]);
       await invoke("update_eq_bands", { bands: bandTuples }).catch(() => {});
@@ -667,6 +690,22 @@ export default function AudioEqPage() {
     setPreamp(gain);
     store.set(EQ_STORE_PREAMP, gain).then(() => store.save()).catch(() => {});
     invoke("update_eq_preamp", { gain }).catch(() => {});
+  };
+
+  // 选择输出设备
+  const handleDeviceChange = (deviceName: string) => {
+    setSelectedDevice(deviceName);
+    store.set(EQ_STORE_DEVICE, deviceName).then(() => store.save()).catch(() => {});
+  };
+
+  // 刷新设备列表
+  const handleRefreshDevices = async () => {
+    try {
+      const devList = await invoke<AudioDevice[]>("list_audio_devices");
+      setDevices(devList ?? []);
+    } catch (e) {
+      console.error("Failed to list audio devices:", e);
+    }
   };
 
   // 选择预设
@@ -1149,10 +1188,55 @@ ${bandsStr}`;
           </VStack>
         </LiquidGlassCard>
 
-        {/* 总增益 */}
+        {/* 音频设备选择 + 总增益 */}
         <LiquidGlassCard p={4}>
-          <HStack spacing={4} align="center">
-            <Text fontSize="sm" fontWeight="bold" color={headingColor} whiteSpace="nowrap">
+          <HStack spacing={4} align="center" flexWrap="wrap">
+            {/* 左侧：音频设备选择（Chakra UI FormControl） */}
+            <FormControl
+              minW="240px"
+              maxW="340px"
+              display="inline-flex"
+              flexDirection="row"
+              alignItems="center"
+              gap={2}
+              isDisabled={engineStatus.running}
+            >
+              <FormLabel
+                m={0}
+                fontSize="sm"
+                fontWeight="bold"
+                color={headingColor}
+                whiteSpace="nowrap"
+              >
+                音频设备
+              </FormLabel>
+              <Box
+                flex={1}
+                minW={0}
+                pointerEvents={engineStatus.running ? "none" : "auto"}
+                opacity={engineStatus.running ? 0.5 : 1}
+                transition="opacity 0.2s"
+              >
+                <CustomSelect
+                  value={selectedDevice}
+                  onChange={handleDeviceChange}
+                  options={devices.map((dev) => ({ value: dev.name, label: dev.name }))}
+                  width="100%"
+                  placeholder="选择音频设备"
+                />
+              </Box>
+              <IconButton
+                aria-label="刷新设备列表"
+                icon={<RefreshCw size={14} />}
+                size="sm"
+                variant="ghost"
+                onClick={handleRefreshDevices}
+                isDisabled={engineStatus.running}
+              />
+            </FormControl>
+
+            {/* 总增益 */}
+            <Text fontSize="sm" fontWeight="bold" color={headingColor} whiteSpace="nowrap" ml={2}>
               总增益
             </Text>
             <Box flex={1}>

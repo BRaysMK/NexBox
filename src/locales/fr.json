@@ -67,6 +67,110 @@
 "enterEdit": "Modifier la disposition",
 "exitEdit": "Quitter l'édition"
 },
+  "powerAdvanced": {
+    "title": "Paramètres avancés du processeur",
+    "description": "Ajustez les options d'alimentation avancées du CPU pour les performances, le refroidissement et la consommation",
+    "currentScheme": "Schéma d'alimentation actuel",
+    "refresh": "Actualiser",
+    "acLabel": "Sur secteur (AC)",
+    "dcLabel": "Sur batterie (DC)",
+    "percentUnit": "%",
+    "lockedTitle": "Paramètres avancés verrouillés",
+    "lockedDesc": "Les paramètres avancés du processeur affectent les stratégies d'alimentation de bas niveau et peuvent avoir un impact sur la consommation, la température et la durée de vie du matériel. Vous pouvez consulter les valeurs actuelles mais pas les modifier tant que c'est verrouillé.",
+    "unlockButton": "Déverrouiller les paramètres avancés",
+    "disclaimerTitle": "Avertissement",
+    "disclaimerText": "Les paramètres avancés du processeur modifient directement les paramètres de bas niveau de votre plan d'alimentation Windows, ce qui peut affecter la stabilité du système, la consommation et la durée de vie du matériel. NexBox n'est pas responsable des conséquences. Assurez-vous de comprendre chaque paramètre avant de le modifier et notez les valeurs actuelles pour pouvoir les restaurer.",
+    "agreeCheck": "Je comprends les risques et j'accepte de déverrouiller",
+    "cancel": "Annuler",
+    "confirmUnlock": "Accepter et déverrouiller",
+    "unlockSuccess": "Paramètres avancés déverrouillés",
+    "unlockFailed": "Échec du déverrouillage",
+    "stateRecommended": "Recommandé",
+    "stateDefault": "Par défaut",
+    "stateCustom": "Personnalisé",
+    "supported": "Pris en charge par le matériel actuel",
+    "notSupported": "Non pris en charge par le schéma actuel",
+    "hiddenHint": "Ce paramètre est masqué par défaut et sera affiché après le déverrouillage",
+    "setRecommended": "Définir sur Recommandé",
+    "setDefault": "Définir sur Par défaut",
+    "setRecommendedSuccess": "Valeurs recommandées appliquées",
+    "setRecommendedFailed": "Échec de l'application des valeurs recommandées",
+    "setDefaultSuccess": "Valeurs par défaut appliquées",
+    "setDefaultFailed": "Échec de l'application des valeurs par défaut",
+    "applyFailed": "Échec de l'application",
+    "applySuccess": "Modifications appliquées avec succès",
+    "applyChanges": "Appliquer les modifications",
+    "unlocking": "Déverrouillage en cours...",
+    "loadFailed": "Échec du chargement des paramètres avancés du processeur",
+    "unhideFailed": "Échec de l'affichage de certains paramètres",
+    "settings": {
+      "processorMinState": {
+        "title": "État minimal du processeur",
+        "desc": "Définit la vitesse CPU minimale autorisée en pourcentage de la fréquence maximale"
+      },
+      "processorMaxState": {
+        "title": "État maximal du processeur",
+        "desc": "Définit la vitesse CPU maximale autorisée en pourcentage de la fréquence maximale"
+      },
+      "systemCoolingPolicy": {
+        "title": "Politique de refroidissement système",
+        "desc": "Choisissez de ralentir d'abord le processeur (passif) ou d'accélérer d'abord les ventilateurs (actif) en cas de chaleur"
+      },
+      "processorBoostMode": {
+        "title": "Mode d'augmentation des performances",
+        "desc": "Contrôle l'agressivité avec laquelle votre CPU dépasse la fréquence de base pour les tâches exigeantes"
+      },
+      "increasePolicy": {
+        "title": "Politique d'augmentation des performances",
+        "desc": "Contrôle la rapidité d'accélération du CPU lorsque la charge augmente (pour les anciens processeurs non-HWP)"
+      },
+      "decreasePolicy": {
+        "title": "Politique de réduction des performances",
+        "desc": "Contrôle la rapidité de décélération du CPU lorsque la charge diminue (pour les anciens processeurs non-HWP)"
+      },
+      "coreParkingMin": {
+        "title": "Parking de cœurs minimum",
+        "desc": "Définit le pourcentage minimal de cœurs CPU qui doivent rester actifs et réactifs"
+      },
+      "coreParkingMax": {
+        "title": "Parking de cœurs maximum",
+        "desc": "Définit le pourcentage maximal de cœurs CPU autorisés à être actifs (100% pour de meilleures performances)"
+      },
+      "energyPreference": {
+        "title": "Préférence énergie/performance",
+        "desc": "Équilibre efficacité énergétique et performances pour les CPU modernes avec HWP (0 = performances maximales, 100 = efficacité maximale)"
+      },
+      "increaseThreshold": {
+        "title": "Seuil d'augmentation des performances",
+        "desc": "Définit le pourcentage d'utilisation CPU qui déclenche l'accélération (plus bas = plus réactif, pour les anciens CPU non-HWP)"
+      },
+      "decreaseThreshold": {
+        "title": "Seuil de réduction des performances",
+        "desc": "Définit le pourcentage d'utilisation CPU qui déclenche la décélération (plus bas = maintient mieux les performances, pour les anciens CPU non-HWP)"
+      }
+    },
+    "options": {
+      "coolingPolicy": {
+        "0": "Passif (ralentir le processeur)",
+        "1": "Actif (accélérer les ventilateurs)"
+      },
+      "boostMode": {
+        "0": "Désactivé",
+        "1": "Activé",
+        "2": "Agressif",
+        "3": "Efficace activé",
+        "4": "Efficace agressif",
+        "5": "Agressif garanti",
+        "6": "Efficace agressif garanti"
+      },
+      "policy": {
+        "0": "Idéal",
+        "1": "Unique",
+        "2": "Fusée",
+        "3": "Idéal agressif"
+      }
+    }
+  },
   "optimization": {
     "pageTitle": "Optimiser",
     "pageDesc": "Outils d'optimisation système et de performances",
@@ -295,6 +399,7 @@
     },
     "powerManagement": {
       "title": "Gestion de l'alimentation",
+      "tabPlans": "Plans d'alimentation",
       "description": "Importer et activer des plans d'alimentation optimisés pour de meilleures performances de jeu",
       "currentPlan": "Plan d'alimentation actuel",
       "builtinPlans": "Plans d'alimentation intégrés",
@@ -554,6 +659,34 @@
       "noImageYet": "Aucune image à télécharger",
       "previewAlt": "Aperçu de l'image aléatoire"
     }
+  },
+  "ai": {
+    "name": "BoxCat",
+    "personaTag": "Neko·Yandere",
+    "subtitle": "Assistante IA dédiée à NexBox",
+    "liveTag": "IA",
+    "entrySubtitle": "Cliquez pour discuter avec BoxCat~",
+    "welcome": "Miaou~ Je suis BoxCat ! Posez-moi n'importe quelle question sur NexBox (≧▽≦) Miaou~",
+    "inputPlaceholder": "Dites quelque chose à BoxCat~",
+    "inputPlaceholderWeb": "Recherche en cours… demandez-moi du neuf, miaou~",
+    "send": "Envoyer",
+    "clear": "Effacer la conversation",
+    "memory": "Mémoire",
+    "memoryTitle": "Mémoire",
+    "memoryPlaceholder": "Apprenez quelque chose à BoxCat…",
+    "builtin": "Intégré",
+    "memoryAdd": "Ajouter un souvenir",
+    "memoryEmpty": "Aucun souvenir personnalisé. Apprenez-en un à BoxCat ! Miaou~",
+    "web": "Web",
+    "webOn": "Recherche web : Activée",
+    "webOff": "Recherche web : Désactivée",
+    "webActive": "Recherche web activée — les réponses s'appuient sur les infos récentes, miaou~",
+    "searching": "Recherche en cours : ",
+    "searchResultTitle": "Résultats de recherche",
+    "searchNoResult": "Aucun résultat web pertinent trouvé, miaou",
+    "thinking": "Réflexion",
+    "stop": "Arrêter la réponse",
+    "stopped": "(réponse arrêtée)"
   },
   "hardware": {
     "title": "Informations matérielles",

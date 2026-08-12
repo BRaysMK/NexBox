@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LibreHardwareMonitor.Hardware;
 using System.Runtime.ExceptionServices;
 
@@ -8,6 +9,12 @@ class Program
 {
     private static Computer? _computer;
     private static readonly SensorVisitor _visitor = new(_ => { });
+
+    // JSON 兜底：允许 NaN / Infinity 序列化为字面量，避免整体序列化崩溃
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+    };
 
     static int Main(string[] args)
     {
@@ -137,7 +144,7 @@ class Program
             Sensors = sensors
         };
 
-        var json = JsonSerializer.Serialize(response);
+        var json = JsonSerializer.Serialize(response, _jsonOptions);
         output.WriteLine(json);
         output.Flush();
     }
@@ -156,6 +163,13 @@ class Program
                 if (!sensor.Value.HasValue)
                     continue;
 
+                var value = sensor.Value.Value;
+                // 过滤 NaN / Infinity / -Infinity：
+                // 这些值无法被 JSON 表达（会导致 JsonSerializer 抛异常），且对前端展示无意义
+                // 注：net48 上没有 float.IsFinite，用 IsNaN/IsInfinity 组合判断
+                if (float.IsNaN(value) || float.IsInfinity(value))
+                    continue;
+
                 var reading = new SensorReading
                 {
                     Hardware = hw.Name,
@@ -163,7 +177,7 @@ class Program
                     SubHardware = hw.SubHardware.Length > 0 ? hw.Name : null,
                     Name = sensor.Name,
                     SensorType = sensor.SensorType.ToString(),
-                    Value = sensor.Value.Value,
+                    Value = value,
                     Unit = GetUnit(sensor.SensorType)
                 };
 

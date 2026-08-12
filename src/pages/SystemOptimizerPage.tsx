@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
+import type { TFunction } from "i18next";
 import {
   Box,
   Heading,
@@ -22,12 +23,13 @@ import {
   ModalBody,
   ModalFooter,
 } from "@chakra-ui/react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { store } from "@/lib/store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import {
@@ -42,6 +44,232 @@ const STORE_KEY = "system_optimizer_states";
 const NOTICE_KEY = "system_optimizer_notice_agreed";
 const NOTICE_COUNTDOWN_SECONDS = 5;
 
+// ============ 模块级 memo 组件（避免因父组件重渲染导致卸载重挂载，保证 Switch 动画正常） ============
+
+interface OptimizeCardProps {
+  item: OptimizerItem;
+  state: boolean | string;
+  isToggling: boolean;
+  onToggle: (item: OptimizerItem, enable: boolean) => void;
+  onSelect: (item: OptimizerItem, value: string) => void;
+  headingColor: string;
+  subTextColor: string;
+  activeColor: string;
+  cardBg: string;
+  cardBorder: string;
+  liquidGlassEnabled: boolean;
+  t: TFunction;
+}
+
+const OptimizeCard = memo(function OptimizeCard({
+  item,
+  state,
+  isToggling,
+  onToggle,
+  onSelect,
+  headingColor,
+  subTextColor,
+  activeColor,
+  cardBg,
+  cardBorder,
+  liquidGlassEnabled,
+  t,
+}: OptimizeCardProps) {
+  const isSelect = item.type === "select";
+  const isOptimized = state === true;
+  const selectValue = isSelect && typeof state === "string" ? state : (item.defaultSelectValue ?? "");
+  const IconComponent = item.icon;
+
+  const content = (
+    <Flex justify="space-between" align="center" gap={3}>
+      <HStack spacing={3} align="center" flex={1} minW={0}>
+        <Box
+          w={10}
+          h={10}
+          borderRadius="lg"
+          bg={`${item.color}20`}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          color={item.color}
+          flexShrink={0}
+        >
+          <IconComponent size={20} />
+        </Box>
+        <Box minW={0} flex={1}>
+          <HStack spacing={2} align="center" flexWrap="wrap">
+            <Text
+              color={headingColor}
+              fontSize="sm"
+              fontWeight="bold"
+              noOfLines={1}
+            >
+              {t(item.titleKey)}
+            </Text>
+            {item.requiresReboot && (
+              <Tooltip label={t("systemOptimizer.requiresReboot")}>
+                <Badge
+                  fontSize="9px"
+                  colorScheme="orange"
+                  variant="subtle"
+                  borderRadius="full"
+                  px={1.5}
+                  lineHeight="1.2"
+                >
+                  REBOOT
+                </Badge>
+              </Tooltip>
+            )}
+          </HStack>
+          <Text color={subTextColor} fontSize="xs" noOfLines={2} mt={0.5}>
+            {t(item.descKey)}
+          </Text>
+        </Box>
+      </HStack>
+      {isSelect ? (
+        <Box
+          pointerEvents={isToggling ? "none" : "auto"}
+          opacity={isToggling ? 0.5 : 1}
+          flexShrink={0}
+        >
+          <CustomSelect
+            value={selectValue}
+            onChange={(v) => onSelect(item, v)}
+            options={(item.options ?? []).map((opt) => ({
+              value: opt.value,
+              label: t(opt.labelKey),
+            }))}
+            width="140px"
+          />
+        </Box>
+      ) : (
+        <Switch
+          isChecked={isOptimized}
+          isDisabled={isToggling}
+          onChange={() => onToggle(item, !isOptimized)}
+          sx={{
+            "& .chakra-switch__track[data-checked]": {
+              bg: activeColor,
+            },
+          }}
+          size="md"
+        />
+      )}
+    </Flex>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <LiquidGlassCard w="full" p={4}>
+        {content}
+      </LiquidGlassCard>
+    );
+  }
+
+  return (
+    <Box
+      w="full"
+      bg={cardBg}
+      borderRadius="xl"
+      border="1px solid"
+      borderColor={cardBorder}
+      p={4}
+    >
+      {content}
+    </Box>
+  );
+});
+
+interface CategorySectionProps {
+  category: OptimizerCategory;
+  items: OptimizerItem[];
+  savedStates: Record<string, boolean | string>;
+  togglingItems: Set<string>;
+  onToggle: (item: OptimizerItem, enable: boolean) => void;
+  onSelect: (item: OptimizerItem, value: string) => void;
+  headingColor: string;
+  subTextColor: string;
+  activeColor: string;
+  cardBg: string;
+  cardBorder: string;
+  liquidGlassEnabled: boolean;
+  t: TFunction;
+}
+
+const CategorySection = memo(function CategorySection({
+  category,
+  items,
+  savedStates,
+  togglingItems,
+  onToggle,
+  onSelect,
+  headingColor,
+  subTextColor,
+  activeColor,
+  cardBg,
+  cardBorder,
+  liquidGlassEnabled,
+  t,
+}: CategorySectionProps) {
+  if (items.length === 0) return null;
+
+  return (
+    <Box w="full">
+      <Heading
+        as="h3"
+        fontSize="md"
+        fontWeight="bold"
+        color={headingColor}
+        mb={3}
+        position="relative"
+        pl={3}
+        sx={{
+          "&::before": {
+            content: '""',
+            position: "absolute",
+            left: 0,
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: "3px",
+            height: "16px",
+            borderRadius: "full",
+            bg: activeColor,
+          },
+        }}
+      >
+        {t(categoryLabels[category])}
+      </Heading>
+      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
+        {items.map((item) => {
+          const v = savedStates[item.id];
+          const state = v !== undefined
+            ? v
+            : (item.type === "select" ? (item.defaultSelectValue ?? "") : false);
+          return (
+            <OptimizeCard
+              key={item.id}
+              item={item}
+              state={state}
+              isToggling={togglingItems.has(item.id)}
+              onToggle={onToggle}
+              onSelect={onSelect}
+              headingColor={headingColor}
+              subTextColor={subTextColor}
+              activeColor={activeColor}
+              cardBg={cardBg}
+              cardBorder={cardBorder}
+              liquidGlassEnabled={liquidGlassEnabled}
+              t={t}
+            />
+          );
+        })}
+      </SimpleGrid>
+    </Box>
+  );
+});
+
+// ============ 页面主组件 ============
+
 export default function SystemOptimizerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -49,12 +277,20 @@ export default function SystemOptimizerPage() {
   const toast = useToast();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
 
-  const [savedStates, setSavedStates] = useState<Record<string, boolean>>({});
+  const [savedStates, setSavedStatesState] = useState<Record<string, boolean | string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isBatchOptimizing, setIsBatchOptimizing] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [togglingItems, setTogglingItems] = useState<Set<string>>(new Set());
   const [showNotice, setShowNotice] = useState(false);
   const [noticeCountdown, setNoticeCountdown] = useState(NOTICE_COUNTDOWN_SECONDS);
+
+  // 用 ref 持有最新状态，确保 toggleItem/selectItem 引用稳定（配合 memo 生效）
+  const savedStatesRef = useRef<Record<string, boolean | string>>({});
+  const setSavedStates = useCallback((next: Record<string, boolean | string>) => {
+    savedStatesRef.current = next;
+    setSavedStatesState(next);
+  }, []);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -65,13 +301,21 @@ export default function SystemOptimizerPage() {
   const contrastText = getContrastTextColor();
   const hoverBg = getHoverColor(false);
 
+  // 按分类缓存优化项（稳定引用，配合 memo 生效）
+  const itemsByCategory = useMemo(() => {
+    const map = {} as Record<OptimizerCategory, OptimizerItem[]>;
+    for (const cat of categoryOrder) map[cat] = [];
+    for (const item of optimizerItems) map[item.category].push(item);
+    return map;
+  }, []);
+
   // 加载保存的状态
   useEffect(() => {
     let cancelled = false;
     async function init() {
       const startTime = Date.now();
       const savedResult = await Promise.allSettled([
-        store.get<Record<string, boolean>>(STORE_KEY),
+        store.get<Record<string, boolean | string>>(STORE_KEY),
         store.get<boolean>(NOTICE_KEY),
       ]);
       if (cancelled) return;
@@ -97,7 +341,7 @@ export default function SystemOptimizerPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setSavedStates]);
 
   // 5 秒倒计时
   useEffect(() => {
@@ -117,32 +361,97 @@ export default function SystemOptimizerPage() {
   };
 
   // 保存状态到持久化存储
-  const persistStates = useCallback(async (states: Record<string, boolean>) => {
+  const persistStates = useCallback(async (states: Record<string, boolean | string>) => {
     try {
       await store.set(STORE_KEY, states);
       await store.save();
     } catch {}
   }, []);
 
-  // 获取某个优化项的最终显示状态
-  const getItemState = useCallback(
-    (item: OptimizerItem): boolean => {
-      if (savedStates[item.id] !== undefined) return savedStates[item.id];
-      return false;
+  // 扫描当前优化项真实状态（读取注册表与应用 .reg 比对）
+  const handleScan = useCallback(
+    async (showToast = true) => {
+      setIsScanning(true);
+      try {
+        // 收集所有需要扫描的 reg 文件（select 类型扫描其全部选项）
+        const names: string[] = [];
+        for (const item of optimizerItems) {
+          if (item.type === "select") {
+            for (const opt of item.options ?? []) names.push(opt.regName);
+          } else {
+            names.push(item.regName);
+          }
+        }
+        const results = await invoke<{ name: string; applied: boolean }[]>(
+          "scan_registry_tweaks",
+          { names },
+        );
+        const map = new Map(results.map((r) => [r.name, r.applied]));
+        const newSaved: Record<string, boolean | string> = {};
+        let optimizedCount = 0;
+        for (const item of optimizerItems) {
+          if (item.type === "select") {
+            const matched = (item.options ?? []).find((opt) => map.get(opt.regName) === true);
+            const val = matched?.value ?? item.defaultSelectValue ?? "";
+            newSaved[item.id] = val;
+            if (val !== item.defaultSelectValue) optimizedCount++;
+          } else {
+            const applied = map.get(item.regName) === true;
+            newSaved[item.id] = applied;
+            if (applied) optimizedCount++;
+          }
+        }
+        setSavedStates(newSaved);
+        persistStates(newSaved);
+        if (showToast) {
+          toast({
+            title: t("systemOptimizer.scanComplete"),
+            description: t("systemOptimizer.scanResult", {
+              count: optimizedCount,
+              total: optimizerItems.length,
+            }),
+            status: "success",
+            duration: 2500,
+            isClosable: true,
+          });
+        }
+      } catch (err) {
+        if (showToast) {
+          toast({
+            title: t("systemOptimizer.scanError"),
+            description: String(err),
+            status: "error",
+            duration: 3000,
+            isClosable: true,
+          });
+        }
+      } finally {
+        setIsScanning(false);
+      }
     },
-    [savedStates],
+    [persistStates, setSavedStates, toast, t],
   );
 
-  // 执行单个优化项
+  // 加载完成后自动扫描一次优化项真实状态（不弹提示）
+  const didAutoScan = useRef(false);
+  useEffect(() => {
+    if (isLoading || didAutoScan.current) return;
+    didAutoScan.current = true;
+    handleScan(false);
+  }, [isLoading, handleScan]);
+
+  // 执行单个优化项（乐观更新：立即翻转开关状态以获得流畅动画，后台执行注册表写入）
   const toggleItem = useCallback(
     async (item: OptimizerItem, enable: boolean) => {
       const cmd = enable ? "apply_registry_tweak" : "restore_registry_tweak";
       setTogglingItems((prev) => new Set(prev).add(item.id));
+      const prevVal = savedStatesRef.current[item.id];
+      // 乐观更新开关状态，让过渡动画立即播放
+      const optimistic = { ...savedStatesRef.current, [item.id]: enable };
+      setSavedStates(optimistic);
       try {
         await invoke(cmd, { name: item.regName });
-        const newSaved = { ...savedStates, [item.id]: enable };
-        setSavedStates(newSaved);
-        persistStates(newSaved);
+        persistStates(optimistic);
         toast({
           title: enable
             ? t("systemOptimizer.optimized")
@@ -153,6 +462,9 @@ export default function SystemOptimizerPage() {
           isClosable: true,
         });
       } catch (err) {
+        // 失败时回滚开关状态
+        const rollback = { ...savedStatesRef.current, [item.id]: prevVal };
+        setSavedStates(rollback);
         toast({
           title: t("systemOptimizer.operationError"),
           description: String(err),
@@ -168,18 +480,67 @@ export default function SystemOptimizerPage() {
         });
       }
     },
-    [savedStates, persistStates, toast, t],
+    [persistStates, setSavedStates, toast, t],
+  );
+
+  // 执行 select 类型优化项（下拉切换时应用对应选项的 reg 文件）
+  const selectItem = useCallback(
+    async (item: OptimizerItem, value: string) => {
+      const option = item.options?.find((opt) => opt.value === value);
+      if (!option) return;
+      setTogglingItems((prev) => new Set(prev).add(item.id));
+      const prevVal = savedStatesRef.current[item.id];
+      const optimistic = { ...savedStatesRef.current, [item.id]: value };
+      setSavedStates(optimistic);
+      try {
+        await invoke("apply_registry_tweak", { name: option.regName });
+        persistStates(optimistic);
+        toast({
+          title: t("systemOptimizer.optimized"),
+          description: t(item.titleKey),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      } catch (err) {
+        const rollback = { ...savedStatesRef.current, [item.id]: prevVal };
+        setSavedStates(rollback);
+        toast({
+          title: t("systemOptimizer.operationError"),
+          description: String(err),
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      } finally {
+        setTogglingItems((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+      }
+    },
+    [persistStates, setSavedStates, toast, t],
   );
 
   // 全部优化
   const handleBatchEnable = useCallback(async () => {
     setIsBatchOptimizing(true);
     try {
-      const names = optimizerItems.map((item) => item.regName);
+      const names = optimizerItems.map((item) => {
+        // select 类型应用默认选中值对应的 reg 文件
+        if (item.type === "select") {
+          const def = item.options?.find((opt) => opt.value === item.defaultSelectValue);
+          return def?.regName ?? item.regName;
+        }
+        return item.regName;
+      });
       await invoke("batch_apply_registry_tweaks", { names });
-      const newSaved: Record<string, boolean> = {};
+      const newSaved: Record<string, boolean | string> = {};
       for (const item of optimizerItems) {
-        newSaved[item.id] = true;
+        newSaved[item.id] = item.type === "select"
+          ? (item.defaultSelectValue ?? "")
+          : true;
       }
       setSavedStates(newSaved);
       persistStates(newSaved);
@@ -200,7 +561,7 @@ export default function SystemOptimizerPage() {
     } finally {
       setIsBatchOptimizing(false);
     }
-  }, [persistStates, toast, t]);
+  }, [persistStates, setSavedStates, toast, t]);
 
   // 全部恢复
   const handleBatchDisable = useCallback(async () => {
@@ -208,9 +569,11 @@ export default function SystemOptimizerPage() {
     try {
       const names = optimizerItems.map((item) => item.regName);
       await invoke("batch_restore_registry_tweaks", { names });
-      const newSaved: Record<string, boolean> = {};
+      const newSaved: Record<string, boolean | string> = {};
       for (const item of optimizerItems) {
-        newSaved[item.id] = false;
+        newSaved[item.id] = item.type === "select"
+          ? (item.defaultSelectValue ?? "")
+          : false;
       }
       setSavedStates(newSaved);
       persistStates(newSaved);
@@ -231,135 +594,7 @@ export default function SystemOptimizerPage() {
     } finally {
       setIsBatchOptimizing(false);
     }
-  }, [persistStates, toast, t]);
-
-  // 优化项卡片
-  function OptimizeCard({ item }: { item: OptimizerItem }) {
-    const isOptimized = getItemState(item);
-    const isToggling = togglingItems.has(item.id);
-    const IconComponent = item.icon;
-
-    const content = (
-      <Flex justify="space-between" align="center" gap={3}>
-        <HStack spacing={3} align="center" flex={1} minW={0}>
-          <Box
-            w={10}
-            h={10}
-            borderRadius="lg"
-            bg={`${item.color}20`}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            color={item.color}
-            flexShrink={0}
-          >
-            <IconComponent size={20} />
-          </Box>
-          <Box minW={0} flex={1}>
-            <HStack spacing={2} align="center" flexWrap="wrap">
-              <Text
-                color={headingColor}
-                fontSize="sm"
-                fontWeight="bold"
-                noOfLines={1}
-              >
-                {t(item.titleKey)}
-              </Text>
-              {item.requiresReboot && (
-                <Tooltip label={t("systemOptimizer.requiresReboot")}>
-                  <Badge
-                    fontSize="9px"
-                    colorScheme="orange"
-                    variant="subtle"
-                    borderRadius="full"
-                    px={1.5}
-                    lineHeight="1.2"
-                  >
-                    REBOOT
-                  </Badge>
-                </Tooltip>
-              )}
-            </HStack>
-            <Text color={subTextColor} fontSize="xs" noOfLines={2} mt={0.5}>
-              {t(item.descKey)}
-            </Text>
-          </Box>
-        </HStack>
-        <Switch
-          isChecked={isOptimized}
-          isDisabled={isToggling}
-          onChange={() => toggleItem(item, !isOptimized)}
-          sx={{
-            "& .chakra-switch__track[data-checked]": {
-              bg: activeColor,
-            },
-          }}
-          size="md"
-        />
-      </Flex>
-    );
-
-    if (liquidGlassEnabled) {
-      return (
-        <LiquidGlassCard w="full" p={4}>
-          {content}
-        </LiquidGlassCard>
-      );
-    }
-
-    return (
-      <Box
-        w="full"
-        bg={cardBg}
-        borderRadius="xl"
-        border="1px solid"
-        borderColor={cardBorder}
-        p={4}
-      >
-        {content}
-      </Box>
-    );
-  }
-
-  // 分类分组渲染
-  function CategorySection({ category }: { category: OptimizerCategory }) {
-    const items = optimizerItems.filter((item) => item.category === category);
-    if (items.length === 0) return null;
-
-    return (
-      <Box w="full">
-        <Heading
-          as="h3"
-          fontSize="md"
-          fontWeight="bold"
-          color={headingColor}
-          mb={3}
-          position="relative"
-          pl={3}
-          sx={{
-            "&::before": {
-              content: '""',
-              position: "absolute",
-              left: 0,
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: "3px",
-              height: "16px",
-              borderRadius: "full",
-              bg: activeColor,
-            },
-          }}
-        >
-          {t(categoryLabels[category])}
-        </Heading>
-        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
-          {items.map((item) => (
-            <OptimizeCard key={item.id} item={item} />
-          ))}
-        </SimpleGrid>
-      </Box>
-    );
-  }
+  }, [persistStates, setSavedStates, toast, t]);
 
   // 加载中
   if (isLoading) {
@@ -413,6 +648,21 @@ export default function SystemOptimizerPage() {
         <HStack spacing={2}>
           <Button
             size="sm"
+            onClick={() => handleScan(true)}
+            isLoading={isScanning}
+            loadingText={t("systemOptimizer.scanning")}
+            leftIcon={<RefreshCw size={16} />}
+            variant="outline"
+            sx={{
+              borderColor: activeColor,
+              color: activeColor,
+              _hover: { bg: hoverBg },
+            }}
+          >
+            {t("systemOptimizer.scanStatus")}
+          </Button>
+          <Button
+            size="sm"
             onClick={handleBatchEnable}
             isLoading={isBatchOptimizing}
             loadingText={t("systemOptimizer.optimizing")}
@@ -442,15 +692,23 @@ export default function SystemOptimizerPage() {
 
       {/* 优化项分类列表 */}
       {categoryOrder.map((cat) => (
-        <CategorySection key={cat} category={cat} />
+        <CategorySection
+          key={cat}
+          category={cat}
+          items={itemsByCategory[cat]}
+          savedStates={savedStates}
+          togglingItems={togglingItems}
+          onToggle={toggleItem}
+          onSelect={selectItem}
+          headingColor={headingColor}
+          subTextColor={subTextColor}
+          activeColor={activeColor}
+          cardBg={cardBg}
+          cardBorder={cardBorder}
+          liquidGlassEnabled={liquidGlassEnabled}
+          t={t}
+        />
       ))}
-
-      {/* 致谢标注 */}
-      <Box w="full" textAlign="center" mt={2}>
-        <Text fontSize="xs" color={subTextColor}>
-          {t("systemOptimizer.credits")}
-        </Text>
-      </Box>
 
       {/* 温馨提示弹窗 */}
       <Modal

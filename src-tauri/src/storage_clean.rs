@@ -212,13 +212,6 @@ pub async fn scan_storage_items() -> Result<ScanResult, String> {
             "应用程序崩溃转储文件"
         ));
 
-        items.push(scan_clean_item(
-            "d3dscache",
-            "DirectX着色器缓存",
-            local.join("D3DSCache"),
-            false,
-            "显卡着色器编译缓存"
-        ));
     }
 
     items.push(scan_clean_item(
@@ -475,13 +468,6 @@ pub async fn clean_storage_items(item_ids: Vec<String>) -> Result<CleanResult, S
             }
             "windows_logs" => {
                 clean_dir_contents(&windows_dir.join("Logs"))
-            }
-            "d3dscache" => {
-                if let Some(local) = &local_app_data {
-                    clean_dir_contents(&local.join("D3DSCache"))
-                } else {
-                    (0, Vec::new())
-                }
             }
             "thumbs_db" => {
                 clean_thumbs_db_files("C:")

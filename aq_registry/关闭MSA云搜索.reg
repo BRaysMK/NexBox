@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+;关闭MSA云搜索 - 禁止搜索使用 Microsoft 账户云服务
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\SearchSettings]
+"IsMSACloudSearchEnabled"=dword:00000000

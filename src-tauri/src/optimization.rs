@@ -2582,90 +2582,100 @@ fn clear_service_failure_actions(service_name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Helper: grant Administrators write access to a protected service registry key.
-/// Uses PowerShell .NET API to take ownership and grant access (the only reliable way
-/// for ACL-protected keys like wuauserv).
-fn grant_service_key_access(service_name: &str) -> Result<(), String> {
-    let ps_script = format!(
-        r#"
-        $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubkey('SYSTEM\CurrentControlSet\Services\{}', [Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree, [System.Security.AccessControl.RegistryRights]::TakeOwnership)
-        $acl = $key.GetAccessControl()
-        $me = [System.Security.Principal.NTAccount]'Administrators'
-        $acl.SetOwner($me)
-        $key.SetAccessControl($acl)
-        $acl = $key.GetAccessControl()
-        $rule = New-Object System.Security.AccessControl.RegistryAccessRule($me, 'FullControl', 'ContainerInherit', 'None', 'Allow')
-        $acl.SetAccessRule($rule)
-        $key.SetAccessControl($acl)
-        $key.Close()
-        "#,
-        service_name
-    );
+/// Helper: set a service start type.
+/// Preferred method: `sc.exe config` — goes through the SCM (Service Control Manager)
+/// official API, which updates the service configuration reliably even for ACL-protected
+/// services (wuauserv/UsoSvc/WaaSMedicSvc are owned by TrustedInstaller). Direct reg add
+/// on those keys is silently ignored in some environments (reg add returns 0 but the
+/// value is unchanged), which is exactly the bug we observed.
+/// start_type: 2=auto, 3=demand, 4=disabled
+/// Returns Err if the start type could not be set (so callers don't claim success).
+fn set_service_start_reg(service_name: &str, start_type: u32) -> Result<(), String> {
+    let type_str = match start_type {
+        2 => "auto",
+        3 => "demand",
+        4 => "disabled",
+        _ => return Err(format!("未知的启动类型: {}", start_type)),
+    };
 
-    let output = std::process::Command::new("powershell.exe")
-        .args(&["-NoProfile", "-NonInteractive", "-Command", &ps_script])
+    // Method 1: sc.exe config (SCM API) — the official & reliable way.
+    // NOTE: "start=" and the value MUST be separate args. sc.exe parses them as
+    // two tokens ("start= disabled"); a single "start= disabled" arg would be
+    // quoted by Rust and rejected with "无效 start= 参数".
+    let sc_output = std::process::Command::new("sc.exe")
+        .args(["config", service_name, "start=", type_str])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .map_err(|e| format!("执行 PowerShell 权限获取失败: {}", e))?;
+        .map_err(|e| format!("执行 sc.exe config 失败: {}", e))?;
 
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        let out = String::from_utf8_lossy(&output.stdout);
-        let msg = if err.trim().is_empty() { out.trim() } else { err.trim() };
-        log::warn!("grant_service_key_access {} 输出: {}", service_name, msg);
-        // Don't fail — try reg add anyway
+    if sc_output.status.success() {
+        let out = String::from_utf8_lossy(&sc_output.stdout);
+        let err = String::from_utf8_lossy(&sc_output.stderr);
+        log::info!(
+            "sc.exe config {} start={} 输出: {} {}",
+            service_name, type_str,
+            out.trim(), err.trim()
+        );
+        // Verify through the registry (SCM writes Start there as well).
+        if get_service_start(service_name) == Some(start_type) {
+            log::info!("服务 {} Start={} 设置成功 (sc config)", service_name, start_type);
+            return Ok(());
+        }
+        log::warn!(
+            "sc.exe config 后注册表 Start 仍为 {:?}，尝试 reg add",
+            get_service_start(service_name)
+        );
+    } else {
+        let err = String::from_utf8_lossy(&sc_output.stderr);
+        let out = String::from_utf8_lossy(&sc_output.stdout);
+        log::warn!(
+            "sc.exe config {} start= {} 失败: {} {}",
+            service_name, type_str,
+            out.trim(), err.trim()
+        );
     }
-    Ok(())
-}
 
-/// Helper: set a service start type via reg.exe with PowerShell ownership fallback.
-/// start_type: 2=auto, 3=demand, 4=disabled
-fn set_service_start_reg(service_name: &str, start_type: u32) -> Result<(), String> {
-    // First try: direct reg add
+    // Method 2 (fallback): direct reg add, retried up to 3 times with verification.
+    // Note: for TrustedInstaller-protected keys this may silently no-op; WaaSMedicSvc
+    // is fully covered by the DLL rename step in disable_windows_update instead.
     let cmd = format!(
         "reg add \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\{}\" /v Start /t REG_DWORD /d {} /f",
         service_name, start_type
     );
-    let output = std::process::Command::new("cmd.exe")
-        .args(&["/c", &cmd])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行 cmd/reg 失败: {}", e))?;
+    let mut last_msg = String::new();
+    for attempt in 1..=3 {
+        let output = std::process::Command::new("cmd.exe")
+            .args(&["/c", &cmd])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("执行 cmd/reg 失败: {}", e))?;
 
-    if output.status.success() {
-        return Ok(());
+        if output.status.success() {
+            let after = get_service_start(service_name);
+            log::info!("reg add 尝试 {} 后 {} Start = {:?}", attempt, service_name, after);
+            if after == Some(start_type) {
+                log::info!("服务 {} Start={} 设置成功 (reg add)", service_name, start_type);
+                return Ok(());
+            }
+            last_msg = format!("写入后 Start = {:?}", after);
+        } else {
+            last_msg = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        }
+        thread::sleep(Duration::from_millis(200 * attempt as u64));
     }
-
-    // First try failed — take ownership via PowerShell .NET API and retry
-    log::info!("reg add 直接写入失败，尝试获取注册表键所有权...");
-    let _ = grant_service_key_access(service_name);
-
-    // Retry reg add after taking ownership
-    let output2 = std::process::Command::new("cmd.exe")
-        .args(&["/c", &cmd])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行 cmd/reg (retry) 失败: {}", e))?;
-
-    if !output2.status.success() {
-        let err = String::from_utf8_lossy(&output2.stderr);
-        let out = String::from_utf8_lossy(&output2.stdout);
-        let msg = if err.trim().is_empty() { out.trim() } else { err.trim() };
-        log::error!("设置服务 {} Start={} 最终失败: {}", service_name, start_type, msg);
-        // Return Ok anyway — non-fatal, the policy + schtasks still apply
-        return Ok(());
-    }
-    log::info!("服务 {} Start={} 设置成功 (retry)", service_name, start_type);
-    Ok(())
+    Err(format!("设置服务 {} Start={} 失败: {}", service_name, start_type, last_msg))
 }
 
 /// Helper: control a service (stop/start).
+/// For STOP, it sends the stop control and waits (with retries) until the service
+/// actually reaches the STOPPED state, so the running check reflects reality.
 unsafe fn control_service(service_name: &str, control: u32) -> Result<(), String> {
     use windows_sys::Win32::System::Services::{
         OpenSCManagerW, OpenServiceW, ControlService, CloseServiceHandle, StartServiceW,
         QueryServiceStatus,
         SC_MANAGER_CONNECT, SERVICE_STOP, SERVICE_START,
-        SERVICE_QUERY_STATUS, SERVICE_STOPPED,
+        SERVICE_QUERY_STATUS, SERVICE_STOPPED, SERVICE_RUNNING, SERVICE_START_PENDING,
+        SERVICE_STOP_PENDING, SERVICE_CONTINUE_PENDING, SERVICE_PAUSE_PENDING, SERVICE_PAUSED,
         SERVICE_CONTROL_STOP,
     };
 
@@ -2684,17 +2694,58 @@ unsafe fn control_service(service_name: &str, control: u32) -> Result<(), String
         return Ok(());
     }
 
+    let mut status: windows_sys::Win32::System::Services::SERVICE_STATUS = std::mem::zeroed();
+
     if control == SERVICE_CONTROL_STOP {
-        // Query status first to see if it's running
-        let mut status: windows_sys::Win32::System::Services::SERVICE_STATUS = std::mem::zeroed();
-        let qs_ret = QueryServiceStatus(svc, &mut status);
-        if qs_ret != 0 && status.dwCurrentState != SERVICE_STOPPED {
-            let mut s = std::mem::zeroed();
-            ControlService(svc, SERVICE_CONTROL_STOP, &mut s);
+        let _ = QueryServiceStatus(svc, &mut status);
+        // Skip if already stopped
+        if status.dwCurrentState == SERVICE_STOPPED {
+            CloseServiceHandle(svc);
+            CloseServiceHandle(scm);
+            return Ok(());
+        }
+
+        // Send stop control, retrying while it is still stopping
+        for _ in 0..3 {
+            if status.dwCurrentState == SERVICE_STOPPED {
+                break;
+            }
+            if status.dwCurrentState != SERVICE_STOP_PENDING {
+                let mut s = std::mem::zeroed();
+                ControlService(svc, SERVICE_CONTROL_STOP, &mut s);
+            }
+            // Wait for the stop to progress (wait up to ~30s total)
+            for _ in 0..20 {
+                thread::sleep(Duration::from_millis(250));
+                let _ = QueryServiceStatus(svc, &mut status);
+                if status.dwCurrentState == SERVICE_STOPPED {
+                    break;
+                }
+                // Stop pending may need multiple wait hints; keep polling
+                if status.dwCurrentState == SERVICE_RUNNING
+                    || status.dwCurrentState == SERVICE_START_PENDING
+                    || status.dwCurrentState == SERVICE_CONTINUE_PENDING
+                    || status.dwCurrentState == SERVICE_PAUSE_PENDING
+                    || status.dwCurrentState == SERVICE_PAUSED
+                {
+                    break; // stop attempt apparently failed / not progressing; try again
+                }
+            }
+            if status.dwCurrentState == SERVICE_STOPPED {
+                break;
+            }
         }
     } else {
         // Start
         StartServiceW(svc, 0, std::ptr::null_mut());
+        // Wait for start to complete
+        for _ in 0..20 {
+            thread::sleep(Duration::from_millis(250));
+            let _ = QueryServiceStatus(svc, &mut status);
+            if status.dwCurrentState == SERVICE_RUNNING || status.dwCurrentState == SERVICE_STOPPED {
+                break;
+            }
+        }
     }
 
     CloseServiceHandle(svc);
@@ -2710,68 +2761,178 @@ fn kill_process(name: &str) {
         .output();
 }
 
-/// Helper: run schtasks to disable or enable Windows Update scheduled tasks.
+/// Helper: disable or enable Windows Update scheduled tasks via schtasks.exe (no PowerShell).
+/// Tasks that Windows refuses to toggle (e.g. "Refresh Group Policy Cache" is
+/// TrustedInstaller-protected and can NEVER be disabled by any tool) are skipped with
+/// a warning instead of failing the whole operation — same behavior as Winhance.
 fn schtasks_wu_tasks(enable: bool) -> Result<(), String> {
-    let action = if enable { "/enable" } else { "/disable" };
+    let sch_action = if enable { "/enable" } else { "/disable" };
 
-    // Dynamically enumerate all tasks under \Microsoft\Windows\WindowsUpdate
-    let output = std::process::Command::new("cmd.exe")
-        .args(&["/c", "schtasks /query /fo csv /nh"])
+    // One full query to get task name + current status.
+    // CSV format: "TaskName","Next Run Time","Status"
+    let query = std::process::Command::new("schtasks")
+        .args(["/query", "/fo", "csv", "/nh"])
         .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行 schtasks /query 失败: {}", e))?;
+        .output();
 
-    let out = String::from_utf8_lossy(&output.stdout);
-    let mut task_names: Vec<String> = Vec::new();
+    let out = match query {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => {
+            log::warn!("schtasks /query 失败，无法处理计划任务");
+            return Ok(());
+        }
+    };
 
+    // Collect tasks belonging to WU-related folders, with their current status.
+    let mut tasks: Vec<(String, String)> = Vec::new();
     for line in out.lines() {
-        // CSV format: "TaskName","Next Run Time","Status"
-        if line.to_lowercase().contains("windowsupdate") {
-            // Extract task name from CSV (first field)
-            if let Some(name) = line.split(',').next() {
-                let name = name.trim().trim_matches('"');
-                if !name.is_empty() {
-                    task_names.push(name.to_string());
-                }
-            }
+        if line.trim().is_empty() {
+            continue;
+        }
+        let lower = line.to_lowercase();
+        if !(lower.contains("windowsupdate")
+            || lower.contains("updateorchestrator")
+            || lower.contains("waasmedic")
+            || lower.contains("updateassistant")
+            || lower.contains("installservice"))
+        {
+            continue;
+        }
+        let fields: Vec<&str> = line.split(',').collect();
+        if fields.len() < 3 {
+            continue;
+        }
+        let name = fields[0].trim().trim_matches('"').to_string();
+        let status = fields[2].trim().trim_matches('"').to_string();
+        if name.is_empty() {
+            continue;
+        }
+        if !tasks.iter().any(|(n, _)| n == &name) {
+            tasks.push((name, status));
         }
     }
 
-    log::info!("找到 {} 个 WindowsUpdate 计划任务: {:?}", task_names.len(), task_names);
+    log::info!("找到 {} 个 Windows Update 相关计划任务", tasks.len());
 
-    if task_names.is_empty() {
-        log::warn!("未找到任何 WindowsUpdate 计划任务，跳过");
+    if tasks.is_empty() {
+        log::warn!("未找到任何 Windows Update 计划任务，跳过");
         return Ok(());
     }
 
-    for task_path in &task_names {
+    let mut skipped: Vec<String> = Vec::new();
+    let mut changed: usize = 0;
+    let mut already: usize = 0;
+
+    for (task_path, status) in &tasks {
+        // schtasks output language depends on system locale (Disabled / 已禁用).
+        let is_disabled = status.eq_ignore_ascii_case("Disabled") || status == "已禁用";
+        let is_ready = status.eq_ignore_ascii_case("Ready") || status == "就绪";
+        // Skip tasks already in the desired state (fast path, no schtasks call).
+        if enable && is_disabled {
+            log::info!("计划任务 {} 已禁用，需启用", task_path);
+        } else if enable && is_ready {
+            already += 1;
+            continue;
+        } else if !enable && is_disabled {
+            already += 1;
+            continue;
+        }
+
         let result = std::process::Command::new("schtasks")
-            .args(&["/change", "/tn", task_path, action])
+            .args(&["/change", "/tn", task_path, sch_action])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
 
         match result {
             Ok(output) => {
-                let out_str = String::from_utf8_lossy(&output.stdout);
-                let err_str = String::from_utf8_lossy(&output.stderr);
                 if output.status.success() {
-                    log::info!("schtasks {} {} -> 成功", action, task_path);
+                    log::info!(
+                        "schtasks {} {} -> 成功",
+                        sch_action,
+                        task_path
+                    );
+                    changed += 1;
                 } else {
-                    log::warn!("schtasks {} {} -> {} {}", action, task_path, out_str.trim(), err_str.trim());
+                    let out_str = String::from_utf8_lossy(&output.stdout);
+                    let err_str = String::from_utf8_lossy(&output.stderr);
+                    log::warn!(
+                        "schtasks {} {} -> {} {}",
+                        sch_action,
+                        task_path,
+                        out_str.trim(),
+                        err_str.trim()
+                    );
+                    // Windows-protected task (e.g. Refresh Group Policy Cache).
+                    // It cannot be toggled even by SYSTEM; skip, not fatal.
+                    skipped.push(task_path.clone());
                 }
             }
             Err(e) => {
                 log::error!("schtasks 调用失败: {}", e);
+                skipped.push(task_path.clone());
             }
         }
     }
 
+    log::info!(
+        "计划任务处理完成: 成功 {} 个，跳过 {} 个，已处于目标状态 {} 个",
+        changed,
+        skipped.len(),
+        already
+    );
+
     Ok(())
 }
 
-/// Check if any WU scheduled task is disabled.
-/// 直接读 TaskCache 注册表（State=1 表示已禁用），无需启动 PowerShell，毫秒级完成。
+/// Check if any WU scheduled task is disabled — via `schtasks.exe /query` (no PowerShell).
+/// A task is considered "disabled" if its CSV Status is "Disabled".
+/// Lenient: any disabled WindowsUpdate task (e.g. "Scheduled Start") counts as success.
+/// Note: "Refresh Group Policy Cache" is Windows-protected and can never be disabled
+/// by any tool, so it is excluded from the judgment.
 fn check_schtasks_wu_disabled() -> bool {
+    let output = std::process::Command::new("schtasks")
+        .args(["/query", "/fo", "csv", "/nh"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    let out = match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => {
+            log::warn!("schtasks /query 失败，回退到注册表 TaskCache");
+            return check_schtasks_wu_disabled_registry();
+        }
+    };
+
+    let mut disabled_any = false;
+    for line in out.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        // CSV: "TaskName","Next Run Time","Status"
+        let lower = line.to_lowercase();
+        if !(lower.contains("windowsupdate")
+            || lower.contains("updateorchestrator")
+            || lower.contains("waasmedic"))
+        {
+            continue;
+        }
+        let fields: Vec<&str> = line.split(',').collect();
+        if fields.len() >= 3 {
+            let status = fields[2].trim().trim_matches('"');
+            // schtasks output language depends on system locale (Disabled / 已禁用).
+            if status.eq_ignore_ascii_case("Disabled") || status == "已禁用" {
+                let name = fields[0].trim().trim_matches('"');
+                log::info!("已禁用的计划任务: {}", name);
+                disabled_any = true;
+            }
+        }
+    }
+
+    disabled_any
+}
+
+/// Fallback: check the TaskCache registry for a disabled State (used if PowerShell fails).
+fn check_schtasks_wu_disabled_registry() -> bool {
     const TREE_PATH: &str =
         r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\Microsoft\Windows\WindowsUpdate";
     const TASKS_PATH: &str =
@@ -2813,9 +2974,119 @@ fn check_schtasks_wu_disabled() -> bool {
     }
 }
 
+/// Rename the critical Windows Update DLLs (WaaSMedicSvc.dll, wuaueng.dll) to a
+/// ._BAK.dll backup. This is the key hardening step (based on Chris Titus / Winhance):
+/// even if Windows re-enables WaaSMedicSvc, the service cannot run without its DLL,
+/// so Windows Update stays fully disabled.
+/// Returns (renamed, skipped).
+fn rename_critical_update_dlls() -> (Vec<String>, Vec<String>) {
+    const DLLS: [&str; 2] = ["WaaSMedicSvc.dll", "wuaueng.dll"];
+    let sys32 = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+    let sys32 = format!(r"{}\System32", sys32);
+
+    let mut renamed = Vec::new();
+    let mut skipped = Vec::new();
+
+    for dll in DLLS {
+        let dll_path = format!(r"{}\{}", sys32, dll);
+        let backup_path = format!(r"{}\{}", sys32, dll.replace(".dll", "_BAK.dll"));
+
+        if !Path::new(&dll_path).exists() {
+            if Path::new(&backup_path).exists() {
+                renamed.push(dll.to_string()); // already renamed previously
+            } else {
+                skipped.push(format!("{} (不存在)", dll));
+            }
+            continue;
+        }
+
+        if Path::new(&backup_path).exists() {
+            // Original exists AND backup exists: stale backup, remove it first
+            let _ = std::process::Command::new("takeown")
+                .args(["/f", &backup_path])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+            let _ = std::process::Command::new("icacls")
+                .args([&backup_path, "/grant", "*S-1-1-0:F"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+            let _ = fs::remove_file(&backup_path);
+        }
+
+        // take ownership + grant full control, then rename
+        let _ = std::process::Command::new("takeown")
+            .args(["/f", &dll_path])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        let _ = std::process::Command::new("icacls")
+            .args([&dll_path, "/grant", "*S-1-1-0:F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+
+        if let Err(e) = fs::rename(&dll_path, &backup_path) {
+            log::warn!("重命名 {} 失败: {}", dll, e);
+            skipped.push(format!("{} ({})", dll, e));
+        } else {
+            log::info!("已重命名 {} -> _BAK.dll", dll);
+            renamed.push(dll.to_string());
+        }
+    }
+
+    (renamed, skipped)
+}
+
+/// Restore the critical Windows Update DLLs from their _BAK.dll backups.
+fn restore_critical_update_dlls() {
+    const DLLS: [&str; 2] = ["WaaSMedicSvc.dll", "wuaueng.dll"];
+    let sys32 = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+    let sys32 = format!(r"{}\System32", sys32);
+
+    for dll in DLLS {
+        let dll_path = format!(r"{}\{}", sys32, dll);
+        let backup_path = format!(r"{}\{}", sys32, dll.replace(".dll", "_BAK.dll"));
+
+        if !Path::new(&backup_path).exists() {
+            continue;
+        }
+
+        let _ = std::process::Command::new("takeown")
+            .args(["/f", &backup_path])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        let _ = std::process::Command::new("icacls")
+            .args([&backup_path, "/grant", "*S-1-1-0:F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+
+        if Path::new(&dll_path).exists() {
+            // System already restored it; remove stale backup
+            let _ = fs::remove_file(&backup_path);
+            log::info!("{} 已恢复，删除多余备份", dll);
+        } else if let Err(e) = fs::rename(&backup_path, &dll_path) {
+            log::warn!("恢复 {} 失败: {}", dll, e);
+        } else {
+            log::info!("已恢复 {}", dll);
+        }
+    }
+}
+
+/// Clean up the Windows Update download cache folder.
+fn cleanup_software_distribution() {
+    let sysroot = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+    let path = format!(r"{}\SoftwareDistribution", sysroot);
+    // No PowerShell: clear the folder via cmd rd /s /q (ignore failures — files may be in use).
+    let cmd = format!("rd /s /q \"{}\"", path);
+    let _ = std::process::Command::new("cmd.exe")
+        .args(&["/c", &cmd])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+    log::info!("已清理 SoftwareDistribution 文件夹");
+}
+
 #[tauri::command]
 pub async fn disable_windows_update() -> Result<String, String> {
     log::info!("开始关闭 Windows Update...");
+    let mut warnings: Vec<String> = Vec::new();
 
     // 1. Stop services
     let services = ["wuauserv", "UsoSvc", "WaaSMedicSvc"];
@@ -2831,19 +3102,35 @@ pub async fn disable_windows_update() -> Result<String, String> {
     log::info!("终止 UsoClient.exe 进程");
     kill_process("UsoClient.exe");
 
-    // 3. Set service start types to disabled (4) via registry (bypass SCM protection)
+    // 3. Set service start types to disabled (4) + clear failure actions
     for svc in &services {
         log::info!("禁用服务启动: {}", svc);
-        set_service_start_reg(svc, 4)
-            .unwrap_or_else(|e| log::error!("禁用 {} 服务启动失败: {}", svc, e));
-        // Verify the write
+        if let Err(e) = set_service_start_reg(svc, 4) {
+            log::error!("禁用 {} 服务启动失败: {}", svc, e);
+            warnings.push(format!("{}: {}", svc, e));
+        }
         let after = get_service_start(svc);
-        log::info!("服务 {} 写入后 Start = {:?}", svc, after);
+        log::info!("服务 {} 禁用后 Start = {:?}", svc, after);
+        if after != Some(4) {
+            warnings.push(format!("{} 的 Start 值未生效(当前={:?})", svc, after));
+        }
         clear_service_failure_actions(svc)
             .unwrap_or_else(|e| log::error!("清空失败恢复 {} 失败: {}", svc, e));
     }
 
-    // 4. Registry: Set NoAutoUpdate=1, AUOptions=1
+    // 4. Disable scheduled tasks (protected ones are skipped, not fatal)
+    log::info!("禁用 Windows Update 计划任务");
+    schtasks_wu_tasks(false)?;
+
+    // 5. Rename critical DLLs — this is what truly prevents WaaSMedicSvc/wuaueng
+    //    from being revived even if Windows tries to repair them.
+    log::info!("重命名关键 Windows Update DLL");
+    let (renamed, skipped) = rename_critical_update_dlls();
+    if renamed.is_empty() {
+        warnings.push(format!("未能重命名任何关键 DLL: {:?}", skipped));
+    }
+
+    // 6. Registry policies
     log::info!("设置注册表策略: NoAutoUpdate, AUOptions");
     let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
     let (wu_key, _) = hklm.create_subkey(
@@ -2859,36 +3146,47 @@ pub async fn disable_windows_update() -> Result<String, String> {
     wu_policy_key.set_value("DisableWindowsUpdateAccess", &1u32)
         .unwrap_or_else(|e| log::info!("DisableWindowsUpdateAccess 设置跳过（非 Pro/Enterprise 系统）: {}", e));
 
-    // 5. Disable scheduled tasks
-    log::info!("禁用 Windows Update 计划任务");
-    schtasks_wu_tasks(false)?;
+    // 7. Clean up downloaded update files
+    log::info!("清理 Windows Update 下载缓存");
+    cleanup_software_distribution();
 
-    log::info!("Windows Update 关闭完成");
-    Ok("ok".to_string())
+    if warnings.is_empty() {
+        log::info!("Windows Update 已彻底关闭");
+        Ok("Windows Update 已彻底关闭".to_string())
+    } else {
+        log::warn!("Windows Update 关闭完成，但有警告: {:?}", warnings);
+        Ok(format!("Windows Update 已关闭（部分项需注意: {}）", warnings.join("; ")))
+    }
 }
 
 #[tauri::command]
 pub async fn enable_windows_update() -> Result<String, String> {
     log::info!("开始恢复 Windows Update...");
+    let mut warnings: Vec<String> = Vec::new();
 
-    // 1. Restore service start types via registry: wuauserv=3 (demand), UsoSvc=2 (auto), WaaSMedicSvc=2 (auto)
+    // 1. Restore critical DLLs first (they block the update services)
+    log::info!("恢复关键 Windows Update DLL");
+    restore_critical_update_dlls();
+
+    // 2. Restore service start types
     let services_config = [
-        ("wuauserv", 3u32),
-        ("UsoSvc", 2u32),
-        ("WaaSMedicSvc", 2u32),
+        ("wuauserv", 3u32),   // demand
+        ("UsoSvc", 2u32),     // auto
+        ("WaaSMedicSvc", 3u32), // demand
     ];
 
     for (svc, start_type) in &services_config {
         log::info!("恢复服务启动类型: {} -> {}", svc, start_type);
-        set_service_start_reg(svc, *start_type)
-            .unwrap_or_else(|e| log::error!("恢复 {} 服务启动类型失败: {}", svc, e));
+        if let Err(e) = set_service_start_reg(svc, *start_type) {
+            warnings.push(format!("{}: {}", svc, e));
+            log::error!("恢复 {} 服务启动类型失败: {}", svc, e);
+        }
     }
 
-    // 2. Registry: Delete policy keys
+    // 3. Registry: Delete policy keys
     log::info!("删除注册表策略键值");
     let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
 
-    // Delete NoAutoUpdate and AUOptions
     if let Ok(wu_key) = hklm.open_subkey_with_flags(
         r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU",
         winreg::enums::KEY_SET_VALUE
@@ -2897,7 +3195,6 @@ pub async fn enable_windows_update() -> Result<String, String> {
         let _ = wu_key.delete_value("AUOptions");
     }
 
-    // Delete DisableWindowsUpdateAccess
     if let Ok(wu_policy_key) = hklm.open_subkey_with_flags(
         r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate",
         winreg::enums::KEY_SET_VALUE
@@ -2905,12 +3202,16 @@ pub async fn enable_windows_update() -> Result<String, String> {
         let _ = wu_policy_key.delete_value("DisableWindowsUpdateAccess");
     }
 
-    // 3. Enable scheduled tasks
+    // 4. Enable scheduled tasks
     log::info!("启用 Windows Update 计划任务");
     schtasks_wu_tasks(true)?;
 
     log::info!("Windows Update 恢复完成");
-    Ok("ok".to_string())
+    if warnings.is_empty() {
+        Ok("Windows Update 已恢复".to_string())
+    } else {
+        Ok(format!("Windows Update 已恢复（部分项需注意: {}）", warnings.join("; ")))
+    }
 }
 
 /// Check service Start value via registry (simpler and more reliable than SCM query).
@@ -2953,12 +3254,33 @@ fn get_service_start(service_name: &str) -> Option<u32> {
     None
 }
 
+/// Check whether the critical Windows Update DLLs have been renamed to backups
+/// (the strongest indicator that WU is disabled — services can't run without them).
+fn are_update_dlls_renamed() -> bool {
+    const DLLS: [&str; 2] = ["WaaSMedicSvc.dll", "wuaueng.dll"];
+    let sys32 = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+    let sys32 = format!(r"{}\System32", sys32);
+
+    DLLS.iter().any(|dll| {
+        let dll_path = format!(r"{}\{}", sys32, dll);
+        let backup_path = format!(r"{}\{}", sys32, dll.replace(".dll", "_BAK.dll"));
+        Path::new(&backup_path).exists() && !Path::new(&dll_path).exists()
+    })
+}
+
 #[tauri::command]
 pub async fn check_windows_update_state() -> Result<serde_json::Value, String> {
     let services_to_check = ["wuauserv", "UsoSvc", "WaaSMedicSvc"];
     let services_disabled = services_to_check.iter().all(|svc| {
             get_service_start(svc).map_or(false, |st| st == 4)
         });
+    log::info!(
+        "check_windows_update_state: services_disabled={} (wuauserv={:?} UsoSvc={:?} WaaSMedicSvc={:?})",
+        services_disabled,
+        get_service_start("wuauserv"),
+        get_service_start("UsoSvc"),
+        get_service_start("WaaSMedicSvc"),
+    );
 
     // Check registry: NoAutoUpdate == 1?
     let hklm = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE);
@@ -2969,12 +3291,23 @@ pub async fn check_windows_update_state() -> Result<serde_json::Value, String> {
     }).map_or(false, |v| v == 1);
 
     let scheduler_disabled = check_schtasks_wu_disabled();
-    let all_disabled = services_disabled && policy_set && scheduler_disabled;
+    let dlls_renamed = are_update_dlls_renamed();
+    log::info!(
+        "check_windows_update_state: policy_set={} scheduler_disabled={} dlls_renamed={}",
+        policy_set,
+        scheduler_disabled,
+        dlls_renamed,
+    );
+    // "Disabled" is determined by the strongest signals: services + DLL rename.
+    // scheduler/policy are treated as contributing factors (some tasks like
+    // "Refresh Group Policy Cache" are Windows-protected and can never be disabled).
+    let all_disabled = services_disabled && dlls_renamed;
 
     let result = serde_json::json!({
         "services_disabled": services_disabled,
         "policy_set": policy_set,
         "scheduler_disabled": scheduler_disabled,
+        "dlls_renamed": dlls_renamed,
         "all_disabled": all_disabled,
     });
 
@@ -3235,6 +3568,122 @@ fn open_or_create_reg_key(path: &str) -> Result<RegKey, String> {
     Ok(key)
 }
 
+/// 只读打开注册表键（不存在时返回 Err），用于扫描优化项状态
+fn open_reg_key_readonly(path: &str) -> Result<RegKey, String> {
+    let (root, subpath) = if let Some(sub) = path.strip_prefix("HKEY_LOCAL_MACHINE\\") {
+        (RegKey::predef(HKEY_LOCAL_MACHINE), sub)
+    } else if let Some(sub) = path.strip_prefix("HKEY_CURRENT_USER\\") {
+        (RegKey::predef(HKEY_CURRENT_USER), sub)
+    } else if let Some(sub) = path.strip_prefix("HKEY_CLASSES_ROOT\\") {
+        (RegKey::predef(HKEY_CLASSES_ROOT), sub)
+    } else if let Some(sub) = path.strip_prefix("HKEY_USERS\\") {
+        (RegKey::predef(HKEY_USERS), sub)
+    } else {
+        return Err(format!("不支持的注册表根键: {}", path));
+    };
+
+    root.open_subkey_with_flags(subpath, KEY_READ)
+        .map_err(|e| format!("打开注册表键失败: {} - {}", path, e))
+}
+
+/// 检查单个注册表值是否与 .reg 目标一致（dword / 字符串 / 删除值）
+fn check_reg_entry_matches(key: &RegKey, name: &str, value: &str) -> bool {
+    if let Some(hex_str) = value.strip_prefix("dword:") {
+        // 目标为 DWORD 值
+        match u32::from_str_radix(hex_str, 16) {
+            Ok(expected) => match key.get_value::<u32, _>(name) {
+                Ok(v) => v == expected,
+                Err(_) => false,
+            },
+            Err(_) => false,
+        }
+    } else if value.starts_with('"') && value.ends_with('"') {
+        // 目标为字符串值
+        let expected = value[1..value.len() - 1].replace("\\\"", "\"");
+        match key.get_value::<String, _>(name) {
+            Ok(v) => v == expected,
+            Err(_) => false,
+        }
+    } else if value == "-" {
+        // 目标为删除值：当前值不存在才视为匹配
+        key.get_raw_value(name).is_err()
+    } else {
+        false
+    }
+}
+
+/// 扫描 .reg 应用文件：所有条目均与注册表当前状态一致才算已优化
+fn scan_reg_content(content: &str) -> Result<bool, String> {
+    let mut current_key: Option<RegKey> = None;
+    let mut all_match = true;
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        if line.is_empty() || line.starts_with(';') || line.starts_with("Windows Registry Editor") {
+            continue;
+        }
+
+        // [HKEY_LOCAL_MACHINE\SYSTEM\...] — 注册表键路径
+        if line.starts_with('[') && line.ends_with(']') {
+            let path = &line[1..line.len() - 1];
+            current_key = open_reg_key_readonly(path).ok();
+            continue;
+        }
+
+        if let Some(rest) = line.strip_prefix('"') {
+            if let Some(eq_pos) = rest.find("\"=") {
+                let name = rest[..eq_pos].replace("\\\"", "\"");
+                let value = &rest[eq_pos + 2..];
+
+                let matched = match &current_key {
+                    Some(key) => check_reg_entry_matches(key, &name, value),
+                    // 键不存在：dword/字符串目标值必然不匹配；删除值目标视为已匹配
+                    None => value == "-",
+                };
+                if !matched {
+                    all_match = false;
+                }
+            }
+        }
+    }
+
+    Ok(all_match)
+}
+
+/// 单个优化项的扫描结果
+#[derive(serde::Serialize)]
+pub struct TweakScanResult {
+    pub name: String,
+    pub applied: bool,
+}
+
+/// 批量扫描优化项当前状态（读取 aq_registry/<name>.reg 与注册表当前值比对）
+#[tauri::command]
+pub async fn scan_registry_tweaks(names: Vec<String>) -> Result<Vec<TweakScanResult>, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    // 扫描同样为阻塞的注册表读取，放入后台线程避免卡顿 UI
+    tokio::task::spawn_blocking(move || {
+        let mut results = Vec::with_capacity(names.len());
+        for name in &names {
+            let applied = match read_reg_file(name, false) {
+                Ok(content) => scan_reg_content(&content).unwrap_or(false),
+                Err(_) => false,
+            };
+            results.push(TweakScanResult {
+                name: name.clone(),
+                applied,
+            });
+        }
+        Ok(results)
+    })
+    .await
+    .map_err(|e| format!("扫描线程异常: {}", e))?
+}
+
 /// 应用单个注册表优化（读取 aq_registry/<name>.reg 并通过 winreg 写入）
 #[tauri::command]
 pub async fn apply_registry_tweak(name: String) -> Result<PerfTweakResult, String> {
@@ -3242,13 +3691,17 @@ pub async fn apply_registry_tweak(name: String) -> Result<PerfTweakResult, Strin
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let content = read_reg_file(&name, false)?;
-    apply_reg_content(&content)?;
-
-    Ok(PerfTweakResult {
-        success: true,
-        message: "优化已应用".to_string(),
+    // 注册表读写为阻塞操作，放入后台线程执行，避免卡顿主线程 UI
+    tokio::task::spawn_blocking(move || {
+        let content = read_reg_file(&name, false)?;
+        apply_reg_content(&content)?;
+        Ok(PerfTweakResult {
+            success: true,
+            message: "优化已应用".to_string(),
+        })
     })
+    .await
+    .map_err(|e| format!("优化执行线程异常: {}", e))?
 }
 
 /// 恢复单个注册表优化（读取 aq_registry_restore/<name>.restore.reg 并通过 winreg 写入）
@@ -3258,13 +3711,16 @@ pub async fn restore_registry_tweak(name: String) -> Result<PerfTweakResult, Str
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let content = read_reg_file(&name, true)?;
-    apply_reg_content(&content)?;
-
-    Ok(PerfTweakResult {
-        success: true,
-        message: "优化已恢复".to_string(),
+    tokio::task::spawn_blocking(move || {
+        let content = read_reg_file(&name, true)?;
+        apply_reg_content(&content)?;
+        Ok(PerfTweakResult {
+            success: true,
+            message: "优化已恢复".to_string(),
+        })
     })
+    .await
+    .map_err(|e| format!("恢复执行线程异常: {}", e))?
 }
 
 /// 批量应用注册表优化
@@ -3274,41 +3730,45 @@ pub async fn batch_apply_registry_tweaks(names: Vec<String>) -> Result<PerfTweak
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let mut success_count = 0;
-    let mut failed = Vec::new();
+    tokio::task::spawn_blocking(move || {
+        let mut success_count = 0;
+        let mut failed = Vec::new();
 
-    for name in &names {
-        match read_reg_file(name, false) {
-            Ok(content) => {
-                if let Err(e) = apply_reg_content(&content) {
+        for name in &names {
+            match read_reg_file(name, false) {
+                Ok(content) => {
+                    if let Err(e) = apply_reg_content(&content) {
+                        failed.push((name.clone(), e));
+                    } else {
+                        success_count += 1;
+                    }
+                }
+                Err(e) => {
                     failed.push((name.clone(), e));
-                } else {
-                    success_count += 1;
                 }
             }
-            Err(e) => {
-                failed.push((name.clone(), e));
-            }
         }
-    }
 
-    if failed.is_empty() {
-        Ok(PerfTweakResult {
-            success: true,
-            message: format!("成功应用 {} 项优化", success_count),
-        })
-    } else {
-        let failed_names: Vec<String> = failed.iter().map(|(n, _)| n.clone()).collect();
-        Ok(PerfTweakResult {
-            success: failed.len() < names.len(),
-            message: format!(
-                "成功 {} 项，失败 {} 项: {}",
-                success_count,
-                failed.len(),
-                failed_names.join(", ")
-            ),
-        })
-    }
+        if failed.is_empty() {
+            Ok(PerfTweakResult {
+                success: true,
+                message: format!("成功应用 {} 项优化", success_count),
+            })
+        } else {
+            let failed_names: Vec<String> = failed.iter().map(|(n, _)| n.clone()).collect();
+            Ok(PerfTweakResult {
+                success: failed.len() < names.len(),
+                message: format!(
+                    "成功 {} 项，失败 {} 项: {}",
+                    success_count,
+                    failed.len(),
+                    failed_names.join(", ")
+                ),
+            })
+        }
+    })
+    .await
+    .map_err(|e| format!("批量优化线程异常: {}", e))?
 }
 
 /// 批量恢复注册表优化
@@ -3318,41 +3778,45 @@ pub async fn batch_restore_registry_tweaks(names: Vec<String>) -> Result<PerfTwe
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    let mut success_count = 0;
-    let mut failed = Vec::new();
+    tokio::task::spawn_blocking(move || {
+        let mut success_count = 0;
+        let mut failed = Vec::new();
 
-    for name in &names {
-        match read_reg_file(name, true) {
-            Ok(content) => {
-                if let Err(e) = apply_reg_content(&content) {
+        for name in &names {
+            match read_reg_file(name, true) {
+                Ok(content) => {
+                    if let Err(e) = apply_reg_content(&content) {
+                        failed.push((name.clone(), e));
+                    } else {
+                        success_count += 1;
+                    }
+                }
+                Err(e) => {
                     failed.push((name.clone(), e));
-                } else {
-                    success_count += 1;
                 }
             }
-            Err(e) => {
-                failed.push((name.clone(), e));
-            }
         }
-    }
 
-    if failed.is_empty() {
-        Ok(PerfTweakResult {
-            success: true,
-            message: format!("成功恢复 {} 项优化", success_count),
-        })
-    } else {
-        let failed_names: Vec<String> = failed.iter().map(|(n, _)| n.clone()).collect();
-        Ok(PerfTweakResult {
-            success: failed.len() < names.len(),
-            message: format!(
-                "成功 {} 项，失败 {} 项: {}",
-                success_count,
-                failed.len(),
-                failed_names.join(", ")
-            ),
-        })
-    }
+        if failed.is_empty() {
+            Ok(PerfTweakResult {
+                success: true,
+                message: format!("成功恢复 {} 项优化", success_count),
+            })
+        } else {
+            let failed_names: Vec<String> = failed.iter().map(|(n, _)| n.clone()).collect();
+            Ok(PerfTweakResult {
+                success: failed.len() < names.len(),
+                message: format!(
+                    "成功 {} 项，失败 {} 项: {}",
+                    success_count,
+                    failed.len(),
+                    failed_names.join(", ")
+                ),
+            })
+        }
+    })
+    .await
+    .map_err(|e| format!("批量恢复线程异常: {}", e))?
 }
 
 /// 重启显卡驱动（模拟 Win+Ctrl+Shift+B）

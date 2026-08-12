@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "hqeF0NeDhvQ=",
+  "dgSpecHash": "pg4jsi+6trs=",
   "success": true,
-  "projectFilePath": "D:\\NexBox\\monitor\\NexBoxMonitor.csproj",
+  "projectFilePath": "d:\\NexBox\\monitor\\NexBoxMonitor.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\MuLiu\\.nuget\\packages\\blacksharp.core\\1.0.7\\blacksharp.core.1.0.7.nupkg.sha512",
     "C:\\Users\\MuLiu\\.nuget\\packages\\diskinfotoolkit\\1.1.2\\diskinfotoolkit.1.1.2.nupkg.sha512",

@@ -1,6 +1,6 @@
 {
   "name": "nexbox-installer",
-  "version": "7.4.7",
+  "version": "7.6.0",
   "private": true,
   "type": "module",
   "scripts": {

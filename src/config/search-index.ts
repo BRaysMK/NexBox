@@ -39,6 +39,7 @@ import {
   Archive,
   Rocket,
   LineChart,
+  ShieldCheck,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -279,7 +280,7 @@ export const searchIndex: SearchItem[] = [
     path: "/optimize/power-management",
     icon: Battery,
     category: "optimization",
-    keywords: ["电源", "管理", "power", "management", "电源计划", "高性能"],
+    keywords: ["电源", "管理", "power", "management", "电源计划", "高性能", "处理器", "CPU", "散热", "boost", "睿频", "核心停放", "高级设置"],
   },
   {
     id: "storage-clean",
@@ -328,6 +329,14 @@ export const searchIndex: SearchItem[] = [
     icon: Braces,
     category: "builtin-tool",
     keywords: ["运行库", "运行库修复", "运行库补全", "vc++", "vc", "redist", "visual c++", "directx", "dx", ".net", "net framework", "runtime", "修复", "缺失", "库"],
+  },
+  {
+    id: "vtx-virtualization",
+    nameKey: "sidebar.vtxVirtualization",
+    path: "/vtx-virtualization",
+    icon: ShieldCheck,
+    category: "builtin-tool",
+    keywords: ["VT-X", "vt-x", "VTX", "虚拟化", "virtualization", "内存完整性", "内核隔离", "hypervisor", "hyper-v", "hyperv", "VBS", "HypervisorEnforcedCodeIntegrity", "弹窗", "反作弊", "安全中心"],
   },
   {
     id: "network-optimizer",

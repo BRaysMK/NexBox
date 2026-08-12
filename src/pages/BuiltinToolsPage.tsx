@@ -18,6 +18,7 @@ import {
   MousePointerClick,
   Gauge,
   Braces,
+  ShieldCheck,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
@@ -144,6 +145,14 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.runtimeRepair",
     descriptionKey: "builtinTools.runtimeRepairDesc",
     color: "#4A90E2",
+  },
+  {
+    id: "vtx-virtualization",
+    path: "/vtx-virtualization",
+    icon: ShieldCheck,
+    titleKey: "sidebar.vtxVirtualization",
+    descriptionKey: "builtinTools.vtxVirtualizationDesc",
+    color: "#38A169",
   },
 ];
 

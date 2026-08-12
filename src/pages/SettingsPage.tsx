@@ -195,6 +195,7 @@ function GeneralSettings() {
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [randomImageEnabled, setRandomImageEnabled] = useState(true);
@@ -338,6 +339,15 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_game_win_key_card_enabled");
         if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
+      }
+
+      // 盒子喵 AI 卡片显示（store 持久化，默认开启）
+      v = await store.get<boolean>("nexbox_ai_enabled");
+      if (v !== null && v !== undefined) {
+        setAiEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_ai_enabled");
+        if (ls !== null) setAiEnabled(ls === "true");
       }
 
       // 反馈
@@ -567,6 +577,14 @@ function GeneralSettings() {
     store.set("nexbox_random_image_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_random_image_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("random-image-setting-changed", { detail: newValue }));
+  };
+
+  const handleAiToggle = () => {
+    const newValue = !aiEnabled;
+    setAiEnabled(newValue);
+    store.set("nexbox_ai_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_ai_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("ai-setting-changed", { detail: newValue }));
   };
 
   // 标题用户名：留空时使用系统用户名
@@ -909,6 +927,22 @@ function GeneralSettings() {
                 size="md"
                 isChecked={homeHardwareModelEnabled}
                 onChange={handleHomeHardwareModelToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.aiEntryLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.aiEntryDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={aiEnabled}
+                onChange={handleAiToggle}
               />
             </HStack>
             <Divider />
@@ -2981,7 +3015,7 @@ function AboutSettings() {
   const graphicLogoSrc = useColorModeValue("/logo/NBB.png", "/logo/NBW.png");
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
 
-  const currentVersion = "7.4.7";
+  const currentVersion = "7.6.0";
   const [currentRelease, setCurrentRelease] = useState<GiteeRelease | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

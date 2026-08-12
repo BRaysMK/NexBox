@@ -1,3 +1,5 @@
+mod ai;
+mod web_search;
 mod announcement;
 mod audio_engine;
 mod audio_eq;
@@ -32,7 +34,9 @@ mod nvidia_driver_download;
 mod runtime_repair;
 mod optimization;
 mod overlay_panel;
+mod power_settings;
 mod vertical_overlay;
+mod vtx_virtualization;
 
 mod sensor;
 mod sensor_monitor;
@@ -44,6 +48,7 @@ mod startup_manager;
 mod steam;
 mod speedtest;
 mod storage_clean;
+mod storage_scan;
 mod thirdparty_tools;
 mod tray;
 mod uapi;
@@ -498,10 +503,15 @@ pub fn run() {
         optimization::import_power_plan,
         optimization::activate_power_plan,
         optimization::import_and_activate_power_plan,
+        // === 处理器电源高级设置 ===
+        power_settings::get_power_advanced_settings,
+        power_settings::set_power_advanced_setting,
+        power_settings::unhide_power_advanced_settings,
         optimization::apply_registry_tweak,
         optimization::restore_registry_tweak,
         optimization::batch_apply_registry_tweaks,
         optimization::batch_restore_registry_tweaks,
+        optimization::scan_registry_tweaks,
         optimization::disable_windows_update,
         optimization::enable_windows_update,
         optimization::check_windows_update_state,
@@ -587,6 +597,7 @@ pub fn run() {
         audio_eq::get_audio_levels,
         audio_eq::get_spectrum,
         audio_eq::get_default_audio_device,
+        audio_eq::list_audio_devices,
         audio_eq::update_eq_bands,
         audio_eq::update_eq_preamp,
         audio_eq::update_eq_effects,
@@ -702,9 +713,23 @@ pub fn run() {
         // === 运行库补全/修复 ===
         runtime_repair::get_runtime_statuses,
         runtime_repair::repair_runtime,
+        // === VT-X 虚拟化修复 ===
+        vtx_virtualization::check_vtx_virtualization_status,
+        vtx_virtualization::fix_vtx_virtualization_popup,
+        vtx_virtualization::restore_vtx_virtualization,
             storage_clean::scan_storage_items,
             storage_clean::clean_storage_items,
             storage_clean::empty_recycle_bin_cmd,
+            // === 垃圾清理 / 大文件扫描(移植自 light-c-main) ===
+            storage_scan::scan_junk_categories,
+            storage_scan::scan_junk_category,
+            storage_scan::get_junk_categories,
+            storage_scan::delete_junk_files,
+            storage_scan::scan_large_files,
+            storage_scan::cancel_large_file_scan,
+            storage_scan::reveal_large_file,
+            storage_scan::delete_large_file,
+            storage_scan::get_drive_list,
             utils::sys_info::get_system_locale,
             utils::sys_info::get_system_username,
             tray::minimize_to_tray,
@@ -769,6 +794,15 @@ pub fn run() {
         // === UAPI 随机图片 ===
         uapi::get_random_image,
         uapi::save_random_image_bytes,
+
+        // === 盒子喵 AI 助手 ===
+        ai::ai_chat,
+        ai::ai_chat_stream,
+        ai::ai_get_memory,
+        ai::ai_add_memory,
+        ai::ai_delete_memory,
+        ai::ai_web_search,
+        ai::ai_cancel_stream,
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

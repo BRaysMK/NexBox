@@ -50,7 +50,7 @@
     "gpuRename": "显卡改写",
     "resolutionConverter": "分辨率管理",
     "dlssPreset": "三角洲DLSS设置",
-    "steam": "Steam管理",
+    "steam": "Steam",
     "epicFree": "喜加一",
     "nvidiaDriver": "显卡设置（仅NVIDIA）",
     "nvidiaDriverDownload": "NVIDIA显卡驱动下载",
@@ -60,7 +60,8 @@
     "custom": "自定义",
     "autoclicker": "连点器",
     "speedtest": "网络测速",
-    "runtimeRepair": "运行库修复"
+    "runtimeRepair": "运行库修复",
+    "vtxVirtualization": "VT-X 虚拟化修复"
   },
   "customPage": {
     "title": "自定义页面",
@@ -121,6 +122,110 @@
     "deleteAccountError": "删除账户失败",
     "deleteAccountCloseSteam": "Steam 正在运行，将自动关闭 Steam 后执行删除",
     "lastPlayed": "最近游玩"
+  },
+  "powerAdvanced": {
+    "title": "处理器高级设置",
+    "description": "调整 CPU 性能、散热与功耗相关的进阶电源选项",
+    "currentScheme": "当前电源方案",
+    "refresh": "刷新",
+    "acLabel": "插电 (AC)",
+    "dcLabel": "电池 (DC)",
+    "percentUnit": "%",
+    "lockedTitle": "高级设置已锁定",
+    "lockedDesc": "处理器高级设置涉及系统底层电源策略，可能影响功耗、温度与硬件寿命。解锁前仅可查看当前值，无法修改。",
+    "unlockButton": "解锁高级设置",
+    "disclaimerTitle": "免责声明",
+    "disclaimerText": "处理器高级设置将直接修改 Windows 电源方案中的底层参数，可能影响系统稳定性、功耗与硬件寿命。NexBox 不对由此产生的任何后果负责。请确保您了解每项设置的作用后再进行修改，并建议在操作前记录当前值以便恢复。",
+    "agreeCheck": "我已了解相关风险，同意并解锁",
+    "cancel": "取消",
+    "confirmUnlock": "同意并解锁",
+    "unlockSuccess": "高级设置已解锁",
+    "unlockFailed": "解锁失败",
+    "stateRecommended": "推荐",
+    "stateDefault": "默认",
+    "stateCustom": "自定义",
+    "supported": "当前硬件支持",
+    "notSupported": "当前方案不支持此设置",
+    "hiddenHint": "此设置默认被系统隐藏，解锁后将自动显示",
+    "setRecommended": "设为推荐",
+    "setDefault": "设为默认",
+    "setRecommendedSuccess": "已应用推荐值",
+    "setRecommendedFailed": "应用推荐值失败",
+    "setDefaultSuccess": "已应用默认值",
+    "setDefaultFailed": "应用默认值失败",
+    "applyFailed": "修改失败",
+    "applySuccess": "修改已生效",
+    "applyChanges": "应用修改",
+    "unlocking": "解锁中...",
+    "loadFailed": "加载处理器高级设置失败",
+    "unhideFailed": "部分设置解除隐藏失败",
+    "settings": {
+      "processorMinState": {
+        "title": "最低处理器状态",
+        "desc": "将允许的最低 CPU 速度设置为最大频率的百分比"
+      },
+      "processorMaxState": {
+        "title": "最高处理器状态",
+        "desc": "将允许的最高 CPU 速度设置为最大频率的百分比"
+      },
+      "systemCoolingPolicy": {
+        "title": "系统散热策略",
+        "desc": "选择在发热时是先降低处理器速度（被动）还是先加速风扇（主动）"
+      },
+      "processorBoostMode": {
+        "title": "处理器性能提升模式",
+        "desc": "控制您的 CPU 在要求苛刻的任务中超过基本频率的积极程度"
+      },
+      "increasePolicy": {
+        "title": "处理器性能提升策略",
+        "desc": "控制当工作负载增加时 CPU 加速速度的快慢（适用于旧的非 HWP 处理器）"
+      },
+      "decreasePolicy": {
+        "title": "处理器性能下降策略",
+        "desc": "控制当工作负载减少时 CPU 降低速度的快慢（适用于旧的非 HWP 处理器）"
+      },
+      "coreParkingMin": {
+        "title": "CPU 核心停放最低核心数",
+        "desc": "设置必须保持活动和响应的 CPU 核心的最小百分比"
+      },
+      "coreParkingMax": {
+        "title": "CPU 核心停放最高核心数",
+        "desc": "设置允许活动的 CPU 核心的最大百分比（100% 为最佳性能）"
+      },
+      "energyPreference": {
+        "title": "处理器能效性能偏好",
+        "desc": "平衡具有 HWP 的现代 CPU 的能效和性能（0=最高性能，100=最高能效）"
+      },
+      "increaseThreshold": {
+        "title": "处理器性能提升阈值",
+        "desc": "设置触发速度提升的 CPU 使用率百分比（越低越灵敏，适用于旧的非 HWP CPU）"
+      },
+      "decreaseThreshold": {
+        "title": "处理器性能下降阈值",
+        "desc": "设置触发速度降低的 CPU 使用率百分比（越低越能保持高性能，适用于旧的非 HWP CPU）"
+      }
+    },
+    "options": {
+      "coolingPolicy": {
+        "0": "被动（降低处理器速度）",
+        "1": "主动（加速风扇）"
+      },
+      "boostMode": {
+        "0": "禁用",
+        "1": "启用",
+        "2": "积极",
+        "3": "高效启用",
+        "4": "高效积极",
+        "5": "保证积极",
+        "6": "高效保证积极"
+      },
+      "policy": {
+        "0": "理想",
+        "1": "单一",
+        "2": "火箭",
+        "3": "理想积极"
+      }
+    }
   },
   "optimization": {
     "pageTitle": "优化",
@@ -215,6 +320,7 @@
     "powerManagement": {
       "title": "电源管理",
       "description": "导入并激活优化电源计划，提升游戏性能",
+      "tabPlans": "电源计划",
       "currentPlan": "当前电源计划",
       "builtinPlans": "内置电源计划",
       "systemPlans": "系统电源计划",
@@ -505,6 +611,34 @@
       "noImageYet": "还没有可下载的图片",
       "previewAlt": "随机图片预览"
     }
+  },
+  "ai": {
+    "name": "盒子喵",
+    "personaTag": "猫娘·病娇",
+    "subtitle": "新境盒专属 AI 助手",
+    "liveTag": "AI",
+    "entrySubtitle": "点击和盒子喵聊天喵~",
+    "welcome": "喵呜~ 我是盒子喵！关于新境盒的任何问题都可以问我哦(≧▽≦)喵~",
+    "inputPlaceholder": "跟盒子喵说点什么喵~",
+    "inputPlaceholderWeb": "联网搜索中…问点最新的事情喵~",
+    "send": "发送",
+    "clear": "清空对话",
+    "memory": "记忆管理",
+    "memoryTitle": "记忆管理",
+    "memoryPlaceholder": "给盒子喵记一条关于你的信息…",
+    "builtin": "内置",
+    "memoryAdd": "添加记忆",
+    "memoryEmpty": "还没有自定义记忆，给盒子喵加点吧喵~",
+    "web": "联网",
+    "webOn": "联网搜索：开",
+    "webOff": "联网搜索：关",
+    "webActive": "联网搜索已开启，回答会基于最新网络信息喵~",
+    "searching": "正在联网搜索：",
+    "searchResultTitle": "联网搜索结果",
+    "searchNoResult": "没有找到相关网页结果喵",
+    "thinking": "思考中",
+    "stop": "停止输出",
+    "stopped": "（已停止输出）"
   },
   "gameLauncher": {
     "title": "快捷启动",
@@ -1123,11 +1257,43 @@
     "autoclickerDesc": "自动连点鼠标，支持左右键、频率预设与热键",
     "speedtestDesc": "测试网络下载/上传速度、延迟与抖动",
     "runtimeRepairDesc": "检测并修复缺失的 VC++ / .NET / DirectX 运行库",
+    "vtxVirtualizationDesc": "关闭/恢复内存完整性与 Hyper-V，修复虚拟化弹窗",
     "resolutionManagement": "显示器分辨率管理",
     "selectDisplay": "选择显示器",
     "selectResolution": "选择分辨率",
     "applyResolution": "应用分辨率",
     "resolutionApplied": "分辨率已应用"
+  },
+  "vtxVirtualization": {
+    "title": "VT-X 虚拟化修复",
+    "subtitle": "关闭或恢复内存完整性、VBS 与 Hyper-V 自动启动，解决游戏/软件虚拟化弹窗",
+    "refresh": "重新检测",
+    "checking": "正在检测当前虚拟化状态...",
+    "checkFailed": "虚拟化状态检测失败",
+    "currentStatus": "当前虚拟化状态",
+    "memoryIntegrity": "内存完整性（内核隔离）",
+    "vbs": "虚拟化安全 VBS",
+    "hypervisorLaunch": "Hyper-V 启动类型",
+    "on": "开启",
+    "off": "关闭",
+    "unknown": "未知",
+    "notConfigured": "未配置",
+    "operations": "操作",
+    "fix": "一键修复",
+    "restore": "恢复",
+    "fixing": "修复中...",
+    "restoring": "恢复中...",
+    "fixDone": "修复已执行",
+    "restoreDone": "恢复已执行",
+    "fixFailed": "修复失败",
+    "restoreFailed": "恢复失败",
+    "rebootHint": "操作需重启电脑后生效。Windows 更新可能在后续自动重新开启内存完整性，如再次弹窗请重新修复。",
+    "limitationTitle": "为什么不能保证 100% 不弹？",
+    "limitationBody": "本工具已关闭系统侧的内存完整性、VBS 与 Hyper-V 自动启动，可解决绝大多数由虚拟化设置触发的弹窗。但不同游戏/反作弊的检测机制不同，部分场景仍可能弹窗：① BIOS 中的 VT-x/SVM 开关未开启或需在 BIOS 手动设置；② 使用了依赖虚拟化的软件（VMware/VirtualBox/WSL2/Docker/模拟器等）；③ Windows 更新可能重置系统设置。",
+    "notAdmin": "非管理员",
+    "adminHint": "非管理员运行时操作会弹出 UAC 授权窗口，请点击允许",
+    "fullyFixed": "检测到虚拟化相关设置已全部关闭，当前处于修复状态。",
+    "fullyRestored": "检测到虚拟化相关设置已全部恢复，当前处于默认状态。"
   },
   "gameProcessOptimize": {
     "title": "游戏进程优化",
@@ -1309,6 +1475,8 @@
       "gameLauncherDesc": "在主页显示快捷启动卡片",
       "homeHardwareModelLabel": "硬件型号",
       "homeHardwareModelDesc": "在主页显示 CPU/GPU/内存/主板/硬盘的型号摘要",
+      "aiEntryLabel": "盒子喵",
+      "aiEntryDesc": "在主页显示盒子喵 AI 助手卡片",
       "gameWinKeyLabel": "Win 键禁用卡片",
       "gameWinKeyDesc": "在主页显示游戏时禁用 Win 键卡片",
       "randomImageLabel": "随机图片",
@@ -1554,14 +1722,19 @@
     "noticeTitle": "温馨提示",
     "noticeContent": "该页面优化内容仅涉及系统层修改，请仔细查看每一项功能后使用，不要无脑全部优化，根据自己的设备选择合适的优化。\n\n不懂就不要优化！不懂就不要优化！不懂就不要优化！\n\n如出现优化后帧率降低，概不负责。",
     "noticeAgree": "我知道了，开始使用",
-    "credits": "感谢 1U 工具箱提供系统优化支持",
     "loading": "加载中...",
+    "scanStatus": "扫描状态",
+    "scanning": "扫描中...",
+    "scanComplete": "扫描完成",
+    "scanResult": "已优化 {{count}} / {{total}} 项",
+    "scanError": "扫描失败，请重试",
     "category": {
       "gaming": "游戏与图形优化",
       "nvidia": "NVIDIA 显卡优化",
       "amd": "AMD 显卡优化",
       "performance": "系统性能调优",
       "privacy": "隐私与遥测",
+      "ai": "Windows AI 优化",
       "services": "系统服务精简",
       "disk": "磁盘与文件系统",
       "apps": "应用与界面"
@@ -1590,7 +1763,21 @@
       "disableBcastDVR": "禁用广播 DVR 服务",
       "disableBcastDVRDesc": "禁用 BcastDVRUserService 服务",
       "disableAutoColorMgmt": "关闭自动色彩管理",
-      "disableAutoColorMgmtDesc": "关闭 DirectX 自动色彩管理，减少 GPU 开销"
+      "disableAutoColorMgmtDesc": "关闭 DirectX 自动色彩管理，减少 GPU 开销",
+      "gameMode": "游戏模式",
+      "gameModeDesc": "开启 Windows 游戏模式，系统在玩游戏时自动暂停后台任务，优先分配资源给游戏",
+      "win32Priority": "调整处理器以获得最佳性能",
+      "win32PriorityDesc": "配置 Windows 在前台程序与后台服务之间分配 CPU 时间。程序模式响应更灵敏（推荐）",
+      "win32PriorityProgram": "程序",
+      "win32PriorityBackground": "后台服务",
+      "systemResponsiveness": "游戏系统响应能力",
+      "systemResponsivenessDesc": "减少 MMCSS 保留给后台的 CPU 时间，让游戏获得更多 CPU 资源。注意：与「改进网络和 SR 响应能力」共享此值，建议二选一",
+      "hags": "硬件加速GPU调度",
+      "hagsDesc": "开启硬件加速 GPU 调度，让 GPU 管理自身内存与调度，降低延迟（需重启）",
+      "backgroundServices": "优化后台服务",
+      "backgroundServicesDesc": "将 Windows 服务启动超时从 60 秒缩短到 30 秒，略微加快启动速度",
+      "disableMpo": "禁用 MPO（多平面覆盖层）",
+      "disableMpoDesc": "禁用多平面覆盖层合成，可修复多显示器下的闪烁、黑屏和卡顿问题（需重启）"
     },
     "nvidia": {
       "lowLatencyThreshold": "NVIDIA 低延迟阈值优化",
@@ -1658,7 +1845,43 @@
       "disableWritingFeedback": "禁用写入反馈",
       "disableWritingFeedbackDesc": "禁用手写输入反馈收集",
       "disableErrorReporting": "禁用 Windows 错误报告",
-      "disableErrorReportingDesc": "禁用 WER，停止错误数据上传"
+      "disableErrorReportingDesc": "禁用 WER，停止错误数据上传",
+      "disableAdvertisingId": "关闭广告 ID",
+      "disableAdvertisingIdDesc": "关闭个性化广告标识，阻止应用跟踪活动投放定向广告",
+      "disableAdsPromotional": "关闭广告、建议和推广",
+      "disableAdsPromotionalDesc": "总开关：禁用开始菜单、锁屏、设置、通知中心等处的全部广告、建议和推广内容",
+      "disableOnlineSpeechRecognition": "关闭在线语音识别",
+      "disableOnlineSpeechRecognitionDesc": "禁止将语音数据发送到 Microsoft 云端处理",
+      "disableTailoredExperiences": "关闭定制体验",
+      "disableTailoredExperiencesDesc": "禁止根据诊断数据提供定制化建议、提示和广告",
+      "disableMsaCloudSearch": "关闭 MSA 云搜索",
+      "disableMsaCloudSearchDesc": "禁止搜索使用 Microsoft 账户的云端搜索服务",
+      "disableLockScreenSpotlight": "关闭锁屏 Spotlight",
+      "disableLockScreenSpotlightDesc": "锁屏不再显示必应每日图片和推广内容",
+      "disableInkingDictionary": "关闭墨迹书写词典",
+      "disableInkingDictionaryDesc": "禁止使用键入和手写历史创建个性化词典",
+      "disableFeedbackRequests": "禁止 Windows 反馈请求",
+      "disableFeedbackRequestsDesc": "禁止系统定期询问是否提供使用反馈"
+    },
+    "ai": {
+      "disableCopilot": "关闭 Windows Copilot",
+      "disableCopilotDesc": "通过组策略禁用 Copilot，并移除 Shell 集成、键盘硬件键和运行时",
+      "disableRecallSnapshots": "关闭 Recall 快照",
+      "disableRecallSnapshotsDesc": "禁止 Windows Recall 保存活动快照",
+      "blockRecallEnablement": "阻止启用 Recall",
+      "blockRecallEnablementDesc": "禁止通过策略启用 Windows Recall 功能",
+      "disableAiDataAnalysis": "关闭 AI 数据分析",
+      "disableAiDataAnalysisDesc": "禁止 Windows AI 分析用户数据用于个性化和推荐",
+      "disableClickToDo": "关闭 Click to Do",
+      "disableClickToDoDesc": "禁用 Windows Click to Do AI 功能",
+      "disableAiSettingsAgent": "关闭 AI 设置代理",
+      "disableAiSettingsAgentDesc": "禁用 AI 驱动的设置代理功能",
+      "disableAgentConnectors": "关闭 AI Agent 连接器",
+      "disableAgentConnectorsDesc": "禁止 AI 代理通过连接器访问外部服务",
+      "disableAgentWorkspaces": "关闭 AI Agent 工作区",
+      "disableAgentWorkspacesDesc": "禁用 Windows AI Agent 工作区功能",
+      "disableRemoteAgentConnectors": "关闭远程 Agent 连接器",
+      "disableRemoteAgentConnectorsDesc": "禁止 AI 代理通过远程连接器访问远程服务"
     },
     "services": {
       "disableSensorSvc": "禁用传感器服务",
@@ -1726,9 +1949,9 @@
     "policyStatus": "组策略状态",
     "policyConfigured": "已配置",
     "policyNotConfigured": "未配置",
-    "schedulerStatus": "计划任务状态",
-    "schedulerDisabled": "已禁用",
-    "schedulerRunning": "运行中",
+    "dllStatus": "核心组件状态",
+    "dllRenamed": "已隔离",
+    "dllNotRenamed": "未隔离",
     "overallStatus": "总体状态",
     "allDisabled": "已完全关闭",
     "notAllDisabled": "未完全关闭",
@@ -1914,6 +2137,56 @@
     "recycleBinEmpty": "回收站已清空",
     "recycleBinError": "清空回收站失败",
     "adminRequired": "需管理员",
+    "tabQuick": "快速清理",
+    "tabJunk": "垃圾清理",
+    "tabBigFiles": "大文件扫描",
+    "risk1": "安全",
+    "risk2": "低风险",
+    "risk3": "中风险",
+    "risk4": "较高风险",
+    "risk5": "高危",
+    "junkFileTotal": "垃圾文件数",
+    "junkScanning": "正在扫描垃圾文件...",
+    "junkCleanButton": "清理选中",
+    "junkCleaning": "清理中...",
+    "junkNoSelection": "请先选择要清理的分类",
+    "junkCleanSuccess": "清理完成，释放了 {{size}}",
+    "junkCleanFailed": "{{count}} 个文件清理失败",
+    "junkRebootPending": "{{count}} 个文件将在重启后删除",
+    "junkFiles": "{{count}} 个文件",
+    "junkViewFiles": "查看文件",
+    "junkHideFiles": "收起",
+    "junkEmpty": "未发现可清理的垃圾文件，点击「扫描垃圾」开始",
+    "junkScanButton": "扫描垃圾",
+    "junkLoadMore": "加载更多 ({{count}})",
+    "bigDrive": "选择磁盘",
+    "bigTopN": "扫描数量",
+    "bigScanButton": "开始扫描",
+    "bigScanning": "扫描中...",
+    "bigCancelButton": "取消扫描",
+    "bigScanned": "已扫描 {{count}} 个文件",
+    "bigFound": "发现 {{count}} 个最大文件",
+    "bigPath": "路径",
+    "bigSize": "大小",
+    "bigSource": "来源",
+    "bigRisk": "风险",
+    "bigEmpty": "暂无数据，选择磁盘后开始扫描",
+    "bigCancelTip": "已取消扫描",
+    "bigScanError": "扫描失败",
+    "bigDriveRequired": "请先选择要扫描的磁盘",
+    "bigResults": "扫描结果",
+    "bigAction": "操作",
+    "bigReveal": "跳转到文件位置",
+    "bigDelete": "强制删除",
+    "bigRevealError": "打开文件位置失败",
+    "bigDeleteError": "删除失败",
+    "bigDeleteSuccess": "已删除，释放 {{size}}",
+    "bigDeleteFailed": "删除失败",
+    "bigDeleteConfirmTitle": "确认删除文件",
+    "bigDeleteConfirmDesc": "确定要永久删除以下文件吗？此操作不可撤销。",
+    "bigDeleteConfirmWarn": "警告：该文件将被永久删除，无法从回收站恢复！",
+    "bigDeleteConfirmButton": "确认删除",
+    "bigDeleting": "删除中...",
     "items": {
       "temp_user": {
         "name": "用户临时文件",
@@ -1958,10 +2231,6 @@
       "windows_logs": {
         "name": "系统日志",
         "description": "Windows各组件运行日志"
-      },
-      "d3dscache": {
-        "name": "DirectX着色器缓存",
-        "description": "显卡着色器编译缓存"
       },
       "thumbs_db": {
         "name": "thumbs.db残留文件",

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\NexBox\\monitor\\NexBoxMonitor.csproj": {}
+    "d:\\NexBox\\monitor\\NexBoxMonitor.csproj": {}
   },
   "projects": {
-    "D:\\NexBox\\monitor\\NexBoxMonitor.csproj": {
+    "d:\\NexBox\\monitor\\NexBoxMonitor.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\NexBox\\monitor\\NexBoxMonitor.csproj",
+        "projectUniqueName": "d:\\NexBox\\monitor\\NexBoxMonitor.csproj",
         "projectName": "NexBoxMonitor",
-        "projectPath": "D:\\NexBox\\monitor\\NexBoxMonitor.csproj",
+        "projectPath": "d:\\NexBox\\monitor\\NexBoxMonitor.csproj",
         "packagesPath": "C:\\Users\\MuLiu\\.nuget\\packages\\",
-        "outputPath": "D:\\NexBox\\monitor\\obj\\",
+        "outputPath": "d:\\NexBox\\monitor\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\MuLiu\\AppData\\Roaming\\NuGet\\NuGet.Config"

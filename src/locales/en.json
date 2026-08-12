@@ -49,7 +49,7 @@
     "settings": "Settings",
     "gpuRename": "GPU Rename",
     "dlssPreset": "Delta Force DLSS Settings",
-    "steam": "Steam Manager",
+    "steam": "Steam",
     "epicFree": "Epic Free Games",
     "nvidiaDriverDownload": "NVIDIA Driver Download",
     "diskHealth": "Disk Health",
@@ -57,7 +57,8 @@
     "audioEq": "EQ Tuner",
     "custom": "Custom",
     "speedtest": "Speed Test",
-    "runtimeRepair": "Runtime Repair"
+    "runtimeRepair": "Runtime Repair",
+    "vtxVirtualization": "VT-X Virtualization Fix"
   },
   "customPage": {
     "title": "Custom Dashboard",
@@ -118,6 +119,110 @@
     "deleteAccountError": "Failed to delete account",
     "deleteAccountCloseSteam": "Steam is running and will be closed automatically before deletion",
     "lastPlayed": "Last played"
+  },
+  "powerAdvanced": {
+    "title": "Processor Advanced Settings",
+    "description": "Fine-tune advanced CPU power options for performance, cooling and power consumption",
+    "currentScheme": "Current power scheme",
+    "refresh": "Refresh",
+    "acLabel": "Plugged in (AC)",
+    "dcLabel": "On battery (DC)",
+    "percentUnit": "%",
+    "lockedTitle": "Advanced settings locked",
+    "lockedDesc": "Processor advanced settings affect low-level system power policies and may impact power consumption, temperature and hardware lifespan. You can view current values while locked, but cannot modify them.",
+    "unlockButton": "Unlock advanced settings",
+    "disclaimerTitle": "Disclaimer",
+    "disclaimerText": "Processor advanced settings directly modify low-level parameters in your Windows power plan, which may affect system stability, power consumption and hardware lifespan. NexBox is not responsible for any consequences. Make sure you understand each setting before changing it, and record current values for recovery.",
+    "agreeCheck": "I understand the risks and agree to unlock",
+    "cancel": "Cancel",
+    "confirmUnlock": "Agree & Unlock",
+    "unlockSuccess": "Advanced settings unlocked",
+    "unlockFailed": "Failed to unlock",
+    "stateRecommended": "Recommended",
+    "stateDefault": "Default",
+    "stateCustom": "Custom",
+    "supported": "Supported by current hardware",
+    "notSupported": "Not supported by current scheme",
+    "hiddenHint": "This setting is hidden by the system by default and will be shown after unlocking",
+    "setRecommended": "Set to Recommended",
+    "setDefault": "Set to Default",
+    "setRecommendedSuccess": "Recommended values applied",
+    "setRecommendedFailed": "Failed to apply recommended values",
+    "setDefaultSuccess": "Default values applied",
+    "setDefaultFailed": "Failed to apply default values",
+    "applyFailed": "Failed to apply",
+    "applySuccess": "Changes applied successfully",
+    "applyChanges": "Apply Changes",
+    "unlocking": "Unlocking...",
+    "loadFailed": "Failed to load processor advanced settings",
+    "unhideFailed": "Failed to unhide some settings",
+    "settings": {
+      "processorMinState": {
+        "title": "Minimum processor state",
+        "desc": "Set the lowest CPU speed allowed as a percentage of maximum frequency"
+      },
+      "processorMaxState": {
+        "title": "Maximum processor state",
+        "desc": "Set the highest CPU speed allowed as a percentage of maximum frequency"
+      },
+      "systemCoolingPolicy": {
+        "title": "System cooling policy",
+        "desc": "Choose whether to slow down the processor first (passive) or speed up fans first (active) when hot"
+      },
+      "processorBoostMode": {
+        "title": "Processor performance boost mode",
+        "desc": "Control how aggressively your CPU boosts above base frequency for demanding tasks"
+      },
+      "increasePolicy": {
+        "title": "Processor performance increase policy",
+        "desc": "Control how quickly CPU ramps up speed when workload increases (for legacy non-HWP processors)"
+      },
+      "decreasePolicy": {
+        "title": "Processor performance decrease policy",
+        "desc": "Control how quickly CPU reduces speed when workload decreases (for legacy non-HWP processors)"
+      },
+      "coreParkingMin": {
+        "title": "CPU core parking minimum cores",
+        "desc": "Set the minimum percentage of CPU cores that must remain active and responsive"
+      },
+      "coreParkingMax": {
+        "title": "CPU core parking maximum cores",
+        "desc": "Set the maximum percentage of CPU cores allowed to be active (100% for best performance)"
+      },
+      "energyPreference": {
+        "title": "Processor energy performance preference",
+        "desc": "Balance power efficiency and performance for modern CPUs with HWP (0 = max performance, 100 = max efficiency)"
+      },
+      "increaseThreshold": {
+        "title": "Processor performance increase threshold",
+        "desc": "Set CPU usage percentage that triggers speed increase (lower = more responsive, for legacy non-HWP CPUs)"
+      },
+      "decreaseThreshold": {
+        "title": "Processor performance decrease threshold",
+        "desc": "Set CPU usage percentage that triggers speed reduction (lower = maintains performance longer, for legacy non-HWP CPUs)"
+      }
+    },
+    "options": {
+      "coolingPolicy": {
+        "0": "Passive",
+        "1": "Active"
+      },
+      "boostMode": {
+        "0": "Disabled",
+        "1": "Enabled",
+        "2": "Aggressive",
+        "3": "Efficient Enabled",
+        "4": "Efficient Aggressive",
+        "5": "Aggressive At Guaranteed",
+        "6": "Efficient Aggressive At Guaranteed"
+      },
+      "policy": {
+        "0": "Ideal",
+        "1": "Single",
+        "2": "Rocket",
+        "3": "Ideal Aggressive"
+      }
+    }
   },
   "optimization": {
     "pageTitle": "Optimize",
@@ -380,6 +485,7 @@
     "powerManagement": {
       "title": "Power Management",
       "description": "Import and activate optimized power plans for better gaming performance",
+      "tabPlans": "Power Plans",
       "currentPlan": "Current Power Plan",
       "builtinPlans": "Built-in Power Plans",
       "systemPlans": "System Power Plans",
@@ -670,6 +776,34 @@
       "noImageYet": "No image to download yet",
       "previewAlt": "Random image preview"
     }
+  },
+  "ai": {
+    "name": "BoxCat",
+    "personaTag": "Catgirl·Yandere",
+    "subtitle": "NexBox dedicated AI assistant",
+    "liveTag": "AI",
+    "entrySubtitle": "Click to chat with BoxCat~",
+    "welcome": "Meow~ I'm BoxCat! Feel free to ask me anything about NexBox (≧▽≦) Meow~",
+    "inputPlaceholder": "Say something to BoxCat~",
+    "inputPlaceholderWeb": "Searching the web… ask something new, meow~",
+    "send": "Send",
+    "clear": "Clear chat",
+    "memory": "Memory",
+    "memoryTitle": "Memory",
+    "memoryPlaceholder": "Teach BoxCat something about you…",
+    "builtin": "Built-in",
+    "memoryAdd": "Add memory",
+    "memoryEmpty": "No custom memory yet. Teach BoxCat a bit! Meow~",
+    "web": "Web",
+    "webOn": "Web search: On",
+    "webOff": "Web search: Off",
+    "webActive": "Web search is on — answers will be based on the latest web info, meow~",
+    "searching": "Searching the web: ",
+    "searchResultTitle": "Web search results",
+    "searchNoResult": "No relevant web results found, meow",
+    "thinking": "Thinking",
+    "stop": "Stop output",
+    "stopped": "(output stopped)"
   },
   "gameLauncher": {
     "title": "Quick Launch",
@@ -1250,7 +1384,39 @@
     "audioEqDesc": "System-level audio equalizer tuning",
     "nvidiaDriverDownloadDesc": "Search and download NVIDIA GPU drivers (including older versions)",
     "speedtestDesc": "Test network download/upload speed, latency and jitter",
-    "runtimeRepairDesc": "Detect and repair missing VC++ / .NET / DirectX runtime libraries"
+    "runtimeRepairDesc": "Detect and repair missing VC++ / .NET / DirectX runtime libraries",
+    "vtxVirtualizationDesc": "Disable/restore Memory Integrity & Hyper-V to fix virtualization popups"
+  },
+  "vtxVirtualization": {
+    "title": "VT-X Virtualization Fix",
+    "subtitle": "Disable or restore Memory Integrity, VBS and Hyper-V auto-start to fix game/software virtualization popups",
+    "refresh": "Re-check",
+    "checking": "Checking current virtualization state...",
+    "checkFailed": "Failed to check virtualization state",
+    "currentStatus": "Current Virtualization State",
+    "memoryIntegrity": "Memory Integrity (Core Isolation)",
+    "vbs": "Virtualization-Based Security (VBS)",
+    "hypervisorLaunch": "Hyper-V Launch Type",
+    "on": "On",
+    "off": "Off",
+    "unknown": "Unknown",
+    "notConfigured": "Not configured",
+    "operations": "Actions",
+    "fix": "One-click Fix",
+    "restore": "Restore",
+    "fixing": "Fixing...",
+    "restoring": "Restoring...",
+    "fixDone": "Fix executed",
+    "restoreDone": "Restore executed",
+    "fixFailed": "Fix failed",
+    "restoreFailed": "Restore failed",
+    "rebootHint": "Changes take effect after a system restart. Windows Update may re-enable Memory Integrity later; if the popup reappears, run the fix again.",
+    "limitationTitle": "Why can't this guarantee 100% no more popups?",
+    "limitationBody": "This tool disables system-side Memory Integrity, VBS and Hyper-V auto-start, resolving most virtualization popups. However, different games/anti-cheats use different detection methods: ① BIOS VT-x/SVM may still need to be enabled manually; ② software relying on virtualization (VMware/VirtualBox/WSL2/Docker/emulators) may conflict; ③ Windows Update may reset system settings.",
+    "notAdmin": "Not admin",
+    "adminHint": "When not running as admin, a UAC prompt will appear - please click Allow",
+    "fullyFixed": "Virtualization settings are all disabled - currently in the fixed state.",
+    "fullyRestored": "Virtualization settings are all restored - currently in the default state."
   },
   "gameProcessOptimize": {
     "title": "Game Process Optimize",
@@ -1409,6 +1575,8 @@
       "gameLauncherDesc": "Show quick launch card on homepage",
       "homeHardwareModelLabel": "Hardware Model",
       "homeHardwareModelDesc": "Show a brief summary of CPU/GPU/RAM/Motherboard/Storage on the homepage",
+      "aiEntryLabel": "BoxCat AI",
+      "aiEntryDesc": "Show the BoxCat AI assistant card on the homepage",
       "gameWinKeyLabel": "Win Key Disable Card",
       "gameWinKeyDesc": "Show the disable Win key while gaming card on the homepage",
       "randomImageLabel": "Random Image",
@@ -1647,14 +1815,19 @@
     "noticeTitle": "Friendly Reminder",
     "noticeContent": "The optimizations on this page involve system-level modifications. Please review each feature carefully before use, do not blindly apply all of them, and choose the ones suitable for your device.\n\nIf you don't understand it, don't optimize! If you don't understand it, don't optimize! If you don't understand it, don't optimize!\n\nIf your FPS drops after optimization, we are not responsible.",
     "noticeAgree": "I understand, let's start",
-    "credits": "Powered by 1U Toolbox system optimization",
     "loading": "Loading...",
+    "scanStatus": "Scan Status",
+    "scanning": "Scanning...",
+    "scanComplete": "Scan Complete",
+    "scanResult": "{{count}} / {{total}} optimized",
+    "scanError": "Scan failed, please try again",
     "category": {
       "gaming": "Gaming & Graphics",
       "nvidia": "NVIDIA GPU",
       "amd": "AMD GPU",
       "performance": "System Performance",
       "privacy": "Privacy & Telemetry",
+      "ai": "Windows AI",
       "services": "System Services",
       "disk": "Disk & File System",
       "apps": "Apps & UI"
@@ -1683,7 +1856,21 @@
       "disableBcastDVR": "Disable Broadcast DVR Service",
       "disableBcastDVRDesc": "Disable BcastDVRUserService service",
       "disableAutoColorMgmt": "Disable Auto Color Management",
-      "disableAutoColorMgmtDesc": "Disable DirectX auto color management, reduce GPU overhead"
+      "disableAutoColorMgmtDesc": "Disable DirectX auto color management, reduce GPU overhead",
+      "gameMode": "Game Mode",
+      "gameModeDesc": "Enable Windows Game Mode to automatically suspend background tasks while gaming and prioritize resources for the game",
+      "win32Priority": "Adjust Processor for Best Performance",
+      "win32PriorityDesc": "Configure how Windows allocates CPU time between foreground applications and background services. Programs mode is more responsive (recommended)",
+      "win32PriorityProgram": "Programs",
+      "win32PriorityBackground": "Background Services",
+      "systemResponsiveness": "System Responsiveness for Games",
+      "systemResponsivenessDesc": "Reduce the CPU time MMCSS reserves for background tasks so games get more CPU resources. Note: shares the same value as \"Improved Network and SR Responsiveness\", use only one",
+      "hags": "Hardware-Accelerated GPU Scheduling",
+      "hagsDesc": "Enable Hardware-Accelerated GPU Scheduling so the GPU manages its own memory and scheduling, reducing latency (requires reboot)",
+      "backgroundServices": "Optimize Background Services",
+      "backgroundServicesDesc": "Reduce the Windows service startup timeout from 60 to 30 seconds for a slightly faster boot",
+      "disableMpo": "Disable MPO (Multi-Plane Overlay)",
+      "disableMpoDesc": "Disable multi-plane overlay compositing to fix screen flickering, black screens, and stuttering on multi-monitor setups (requires reboot)"
     },
     "nvidia": {
       "lowLatencyThreshold": "NVIDIA Low Latency Threshold",
@@ -1751,7 +1938,43 @@
       "disableWritingFeedback": "Disable Writing Feedback",
       "disableWritingFeedbackDesc": "Disable handwriting input feedback collection",
       "disableErrorReporting": "Disable Windows Error Reporting",
-      "disableErrorReportingDesc": "Disable WER, stop error data upload"
+      "disableErrorReportingDesc": "Disable WER, stop error data upload",
+      "disableAdvertisingId": "Disable Advertising ID",
+      "disableAdvertisingIdDesc": "Disable the personalized advertising ID that apps use to track your activity and show targeted ads",
+      "disableAdsPromotional": "Disable Ads, Suggestions & Promotions",
+      "disableAdsPromotionalDesc": "Master switch: disable all advertising, suggestions, and promotional content in Start menu, lock screen, Settings, and Notification Center",
+      "disableOnlineSpeechRecognition": "Disable Online Speech Recognition",
+      "disableOnlineSpeechRecognitionDesc": "Prevent sending speech data to Microsoft cloud for processing",
+      "disableTailoredExperiences": "Disable Tailored Experiences",
+      "disableTailoredExperiencesDesc": "Prevent personalized suggestions, tips, and ads based on diagnostic data",
+      "disableMsaCloudSearch": "Disable MSA Cloud Search",
+      "disableMsaCloudSearchDesc": "Prevent search from using Microsoft account cloud search services",
+      "disableLockScreenSpotlight": "Disable Lock Screen Spotlight",
+      "disableLockScreenSpotlightDesc": "Stop showing Bing daily images and promotional content on the lock screen",
+      "disableInkingDictionary": "Disable Custom Inking & Typing Dictionary",
+      "disableInkingDictionaryDesc": "Prevent using your typing and handwriting history to create a personalized dictionary",
+      "disableFeedbackRequests": "Disable Windows Feedback Requests",
+      "disableFeedbackRequestsDesc": "Stop Windows from periodically asking you to provide feedback"
+    },
+    "ai": {
+      "disableCopilot": "Disable Windows Copilot",
+      "disableCopilotDesc": "Disable Copilot via group policy and remove Shell integration, keyboard hardware key, and runtime",
+      "disableRecallSnapshots": "Disable Recall Snapshots",
+      "disableRecallSnapshotsDesc": "Prevent Windows Recall from saving snapshots of your activity",
+      "blockRecallEnablement": "Block Recall Enablement",
+      "blockRecallEnablementDesc": "Prevent Windows Recall from being enabled via policy",
+      "disableAiDataAnalysis": "Disable AI Data Analysis",
+      "disableAiDataAnalysisDesc": "Prevent Windows AI from analyzing user data for personalization and recommendations",
+      "disableClickToDo": "Disable Click to Do",
+      "disableClickToDoDesc": "Disable the Windows Click to Do AI feature",
+      "disableAiSettingsAgent": "Disable AI Settings Agent",
+      "disableAiSettingsAgentDesc": "Disable the AI-powered Settings Agent feature",
+      "disableAgentConnectors": "Disable AI Agent Connectors",
+      "disableAgentConnectorsDesc": "Prevent AI agents from using connectors to access external services",
+      "disableAgentWorkspaces": "Disable AI Agent Workspaces",
+      "disableAgentWorkspacesDesc": "Disable the Windows AI Agent Workspaces feature",
+      "disableRemoteAgentConnectors": "Disable Remote Agent Connectors",
+      "disableRemoteAgentConnectorsDesc": "Prevent AI agents from using remote connectors to access remote services"
     },
     "services": {
       "disableSensorSvc": "Disable Sensor Services",
@@ -1819,9 +2042,9 @@
     "policyStatus": "Group Policy",
     "policyConfigured": "Configured",
     "policyNotConfigured": "Not Configured",
-    "schedulerStatus": "Scheduled Tasks",
-    "schedulerDisabled": "Disabled",
-    "schedulerRunning": "Running",
+    "dllStatus": "Core Components",
+    "dllRenamed": "Isolated",
+    "dllNotRenamed": "Not Isolated",
     "overallStatus": "Overall Status",
     "allDisabled": "Completely Disabled",
     "notAllDisabled": "Not Fully Disabled",
@@ -2098,5 +2321,133 @@
     "unknown": "Unknown",
     "openFailed": "Failed to open link",
     "latest": "Latest"
+  },
+  "storageClean": {
+    "title": "Storage Cleanup",
+    "description": "Clean system temp files, caches and junk files to free up disk space",
+    "totalScanned": "Total Scanned",
+    "itemsFound": "Items Found",
+    "selectedSize": "Selected Size",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "emptyRecycleBin": "Empty Recycle Bin",
+    "scanning": "Scanning...",
+    "cleanButton": "Start Cleanup",
+    "cleaning": "Cleaning...",
+    "scanButton": "Rescan",
+    "cleanSuccess": "Cleanup complete, freed {{size}}",
+    "cleanError": "Cleanup failed",
+    "scanError": "Scan failed",
+    "noItemSelected": "Please select items to clean",
+    "skippedFiles": "Skipped {{count}} in-use files",
+    "recycleBinEmpty": "Recycle bin emptied",
+    "recycleBinError": "Failed to empty recycle bin",
+    "adminRequired": "Admin Required",
+    "tabQuick": "Quick Clean",
+    "tabJunk": "Junk Clean",
+    "tabBigFiles": "Large Files",
+    "risk1": "Safe",
+    "risk2": "Low Risk",
+    "risk3": "Medium Risk",
+    "risk4": "High Risk",
+    "risk5": "Critical",
+    "junkFileTotal": "Junk Files",
+    "junkScanning": "Scanning junk files...",
+    "junkCleanButton": "Clean Selected",
+    "junkCleaning": "Cleaning...",
+    "junkNoSelection": "Please select categories to clean",
+    "junkCleanSuccess": "Cleanup complete, freed {{size}}",
+    "junkCleanFailed": "{{count}} files failed to clean",
+    "junkRebootPending": "{{count}} files will be deleted after reboot",
+    "junkFiles": "{{count}} files",
+    "junkViewFiles": "View Files",
+    "junkHideFiles": "Collapse",
+    "junkEmpty": "No junk files found. Click \"Scan Junk\" to start.",
+    "junkScanButton": "Scan Junk",
+    "junkLoadMore": "Load More ({{count}})",
+    "bigDrive": "Select Drive",
+    "bigTopN": "Scan Count",
+    "bigScanButton": "Start Scan",
+    "bigScanning": "Scanning...",
+    "bigCancelButton": "Cancel Scan",
+    "bigScanned": "{{count}} files scanned",
+    "bigFound": "Found {{count}} largest files",
+    "bigPath": "Path",
+    "bigSize": "Size",
+    "bigSource": "Source",
+    "bigRisk": "Risk",
+    "bigEmpty": "No data yet. Select a drive and start scanning.",
+    "bigCancelTip": "Scan cancelled",
+    "bigScanError": "Scan failed",
+    "bigDriveRequired": "Please select a drive to scan",
+    "bigResults": "Scan Results",
+    "bigAction": "Actions",
+    "bigReveal": "Reveal in Folder",
+    "bigDelete": "Force Delete",
+    "bigRevealError": "Failed to open file location",
+    "bigDeleteError": "Delete failed",
+    "bigDeleteSuccess": "Deleted, freed {{size}}",
+    "bigDeleteFailed": "Delete failed",
+    "bigDeleteConfirmTitle": "Confirm File Deletion",
+    "bigDeleteConfirmDesc": "Are you sure you want to permanently delete the following file? This action cannot be undone.",
+    "bigDeleteConfirmWarn": "Warning: This file will be permanently deleted and cannot be restored from the Recycle Bin!",
+    "bigDeleteConfirmButton": "Confirm Delete",
+    "bigDeleting": "Deleting...",
+    "items": {
+      "temp_user": {
+        "name": "User Temp Files",
+        "description": "Intermediate files generated by programs, safe to delete"
+      },
+      "temp_system": {
+        "name": "System Temp Files",
+        "description": "System-level temp files, requires admin privileges"
+      },
+      "recycle_bin": {
+        "name": "Recycle Bin",
+        "description": "Staging area for deleted files; emptying frees disk space"
+      },
+      "thumbnail_cache": {
+        "name": "Thumbnail Cache",
+        "description": "Preview cache for images and videos, auto-rebuilt after deletion"
+      },
+      "prefetch": {
+        "name": "Prefetch Files",
+        "description": "Program launch prefetch data; first launch may be slower after deletion"
+      },
+      "wer_archive": {
+        "name": "Error Report Archive",
+        "description": "Archived program crash error reports"
+      },
+      "wer_queue": {
+        "name": "Error Report Queue",
+        "description": "Error reports pending upload"
+      },
+      "crash_dumps": {
+        "name": "Crash Dumps",
+        "description": "Application crash dump files"
+      },
+      "memory_dmp": {
+        "name": "Full Memory Dump",
+        "description": "Complete memory dump from blue screen"
+      },
+      "minidump": {
+        "name": "Minidump",
+        "description": "Small dump files from blue screens, safe to delete"
+      },
+      "windows_logs": {
+        "name": "System Logs",
+        "description": "Windows component runtime logs"
+      },
+      "thumbs_db": {
+        "name": "thumbs.db Residue",
+        "description": "Legacy thumbnail cache files from older Windows"
+      }
+    },
+    "tip": {
+      "title": "Usage Tips",
+      "description": "Storage cleanup can safely delete system temp files and caches to free up disk space.",
+      "note1": "• Items requiring admin privileges will request them automatically during cleanup",
+      "note2": "• In-use files are skipped automatically and will not affect system operation"
+    }
   }
 }

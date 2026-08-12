@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "7.4.7"
+version = "7.6.0"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -81,6 +81,11 @@ encoding_rs = "0.8"
 # 本地音频元数据解析（封面/标题/艺术家/时长）
 lofty = "0.21"
 
+# 存储清理/垃圾清理/大文件扫描
+walkdir = "2"
+jwalk = "0.8"
+glob = "0.3"
+
 [target.'cfg(windows)'.dependencies]
 mslnk = "0.1"
 windows-sys = { version = "0.59", features = [
@@ -109,7 +114,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_Devices_Display",
 ] }
 winreg = "0.52"
-winapi = { version = "0.3", features = ["winuser", "windef", "shellapi"] }
+winapi = { version = "0.3", features = ["winuser", "windef", "shellapi", "handleapi", "processthreadsapi", "securitybaseapi", "winbase", "winnt", "sddl", "fileapi", "ioapiset", "errhandlingapi", "ntdef"] }
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
@@ -150,4 +155,5 @@ windows = { version = "0.58", features = [
     "Win32_Graphics_Gdi",
     "Win32_Media_MediaFoundation",
     "Win32_Media_Multimedia",
+    "Win32_System_Power",
 ] }

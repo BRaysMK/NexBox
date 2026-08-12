@@ -121,3 +121,7 @@ monitor/build.log
 # Third-party reference project (downloaded Mineradio source, not part of repo)
 Mineradio-main/
 
+# 临时调试测试文件
+src-tauri/reg_test.pdb
+src-tauri/reg_test.rs
+

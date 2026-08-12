@@ -67,6 +67,110 @@
 "enterEdit": "Layout bearbeiten",
 "exitEdit": "Bearbeitung beenden"
 },
+  "powerAdvanced": {
+    "title": "Erweiterte Prozessoreinstellungen",
+    "description": "Erweiterte CPU-Energieoptionen für Leistung, Kühlung und Stromverbrauch optimieren",
+    "currentScheme": "Aktuelles Energieschema",
+    "refresh": "Aktualisieren",
+    "acLabel": "Netzbetrieb (AC)",
+    "dcLabel": "Akku (DC)",
+    "percentUnit": "%",
+    "lockedTitle": "Erweiterte Einstellungen gesperrt",
+    "lockedDesc": "Erweiterte Prozessoreinstellungen betreffen systemnahe Energiepolitiken und können Stromverbrauch, Temperatur und Hardware-Lebensdauer beeinflussen. Im gesperrten Zustand können Sie aktuelle Werte ansehen, aber nicht ändern.",
+    "unlockButton": "Erweiterte Einstellungen entsperren",
+    "disclaimerTitle": "Haftungsausschluss",
+    "disclaimerText": "Erweiterte Prozessoreinstellungen ändern direkt systemnahe Parameter Ihres Windows-Energieplans und können Systemstabilität, Stromverbrauch und Hardware-Lebensdauer beeinflussen. NexBox übernimmt keine Verantwortung für daraus resultierende Folgen. Stellen Sie sicher, dass Sie jede Einstellung verstehen, bevor Sie sie ändern, und notieren Sie die aktuellen Werte zur Wiederherstellung.",
+    "agreeCheck": "Ich verstehe die Risiken und stimme der Entsperrung zu",
+    "cancel": "Abbrechen",
+    "confirmUnlock": "Zustimmen & Entsperren",
+    "unlockSuccess": "Erweiterte Einstellungen entsperrt",
+    "unlockFailed": "Entsperren fehlgeschlagen",
+    "stateRecommended": "Empfohlen",
+    "stateDefault": "Standard",
+    "stateCustom": "Benutzerdefiniert",
+    "supported": "Von aktueller Hardware unterstützt",
+    "notSupported": "Vom aktuellen Schema nicht unterstützt",
+    "hiddenHint": "Diese Einstellung ist standardmäßig ausgeblendet und wird nach dem Entsperren angezeigt",
+    "setRecommended": "Auf Empfohlen setzen",
+    "setDefault": "Auf Standard setzen",
+    "setRecommendedSuccess": "Empfohlene Werte angewendet",
+    "setRecommendedFailed": "Empfohlene Werte konnten nicht angewendet werden",
+    "setDefaultSuccess": "Standardwerte angewendet",
+    "setDefaultFailed": "Standardwerte konnten nicht angewendet werden",
+    "applyFailed": "Anwendung fehlgeschlagen",
+    "applySuccess": "Änderungen erfolgreich angewendet",
+    "applyChanges": "Änderungen anwenden",
+    "unlocking": "Wird entsperrt...",
+    "loadFailed": "Erweiterte Prozessoreinstellungen konnten nicht geladen werden",
+    "unhideFailed": "Einige Einstellungen konnten nicht eingeblendet werden",
+    "settings": {
+      "processorMinState": {
+        "title": "Minimaler Prozessorstatus",
+        "desc": "Legt die niedrigste zulässige CPU-Geschwindigkeit als Prozentsatz der maximalen Frequenz fest"
+      },
+      "processorMaxState": {
+        "title": "Maximaler Prozessorstatus",
+        "desc": "Legt die höchste zulässige CPU-Geschwindigkeit als Prozentsatz der maximalen Frequenz fest"
+      },
+      "systemCoolingPolicy": {
+        "title": "System-Kühlungsrichtlinie",
+        "desc": "Wählen Sie, ob bei Hitze zuerst der Prozessor gedrosselt (passiv) oder zuerst die Lüfter beschleunigt werden (aktiv)"
+      },
+      "processorBoostMode": {
+        "title": "Prozessorleistungs-Boost-Modus",
+        "desc": "Steuert, wie aggressiv Ihre CPU bei anspruchsvollen Aufgaben über die Basisfrequenz boostet"
+      },
+      "increasePolicy": {
+        "title": "Richtlinie zur Leistungssteigerung",
+        "desc": "Steuert, wie schnell die CPU bei steigender Last beschleunigt (für ältere Nicht-HWP-Prozessoren)"
+      },
+      "decreasePolicy": {
+        "title": "Richtlinie zur Leistungsminderung",
+        "desc": "Steuert, wie schnell die CPU bei fallender Last heruntertaktet (für ältere Nicht-HWP-Prozessoren)"
+      },
+      "coreParkingMin": {
+        "title": "CPU-Core-Parking minimale Kerne",
+        "desc": "Legt den minimalen Prozentsatz der CPU-Kerne fest, die aktiv und reaktionsschnell bleiben müssen"
+      },
+      "coreParkingMax": {
+        "title": "CPU-Core-Parking maximale Kerne",
+        "desc": "Legt den maximalen Prozentsatz aktiver CPU-Kerne fest (100% für beste Leistung)"
+      },
+      "energyPreference": {
+        "title": "Energieeffizienz-Präferenz",
+        "desc": "Gleicht Energieeffizienz und Leistung moderner CPUs mit HWP aus (0 = maximale Leistung, 100 = maximale Effizienz)"
+      },
+      "increaseThreshold": {
+        "title": "Schwelle zur Leistungssteigerung",
+        "desc": "Legt den CPU-Auslastungswert fest, der eine Beschleunigung auslöst (niedriger = reaktionsschneller, für ältere Nicht-HWP-CPUs)"
+      },
+      "decreaseThreshold": {
+        "title": "Schwelle zur Leistungsminderung",
+        "desc": "Legt den CPU-Auslastungswert fest, der eine Drosselung auslöst (niedriger = hält Leistung länger, für ältere Nicht-HWP-CPUs)"
+      }
+    },
+    "options": {
+      "coolingPolicy": {
+        "0": "Passiv (Prozessor drosseln)",
+        "1": "Aktiv (Lüfter beschleunigen)"
+      },
+      "boostMode": {
+        "0": "Deaktiviert",
+        "1": "Aktiviert",
+        "2": "Aggressiv",
+        "3": "Effizient aktiviert",
+        "4": "Effizient aggressiv",
+        "5": "Aggressiv bei Garantie",
+        "6": "Effizient aggressiv bei Garantie"
+      },
+      "policy": {
+        "0": "Ideal",
+        "1": "Einfach",
+        "2": "Rakete",
+        "3": "Ideal aggressiv"
+      }
+    }
+  },
   "optimization": {
     "pageTitle": "Optimieren",
     "pageDesc": "Systemoptimierung und Leistungstools",
@@ -295,6 +399,7 @@
     },
     "powerManagement": {
       "title": "Energieverwaltung",
+      "tabPlans": "Energiepläne",
       "description": "Optimierte Energiepläne importieren und aktivieren für bessere Gaming-Leistung",
       "currentPlan": "Aktueller Energieplan",
       "builtinPlans": "Integrierte Energiepläne",
@@ -554,6 +659,34 @@
       "noImageYet": "Noch kein Bild zum Herunterladen",
       "previewAlt": "Zufallsbild-Vorschau"
     }
+  },
+  "ai": {
+    "name": "BoxCat",
+    "personaTag": "Catgirl·Yandere",
+    "subtitle": "NexBoxs eigener KI-Assistent",
+    "liveTag": "KI",
+    "entrySubtitle": "Klick, um mit BoxCat zu chatten~",
+    "welcome": "Miau~ Ich bin BoxCat! Frag mich alles über NexBox (≧▽≦) Miau~",
+    "inputPlaceholder": "Sag BoxCat etwas~",
+    "inputPlaceholderWeb": "Websuche läuft… frag mich etwas Neues, miau~",
+    "send": "Senden",
+    "clear": "Chat leeren",
+    "memory": "Erinnerung",
+    "memoryTitle": "Erinnerung",
+    "memoryPlaceholder": "Bring BoxCat etwas über dich bei…",
+    "builtin": "Integriert",
+    "memoryAdd": "Erinnerung hinzufügen",
+    "memoryEmpty": "Noch keine eigene Erinnerung. Bring BoxCat etwas bei! Miau~",
+    "web": "Web",
+    "webOn": "Websuche: An",
+    "webOff": "Websuche: Aus",
+    "webActive": "Websuche aktiv — Antworten basieren auf aktuellen Webinfos, miau~",
+    "searching": "Websuche läuft: ",
+    "searchResultTitle": "Websuche-Ergebnisse",
+    "searchNoResult": "Keine relevanten Web-Ergebnisse gefunden, miau",
+    "thinking": "Denkt nach",
+    "stop": "Ausgabe stoppen",
+    "stopped": "(Ausgabe gestoppt)"
   },
   "hardware": {
     "title": "Hardware-Informationen",

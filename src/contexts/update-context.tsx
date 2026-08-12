@@ -19,7 +19,7 @@ import { store } from "@/lib/store";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type GiteeRelease } from "@/lib/update-checker";
 
-const CURRENT_VERSION = "v7.4.7";
+const CURRENT_VERSION = "v7.6.0";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 
 interface UpdateContextValue {

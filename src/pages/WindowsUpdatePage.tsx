@@ -19,13 +19,14 @@ import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, Wrench, FileText, Clock, BarChart3, PauseCircle, PlayCircle, Ban, RotateCcw } from "lucide-react";
+import { ArrowLeft, Wrench, FileText, BarChart3, ShieldBan, PauseCircle, PlayCircle, Ban, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface UpdateState {
   services_disabled: boolean;
   policy_set: boolean;
   scheduler_disabled: boolean;
+  dlls_renamed: boolean;
   all_disabled: boolean;
 }
 
@@ -292,15 +293,15 @@ export default function WindowsUpdatePage() {
               }
             />
             <StatusCard
-              icon={Clock}
-              label={t("windowsUpdate.schedulerStatus")}
-              isGood={state?.scheduler_disabled ?? false}
-              goodLabel={t("windowsUpdate.schedulerDisabled")}
-              badLabel={t("windowsUpdate.schedulerRunning")}
+              icon={ShieldBan}
+              label={t("windowsUpdate.dllStatus")}
+              isGood={state?.dlls_renamed ?? false}
+              goodLabel={t("windowsUpdate.dllRenamed")}
+              badLabel={t("windowsUpdate.dllNotRenamed")}
               description={
-                state?.scheduler_disabled
-                  ? t("windowsUpdate.schedulerDisabled")
-                  : t("windowsUpdate.schedulerRunning")
+                state?.dlls_renamed
+                  ? t("windowsUpdate.dllRenamed")
+                  : t("windowsUpdate.dllNotRenamed")
               }
             />
             <StatusCard

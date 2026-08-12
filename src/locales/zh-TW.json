@@ -67,6 +67,110 @@
 "enterEdit": "編輯佈局",
 "exitEdit": "退出編輯"
 },
+  "powerAdvanced": {
+    "title": "處理器進階設定",
+    "description": "調整 CPU 效能、散熱與功耗相關的進階電源選項",
+    "currentScheme": "目前電源方案",
+    "refresh": "重新整理",
+    "acLabel": "插電 (AC)",
+    "dcLabel": "電池 (DC)",
+    "percentUnit": "%",
+    "lockedTitle": "進階設定已鎖定",
+    "lockedDesc": "處理器進階設定涉及系統底層電源策略，可能影響功耗、溫度與硬體壽命。解鎖前僅可查看目前值，無法修改。",
+    "unlockButton": "解鎖進階設定",
+    "disclaimerTitle": "免責聲明",
+    "disclaimerText": "處理器進階設定將直接修改 Windows 電源方案中的底層參數，可能影響系統穩定性、功耗與硬體壽命。NexBox 不對由此產生的任何後果負責。請確保您了解每項設定的作用後再進行修改，並建議在操作前記錄目前值以便恢復。",
+    "agreeCheck": "我已了解相關風險，同意並解鎖",
+    "cancel": "取消",
+    "confirmUnlock": "同意並解鎖",
+    "unlockSuccess": "進階設定已解鎖",
+    "unlockFailed": "解鎖失敗",
+    "stateRecommended": "推薦",
+    "stateDefault": "預設",
+    "stateCustom": "自訂",
+    "supported": "目前硬體支援",
+    "notSupported": "目前方案不支援此設定",
+    "hiddenHint": "此設定預設被系統隱藏，解鎖後將自動顯示",
+    "setRecommended": "設為推薦",
+    "setDefault": "設為預設",
+    "setRecommendedSuccess": "已套用推薦值",
+    "setRecommendedFailed": "套用推薦值失敗",
+    "setDefaultSuccess": "已套用預設值",
+    "setDefaultFailed": "套用預設值失敗",
+    "applyFailed": "修改失敗",
+    "applySuccess": "修改已生效",
+    "applyChanges": "套用修改",
+    "unlocking": "解鎖中...",
+    "loadFailed": "載入處理器進階設定失敗",
+    "unhideFailed": "部分設定解除隱藏失敗",
+    "settings": {
+      "processorMinState": {
+        "title": "最低處理器狀態",
+        "desc": "將允許的最低 CPU 速度設定為最大頻率的百分比"
+      },
+      "processorMaxState": {
+        "title": "最高處理器狀態",
+        "desc": "將允許的最高 CPU 速度設定為最大頻率的百分比"
+      },
+      "systemCoolingPolicy": {
+        "title": "系統散熱策略",
+        "desc": "選擇在發熱時是先降低處理器速度（被動）還是先加速風扇（主動）"
+      },
+      "processorBoostMode": {
+        "title": "處理器效能提升模式",
+        "desc": "控制您的 CPU 在要求苛刻的任務中超過基本頻率的積極程度"
+      },
+      "increasePolicy": {
+        "title": "處理器效能提升策略",
+        "desc": "控制當工作負載增加時 CPU 加速速度的快慢（適用於舊的非 HWP 處理器）"
+      },
+      "decreasePolicy": {
+        "title": "處理器效能下降策略",
+        "desc": "控制當工作負載減少時 CPU 降低速度的快慢（適用於舊的非 HWP 處理器）"
+      },
+      "coreParkingMin": {
+        "title": "CPU 核心停放最低核心數",
+        "desc": "設定必須保持活動和回應的 CPU 核心的最小百分比"
+      },
+      "coreParkingMax": {
+        "title": "CPU 核心停放最高核心數",
+        "desc": "設定允許活動的 CPU 核心的最大百分比（100% 為最佳效能）"
+      },
+      "energyPreference": {
+        "title": "處理器能源效能偏好",
+        "desc": "平衡具有 HWP 的現代 CPU 的能源效率與效能（0=最高效能，100=最高能源效率）"
+      },
+      "increaseThreshold": {
+        "title": "處理器效能提升閾值",
+        "desc": "設定觸發速度提升的 CPU 使用率百分比（越低越靈敏，適用於舊的非 HWP CPU）"
+      },
+      "decreaseThreshold": {
+        "title": "處理器效能下降閾值",
+        "desc": "設定觸發速度降低的 CPU 使用率百分比（越低越能保持高效能，適用於舊的非 HWP CPU）"
+      }
+    },
+    "options": {
+      "coolingPolicy": {
+        "0": "被動（降低處理器速度）",
+        "1": "主動（加速風扇）"
+      },
+      "boostMode": {
+        "0": "停用",
+        "1": "啟用",
+        "2": "積極",
+        "3": "高效啟用",
+        "4": "高效積極",
+        "5": "保證時積極",
+        "6": "保證時高效積極"
+      },
+      "policy": {
+        "0": "理想",
+        "1": "單一",
+        "2": "火箭",
+        "3": "理想積極"
+      }
+    }
+  },
   "optimization": {
     "pageTitle": "優化",
     "pageDesc": "系統優化與效能提升工具",
@@ -296,6 +400,7 @@
     "powerManagement": {
       "title": "電源管理",
       "description": "匯入並啟用優化電源計劃，提升遊戲效能",
+      "tabPlans": "電源計劃",
       "currentPlan": "目前電源計劃",
       "builtinPlans": "內建電源計劃",
       "systemPlans": "系統電源計劃",
@@ -538,6 +643,34 @@
       "noImageYet": "尚無可下載的圖片",
       "previewAlt": "隨機圖片預覽"
     }
+  },
+  "ai": {
+    "name": "盒子喵",
+    "personaTag": "貓娘·病嬌",
+    "subtitle": "新境盒專屬 AI 助手",
+    "liveTag": "AI",
+    "entrySubtitle": "點擊和盒子喵聊天喵~",
+    "welcome": "喵嗚~ 我是盒子喵！關於新境盒的任何問題都可以問我哦(≧▽≦)喵~",
+    "inputPlaceholder": "跟盒子喵說點什麼喵~",
+    "inputPlaceholderWeb": "聯網搜尋中…問點最新的事情喵~",
+    "send": "傳送",
+    "clear": "清空對話",
+    "memory": "記憶管理",
+    "memoryTitle": "記憶管理",
+    "memoryPlaceholder": "給盒子喵記一條關於你的資訊…",
+    "builtin": "內建",
+    "memoryAdd": "新增記憶",
+    "memoryEmpty": "還沒有自訂記憶，給盒子喵加點吧喵~",
+    "web": "聯網",
+    "webOn": "聯網搜尋：開",
+    "webOff": "聯網搜尋：關",
+    "webActive": "聯網搜尋已開啟，回答會基於最新網路資訊喵~",
+    "searching": "正在聯網搜尋：",
+    "searchResultTitle": "聯網搜尋結果",
+    "searchNoResult": "沒有找到相關網頁結果喵",
+    "thinking": "思考中",
+    "stop": "停止輸出",
+    "stopped": "（已停止輸出）"
   },
   "hardware": {
     "title": "硬體資訊",

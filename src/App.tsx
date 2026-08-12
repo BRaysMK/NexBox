@@ -39,6 +39,7 @@ import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
 import SensorMonitorPage from "./pages/SensorMonitorPage";
 import RuntimeRepairPage from "./pages/RuntimeRepairPage";
+import VtxVirtualizationPage from "./pages/VtxVirtualizationPage";
 import AudioEqPage from "./pages/AudioEqPage";
 import AutoClickerPage from "./pages/AutoClickerPage";
 import GameProcessOptimizePage from "./pages/GameProcessOptimizePage";
@@ -142,6 +143,7 @@ function App() {
               <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
               <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
               <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
+              <Route path="/vtx-virtualization" element={<AnimatedPage><VtxVirtualizationPage /></AnimatedPage>} />
         </Routes>
       </AnimatePresence>
     ) : (
@@ -186,6 +188,7 @@ function App() {
             <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
             <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
             <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
+            <Route path="/vtx-virtualization" element={<AnimatedPage><VtxVirtualizationPage /></AnimatedPage>} />
       </Routes>
     )}
 
