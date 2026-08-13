@@ -12,11 +12,13 @@ import {
   Badge,
   Spinner,
   Progress,
+  useToast,
+  Tooltip,
 } from "@chakra-ui/react";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, HardDrive, RefreshCw, Thermometer, AlertTriangle, Star } from "lucide-react";
+import { ArrowLeft, HardDrive, RefreshCw, Thermometer, AlertTriangle, Star, Wrench, Sparkles } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -60,6 +62,83 @@ interface DiskHealthResponse {
   healthy_count: number;
   warning_count: number;
   unhealthy_count: number;
+}
+
+interface DiskOptimizeResult {
+  drive_letter: string;
+  operation: string;
+  is_ssd: boolean;
+  success: boolean;
+  message: string;
+}
+
+function isSsdMedia(mediaType: string): boolean {
+  return /ssd|nvme|solid|flash/i.test(mediaType);
+}
+
+// 分区整理/优化按钮：机械盘做碎片整理，固态盘做 TRIM/优化
+function OptimizeButton({ letter, mediaType }: { letter: string; mediaType: string }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const { getActiveColor } = useThemeColor();
+  const [loading, setLoading] = useState(false);
+
+  const ssd = isSsdMedia(mediaType);
+  const label = ssd ? t("diskHealth.optimize") : t("diskHealth.defrag");
+
+  const handle = async () => {
+    setLoading(true);
+    try {
+      const res = await invoke<DiskOptimizeResult>("optimize_disk", {
+        driveLetter: letter,
+        mediaType,
+      });
+      const done = res.operation === "retrim"
+        ? t("diskHealth.optimizeDone")
+        : res.operation === "defrag"
+          ? t("diskHealth.defragDone")
+          : t("diskHealth.optimizeDone");
+      toast({
+        title: `${letter}: ${done}`,
+        description: res.message,
+        status: "success",
+        duration: 6000,
+        isClosable: true,
+        variant: "left-accent",
+      });
+    } catch (e) {
+      toast({
+        title: t("diskHealth.optimizeFailed"),
+        description: String(e),
+        status: "error",
+        duration: 6000,
+        isClosable: true,
+        variant: "left-accent",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Tooltip label={ssd ? t("diskHealth.optimizeHint") : t("diskHealth.defragHint")} hasArrow>
+      <Button
+        leftIcon={ssd ? <Sparkles size={13} /> : <Wrench size={13} />}
+        size="xs"
+        variant="outline"
+        color={getActiveColor()}
+        borderColor={getActiveColor()}
+        _hover={{ bg: getActiveColor(), color: "#fff", borderColor: getActiveColor() }}
+        fontWeight="medium"
+        isLoading={loading}
+        loadingText={t("diskHealth.optimizing")}
+        onClick={handle}
+        flex="none"
+      >
+        {label}
+      </Button>
+    </Tooltip>
+  );
 }
 
 function SettingCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -109,9 +188,9 @@ function MediaTypeBadge({ type }: { type: string }) {
 }
 
 function formatGb(gb: number): string {
-  if (gb >= 1000) return `${(gb / 1000).toFixed(1)}TB`;
-  if (gb >= 1) return `${gb.toFixed(0)}GB`;
-  return `${(gb * 1000).toFixed(0)}MB`;
+  if (gb >= 1024) return `${(gb / 1024).toFixed(2)}TB`;
+  if (gb >= 1) return `${gb.toFixed(2)}GB`;
+  return `${(gb * 1024).toFixed(1)}MB`;
 }
 
 export default function DiskHealthPage() {
@@ -237,9 +316,9 @@ export default function DiskHealthPage() {
                     )}
                   </HStack>
                   <Text fontSize="sm" color={subTextColor}>
-                    {disk.size_gb >= 1000
-                      ? `${(disk.size_gb / 1000).toFixed(1)} TB`
-                      : `${disk.size_gb.toFixed(0)} GB`}
+                    {disk.size_gb >= 1024
+                      ? `${(disk.size_gb / 1024).toFixed(2)} TB`
+                      : `${disk.size_gb.toFixed(2)} GB`}
                   </Text>
                 </HStack>
 
@@ -262,6 +341,7 @@ export default function DiskHealthPage() {
                       <Text fontSize="xs" fontWeight="medium" color={part.usage_percent > 90 ? "red.400" : part.usage_percent > 75 ? "yellow.400" : textColor}>
                         {part.usage_percent.toFixed(0)}%
                       </Text>
+                      <OptimizeButton letter={part.drive_letter} mediaType={disk.media_type} />
                     </HStack>
                     <Progress
                       value={part.usage_percent}

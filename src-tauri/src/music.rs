@@ -282,6 +282,36 @@ pub async fn import_local_music(paths: Vec<String>) -> Result<Vec<LocalSongInfo>
     Ok(results)
 }
 
+/// 递归收集文件夹下所有受支持的音频文件路径
+fn collect_audio_files(dir: &std::path::Path, out: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_audio_files(&path, out);
+        } else if path.is_file() {
+            let ext = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.to_lowercase())
+                .unwrap_or_default();
+            if is_supported_extension(&ext) {
+                out.push(path.to_string_lossy().to_string());
+            }
+        }
+    }
+}
+
+/// 导入整个文件夹（递归）下的音频文件：收集文件后复用单文件导入逻辑
+#[tauri::command]
+pub async fn import_local_music_folder(folder: String) -> Result<Vec<LocalSongInfo>, String> {
+    let mut paths = Vec::new();
+    collect_audio_files(std::path::Path::new(&folder), &mut paths);
+    import_local_music(paths).await
+}
+
 /// 读取本地音频文件同目录的同名 .lrc 歌词文件。
 /// 优先级：同名 .lrc → 同名 .txt（文本歌词）。
 /// 返回原始歌词文本，若不存在返回空字符串。

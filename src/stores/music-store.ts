@@ -133,6 +133,7 @@ interface MusicState {
   // 本地导入歌曲 Actions
   loadLocalSongs: () => Promise<void>;
   importLocalSongs: (paths: string[]) => Promise<{ count: number; noCoverCount: number }>;
+  importLocalFolder: (folder: string) => Promise<{ count: number; noCoverCount: number }>;
   removeLocalSong: (id: string) => Promise<void>;
   clearLocalSongs: () => Promise<void>;
 
@@ -232,6 +233,73 @@ function serializeLocalSong(song: Song): Record<string, unknown> {
     hash: song.hash,
     _localPath: song._localPath,
   };
+}
+
+/// 后端 import_local_music / import_local_music_folder 返回的单首歌曲元信息
+interface LocalSongInfoPayload {
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  extension: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration_ms: number;
+  cover: string;
+  cover_source: string;
+}
+
+/// 把后端返回的本地歌曲元信息合并进 localSongs 并持久化（供单文件/文件夹导入复用）
+async function mergeLocalSongInfos(
+  infos: LocalSongInfoPayload[],
+  set: (partial: (state: unknown) => unknown) => void,
+  get: () => { localSongs: Song[] }
+): Promise<{ count: number; noCoverCount: number }> {
+  if (infos.length === 0) return { count: 0, noCoverCount: 0 };
+
+  const newSongs: Song[] = infos.map((info) => ({
+    provider: "local",
+    id: info.id,
+    // 优先使用音频标签中的标题，回退到文件名
+    name: info.title || info.name,
+    artist: info.artist || "本地音乐",
+    artists: info.artist ? [{ name: info.artist }] : [],
+    album: info.album,
+    // 内嵌封面（data URI 或空字符串）
+    cover: info.cover || "",
+    duration: info.duration_ms,
+    fee: 0,
+    playable: true,
+    language: 0,
+    // 本地歌曲专用：文件绝对路径，用于 convertFileSrc 播放
+    // 复用 hash 字段存放绝对路径，避免修改 Song 结构
+    hash: info.path,
+    _localPath: info.path,
+  }));
+
+  set((state) => {
+    const st = state as { localSongs: Song[] };
+    // 已存在的歌曲更新元数据，新歌曲追加
+    const merged = [...st.localSongs];
+    for (const song of newSongs) {
+      const idx = merged.findIndex((s) => s.id === song.id);
+      if (idx >= 0) {
+        merged[idx] = song;
+      } else {
+        merged.push(song);
+      }
+    }
+    return { localSongs: merged };
+  });
+
+  // 持久化完整 Song 对象，确保重启后 provider 等字段不丢失
+  const s = await getStore();
+  const finalList = get().localSongs.map(serializeLocalSong);
+  await s.set("localSongs", finalList);
+  await s.save();
+
+  return { count: newSongs.length, noCoverCount: infos.filter((info) => !info.cover).length };
 }
 
 // 桌面歌词时间同步定时器
@@ -443,67 +511,20 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   importLocalSongs: async (paths) => {
     try {
-      const infos = await invoke<Array<{
-        id: string;
-        name: string;
-        path: string;
-        size: number;
-        extension: string;
-        title: string;
-        artist: string;
-        album: string;
-        duration_ms: number;
-        cover: string;
-        cover_source: string;
-      }>>("import_local_music", { paths });
-
-      if (infos.length === 0) return { count: 0, noCoverCount: 0 };
-
-      const newSongs: Song[] = infos.map((info) => ({
-        provider: "local",
-        id: info.id,
-        // 优先使用音频标签中的标题，回退到文件名
-        name: info.title || info.name,
-        artist: info.artist || "本地音乐",
-        artists: info.artist ? [{ name: info.artist }] : [],
-        album: info.album,
-        // 内嵌封面（data URI 或空字符串）
-        cover: info.cover || "",
-        duration: info.duration_ms,
-        fee: 0,
-        playable: true,
-        language: 0,
-        // 本地歌曲专用：文件绝对路径，用于 convertFileSrc 播放
-        // 复用 hash 字段存放绝对路径，避免修改 Song 结构
-        hash: info.path,
-        _localPath: info.path,
-      }));
-
-      set((state) => {
-        // 已存在的歌曲更新元数据（封面/标题/艺术家/专辑/时长），新歌曲追加
-        const merged = [...state.localSongs];
-        for (const song of newSongs) {
-          const idx = merged.findIndex((s) => s.id === song.id);
-          if (idx >= 0) {
-            merged[idx] = song;
-          } else {
-            merged.push(song);
-          }
-        }
-        return { localSongs: merged };
-      });
-
-      // 持久化完整 Song 对象，确保重启后 provider 等字段不丢失
-      const s = await getStore();
-      const finalList = get().localSongs.map(serializeLocalSong);
-      await s.set("localSongs", finalList);
-      await s.save();
-
-      // 统计没有封面的歌曲数量，用于前端提示
-      const noCoverCount = infos.filter((info) => !info.cover).length;
-      return { count: newSongs.length, noCoverCount };
+      const infos = await invoke<LocalSongInfoPayload[]>("import_local_music", { paths });
+      return await mergeLocalSongInfos(infos, set, get);
     } catch (e) {
       console.error("Import local songs failed:", e);
+      return { count: 0, noCoverCount: 0 };
+    }
+  },
+
+  importLocalFolder: async (folder) => {
+    try {
+      const infos = await invoke<LocalSongInfoPayload[]>("import_local_music_folder", { folder });
+      return await mergeLocalSongInfos(infos, set, get);
+    } catch (e) {
+      console.error("Import local music folder failed:", e);
       return { count: 0, noCoverCount: 0 };
     }
   },
@@ -562,7 +583,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (fontSize != null) set({ lyricsFontSize: fontSize });
       const expStyle = await store.get<string>("expandedStyle");
       if (highlightColor) set({ lyricsHighlightColor: highlightColor });
-      if (expStyle === "modern") set({ expandedStyle: "modern" });
+      // 恢复播放器样式（glass/modern 都需还原，否则切到 glass 后重启会退回默认 modern）
+      if (expStyle === "modern" || expStyle === "glass") set({ expandedStyle: expStyle });
       const dynamic = await store.get<boolean>("dynamicEnabled");
       if (dynamic) set({ dynamicEnabled: true });
       const filmEffect = await store.get<boolean>("coverFilmEffect");

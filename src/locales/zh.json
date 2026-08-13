@@ -1315,7 +1315,12 @@
       "title": "核心优化",
       "description": "为游戏进程分配指定 CPU 核心，发挥多核性能"
     },
+    "ifeoOptimize": {
+      "title": "IFEO 优先级",
+      "description": "通过注册表在进程启动时由系统强制应用优先级，持久且对受保护进程生效"
+    },
     "apply": "应用",
+    "restore": "恢复",
     "optimizeNow": "立即优化",
     "optimizeNowDone": "已对该游戏应用进程优化 + 核心优化",
     "autoOptimize": {
@@ -1323,6 +1328,7 @@
       "description": "游戏启动时自动应用下方已开启的优化项",
       "priority": "进程自动优化",
       "affinity": "核心自动优化",
+      "ifeo": "IFEO 优先级强制优化",
       "enabled": "自动优化已开启",
       "disabled": "自动优化已关闭"
     },
@@ -1512,6 +1518,10 @@
       "autoStartDisabled": "开机自启已关闭",
       "autoStartError": "开机自启设置失败",
       "autoStartErrorHint": "请检查杀毒软件是否拦截，或尝试以管理员身份运行",
+      "minimizedStartLabel": "开机最小化启动",
+      "minimizedStartDesc": "开机时不显示主窗口，仅后台运行并保留托盘",
+      "minimizedStartEnabled": "开机最小化启动已开启",
+      "minimizedStartDisabled": "开机最小化启动已关闭",
       "autoUpdate": "自动静默更新",
       "closeBehavior": "关闭行为",
       "closeBehaviorLabel": "点击关闭按钮时",
@@ -1611,7 +1621,7 @@
       "unreachable": "不可达",
       "servers": {
         "baidu": "百度",
-        "gitee": "Gitee",
+        "gitcode": "GitCode",
         "github": "GitHub",
         "qq": "腾讯",
         "aliyun": "阿里云",
@@ -1941,8 +1951,8 @@
     "requiresReboot": "需要重启系统才能完全生效"
   },
   "windowsUpdate": {
-    "pageTitle": "关闭 Windows 更新",
-    "pageDesc": "完全关闭 Windows 自动更新，包括服务、组策略和定时任务（可恢复）",
+    "pageTitle": "Windows 更新与 Defender",
+    "pageDesc": "完全关闭 Windows 自动更新与 Windows Defender（均支持恢复）",
     "servicesStatus": "更新服务状态",
     "servicesDisabled": "已禁用",
     "servicesRunning": "运行中",
@@ -1978,6 +1988,21 @@
       "restoreError": "恢复更新失败",
       "manualHintTitle": "💡 重要提示",
       "manualHint": "写入成功后，请打开「设置 → Windows 更新 → 暂停更新」手动调整暂停周数为最大值，否则注册表时间无法生效。"
+    },
+    "defenderCard": {
+      "title": "Windows Defender 实时防护",
+      "desc": "通过组策略关闭 Windows Defender 实时防护（反间谍/反病毒、行为监控、文件访问保护等），可随时恢复。",
+      "checking": "正在检查 Defender 状态...",
+      "disabled": "已关闭",
+      "enabled": "运行中",
+      "applyBtn": "关闭 Windows Defender",
+      "restoreBtn": "恢复 Windows Defender",
+      "applySuccess": "已成功关闭 Windows Defender",
+      "restoreSuccess": "已成功恢复 Windows Defender",
+      "applyError": "关闭 Windows Defender 失败",
+      "restoreError": "恢复 Windows Defender 失败",
+      "manualHintTitle": "⚠️ 请注意",
+      "manualHint": "关闭后系统将不再提供病毒与威胁防护。若「篡改防护」处于开启状态，Windows 可能会自动重置这些策略，需先在 Defender 设置中关闭「篡改防护」才能生效。"
     }
   },
   "gpuDriverRestart": {
@@ -2020,6 +2045,14 @@
       "description": "刷新系统 DNS 解析缓存，解决域名解析异常",
       "clear": "立即清理",
       "clearing": "清理中..."
+    },
+    "resetNetwork": {
+      "title": "重置网络",
+      "description": "重置 Winsock 与 TCP/IP 协议栈，解决网络异常、连接问题",
+      "reset": "立即重置",
+      "resetting": "重置中...",
+      "done": "网络已重置，建议重启电脑后生效",
+      "error": "网络重置失败"
     },
     "dns": {
       "title": "DNS 设置",
@@ -2317,7 +2350,15 @@
     "writeErrors": "写入错误",
     "partitions": "个分区",
     "loadError": "加载失败",
-    "retry": "重试"
+    "retry": "重试",
+    "defrag": "整理碎片",
+    "optimize": "优化/TRIM",
+    "optimizing": "整理中...",
+    "defragHint": "执行碎片整理，重新排列数据以减少机械盘寻道",
+    "optimizeHint": "对固态盘执行 TRIM/优化，清理无效数据",
+    "defragDone": "碎片整理完成",
+    "optimizeDone": "优化(TRIM)完成",
+    "optimizeFailed": "磁盘整理失败"
   },
   "screenRecord": {
     "title": "屏幕录制",

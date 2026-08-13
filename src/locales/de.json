@@ -1193,7 +1193,12 @@
       "title": "Kern-Optimierung",
       "description": "Bestimmte CPU-Kerne dem Spielprozess zuweisen für Mehrkern-Leistung"
     },
+    "ifeoOptimize": {
+      "title": "IFEO-Priorität",
+      "description": "Priorität per Registrierung beim Prozessstart erzwungen; persistent und wirkt auf geschützte Prozesse"
+    },
     "apply": "Anwenden",
+    "restore": "Wiederherstellen",
     "optimizeNow": "Jetzt optimieren",
     "optimizeNowDone": "Prozess- und Kern-Optimierung für dieses Spiel angewendet",
     "autoOptimize": {
@@ -1201,6 +1206,7 @@
       "description": "Beim Spielstart werden die unten aktivierten Optimierungen automatisch angewendet",
       "priority": "Prozess-Auto-Optimierung",
       "affinity": "Kern-Auto-Optimierung",
+      "ifeo": "IFEO-Priorität erzwingen",
       "enabled": "Auto-Optimierung aktiviert",
       "disabled": "Auto-Optimierung deaktiviert"
     },
@@ -1528,7 +1534,7 @@
       "unreachable": "Nicht erreichbar",
       "servers": {
         "baidu": "Baidu",
-        "gitee": "Gitee",
+        "gitcode": "GitCode",
         "github": "GitHub",
         "qq": "Tencent",
         "aliyun": "Alibaba Cloud",

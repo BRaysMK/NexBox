@@ -276,6 +276,51 @@ pub static CURRENT_SETTINGS: Mutex<Option<OverlaySettings>> = Mutex::new(None);
 pub static CURRENT_HARDWARE_DATA: Mutex<Option<OverlayHardwareData>> = Mutex::new(None);
 pub static SETTINGS_LOADED_FROM_STORE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// 供托盘悬停面板读取的硬件数据快照（只读自常驻轮询缓存，不触发额外采样）。
+#[derive(serde::Serialize, Clone, Default)]
+pub struct HoverSnapshot {
+    pub cpu_usage: Option<u16>,
+    pub cpu_temp: Option<f64>,
+    pub cpu_clock: Option<u32>,
+    pub cpu_fan_speed: Option<u32>,
+    pub cpu_voltage: Option<f64>,
+    pub cpu_power: Option<f64>,
+    pub gpu_temp: Option<f64>,
+    pub gpu_usage: Option<u32>,
+    pub gpu_clock: Option<u32>,
+    pub gpu_fan_speed: Option<u32>,
+    pub gpu_voltage: Option<f64>,
+    pub gpu_power: Option<u32>,
+    pub gpu_vram_used: Option<u32>,
+    pub gpu_vram_total: Option<u32>,
+    pub gpu_memory_clock: Option<u32>,
+    pub memory_usage: Option<f64>,
+    pub ssd_temp: Option<f64>,
+}
+
+/// 读取当前轮询缓存中的硬件数据（None 表示尚无数据，如启动早期）。
+pub fn current_hover_snapshot() -> Option<HoverSnapshot> {
+    CURRENT_HARDWARE_DATA.lock().unwrap().clone().map(|d| HoverSnapshot {
+        cpu_usage: d.cpu_usage,
+        cpu_temp: d.cpu_temp,
+        cpu_clock: d.cpu_clock,
+        cpu_fan_speed: d.cpu_fan_speed,
+        cpu_voltage: d.cpu_voltage,
+        cpu_power: d.cpu_power,
+        gpu_temp: d.gpu_temp,
+        gpu_usage: d.gpu_usage,
+        gpu_clock: d.gpu_clock,
+        gpu_fan_speed: d.gpu_fan_speed,
+        gpu_voltage: d.gpu_voltage,
+        gpu_power: d.gpu_power,
+        gpu_vram_used: d.gpu_vram_used,
+        gpu_vram_total: d.gpu_vram_total,
+        gpu_memory_clock: d.gpu_memory_clock,
+        memory_usage: d.memory_usage,
+        ssd_temp: d.ssd_temp,
+    })
+}
+
 /// 从持久化存储 (settings.json) 加载悬浮框设置到内存。
 /// 仅在 CURRENT_SETTINGS 为空时尝试加载，确保快捷键触发的 toggle 使用已保存的设置而非默认值。
 pub fn try_load_persisted_settings(app_handle: &tauri::AppHandle) {

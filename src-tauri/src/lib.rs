@@ -10,6 +10,7 @@ mod cpu_scheduler;
 mod crosshair;
 mod dattorro;
 mod delta_force;
+mod disk_optimize;
 mod spectrum;
 mod display_cache;
 mod display_filter;
@@ -303,6 +304,10 @@ pub fn run() {
                 let _ = game_process_optimize::init(app_handle_for_game_opt).await;
             });
 
+            // 启动时自动清理旧版开机自启残留（计划任务/启动快捷方式），
+            // 确保只保留当前的注册表 Run 键启动项
+            auto_start::cleanup_legacy_auto_start();
+
             // Main window: intercept taskbar Close / Alt+F4 → hide instead of destroy，
             // 并通知前端窗口可见性变化（最小化/隐藏到托盘时暂停动态背景视频，降低 CPU 占用）
             if let Some(main_window) = app.get_webview_window("main") {
@@ -342,6 +347,18 @@ pub fn run() {
                 Err(e) => log::error!("Failed to initialize tray: {}", e),
             }
 
+            // 开机自启模式（--autostart 参数）：主窗口在 tauri.conf.json 中已设 visible:false，
+            // 此处保持隐藏，静默后台运行、不显示启动画面，仅保留托盘
+            let is_autostart = std::env::args().any(|a| a == "--autostart");
+            if is_autostart {
+                log::info!("开机自启模式：主窗口保持隐藏，后台静默运行");
+            } else if let Some(main_window) = app.get_webview_window("main") {
+                // 正常启动：显示主窗口（避免 autostart 时闪现启动画面）
+                let _ = main_window.show();
+                emit_main_visibility(app.handle(), true);
+                log::info!("正常启动：主窗口已显示");
+            }
+
             // 提前从持久化存储加载悬浮框设置，确保快捷键触发时使用已保存的配置而非默认值
             overlay_panel::try_load_persisted_settings(app.handle());
 
@@ -364,6 +381,11 @@ pub fn run() {
             let _ = hotkey::init_music_next(app.handle(), &music_next_hotkey);
             let _ = hotkey::init_music_playpause(app.handle(), &music_playpause_hotkey);
 
+            // 若保存的总开关为“关闭”，上面已注册的热键需立即注销以释放按键
+            if !hotkey::is_hotkeys_enabled() {
+                hotkey::apply_hotkeys_enabled(app.handle(), false);
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -378,8 +400,10 @@ pub fn run() {
         hardware::is_nvidia_gpu,
         hardware::get_os_version,
         hardware::get_disk_health_info,
+        disk_optimize::optimize_disk,
         music::get_music_files,
         music::import_local_music,
+        music::import_local_music_folder,
         music::get_local_lyric,
         // === 音乐播放器 API ===
         music_api::music_search,
@@ -516,6 +540,7 @@ pub fn run() {
         optimization::enable_windows_update,
         optimization::check_windows_update_state,
         optimization::check_pause_update_state,
+        optimization::check_defender_state,
         optimization::delete_power_plan,
         optimization::get_peripheral_status,
         optimization::set_peripheral_settings,
@@ -532,6 +557,7 @@ pub fn run() {
         network_optimize::set_dns_servers,
         network_optimize::restore_dns_servers,
         network_optimize::clear_dns_cache,
+        network_optimize::reset_network,
         network_optimize::check_network_tweak_states,
         network_optimize::batch_network_enable,
         network_optimize::batch_network_disable,
@@ -541,6 +567,7 @@ pub fn run() {
         startup_manager::enable_startup_item,
         startup_manager::locate_startup_file,
         startup_manager::find_startup_key_in_registry,
+        startup_manager::get_startup_item_icon,
         display_filter::get_displays,
         display_filter::set_active_display,
         display_filter::check_gamma_support,
@@ -574,6 +601,8 @@ pub fn run() {
         game_process_optimize::save_game_optimize_configs,
         game_process_optimize::optimize_game_priority,
         game_process_optimize::optimize_game_affinity,
+        game_process_optimize::apply_game_ifeo,
+        game_process_optimize::restore_game_ifeo,
         game_process_optimize::set_game_auto_optimize,
         game_process_optimize::get_game_auto_optimize_status,
         game_process_optimize::select_game_executable,

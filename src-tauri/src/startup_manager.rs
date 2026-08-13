@@ -6,6 +6,7 @@ use std::process::Command;
 use winreg::enums::*;
 use winreg::RegKey;
 use winreg::types::FromRegValue;
+use base64::Engine as _;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -74,29 +75,101 @@ fn sanitize_path(s: &str) -> String {
     s.trim().to_string()
 }
 
-fn resolve_shortcut_target(lnk_path: &str) -> Option<String> {
-    let escaped = lnk_path.replace('\'', "''");
-    let ps_script = format!(
-        "try {{ $ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('{}'); Write-Output $sc.TargetPath }} catch {{ exit 1 }}",
-        escaped
-    );
-    let result = Command::new("powershell")
-        .args(&[
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &ps_script,
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-    match result {
-        Ok(output) if output.status.success() => {
-            let target = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if target.is_empty() { None } else { Some(target) }
-        }
-        _ => None,
+/// 原生解析 .lnk 快捷方式的目标路径（不依赖 PowerShell）。
+/// 按 ShellLink 格式读取 LinkInfo 中的 LocalBasePath（优先 Unicode，回退 ANSI），失败返回 None。
+pub fn resolve_shortcut_target(lnk_path: &str) -> Option<String> {
+    let bytes = fs::read(lnk_path).ok()?;
+    if bytes.len() < 0x4C {
+        return None;
     }
+    // 校验文件头处的 Shell Link CLSID（00021401-0000-0000-C000-000000000046，LE 存储）
+    let expected_clsid: [u8; 16] = [
+        0x01, 0x14, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x46,
+    ];
+    if &bytes[0x04..0x14] != expected_clsid.as_slice() {
+        return None;
+    }
+
+    let link_flags = u32::from_le_bytes([bytes[0x14], bytes[0x15], bytes[0x16], bytes[0x17]]);
+    if link_flags & 0x02 == 0 {
+        // 无 LinkInfo，无法取得本地路径
+        return None;
+    }
+
+    // 跳过 Header + 可选的 LinkTargetIDList，定位 LinkInfo 起始
+    let mut offset = 0x4Cusize;
+    if link_flags & 0x01 != 0 {
+        if bytes.len() < offset + 2 {
+            return None;
+        }
+        let idlist_size = u16::from_le_bytes([bytes[offset], bytes[offset + 1]]) as usize;
+        offset += 2 + idlist_size;
+    }
+    if bytes.len() < offset + 4 {
+        return None;
+    }
+    let link_info_size =
+        u32::from_le_bytes([bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]])
+            as usize;
+    if bytes.len() < offset + link_info_size {
+        return None;
+    }
+    let li = &bytes[offset..offset + link_info_size];
+    if li.len() < 0x1C {
+        return None;
+    }
+
+    let header_size = u32::from_le_bytes([li[4], li[5], li[6], li[7]]) as usize;
+    // LinkInfo 内偏移基准为 li 起始
+    let local_base_path_off = u32::from_le_bytes([li[16], li[17], li[18], li[19]]) as usize;
+    let unicode_off = if header_size >= 0x24 && li.len() >= 0x28 {
+        Some(u32::from_le_bytes([li[0x1C], li[0x1D], li[0x1E], li[0x1F]]) as usize)
+    } else {
+        None
+    };
+
+    // 优先 Unicode 本地路径
+    if let Some(uoff) = unicode_off {
+        if uoff + 2 <= li.len() {
+            let mut p = uoff;
+            let mut utf16 = Vec::new();
+            while p + 1 < li.len() {
+                let ch = u16::from_le_bytes([li[p], li[p + 1]]);
+                if ch == 0 {
+                    break;
+                }
+                utf16.push(ch);
+                p += 2;
+            }
+            if !utf16.is_empty() {
+                if let Ok(s) = String::from_utf16(&utf16) {
+                    if !s.is_empty() {
+                        return Some(s);
+                    }
+                }
+            }
+        }
+    }
+
+    // 回退 ANSI 本地路径
+    if local_base_path_off + 1 <= li.len() {
+        let mut p = local_base_path_off;
+        let mut ansi = Vec::new();
+        while p < li.len() {
+            let b = li[p];
+            if b == 0 {
+                break;
+            }
+            ansi.push(b);
+            p += 1;
+        }
+        if !ansi.is_empty() {
+            return Some(String::from_utf8_lossy(&ansi).to_string());
+        }
+    }
+
+    None
 }
 
 fn scan_registry_key(
@@ -205,6 +278,153 @@ fn get_common_startup_folder() -> Option<PathBuf> {
             .join("Programs")
             .join("Startup")
     })
+}
+
+/// 把 HICON 画到指定尺寸的 32 位 DIB 位图并编码为 PNG 字节（BGRA -> RGBA）
+fn draw_hicon_png(hicon: *mut std::ffi::c_void, size: i32) -> Option<Vec<u8>> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Graphics::Gdi::{
+            BITMAPINFO, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject,
+            SelectObject, ReleaseDC, GetDC,
+        };
+        use windows_sys::Win32::UI::WindowsAndMessaging::DrawIconEx;
+
+        unsafe {
+            let hdc_screen = GetDC(std::ptr::null_mut());
+            if hdc_screen.is_null() {
+                return None;
+            }
+            let hdc = CreateCompatibleDC(hdc_screen);
+            if hdc.is_null() {
+                ReleaseDC(std::ptr::null_mut(), hdc_screen);
+                return None;
+            }
+
+            let mut bmi: BITMAPINFO = std::mem::zeroed();
+            bmi.bmiHeader.biSize =
+                std::mem::size_of::<windows_sys::Win32::Graphics::Gdi::BITMAPINFOHEADER>() as u32;
+            bmi.bmiHeader.biWidth = size;
+            bmi.bmiHeader.biHeight = -size; // top-down
+            bmi.bmiHeader.biPlanes = 1;
+            bmi.bmiHeader.biBitCount = 32;
+            bmi.bmiHeader.biCompression = 0; // BI_RGB
+
+            let mut bits: *mut std::ffi::c_void = std::ptr::null_mut();
+            let hbmp = CreateDIBSection(hdc, &bmi, 0, &mut bits, std::ptr::null_mut(), 0);
+            if hbmp.is_null() || bits.is_null() {
+                DeleteDC(hdc);
+                ReleaseDC(std::ptr::null_mut(), hdc_screen);
+                return None;
+            }
+
+            let old = SelectObject(hdc, hbmp as *mut std::ffi::c_void);
+            DrawIconEx(
+                hdc, 0, 0, hicon, size, size, 0, std::ptr::null_mut(), 0x0003, // DI_NORMAL
+            );
+
+            // 位图为 BGRA，转为 RGBA
+            let total = (size * size * 4) as usize;
+            let src = std::slice::from_raw_parts(bits as *const u8, total);
+            let mut rgba = Vec::with_capacity(total);
+            for i in 0..(size * size) as usize {
+                rgba.push(src[i * 4 + 2]); // R
+                rgba.push(src[i * 4 + 1]); // G
+                rgba.push(src[i * 4]);     // B
+                rgba.push(src[i * 4 + 3]); // A
+            }
+
+            SelectObject(hdc, old);
+            DeleteObject(hbmp);
+            DeleteDC(hdc);
+            ReleaseDC(std::ptr::null_mut(), hdc_screen);
+
+            let img = image::RgbaImage::from_raw(size as u32, size as u32, rgba)?;
+            let mut out = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgba8(img)
+                .write_to(&mut out, image::ImageFormat::Png)
+                .ok()?;
+            Some(out.into_inner())
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (hicon, size);
+        None
+    }
+}
+
+/// 从 exe 文件提取图标并编码为 PNG data URI（不使用 PowerShell）。
+/// 优先用 SHDefExtractIconW 按 256px 提取高清图标（在 32px 框内缩小显示更清晰），
+/// 失败时回退到 SHGetFileInfoW 的默认图标。
+pub fn extract_icon_data_uri(file_path: &str) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::Shell::SHDefExtractIconW;
+        use windows_sys::Win32::UI::Shell::SHGetFileInfoW;
+        use windows_sys::Win32::UI::Shell::SHFILEINFOW;
+        use windows_sys::Win32::UI::Shell::SHGFI_ICON;
+        use windows_sys::Win32::UI::Shell::SHGFI_LARGEICON;
+        use windows_sys::Win32::UI::WindowsAndMessaging::DestroyIcon;
+
+        unsafe {
+            let wide: Vec<u16> = file_path
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
+
+            // 优先按 256px 提取高清图标（Windows 会从 EXE 资源中取最大可用尺寸），
+            // 前端在 32px 框内缩小显示，在高 DPI 屏上也不会发糊。
+            let mut hicon: *mut std::ffi::c_void = std::ptr::null_mut();
+            let mut bytes: Option<Vec<u8>> = None;
+            let hr = SHDefExtractIconW(
+                wide.as_ptr(),
+                0,
+                0,
+                &mut hicon,
+                std::ptr::null_mut(),
+                256,
+            );
+            if hr == 0 && !hicon.is_null() {
+                bytes = draw_hicon_png(hicon, 256);
+                DestroyIcon(hicon);
+            }
+
+            // 回退：SHGetFileInfoW 默认图标（32px）
+            if bytes.is_none() {
+                let mut sfi: SHFILEINFOW = std::mem::zeroed();
+                let got = SHGetFileInfoW(
+                    wide.as_ptr(),
+                    0,
+                    &mut sfi,
+                    std::mem::size_of::<SHFILEINFOW>() as u32,
+                    SHGFI_ICON | SHGFI_LARGEICON,
+                );
+                if got == 0 || sfi.hIcon.is_null() {
+                    return None;
+                }
+                bytes = draw_hicon_png(sfi.hIcon, 32);
+                if bytes.is_none() {
+                    DestroyIcon(sfi.hIcon);
+                }
+            }
+
+            let png = bytes?;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(png);
+            Some(format!("data:image/png;base64,{b64}"))
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = file_path;
+        None
+    }
+}
+
+/// 获取启动项对应软件的图标（data URI），失败返回空字符串
+#[tauri::command]
+pub async fn get_startup_item_icon(file_location: String) -> String {
+    extract_icon_data_uri(&file_location).unwrap_or_default()
 }
 
 /// Registry 键路径：Run -> RunDisabled，RunOnce -> RunOnceDisabled

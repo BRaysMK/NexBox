@@ -1177,7 +1177,12 @@
       "title": "核心最佳化",
       "description": "為遊戲進程分配指定 CPU 核心，發揮多核心效能"
     },
+    "ifeoOptimize": {
+      "title": "IFEO 優先級",
+      "description": "透過註冊表在進程啟動時由系統強制套用優先級，持久且對受保護進程生效"
+    },
     "apply": "套用",
+    "restore": "恢復",
     "optimizeNow": "立即最佳化",
     "optimizeNowDone": "已對該遊戲套用進程最佳化 + 核心最佳化",
     "autoOptimize": {
@@ -1185,6 +1190,7 @@
       "description": "遊戲啟動時自動套用下方已開啟的最佳化項目",
       "priority": "進程自動最佳化",
       "affinity": "核心自動最佳化",
+      "ifeo": "IFEO 優先級強制最佳化",
       "enabled": "自動最佳化已開啟",
       "disabled": "自動最佳化已關閉"
     },
@@ -1513,7 +1519,7 @@
       "unreachable": "無法連線",
       "servers": {
         "baidu": "百度",
-        "gitee": "Gitee",
+        "gitcode": "GitCode",
         "github": "GitHub",
         "qq": "騰訊",
         "aliyun": "阿里雲",

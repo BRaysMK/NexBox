@@ -18,6 +18,36 @@ export const DEFAULT_THEME_COLOR_CONFIG: ThemeColorConfig = {
   borderOpacity: 0.4,
 };
 
+// localStorage 键名（与 store 保持一致，用于启动时同步快速读取，避免闪默认色）
+const LS_PRIMARY_COLOR = "theme-primary-color";
+const LS_HOVER_OPACITY = "theme-hover-opacity";
+const LS_ACTIVE_OPACITY = "theme-active-opacity";
+const LS_BORDER_OPACITY = "theme-border-opacity";
+
+/** 从 localStorage 同步读取主题色，启动首帧即可拿到自定义值 */
+function loadConfigFromLocalStorage(): ThemeColorConfig {
+  const cfg: ThemeColorConfig = { ...DEFAULT_THEME_COLOR_CONFIG };
+  try {
+    const primaryColor = localStorage.getItem(LS_PRIMARY_COLOR);
+    if (primaryColor && isValidHexColor(primaryColor)) {
+      cfg.primaryColor = normalizeHexColor(primaryColor);
+    }
+    const applyOpacity = (key: string, target: () => number, set: (v: number) => void) => {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) {
+        const n = Number(raw);
+        if (!Number.isNaN(n)) set(Math.max(0, Math.min(1, n)));
+      }
+    };
+    applyOpacity(LS_HOVER_OPACITY, () => cfg.hoverOpacity, (v) => (cfg.hoverOpacity = v));
+    applyOpacity(LS_ACTIVE_OPACITY, () => cfg.activeOpacity, (v) => (cfg.activeOpacity = v));
+    applyOpacity(LS_BORDER_OPACITY, () => cfg.borderOpacity, (v) => (cfg.borderOpacity = v));
+  } catch {
+    // localStorage 不可用时忽略，使用默认值
+  }
+  return cfg;
+}
+
 interface ThemeColorContextType {
   config: ThemeColorConfig;
   setPrimaryColor: (color: string) => void;
@@ -49,7 +79,7 @@ export function useThemeColor() {
 }
 
 export function ThemeColorProvider({ children }: { children: ReactNode }) {
-  const [config, setConfig] = useState<ThemeColorConfig>(DEFAULT_THEME_COLOR_CONFIG);
+  const [config, setConfig] = useState<ThemeColorConfig>(loadConfigFromLocalStorage);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -88,6 +118,12 @@ export function ThemeColorProvider({ children }: { children: ReactNode }) {
 
     async function saveSettings() {
       try {
+        // 同步写入 localStorage，供下次启动首帧快速读取
+        localStorage.setItem(LS_PRIMARY_COLOR, config.primaryColor);
+        localStorage.setItem(LS_HOVER_OPACITY, String(config.hoverOpacity));
+        localStorage.setItem(LS_ACTIVE_OPACITY, String(config.activeOpacity));
+        localStorage.setItem(LS_BORDER_OPACITY, String(config.borderOpacity));
+
         await store.set("theme-primary-color", config.primaryColor);
         await store.set("theme-hover-opacity", config.hoverOpacity);
         await store.set("theme-active-opacity", config.activeOpacity);

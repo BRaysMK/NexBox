@@ -3,7 +3,8 @@ use std::process::Command;
 use std::{env, path::Path};
 use crate::optimization::{run_simple_feature, PerfTweakResult, CREATE_NO_WINDOW};
 use encoding_rs::GBK;
-use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
+use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_READ, KEY_SET_VALUE};
+use winreg::RegKey;
 
 fn get_powershell_path() -> String {
     if let Ok(sysroot) = env::var("SystemRoot") {
@@ -15,132 +16,178 @@ fn get_powershell_path() -> String {
     "powershell.exe".to_string()
 }
 
+/// 原生执行 netsh 命令，返回解码后的输出；失败时检查权限错误
+fn run_netsh_result(args: &[&str]) -> Result<String, String> {
+    let out = Command::new("netsh")
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行 netsh 失败: {}", e))?;
+    let text = if !out.stdout.is_empty() {
+        decode_console(out.stdout)
+    } else {
+        decode_console(out.stderr)
+    };
+    if out.status.success() {
+        Ok(text)
+    } else {
+        let lower = text.to_lowercase();
+        if lower.contains("access denied") || lower.contains("denied") || lower.contains("拒绝访问") || lower.contains("权限不足") {
+            Err("需要管理员权限，请以管理员身份运行 NexBox".to_string())
+        } else {
+            Err(format!("命令执行失败: {}", text.trim()))
+        }
+    }
+}
+
+/// 网卡设备注册表类键（用于禁用/恢复网卡省电）
+const NIC_CLASS_KEY: &str = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}";
+
+/// Nagle：原生注册表写入，对每个有 IP 的接口设置低延迟参数
+fn set_nagle_native() -> Result<(), String> {
+    let params = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", KEY_SET_VALUE)
+        .map_err(|e| format!("打开 Tcpip 参数键失败: {}", e))?;
+    params
+        .set_value("TcpAckFrequency", &1u32)
+        .map_err(|e| format!("写入 TcpAckFrequency 失败: {}", e))?;
+
+    let ifaces = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces", KEY_READ)
+        .map_err(|e| format!("打开 Tcpip 接口键失败: {}", e))?;
+    for name in ifaces.enum_keys().flatten() {
+        if let Ok(key) = ifaces.open_subkey_with_flags(&name, KEY_SET_VALUE) {
+            let has_ip = key.get_value::<Vec<String>, _>("IPAddress").is_ok()
+                || key.get_value::<String, _>("IPAddress").is_ok();
+            if has_ip {
+                let _ = key.set_value("TCPNoDelay", &1u32);
+                let _ = key.set_value("TcpAckFrequency", &1u32);
+                let _ = key.set_value("TcpDelAckTicks", &0u32);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Nagle：原生删除低延迟参数，恢复默认
+fn restore_nagle_native() -> Result<(), String> {
+    let params = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", KEY_SET_VALUE)
+        .map_err(|e| format!("打开 Tcpip 参数键失败: {}", e))?;
+    let _ = params.delete_value("TcpAckFrequency");
+
+    let ifaces = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces", KEY_READ)
+        .map_err(|e| format!("打开 Tcpip 接口键失败: {}", e))?;
+    for name in ifaces.enum_keys().flatten() {
+        if let Ok(key) = ifaces.open_subkey_with_flags(&name, KEY_SET_VALUE) {
+            let has_ip = key.get_value::<Vec<String>, _>("IPAddress").is_ok()
+                || key.get_value::<String, _>("IPAddress").is_ok();
+            if has_ip {
+                let _ = key.delete_value("TCPNoDelay");
+                let _ = key.delete_value("TcpAckFrequency");
+                let _ = key.delete_value("TcpDelAckTicks");
+            }
+        }
+    }
+    Ok(())
+}
+
+/// 网卡省电：off=true 设置 PnPCapabilities 0x100 位禁用省电；off=false 清除该位
+fn set_power_saving_native(off: bool) -> Result<(), String> {
+    let class = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(NIC_CLASS_KEY, KEY_READ)
+        .map_err(|e| format!("打开网卡类键失败: {}", e))?;
+    for name in class.enum_keys().flatten() {
+        if let Ok(key) = class.open_subkey_with_flags(&name, KEY_READ | KEY_SET_VALUE) {
+            // 仅处理网卡设备（有 DriverDesc）
+            if key.get_value::<String, _>("DriverDesc").is_err() {
+                continue;
+            }
+            let cap = key.get_value::<u32, _>("PnPCapabilities").unwrap_or(0);
+            let new = if off { cap | 0x100 } else { cap & !0x100 };
+            if new != cap {
+                let _ = key.set_value("PnPCapabilities", &new);
+            }
+        }
+    }
+    Ok(())
+}
+
 // === 1. TCP 拥塞控制优化 ===
 
 #[tauri::command]
 pub async fn set_tcp_congestion() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'Stop'
-$current = netsh int tcp show supplemental 2>&1 | Select-String "拥塞控制提供程序|Congestion Control Provider"
-$hasCtcp = $current -match "CTCP|CUBIC"
-if (-not $hasCtcp) {
-    $output = netsh int tcp set supplemental Internet congestionprovider=ctcp 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "TCP 拥塞控制设置失败: $output"
-        exit 1
-    }
-}
-Write-Output 'OK'
-"#)
+    run_netsh_result(&["int", "tcp", "set", "supplemental", "Internet", "congestionprovider=ctcp"])
+        .map(|_| PerfTweakResult {
+            success: true,
+            message: "TCP 拥塞控制已优化".to_string(),
+        })
 }
 
 #[tauri::command]
 pub async fn restore_tcp_congestion() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'Stop'
-$output = netsh int tcp set supplemental Internet congestionprovider=newreno 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "TCP 拥塞控制恢复失败: $output"
-    exit 1
-}
-Write-Output 'OK'
-"#)
+    run_netsh_result(&["int", "tcp", "set", "supplemental", "Internet", "congestionprovider=newreno"])
+        .map(|_| PerfTweakResult {
+            success: true,
+            message: "TCP 拥塞控制已恢复".to_string(),
+        })
 }
 
 // === 2. TCP Chimney Offload ===
 
 #[tauri::command]
 pub async fn set_tcp_chimney_off() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'Stop'
-$output = netsh int tcp set global chimney=disabled 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "TCP Chimney Offload 设置失败: $output"
-    exit 1
-}
-Write-Output 'OK'
-"#)
+    run_netsh_result(&["int", "tcp", "set", "global", "chimney=disabled"])
+        .map(|_| PerfTweakResult {
+            success: true,
+            message: "TCP Chimney Offload 已禁用".to_string(),
+        })
 }
 
 #[tauri::command]
 pub async fn restore_tcp_chimney() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'Stop'
-$output = netsh int tcp set global chimney=enabled 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "TCP Chimney Offload 恢复失败: $output"
-    exit 1
-}
-Write-Output 'OK'
-"#)
+    run_netsh_result(&["int", "tcp", "set", "global", "chimney=enabled"])
+        .map(|_| PerfTweakResult {
+            success: true,
+            message: "TCP Chimney Offload 已恢复".to_string(),
+        })
 }
 
 // === 3. Nagle 算法低延迟策略 ===
 
 #[tauri::command]
 pub async fn set_nagle_optimization() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$interfaces = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
-foreach ($iface in $interfaces) {
-    $guid = $iface.PSChildName
-    $path = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid"
-    $ipEnabled = (Get-ItemProperty -Path $path -Name "IPAddress" -ErrorAction SilentlyContinue).IPAddress
-    if ($ipEnabled) {
-        Set-ItemProperty -Path $path -Name "TCPNoDelay" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $path -Name "TcpAckFrequency" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $path -Name "TcpDelAckTicks" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-    }
-}
-Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpAckFrequency" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-Write-Output 'OK'
-"#)
+    set_nagle_native().map(|_| PerfTweakResult {
+        success: true,
+        message: "Nagle 低延迟优化已应用".to_string(),
+    })
 }
 
 #[tauri::command]
 pub async fn restore_nagle_optimization() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$interfaces = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
-foreach ($iface in $interfaces) {
-    $guid = $iface.PSChildName
-    $path = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid"
-    $ipEnabled = (Get-ItemProperty -Path $path -Name "IPAddress" -ErrorAction SilentlyContinue).IPAddress
-    if ($ipEnabled) {
-        Remove-ItemProperty -Path $path -Name "TCPNoDelay" -ErrorAction SilentlyContinue
-        Remove-ItemProperty -Path $path -Name "TcpAckFrequency" -ErrorAction SilentlyContinue
-        Remove-ItemProperty -Path $path -Name "TcpDelAckTicks" -ErrorAction SilentlyContinue
-    }
-}
-Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpAckFrequency" -ErrorAction SilentlyContinue
-Write-Output 'OK'
-"#)
+    restore_nagle_native().map(|_| PerfTweakResult {
+        success: true,
+        message: "Nagle 低延迟优化已恢复".to_string(),
+    })
 }
 
 // === 4. 禁用网卡省电模式 ===
 
 #[tauri::command]
 pub async fn set_adapter_power_saving_off() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue
-foreach ($adapter in $adapters) {
-    Disable-NetAdapterPowerManagement -Name $adapter.Name -ErrorAction SilentlyContinue | Out-Null
-}
-Write-Output 'OK'
-"#)
+    set_power_saving_native(true).map(|_| PerfTweakResult {
+        success: true,
+        message: "网卡省电模式已禁用".to_string(),
+    })
 }
 
 #[tauri::command]
 pub async fn restore_adapter_power_saving() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue
-foreach ($adapter in $adapters) {
-    Enable-NetAdapterPowerManagement -Name $adapter.Name -ErrorAction SilentlyContinue | Out-Null
-}
-Write-Output 'OK'
-"#)
+    set_power_saving_native(false).map(|_| PerfTweakResult {
+        success: true,
+        message: "网卡省电模式已恢复".to_string(),
+    })
 }
 
 // === 5. DNS 优化 ===
@@ -219,6 +266,43 @@ pub async fn clear_dns_cache() -> Result<PerfTweakResult, String> {
             Err(format!("清理 DNS 缓存失败: {}", err_msg))
         }
     }
+}
+
+/// 重置网络栈（netsh winsock reset + netsh int ip reset），常用于解决网络异常
+/// 注意：执行后需重启电脑才能完全生效。
+#[tauri::command]
+pub async fn reset_network() -> Result<PerfTweakResult, String> {
+    let winsock = Command::new("netsh")
+        .args(["winsock", "reset"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("重置 Winsock 失败: {}", e))?;
+    let ip = Command::new("netsh")
+        .args(["int", "ip", "reset"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("重置 TCP/IP 协议栈失败: {}", e))?;
+
+    let mut combined = String::new();
+    for out in [winsock, ip] {
+        if !out.stdout.is_empty() {
+            combined.push_str(&decode_console(out.stdout));
+        }
+        if !out.stderr.is_empty() {
+            combined.push_str(&decode_console(out.stderr));
+        }
+        combined.push('\n');
+    }
+
+    let lower = combined.to_lowercase();
+    if lower.contains("access denied") || lower.contains("denied") || lower.contains("拒绝访问") || lower.contains("权限不足") {
+        return Err("需要管理员权限，请以管理员身份运行 NexBox".to_string());
+    }
+
+    Ok(PerfTweakResult {
+        success: true,
+        message: "网络已重置，建议重启电脑后生效".to_string(),
+    })
 }
 
 // === 6. 状态检测（纯 Rust 实现，不启动 PowerShell，毫秒级） ===
@@ -367,96 +451,56 @@ pub async fn check_network_tweak_states() -> Result<NetworkTweakState, String> {
     })
 }
 
-// === 7. 批量优化 / 恢复（单次 PowerShell 调用） ===
+// === 7. 批量优化 / 恢复（原生实现，不启动 PowerShell） ===
 
 #[tauri::command]
 pub async fn batch_network_enable() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'Stop'
-
-# TCP Congestion
-$current = netsh int tcp show supplemental 2>&1 | Select-String "拥塞控制提供程序|Congestion Control Provider"
-$hasCtcp = $current -match "CTCP|CUBIC"
-if (-not $hasCtcp) {
-    $output = netsh int tcp set supplemental Internet congestionprovider=ctcp 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "TCP 拥塞控制设置失败: $output"
-        exit 1
+    let mut errors = Vec::new();
+    if let Err(e) = run_netsh_result(&["int", "tcp", "set", "supplemental", "Internet", "congestionprovider=ctcp"]) {
+        errors.push(format!("TCP 拥塞控制: {}", e));
     }
-}
-
-# Chimney Offload
-$output = netsh int tcp set global chimney=disabled 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "TCP Chimney Offload 设置失败: $output"
-    exit 1
-}
-
-# Nagle Optimization
-$interfaces = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
-foreach ($iface in $interfaces) {
-    $guid = $iface.PSChildName
-    $path = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid"
-    $ipEnabled = (Get-ItemProperty -Path $path -Name "IPAddress" -ErrorAction SilentlyContinue).IPAddress
-    if ($ipEnabled) {
-        Set-ItemProperty -Path $path -Name "TCPNoDelay" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $path -Name "TcpAckFrequency" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $path -Name "TcpDelAckTicks" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+    if let Err(e) = run_netsh_result(&["int", "tcp", "set", "global", "chimney=disabled"]) {
+        errors.push(format!("Chimney Offload: {}", e));
     }
-}
-Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpAckFrequency" -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-
-# Adapter Power Saving
-$adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue
-foreach ($adapter in $adapters) {
-    Disable-NetAdapterPowerManagement -Name $adapter.Name -ErrorAction SilentlyContinue | Out-Null
-}
-
-Write-Output 'OK'
-"#)
+    if let Err(e) = set_nagle_native() {
+        errors.push(format!("Nagle: {}", e));
+    }
+    if let Err(e) = set_power_saving_native(true) {
+        errors.push(format!("网卡省电: {}", e));
+    }
+    if errors.is_empty() {
+        Ok(PerfTweakResult {
+            success: true,
+            message: "网络优化已全部应用".to_string(),
+        })
+    } else {
+        Err(errors.join("; "))
+    }
 }
 
 #[tauri::command]
 pub async fn batch_network_disable() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'Stop'
-
-# TCP Congestion - restore
-$output = netsh int tcp set supplemental Internet congestionprovider=newreno 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "TCP 拥塞控制恢复失败: $output"
-    exit 1
-}
-
-# Chimney Offload - restore
-$output = netsh int tcp set global chimney=enabled 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "TCP Chimney Offload 恢复失败: $output"
-    exit 1
-}
-
-# Nagle - restore
-$interfaces = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
-foreach ($iface in $interfaces) {
-    $guid = $iface.PSChildName
-    $path = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid"
-    $ipEnabled = (Get-ItemProperty -Path $path -Name "IPAddress" -ErrorAction SilentlyContinue).IPAddress
-    if ($ipEnabled) {
-        Remove-ItemProperty -Path $path -Name "TCPNoDelay" -ErrorAction SilentlyContinue
-        Remove-ItemProperty -Path $path -Name "TcpAckFrequency" -ErrorAction SilentlyContinue
-        Remove-ItemProperty -Path $path -Name "TcpDelAckTicks" -ErrorAction SilentlyContinue
+    let mut errors = Vec::new();
+    if let Err(e) = run_netsh_result(&["int", "tcp", "set", "supplemental", "Internet", "congestionprovider=newreno"]) {
+        errors.push(format!("TCP 拥塞控制: {}", e));
     }
-}
-Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpAckFrequency" -ErrorAction SilentlyContinue
-
-# Adapter Power Saving - restore
-$adapters = Get-NetAdapter -Physical -ErrorAction SilentlyContinue
-foreach ($adapter in $adapters) {
-    Enable-NetAdapterPowerManagement -Name $adapter.Name -ErrorAction SilentlyContinue | Out-Null
-}
-
-Write-Output 'OK'
-"#)
+    if let Err(e) = run_netsh_result(&["int", "tcp", "set", "global", "chimney=enabled"]) {
+        errors.push(format!("Chimney Offload: {}", e));
+    }
+    if let Err(e) = restore_nagle_native() {
+        errors.push(format!("Nagle: {}", e));
+    }
+    if let Err(e) = set_power_saving_native(false) {
+        errors.push(format!("网卡省电: {}", e));
+    }
+    if errors.is_empty() {
+        Ok(PerfTweakResult {
+            success: true,
+            message: "网络优化已全部恢复".to_string(),
+        })
+    } else {
+        Err(errors.join("; "))
+    }
 }
 
 // === 8. 公网 IP 查询（国内可访问的免费 API，多源 fallback，仅返回 IPv4） ===

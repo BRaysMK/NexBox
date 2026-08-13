@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "7.6.0",
+  "version": "7.7.8",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
@@ -20,7 +20,8 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "devtools": true
+        "devtools": true,
+        "visible": false
       },
       {
         "title": "NexBox Tray Menu",

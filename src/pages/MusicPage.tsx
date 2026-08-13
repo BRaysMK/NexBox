@@ -61,6 +61,7 @@ import {
   Maximize2,
   Trash2,
   FolderOpen,
+  FolderPlus,
   FileMusic,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
@@ -2800,6 +2801,39 @@ setRightPanelView("recommendations");
     }
   }, [storeActions, toast]);
 
+  // ── 导入本地歌曲文件夹（递归） ──
+  const handleImportLocalFolder = useCallback(async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "导入本地歌曲文件夹",
+      });
+      if (!selected) return;
+      const folder = Array.isArray(selected) ? selected[0] : selected;
+      if (!folder) return;
+      const result = await storeActions.importLocalFolder(folder);
+      if (result.count > 0) {
+        const noCover = result.noCoverCount > 0
+          ? `，${result.noCoverCount} 首未检测到封面`
+          : "";
+        toast({
+          title: "导入成功",
+          description: `已从文件夹导入 ${result.count} 首本地歌曲${noCover}`,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+        setLeftPanelView("local");
+      } else {
+        toast({ title: "导入失败", description: "该文件夹下未找到支持的音频文件", status: "warning", duration: 2500, isClosable: true });
+      }
+    } catch (e) {
+      console.error("Import local music folder error:", e);
+      toast({ title: "导入失败", description: String(e) || "打开文件夹失败", status: "error", duration: 2500, isClosable: true });
+    }
+  }, [storeActions, toast]);
+
   // ── 点击本地歌曲：播放 ──
   const handleLocalPlay = useCallback((song: Song, queue: Song[]) => {
     storeActions.playSong(song, queue && queue.length > 0 ? queue : useMusicStore.getState().localSongs);
@@ -4177,6 +4211,16 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                     sx={{ color: activeColor, _hover: { bg: hoverBg } }}
                   />
                 </Tooltip>
+                <Tooltip label="导入歌曲文件夹">
+                  <IconButton
+                    aria-label="导入歌曲文件夹"
+                    icon={<FolderPlus size={15} />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleImportLocalFolder}
+                    sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                  />
+                </Tooltip>
                 {localSongs.length > 0 && (
                   <Tooltip label="清空本地音乐">
                     <IconButton
@@ -4225,6 +4269,19 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                   onClick={handleImportLocal}
                 >
                   本地导入
+                </Button>
+                <Button
+                  size="xs"
+                  leftIcon={<FolderPlus size={14} />}
+                  variant="outline"
+                  flexShrink={0}
+                  borderColor={activeColor}
+                  color={activeColor}
+                  _hover={{ opacity: 0.9 }}
+                  _active={{ transform: "scale(0.97)" }}
+                  onClick={handleImportLocalFolder}
+                >
+                  导入文件夹
                 </Button>
               </HStack>
               <Box

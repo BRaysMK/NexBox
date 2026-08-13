@@ -1645,36 +1645,54 @@ pub struct DiskInfo {
     pub usage_percent: f64,
 }
 
+/// 汇总所有磁盘的空间统计：(total_space, available_space, used_space, usage_percent)。
+/// 无磁盘时 total_space=0、usage_percent=0。
+fn collect_disk_stats() -> (u64, u64, u64, f64) {
+    use sysinfo::Disks;
+
+    let disks = Disks::new_with_refreshed_list();
+
+    let mut total_space: u64 = 0;
+    let mut available_space: u64 = 0;
+
+    for disk in disks.iter() {
+        let mount_point = disk.mount_point().to_string_lossy();
+        if mount_point.is_empty() {
+            continue;
+        }
+        total_space = total_space.saturating_add(disk.total_space());
+        available_space = available_space.saturating_add(disk.available_space());
+    }
+
+    let used_space = total_space.saturating_sub(available_space);
+    let usage_percent = if total_space > 0 {
+        (used_space as f64 / total_space as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    (total_space, available_space, used_space, usage_percent)
+}
+
+/// 所有磁盘的总占用百分比（0-100）。无磁盘时返回 None（供托盘悬停面板按需读取）。
+pub fn disk_usage_percent() -> Option<f64> {
+    let (total, _, _, percent) = collect_disk_stats();
+    if total == 0 {
+        None
+    } else {
+        Some(percent)
+    }
+}
+
 #[tauri::command]
 pub async fn get_disk_status() -> Result<DiskInfo, String> {
     let result = tauri::async_runtime::spawn_blocking(|| {
-        use sysinfo::Disks;
-        
-        let disks = Disks::new_with_refreshed_list();
-        
-        let mut total_space: u64 = 0;
-        let mut available_space: u64 = 0;
-        
-        for disk in disks.iter() {
-            let mount_point = disk.mount_point().to_string_lossy();
-            if mount_point.is_empty() {
-                continue;
-            }
-            total_space = total_space.saturating_add(disk.total_space());
-            available_space = available_space.saturating_add(disk.available_space());
-        }
-        
-        let used_space = total_space.saturating_sub(available_space);
-        let usage_percent = if total_space > 0 {
-            (used_space as f64 / total_space as f64) * 100.0
-        } else {
-            0.0
-        };
-        
+        let (total_space, available_space, used_space, usage_percent) = collect_disk_stats();
+
         let total_gb = total_space as f64 / (1024.0 * 1024.0 * 1024.0);
         let available_gb = available_space as f64 / (1024.0 * 1024.0 * 1024.0);
         let used_gb = used_space as f64 / (1024.0 * 1024.0 * 1024.0);
-        
+
         DiskInfo {
             name: String::from("All Disks"),
             total_gb,
@@ -1683,7 +1701,7 @@ pub async fn get_disk_status() -> Result<DiskInfo, String> {
             usage_percent,
         }
     }).await;
-    
+
     match result {
         Ok(info) => Ok(info),
         Err(e) => Err(e.to_string()),
@@ -1890,7 +1908,8 @@ if ($result) { $result | ConvertTo-Json -Depth 3 -Compress } else { '[]' }
 
     for (i, d) in raw_disks.iter().enumerate() {
         let media_type = d.MediaType.as_deref().unwrap_or("Unknown").to_string();
-        let size_gb = d.Size.map(|s| s as f64 / 1_000_000_000.0).unwrap_or(0.0);
+        // 用二进制(2^30)换算，与 Windows 资源管理器显示的容量一致
+        let size_gb = d.Size.map(|s| s as f64 / 1_073_741_824.0).unwrap_or(0.0);
         let health_status = d.HealthStatus.clone();
         let partition_count = d.NumberOfPartitions.unwrap_or(0);
         let serial = d.SerialNumber.as_deref().unwrap_or("").to_string();
@@ -1912,9 +1931,10 @@ if ($result) { $result | ConvertTo-Json -Depth 3 -Compress } else { '[]' }
                 let fs = p.FileSystem.as_deref().unwrap_or("").to_string();
                 Some(PartitionInfo {
                     drive_letter: letter.to_string(),
-                    total_gb: total / 1_000_000_000.0,
-                    available_gb: available / 1_000_000_000.0,
-                    used_gb: used / 1_000_000_000.0,
+                    // 二进制(2^30)换算，与资源管理器一致
+                    total_gb: total / 1_073_741_824.0,
+                    available_gb: available / 1_073_741_824.0,
+                    used_gb: used / 1_073_741_824.0,
                     usage_percent: usage_pct,
                     filesystem: fs,
                 })

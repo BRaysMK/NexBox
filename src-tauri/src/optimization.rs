@@ -3877,3 +3877,21 @@ pub fn check_pause_update_state() -> Result<bool, String> {
 
     Ok(paused)
 }
+
+/// 检查 Windows Defender 是否已被关闭（组策略键 DisableAntiSpyware == 1）
+#[tauri::command]
+pub fn check_defender_state() -> Result<bool, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let disabled: bool = hklm
+        .open_subkey(r"SOFTWARE\Policies\Microsoft\Windows Defender")
+        .ok()
+        .and_then(|key| key.get_value::<u32, _>("DisableAntiSpyware").ok())
+        .map(|v| v == 1)
+        .unwrap_or(false);
+
+    Ok(disabled)
+}

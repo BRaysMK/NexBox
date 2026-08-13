@@ -1,10 +1,11 @@
 "use client";
 
-const GITEE_API_TOKEN = "9957e6fc1011498ba0fd0602d37c9da0";
-const GITEE_OWNER = "muliuawa";
-const GITEE_REPO = "nexbox";
+const GITCODE_API_TOKEN = "eR61HSFsnvE_1EmKzvhosef9";
+const GITCODE_OWNER = "MuLiuSaMa";
+const GITCODE_REPO = "nexbox";
+const GITCODE_WEB = "https://gitcode.com";
 
-export interface GiteeRelease {
+export interface ReleaseInfo {
   tag_name: string;
   name: string;
   body: string;
@@ -17,59 +18,57 @@ export interface GiteeRelease {
   html_url: string;
 }
 
-export async function fetchLatestRelease(): Promise<GiteeRelease | null> {
+const releaseBaseUrl = (path: string, query = "") =>
+  `https://api.gitcode.com/api/v5/repos/${GITCODE_OWNER}/${GITCODE_REPO}${path}?access_token=${GITCODE_API_TOKEN}${query}`;
+
+// GitCode 的 release 响应不含顶层 html_url，按仓库与 tag 拼接
+function releaseHtmlUrl(tagName: string): string {
+  return `${GITCODE_WEB}/${GITCODE_OWNER}/${GITCODE_REPO}/releases/tag/${tagName}`;
+}
+
+export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
   try {
-    const response = await fetch(
-      `https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/latest`,
-      {
-        headers: {
-          Authorization: `token ${GITEE_API_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const response = await fetch(releaseBaseUrl("/releases/latest"), {
+      headers: { "Content-Type": "application/json" },
+    });
 
     if (!response.ok) {
       return null;
     }
 
-    return await response.json();
+    const data = await response.json();
+    return { ...data, html_url: releaseHtmlUrl(data.tag_name) };
   } catch (error) {
     return null;
   }
 }
 
-export async function fetchAllReleases(): Promise<GiteeRelease[]> {
+export async function fetchAllReleases(): Promise<ReleaseInfo[]> {
   try {
-    const response = await fetch(
-      `https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases?per_page=100`,
-      {
-        headers: {
-          Authorization: `token ${GITEE_API_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const response = await fetch(releaseBaseUrl("/releases", "&per_page=100"), {
+      headers: { "Content-Type": "application/json" },
+    });
 
     if (!response.ok) {
       return [];
     }
 
-    return await response.json();
+    const data = await response.json();
+    return (data as ReleaseInfo[]).map((r) => ({
+      ...r,
+      html_url: releaseHtmlUrl(r.tag_name),
+    }));
   } catch (error) {
     return [];
   }
 }
 
-export async function fetchReleaseByTag(tag: string): Promise<GiteeRelease | null> {
+export async function fetchReleaseByTag(tag: string): Promise<ReleaseInfo | null> {
   try {
     const response = await fetch(
-      `https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/tags/${tag}`,
+      releaseBaseUrl(`/releases/tags/${encodeURIComponent(tag)}`),
       {
-        headers: {
-          Authorization: `token ${GITEE_API_TOKEN}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       }
     );
 
@@ -77,7 +76,8 @@ export async function fetchReleaseByTag(tag: string): Promise<GiteeRelease | nul
       return null;
     }
 
-    return await response.json();
+    const data = await response.json();
+    return { ...data, html_url: releaseHtmlUrl(data.tag_name) };
   } catch (error) {
     return null;
   }
@@ -86,17 +86,17 @@ export async function fetchReleaseByTag(tag: string): Promise<GiteeRelease | nul
 export function compareVersions(current: string, latest: string): boolean {
   const cleanCurrent = current.replace(/^v/, "");
   const cleanLatest = latest.replace(/^v/, "");
-  
+
   const currentParts = cleanCurrent.split(".").map(Number);
   const latestParts = cleanLatest.split(".").map(Number);
-  
+
   for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
     const currentPart = currentParts[i] || 0;
     const latestPart = latestParts[i] || 0;
-    
+
     if (latestPart > currentPart) return true;
     if (latestPart < currentPart) return false;
   }
-  
+
   return false;
 }

@@ -396,6 +396,14 @@
         "clear": "Clear now",
         "clearing": "Clearing..."
       },
+      "resetNetwork": {
+        "title": "Reset Network",
+        "description": "Reset Winsock and the TCP/IP stack to fix network and connectivity issues",
+        "reset": "Reset now",
+        "resetting": "Resetting...",
+        "done": "Network has been reset. A reboot is recommended.",
+        "error": "Network reset failed"
+      },
       "tcpCongestion": {
         "title": "TCP Congestion Control",
         "description": "Set TCP congestion control to CTCP/CUBIC for better throughput"
@@ -1438,7 +1446,12 @@
       "title": "Core Optimize",
       "description": "Assign specific CPU cores to the game process for multi-core performance"
     },
+    "ifeoOptimize": {
+      "title": "IFEO Priority",
+      "description": "Force priority via registry at process startup; persistent and works on protected processes"
+    },
     "apply": "Apply",
+    "restore": "Restore",
     "optimizeNow": "Optimize Now",
     "optimizeNowDone": "Applied process optimize + core optimize to this game",
     "autoOptimize": {
@@ -1446,6 +1459,7 @@
       "description": "When this game starts, automatically apply the enabled options below",
       "priority": "Process auto-optimize",
       "affinity": "Core auto-optimize",
+      "ifeo": "IFEO forced priority",
       "enabled": "Auto optimize enabled",
       "disabled": "Auto optimize disabled"
     },
@@ -1612,6 +1626,10 @@
       "autoStartDisabled": "Startup launch disabled",
       "autoStartError": "Auto-start setup failed",
       "autoStartErrorHint": "Please check if antivirus is blocking, or try running as administrator",
+      "minimizedStartLabel": "Minimized start on boot",
+      "minimizedStartDesc": "Do not show the main window on boot; run in background with tray",
+      "minimizedStartEnabled": "Minimized start enabled",
+      "minimizedStartDisabled": "Minimized start disabled",
       "autoUpdate": "Auto Silent Update",
       "closeBehavior": "Close Behavior",
       "closeBehaviorLabel": "When clicking close button",
@@ -1711,7 +1729,7 @@
       "unreachable": "Unreachable",
       "servers": {
         "baidu": "Baidu",
-        "gitee": "Gitee",
+        "gitcode": "GitCode",
         "github": "GitHub",
         "qq": "Tencent",
         "aliyun": "Alibaba Cloud",
@@ -2034,8 +2052,8 @@
     "requiresReboot": "Requires system reboot to take full effect"
   },
   "windowsUpdate": {
-    "pageTitle": "Disable Windows Update",
-    "pageDesc": "Completely disable Windows auto-update including services, group policies and scheduled tasks (reversible)",
+    "pageTitle": "Windows Update & Defender",
+    "pageDesc": "Completely disable Windows auto-update and Windows Defender (both reversible)",
     "servicesStatus": "Update Services",
     "servicesDisabled": "Disabled",
     "servicesRunning": "Running",
@@ -2071,6 +2089,21 @@
       "restoreError": "Failed to restore update",
       "manualHintTitle": "💡 Important Note",
       "manualHint": "After writing successfully, open Settings → Windows Update → Pause Updates and manually adjust the pause duration to the maximum value, otherwise the registry time will not take effect."
+    },
+    "defenderCard": {
+      "title": "Windows Defender Real-time Protection",
+      "desc": "Disable Windows Defender real-time protection (antispyware/antivirus, behavior monitoring, file access protection, etc.) via group policy. Can be restored anytime.",
+      "checking": "Checking Defender status...",
+      "disabled": "Disabled",
+      "enabled": "Running",
+      "applyBtn": "Disable Windows Defender",
+      "restoreBtn": "Restore Windows Defender",
+      "applySuccess": "Windows Defender has been successfully disabled",
+      "restoreSuccess": "Windows Defender has been successfully restored",
+      "applyError": "Failed to disable Windows Defender",
+      "restoreError": "Failed to restore Windows Defender",
+      "manualHintTitle": "⚠️ Warning",
+      "manualHint": "After disabling, the system will no longer provide virus and threat protection. If 'Tamper Protection' is on, Windows may reset these policies automatically. Turn off 'Tamper Protection' in Defender settings first for this to take effect."
     }
   },
   "gpuDriverRestart": {
@@ -2190,7 +2223,15 @@
     "writeErrors": "Write Errors",
     "partitions": "partitions",
     "loadError": "Failed to load disk data",
-    "retry": "Retry"
+    "retry": "Retry",
+    "defrag": "Defragment",
+    "optimize": "Optimize / TRIM",
+    "optimizing": "Optimizing...",
+    "defragHint": "Run defragmentation to reduce mechanical drive seek time",
+    "optimizeHint": "Run TRIM/optimization to clean up invalid data on SSD",
+    "defragDone": "Defragmentation complete",
+    "optimizeDone": "Optimization (TRIM) complete",
+    "optimizeFailed": "Disk optimization failed"
   },
   "screenRecord": {
     "title": "Screen Recording",

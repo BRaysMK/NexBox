@@ -1193,7 +1193,12 @@
       "title": "Optimisation des cœurs",
       "description": "Attribuez des cœurs CPU spécifiques au processus de jeu pour des performances multicœurs"
     },
+    "ifeoOptimize": {
+      "title": "Priorité IFEO",
+      "description": "Applique la priorité via le registre au démarrage du processus ; persistante et active sur les processus protégés"
+    },
     "apply": "Appliquer",
+    "restore": "Restaurer",
     "optimizeNow": "Optimiser maintenant",
     "optimizeNowDone": "Optimisation des processus + cœurs appliquée à ce jeu",
     "autoOptimize": {
@@ -1201,6 +1206,7 @@
       "description": "Au démarrage du jeu, appliquez automatiquement les options activées ci-dessous",
       "priority": "Auto-optimisation des processus",
       "affinity": "Auto-optimisation des cœurs",
+      "ifeo": "Priorité IFEO forcée",
       "enabled": "Auto-optimisation activée",
       "disabled": "Auto-optimisation désactivée"
     },
@@ -1529,7 +1535,7 @@
       "unreachable": "Injoignable",
       "servers": {
         "baidu": "Baidu",
-        "gitee": "Gitee",
+        "gitcode": "GitCode",
         "github": "GitHub",
         "qq": "Tencent",
         "aliyun": "Alibaba Cloud",

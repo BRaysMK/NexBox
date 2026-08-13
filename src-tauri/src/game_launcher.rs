@@ -108,6 +108,7 @@ pub async fn select_exe_file() -> Option<String> {
 }
 
 /// 获取可执行文件或快捷方式的图标，返回 base64 PNG data URI
+/// 复用启动项管理的 Shell API 提取方式（SHDefExtractIconW，256px 高清），不再走 PowerShell
 #[tauri::command]
 pub async fn get_file_icon(file_path: String) -> Result<String, String> {
     let path = PathBuf::from(&file_path);
@@ -127,54 +128,26 @@ pub async fn get_file_icon(file_path: String) -> Result<String, String> {
         }
     }
 
-    // 用 PowerShell 提取图标
-    let ps_script = format!(
-        r#"Add-Type -AssemblyName System.Drawing;
-$path = '{}';
-# 如果是快捷方式，解析到目标 exe 路径
-$src = $path;
-if ($path -like '*.lnk') {{
-    try {{
-        $shell = New-Object -ComObject WScript.Shell;
-        $sc = $shell.CreateShortcut($path);
-        $target = $sc.TargetPath;
-        if ($target -and (Test-Path $target)) {{ $src = $target; }}
-    }} catch {{}}
-}}
-$icon = [System.Drawing.Icon]::ExtractAssociatedIcon($src);
-if ($icon -ne $null) {{
-    $bmp = $icon.ToBitmap();
-    $ms = New-Object System.IO.MemoryStream;
-    $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png);
-    [Convert]::ToBase64String($ms.ToArray());
-}} else {{
-    Write-Output ''
-}}
-"#,
-        file_path.replace('\'', "''")
-    );
-
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("PowerShell 执行失败: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let b64 = stdout.trim().to_string();
-
-    if b64.is_empty() {
-        return Err("无法提取图标".to_string());
-    }
+    // 用共享图标提取逻辑（与启动项管理一致，高分辨率不模糊）。
+    // .lnk 先解析到目标 exe，避免显示快捷方式的小箭头。
+    let icon_src = if file_path.to_lowercase().ends_with(".lnk") {
+        crate::startup_manager::resolve_shortcut_target(&file_path)
+            .unwrap_or_else(|| file_path.clone())
+    } else {
+        file_path
+    };
+    let data_uri = crate::startup_manager::extract_icon_data_uri(&icon_src)
+        .ok_or_else(|| "无法提取图标".to_string())?;
 
     // 解码并存入缓存
-    if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(&b64) {
+    if let Ok(bytes) = base64::engine::general_purpose::STANDARD
+        .decode(data_uri.trim_start_matches("data:image/png;base64,"))
+    {
         let _ = fs::create_dir_all(&cache_dir);
         let _ = fs::write(&cache_path, &bytes);
-        Ok(format!("data:image/png;base64,{}", b64))
-    } else {
-        Ok(format!("data:image/png;base64,{}", b64))
     }
+
+    Ok(data_uri)
 }
 
 /// 简单的路径哈希，用于缓存文件名（取前8个十六进制字符）

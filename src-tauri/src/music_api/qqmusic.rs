@@ -2303,7 +2303,7 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
 
     // 如果是我喜欢歌单
     if is_qq_liked_playlist_id(pid) {
-        return liked_playlist_tracks(cookie).await;
+        return liked_playlist_tracks(cookie, 0, 100).await;
     }
 
     let params: Vec<(&str, &str)> = vec![
@@ -2389,9 +2389,8 @@ pub async fn playlist_tracks_range(id: &str, start: usize, count: usize, cookie:
 
     // 如果是我喜欢歌单
     if is_qq_liked_playlist_id(pid) {
-        let (_, tracks) = liked_playlist_tracks(cookie).await?;
-        let end = (start + count).min(tracks.len());
-        return Ok(tracks[start..end].to_vec());
+        let (_, tracks) = liked_playlist_tracks(cookie, start, count).await?;
+        return Ok(tracks);
     }
 
     let page_limit = count;
@@ -2433,8 +2432,8 @@ pub async fn playlist_tracks_range(id: &str, start: usize, count: usize, cookie:
     Ok(tracks)
 }
 
-/// 获取我喜欢歌单的曲目 (对照 handleQQLikedPlaylistTracks)
-async fn liked_playlist_tracks(cookie: &str) -> Result<(Playlist, Vec<Song>), String> {
+/// 获取我喜欢歌单的曲目 (对照 handleQQLikedPlaylistTracks)，支持分页
+async fn liked_playlist_tracks(cookie: &str, start: usize, count: usize) -> Result<(Playlist, Vec<Song>), String> {
     let auth = extract_qq_auth(cookie);
     if !auth.playback_ready {
         return Ok((
@@ -2460,8 +2459,8 @@ async fn liked_playlist_tracks(cookie: &str) -> Result<(Playlist, Vec<Song>), St
                 "disstid": 0,
                 "dirid": QQ_LIKED_DIRID,
                 "tag": 1,
-                "song_begin": 0,
-                "song_num": 48,
+                "song_begin": start,
+                "song_num": count,
                 "userinfo": 1,
                 "orderlist": 1
             }

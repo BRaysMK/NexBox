@@ -135,8 +135,15 @@ fn find_gpu_registry_keys() -> Result<Vec<(RegKey, String, bool)>, String> {
     
     // 支持的显卡厂商 PCI Vendor ID: NVIDIA(10DE)、AMD(1002)、Intel(8086)
     let supported_vendors = ["VEN_10DE", "VEN_1002", "VEN_8086"];
-    // 排除关键词：USB控制器等非显卡设备、Microsoft 基础显示适配器（未安装驱动的占位设备）
-    let exclude_keywords = ["usb", "controller", "控制器", "host", "xhci", "ehci", "uhci", "chipset", "smbus", "audio", "sound", "basic display"];
+    // 排除关键词：USB控制器等非显卡设备、网卡（Intel 网卡同为 VEN_8086，
+    // 名称含 "Intel" 会被误判为显卡）、Microsoft 基础显示适配器（未安装驱动的占位设备）
+    let exclude_keywords = [
+        "usb", "controller", "控制器", "host", "xhci", "ehci", "uhci", "chipset", "smbus",
+        "audio", "sound", "basic display",
+        // 网卡相关：Intel 网卡名通常含 "Intel" 且不含已知显卡关键词，需显式排除
+        "ethernet", "network", "网卡", "wlan", "wifi", "wi-fi", "wireless", "adapter",
+        "connection", "lan", "nic", "bluetooth",
+    ];
     // 显卡名称关键词（NVIDIA / AMD / Intel）
     let gpu_keywords = ["nvidia", "geforce", "gtx", "rtx", "amd", "radeon", "intel", "uhd graphics", "iris", "hd graphics"];
     

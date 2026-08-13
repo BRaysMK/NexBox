@@ -147,7 +147,7 @@ function App() {
         </Routes>
       </AnimatePresence>
     ) : (
-      <Routes location={location} key={location.pathname}>
+      <Routes location={location}>
             <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
             <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
             <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />

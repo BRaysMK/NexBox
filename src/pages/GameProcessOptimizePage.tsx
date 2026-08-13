@@ -39,6 +39,7 @@ import {
   Zap,
   Settings2,
   ShieldAlert,
+  ShieldCheck,
   Search,
   Play,
 } from "lucide-react";
@@ -55,6 +56,7 @@ interface GameOptimizeConfig {
   affinity_mask: number | null;
   auto_optimize_priority: boolean;
   auto_optimize_affinity: boolean;
+  auto_optimize_ifeo: boolean;
 }
 
 interface GameAutoStatus {
@@ -63,6 +65,7 @@ interface GameAutoStatus {
   optimized: boolean;
   priority_applied: boolean;
   affinity_applied: boolean;
+  ifeo_applied: boolean;
   last_apply: string | null;
 }
 
@@ -90,7 +93,7 @@ interface FilterStatus {
   games: FilterGameEntry[];
 }
 
-type AutoKind = "priority" | "affinity";
+type AutoKind = "priority" | "affinity" | "ifeo";
 
 const EMPTY_CONFIG = (id: string, name: string, process_names: string[]): GameOptimizeConfig => ({
   id,
@@ -100,6 +103,7 @@ const EMPTY_CONFIG = (id: string, name: string, process_names: string[]): GameOp
   affinity_mask: null,
   auto_optimize_priority: false,
   auto_optimize_affinity: false,
+  auto_optimize_ifeo: false,
 });
 
 // 核心选择弹窗：显示所有逻辑核心的复选框网格
@@ -421,6 +425,8 @@ function GameCard({
   isAdmin,
   onApplyPriority,
   onApplyAffinity,
+  onApplyIfeo,
+  onRestoreIfeo,
   onOpenCoreSettings,
   onToggleAuto,
   onDelete,
@@ -432,11 +438,13 @@ function GameCard({
   isAdmin: boolean;
   onApplyPriority: (id: string) => void;
   onApplyAffinity: (id: string) => void;
+  onApplyIfeo: (id: string) => void;
+  onRestoreIfeo: (id: string) => void;
   onOpenCoreSettings: (id: string) => void;
   onToggleAuto: (id: string, kind: AutoKind, checked: boolean) => void;
   onDelete: (id: string) => void;
   onOptimizeAll: (id: string) => void;
-  busy: { priority: boolean; affinity: boolean; all: boolean };
+  busy: { priority: boolean; affinity: boolean; ifeo: boolean; ifeoRestore: boolean; all: boolean };
 }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
@@ -449,6 +457,7 @@ function GameCard({
   const running = status?.running ?? false;
   const priorityApplied = status?.priority_applied ?? false;
   const affinityApplied = status?.affinity_applied ?? false;
+  const ifeoApplied = status?.ifeo_applied ?? false;
 
   const row = (icon: React.ReactNode, title: string, desc: string, action: React.ReactNode) => (
     <HStack align="center" spacing={3} p={3} borderRadius="lg" bg={rowBg} border="1px solid" borderColor={borderColor} flexWrap="wrap">
@@ -533,7 +542,7 @@ function GameCard({
                   {t("gameProcessOptimize.status.running")}
                 </Badge>
               )}
-              {(priorityApplied || affinityApplied) && (
+              {(priorityApplied || affinityApplied || ifeoApplied) && (
                 <Badge colorScheme="blue" variant="subtle" fontSize="2xs" px={2} py={0.5} borderRadius="full">
                   {t("gameProcessOptimize.status.optimized")}
                 </Badge>
@@ -609,6 +618,43 @@ function GameCard({
               minW="72px"
             >
               {t("gameProcessOptimize.apply")}
+            </Button>
+          </HStack>
+        )}
+        {row(
+          <ShieldCheck size={16} />,
+          t("gameProcessOptimize.ifeoOptimize.title"),
+          t("gameProcessOptimize.ifeoOptimize.description"),
+          <HStack spacing={2}>
+            <Button
+              size="sm"
+              variant="outline"
+              color={getActiveColor()}
+              borderColor={getActiveColor()}
+              _hover={{ bg: getActiveColor(), color: "white", opacity: 0.9 }}
+              onClick={() => onApplyIfeo(game.id)}
+              isLoading={busy.ifeo}
+              loadingText=""
+              px={4}
+              borderRadius="lg"
+              minW="72px"
+              disabled={!isAdmin}
+            >
+              {t("gameProcessOptimize.apply")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              colorScheme="red"
+              onClick={() => onRestoreIfeo(game.id)}
+              isLoading={busy.ifeoRestore}
+              loadingText=""
+              px={4}
+              borderRadius="lg"
+              minW="72px"
+              disabled={!isAdmin}
+            >
+              {t("gameProcessOptimize.restore")}
             </Button>
           </HStack>
         )}
@@ -694,7 +740,7 @@ export default function GameProcessOptimizePage() {
   const [autoStatuses, setAutoStatuses] = useState<Record<string, GameAutoStatus>>({});
   const [isAdmin, setIsAdmin] = useState(true);
   const [coreCount, setCoreCount] = useState(4);
-  const [busy, setBusy] = useState<Record<string, { priority: boolean; affinity: boolean; all: boolean }>>({});
+  const [busy, setBusy] = useState<Record<string, { priority: boolean; affinity: boolean; ifeo: boolean; ifeoRestore: boolean; all: boolean }>>({});
 
   // 核心选择弹窗
   const [coreTarget, setCoreTarget] = useState<string | null>(null);
@@ -747,7 +793,7 @@ export default function GameProcessOptimizePage() {
     await invoke("save_game_optimize_configs", { configs: next });
   }, []);
 
-  const runBusy = useCallback((id: string, key: "priority" | "affinity" | "all", val: boolean) => {
+  const runBusy = useCallback((id: string, key: "priority" | "affinity" | "ifeo" | "ifeoRestore" | "all", val: boolean) => {
     setBusy(prev => ({ ...prev, [id]: { ...prev[id], [key]: val } }));
   }, []);
 
@@ -772,6 +818,30 @@ export default function GameProcessOptimizePage() {
       toast({ title: String(e), status: "error", duration: 2000 });
     } finally {
       runBusy(id, "affinity", false);
+    }
+  }, [toast, runBusy]);
+
+  const handleApplyIfeo = useCallback(async (id: string) => {
+    runBusy(id, "ifeo", true);
+    try {
+      const result = await invoke<{ success: boolean; message: string }>("apply_game_ifeo", { gameId: id });
+      toast({ title: result.message, status: result.success ? "success" : "info", duration: 2000 });
+    } catch (e: any) {
+      toast({ title: String(e), status: "error", duration: 2000 });
+    } finally {
+      runBusy(id, "ifeo", false);
+    }
+  }, [toast, runBusy]);
+
+  const handleRestoreIfeo = useCallback(async (id: string) => {
+    runBusy(id, "ifeoRestore", true);
+    try {
+      const result = await invoke<{ success: boolean; message: string }>("restore_game_ifeo", { gameId: id });
+      toast({ title: result.message, status: result.success ? "success" : "info", duration: 2000 });
+    } catch (e: any) {
+      toast({ title: String(e), status: "error", duration: 2000 });
+    } finally {
+      runBusy(id, "ifeoRestore", false);
     }
   }, [toast, runBusy]);
 
@@ -818,7 +888,9 @@ export default function GameProcessOptimizePage() {
         c.id === id
           ? kind === "priority"
             ? { ...c, auto_optimize_priority: checked }
-            : { ...c, auto_optimize_affinity: checked }
+            : kind === "affinity"
+              ? { ...c, auto_optimize_affinity: checked }
+              : { ...c, auto_optimize_ifeo: checked }
           : c
       ));
       toast({
@@ -1018,11 +1090,13 @@ export default function GameProcessOptimizePage() {
               isAdmin={isAdmin}
               onApplyPriority={handleApplyPriority}
               onApplyAffinity={handleApplyAffinity}
+              onApplyIfeo={handleApplyIfeo}
+              onRestoreIfeo={handleRestoreIfeo}
               onOpenCoreSettings={handleOpenCoreSettings}
               onToggleAuto={handleToggleAuto}
               onDelete={handleDelete}
               onOptimizeAll={handleOptimizeAll}
-              busy={busy[game.id] ?? { priority: false, affinity: false, all: false }}
+              busy={busy[game.id] ?? { priority: false, affinity: false, ifeo: false, ifeoRestore: false, all: false }}
             />
           ))}
         </SimpleGrid>

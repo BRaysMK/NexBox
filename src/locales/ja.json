@@ -1270,7 +1270,12 @@
       "title": "コア最適化",
       "description": "ゲームプロセスに特定のCPUコアを割り当て、マルチコア性能を発揮"
     },
+    "ifeoOptimize": {
+      "title": "IFEO 優先度",
+      "description": "プロセス起動時にシステムがレジストリで優先度を強制適用。永続的で保護プロセスにも有効"
+    },
     "apply": "適用",
+    "restore": "復元",
     "optimizeNow": "今すぐ最適化",
     "optimizeNowDone": "このゲームにプロセス最適化＋コア最適化を適用しました",
     "autoOptimize": {
@@ -1278,6 +1283,7 @@
       "description": "ゲーム起動時に、下で有効化した項目を自動適用",
       "priority": "プロセス自動最適化",
       "affinity": "コア自動最適化",
+      "ifeo": "IFEO 優先度強制最適化",
       "enabled": "自動最適化が有効",
       "disabled": "自動最適化が無効"
     },
@@ -1827,7 +1833,7 @@
       "unreachable": "到達不能",
       "servers": {
         "baidu": "Baidu",
-        "gitee": "Gitee",
+        "gitcode": "GitCode",
         "github": "GitHub",
         "qq": "Tencent",
         "aliyun": "Alibaba Cloud",

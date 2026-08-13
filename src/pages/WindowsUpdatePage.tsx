@@ -58,6 +58,9 @@ export default function WindowsUpdatePage() {
   const [pauseEnabled, setPauseEnabled] = useState<boolean | null>(null);
   const [isPauseChecking, setIsPauseChecking] = useState(true);
   const [isPauseOperating, setIsPauseOperating] = useState(false);
+  const [defenderDisabled, setDefenderDisabled] = useState<boolean | null>(null);
+  const [isDefenderChecking, setIsDefenderChecking] = useState(true);
+  const [isDefenderOperating, setIsDefenderOperating] = useState(false);
 
   const checkState = useCallback(async () => {
     setIsChecking(true);
@@ -143,6 +146,70 @@ export default function WindowsUpdatePage() {
       });
     }
     setIsPauseOperating(false);
+  };
+
+  const checkDefenderState = useCallback(async () => {
+    setIsDefenderChecking(true);
+    try {
+      const result = await invoke<boolean>("check_defender_state");
+      setDefenderDisabled(result);
+    } catch (error) {
+      console.error("Failed to check Defender state:", error);
+      setDefenderDisabled(false);
+    }
+    setIsDefenderChecking(false);
+  }, []);
+
+  useEffect(() => {
+    checkDefenderState();
+  }, [checkDefenderState]);
+
+  const handleDisableDefender = async () => {
+    setIsDefenderOperating(true);
+    try {
+      await invoke("apply_registry_tweak", { name: "关闭Windows Defender" });
+      await checkDefenderState();
+      toast({
+        title: t("windowsUpdate.defenderCard.applySuccess"),
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to disable Defender:", error);
+      toast({
+        title: t("windowsUpdate.defenderCard.applyError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setIsDefenderOperating(false);
+  };
+
+  const handleRestoreDefender = async () => {
+    setIsDefenderOperating(true);
+    try {
+      await invoke("restore_registry_tweak", { name: "关闭Windows Defender" });
+      await checkDefenderState();
+      toast({
+        title: t("windowsUpdate.defenderCard.restoreSuccess"),
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to restore Defender:", error);
+      toast({
+        title: t("windowsUpdate.defenderCard.restoreError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setIsDefenderOperating(false);
   };
 
   const handleDisable = async () => {
@@ -439,26 +506,94 @@ export default function WindowsUpdatePage() {
               </Box>
             </VStack>
           </LiquidGlassCard>
+
+          {/* Windows Defender Card */}
+          <LiquidGlassCard w="full">
+            <VStack align="start" spacing={4} p={4}>
+              <HStack spacing={3}>
+                <ShieldBan size={22} color="#DD6B20" />
+                <Text fontSize="md" fontWeight="bold" color={headingColor}>
+                  {t("windowsUpdate.defenderCard.title")}
+                </Text>
+              </HStack>
+              <Text fontSize="sm" color={descColor}>
+                {t("windowsUpdate.defenderCard.desc")}
+              </Text>
+              {isDefenderChecking && defenderDisabled === null ? (
+                <HStack spacing={2}>
+                  <Spinner size="xs" />
+                  <Text fontSize="xs" color={subTextColor}>
+                    {t("windowsUpdate.defenderCard.checking")}
+                  </Text>
+                </HStack>
+              ) : (
+                <Badge
+                  variant="subtle"
+                  colorScheme={defenderDisabled ? "green" : "gray"}
+                  borderRadius="full"
+                  px={3}
+                  py={1}
+                  fontSize="xs"
+                  fontWeight="medium"
+                >
+                  {defenderDisabled
+                    ? t("windowsUpdate.defenderCard.disabled")
+                    : t("windowsUpdate.defenderCard.enabled")}
+                </Badge>
+              )}
+              <HStack spacing={3}>
+                <LiquidGlassButton
+                  leftIcon={
+                    isDefenderOperating ? <Spinner size="sm" /> : <Ban size={16} />
+                  }
+                  onClick={handleDisableDefender}
+                  isLoading={isDefenderOperating}
+                  disabled={isDefenderOperating || isChecking}
+                  colorScheme="red"
+                  size="sm"
+                  px={5}
+                  py={4}
+                  fontSize="sm"
+                  fontWeight="bold"
+                >
+                  {t("windowsUpdate.defenderCard.applyBtn")}
+                </LiquidGlassButton>
+                <LiquidGlassButton
+                  leftIcon={
+                    isDefenderOperating ? <Spinner size="sm" /> : <RotateCcw size={16} />
+                  }
+                  onClick={handleRestoreDefender}
+                  isLoading={isDefenderOperating}
+                  disabled={isDefenderOperating || isChecking}
+                  colorScheme="green"
+                  size="sm"
+                  px={5}
+                  py={4}
+                  fontSize="sm"
+                  fontWeight="bold"
+                >
+                  {t("windowsUpdate.defenderCard.restoreBtn")}
+                </LiquidGlassButton>
+              </HStack>
+              <Box
+                p={3}
+                borderRadius="lg"
+                bg={warningBg}
+                border="1px solid"
+                borderColor={warningBorder}
+                w="full"
+              >
+                <Text fontSize="xs" fontWeight="bold" color={warningTitleColor} mb={1}>
+                  {t("windowsUpdate.defenderCard.manualHintTitle")}
+                </Text>
+                <Text fontSize="xs" color={warningTextColor} lineHeight="tall">
+                  {t("windowsUpdate.defenderCard.manualHint")}
+                </Text>
+              </Box>
+            </VStack>
+          </LiquidGlassCard>
         </>
       )}
-
-      {/* Warning */}
-      <Box
-        p={5}
-        borderRadius="xl"
-        border="1px solid"
-        borderColor={warningBorder}
-        bg={warningBg}
-      >
-        <HStack mb={2}>
-          <Text fontSize="sm" fontWeight="bold" color={warningTitleColor}>
-            {t("windowsUpdate.warningTitle")}
-          </Text>
-        </HStack>
-        <Text fontSize="xs" color={warningTextColor} lineHeight="tall">
-          {t("windowsUpdate.warningDesc")}
-        </Text>
-      </Box>
     </VStack>
   );
 

@@ -17,13 +17,13 @@ import { useToast } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import { store } from "@/lib/store";
 import { useAppStartup } from "@/contexts/app-startup-context";
-import { fetchLatestRelease, compareVersions, type GiteeRelease } from "@/lib/update-checker";
+import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
 
-const CURRENT_VERSION = "v7.6.0";
+const CURRENT_VERSION = "v7.7.8";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 
 interface UpdateContextValue {
-  latestRelease: GiteeRelease | null;
+  latestRelease: ReleaseInfo | null;
   hasUpdate: boolean;
   isChecking: boolean;
   isDownloading: boolean;
@@ -59,7 +59,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
 
   const [autoUpdateEnabled, setAutoUpdateEnabledState] = useState(true);
-  const [latestRelease, setLatestRelease] = useState<GiteeRelease | null>(null);
+  const [latestRelease, setLatestRelease] = useState<ReleaseInfo | null>(null);
   const [hasUpdate, setHasUpdate] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -198,7 +198,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   // 核心下载逻辑（静默与手动共用，互斥进行）
   // manual=true 表示用户手动点击下载：始终允许，不受静默开关限制
   const startDownload = useCallback(
-    async (release: GiteeRelease, openModalOnStart: boolean, manual = false) => {
+    async (release: ReleaseInfo, openModalOnStart: boolean, manual = false) => {
       if (downloadStartedRef.current) return;
       // 硬门禁：自动下载（manual=false）在静默更新关闭时拒绝；手动下载始终允许
       if (!manual && !autoUpdateEnabledRef.current) {

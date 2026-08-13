@@ -10,17 +10,26 @@ export function SplashScreen() {
   const { startupProgress } = useAppStartup();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const [logoSrc, setLogoSrc] = useState(DEFAULT_LOGO);
+  // 同步从 localStorage 读取自定义 LOGO，首帧即显示，避免先用默认 LOGO 再切换
+  const [logoSrc, setLogoSrc] = useState<string>(() => {
+    try {
+      return localStorage.getItem("nexbox_splash_logo") || DEFAULT_LOGO;
+    } catch {
+      return DEFAULT_LOGO;
+    }
+  });
 
   useEffect(() => {
+    // 仅当 localStorage 无自定义 LOGO 时，回退读取 store（存量迁移）
+    try {
+      if (localStorage.getItem("nexbox_splash_logo")) return;
+    } catch {
+      /* ignore */
+    }
     (async () => {
       const customLogo = await store.get<string>("nexbox_splash_logo");
       if (customLogo) {
         setLogoSrc(customLogo);
-      } else {
-        // 兼容旧 localStorage
-        const ls = localStorage.getItem("nexbox_splash_logo");
-        if (ls) setLogoSrc(ls);
       }
     })();
   }, []);

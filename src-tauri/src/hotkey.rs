@@ -13,6 +13,58 @@ pub fn is_hotkeys_enabled() -> bool {
     HOTKEYS_ENABLED.load(Ordering::SeqCst)
 }
 
+/// 根据总开关状态实际注册或注销所有全局热键。
+/// 仅切换开关标志并不会释放被操作系统拦截的按键：例如单独绑定 "P" 后，
+/// RegisterHotKey 仍会在系统层面全局拦截 P 键，导致总开关关闭后依然无法打字。
+/// 因此开关关闭时必须注销热键释放按键，开启时重新注册。
+pub fn apply_hotkeys_enabled(app_handle: &tauri::AppHandle, enabled: bool) {
+    #[cfg(target_os = "windows")]
+    {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+        let autoclicker = get_autoclicker_shortcut();
+        let autoclicker_is_mouse = is_mouse_key(&autoclicker);
+
+        let keyboard_shortcuts = [
+            get_overlay_shortcut(),
+            get_crosshair_shortcut(),
+            get_filter_shortcut(),
+            get_music_prev_shortcut(),
+            get_music_next_shortcut(),
+            get_music_playpause_shortcut(),
+        ];
+
+        for s in keyboard_shortcuts {
+            if s.is_empty() {
+                continue;
+            }
+            if enabled {
+                let _ = app_handle.global_shortcut().register(s.as_str());
+            } else {
+                let _ = app_handle.global_shortcut().unregister(s.as_str());
+            }
+        }
+
+        // 鼠标键热键走低级轮询线程，开关关闭时清除、开启时恢复
+        if autoclicker_is_mouse {
+            crate::autoclicker::set_mouse_hotkey(
+                app_handle,
+                if enabled { Some(&autoclicker) } else { None },
+            );
+        } else if !autoclicker.is_empty() {
+            if enabled {
+                let _ = app_handle.global_shortcut().register(autoclicker.as_str());
+            } else {
+                let _ = app_handle.global_shortcut().unregister(autoclicker.as_str());
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app_handle, enabled);
+    }
+}
+
 static OVERLAY_SHORTCUT: Mutex<Option<String>> = Mutex::new(None);
 static OVERLAY_SHORTCUT_ID: AtomicU32 = AtomicU32::new(0);
 
@@ -722,6 +774,8 @@ pub fn set_music_playpause_hotkey(
 #[tauri::command]
 pub fn set_hotkeys_enabled_cmd(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     set_hotkeys_enabled(enabled);
+    // 同步注册/注销全局热键，释放或重新拦截按键
+    apply_hotkeys_enabled(&app_handle, enabled);
     save_settings_value(
         &app_handle,
         "hotkeys-enabled",

@@ -37,7 +37,8 @@ function NavButton({ item, isActive, activeBg, hoverBg, iconColor, activeIconCol
   showLabel: boolean;
 }) {
   const isCustom = !!item.customIcon || !!item.customIconDark;
-  const showText = showLabel || item.alwaysShowLabel;
+  // 文字是否显示完全跟随全局设置（无字模式下不显示文字）；alwaysShowLabel 仅用于控制图标放大
+  const showText = showLabel;
   const { getActiveColor } = useThemeColor();
   const { colorMode } = useColorMode();
   const activeColor = getActiveColor();

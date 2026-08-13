@@ -20,6 +20,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use sysinfo::{ProcessRefreshKind, System};
 use tauri_plugin_store::StoreExt;
+use winreg::enums::*;
+use winreg::RegKey;
 
 use crate::optimization;
 
@@ -63,6 +65,9 @@ pub struct GameOptimizeConfig {
     /// 核心自动优化（启动游戏自动分配 CPU 核心，每游戏独立）
     #[serde(default)]
     pub auto_optimize_affinity: bool,
+    /// IFEO 优先级优化（通过注册表 IFEO PerfOptions 在进程启动时由系统强制应用优先级，持久且对受保护进程生效）
+    #[serde(default)]
+    pub auto_optimize_ifeo: bool,
     /// 兼容旧版单一开关 `auto_optimize`（仅反序列化迁移用，不参与序列化）
     #[serde(default, rename = "auto_optimize", skip_serializing)]
     pub legacy_auto_optimize: Option<bool>,
@@ -87,6 +92,8 @@ pub struct GameAutoStatus {
     pub priority_applied: bool,
     /// 核心分配是否已自动应用
     pub affinity_applied: bool,
+    /// IFEO 优先级是否已通过注册表应用（持久）
+    pub ifeo_applied: bool,
     pub last_apply: Option<String>,
 }
 
@@ -190,6 +197,7 @@ fn default_configs() -> Vec<GameOptimizeConfig> {
         affinity_mask: None,
         auto_optimize_priority: false,
         auto_optimize_affinity: false,
+        auto_optimize_ifeo: false,
         legacy_auto_optimize: None,
     }]
 }
@@ -273,6 +281,124 @@ fn resolve_affinity_mask(mask: Option<u64>) -> u64 {
                 (1u64 << num_cores) - 1
             };
             all_cores_mask ^ 1
+        }
+    }
+}
+
+// ─── IFEO 注册表强制优先级 ───
+// 原理：Windows 的 Image File Execution Options 的 PerfOptions 会在进程启动瞬间
+// 由系统直接应用 CPU 优先级 / IO 优先级，无需进程运行时注入，且对受保护的
+// 进程也生效（进程无法自行改回）。注册表级持久设置，会一直生效直到被清除。
+
+/// 优先级等级 → PerfOptions CpuPriorityClass 值
+fn priority_to_cpu_class(level: PriorityLevel) -> u32 {
+    match level {
+        PriorityLevel::Idle => 1,
+        PriorityLevel::BelowNormal => 2,
+        PriorityLevel::Normal => 3,
+        PriorityLevel::AboveNormal => 4,
+        PriorityLevel::High => 5,
+        PriorityLevel::Realtime => 6,
+    }
+}
+
+/// 优先级等级 → PerfOptions IoPriority 值（1=高，2=正常，3=低）
+fn priority_to_io_priority(level: PriorityLevel) -> u32 {
+    match level {
+        PriorityLevel::Idle | PriorityLevel::BelowNormal => 3,
+        PriorityLevel::Normal | PriorityLevel::AboveNormal => 2,
+        PriorityLevel::High | PriorityLevel::Realtime => 1,
+    }
+}
+
+/// IFEO PerfOptions 注册表路径（进程名自动补 .exe）
+fn ifeo_perf_options_path(process_name: &str) -> String {
+    let exe = if process_name.to_ascii_lowercase().ends_with(".exe") {
+        process_name.to_string()
+    } else {
+        format!("{}.exe", process_name)
+    };
+    format!(
+        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{}\PerfOptions",
+        exe
+    )
+}
+
+/// 写入单个进程的 IFEO PerfOptions（CPU + IO 优先级），需要管理员权限
+fn apply_game_ifeo_registry(process_name: &str, level: PriorityLevel) -> Result<(), String> {
+    let path = ifeo_perf_options_path(process_name);
+    let (key, _) = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .create_subkey(&path)
+        .map_err(|e| format!("创建 IFEO 注册表键失败 ({}): {}", process_name, e))?;
+    key.set_value("CpuPriorityClass", &priority_to_cpu_class(level))
+        .map_err(|e| format!("写入 CpuPriorityClass 失败 ({}): {}", process_name, e))?;
+    key.set_value("IoPriority", &priority_to_io_priority(level))
+        .map_err(|e| format!("写入 IoPriority 失败 ({}): {}", process_name, e))?;
+    Ok(())
+}
+
+/// 删除单个进程的 IFEO PerfOptions
+fn remove_game_ifeo_registry(process_name: &str) -> Result<(), String> {
+    let path = ifeo_perf_options_path(process_name);
+    match RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(&path) {
+        Ok(key) => {
+            let _ = key.delete_value("CpuPriorityClass");
+            let _ = key.delete_value("IoPriority");
+            Ok(())
+        }
+        Err(_) => Ok(()), // 键不存在视为已清除
+    }
+}
+
+/// 查询某个进程的 IFEO PerfOptions 是否已应用（只读，无需管理员）
+fn ifeo_is_applied(process_name: &str) -> bool {
+    let path = ifeo_perf_options_path(process_name);
+    if let Ok(key) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(&path) {
+        if let Ok(v) = key.get_value::<u32, _>("CpuPriorityClass") {
+            return v > 0;
+        }
+    }
+    false
+}
+
+/// 同步 IFEO 注册表与配置：为「已开启 IFEO 且优先级有变化/新增」的进程写入，
+/// 为「已关闭或已删除」的进程清除。需要管理员权限；无权限时仅记录日志不报错。
+fn sync_ifeo_registry(
+    new_configs: &[GameOptimizeConfig],
+    old_configs: &[GameOptimizeConfig],
+) {
+    if !optimization::is_admin() {
+        log::info!("[游戏进程优化] 非管理员，跳过 IFEO 注册表同步");
+        return;
+    }
+    let enabled = |cfgs: &[GameOptimizeConfig]| -> HashMap<String, PriorityLevel> {
+        let mut map = HashMap::new();
+        for c in cfgs {
+            if c.auto_optimize_ifeo {
+                for n in &c.process_names {
+                    map.entry(n.to_lowercase()).or_insert(c.priority);
+                }
+            }
+        }
+        map
+    };
+    let old = enabled(old_configs);
+    let new = enabled(new_configs);
+
+    // 关闭/删除的 → 清除
+    for name in old.keys() {
+        if !new.contains_key(name) {
+            let _ = remove_game_ifeo_registry(name);
+            log::info!("[游戏进程优化] 已清除 IFEO: {}", name);
+        }
+    }
+    // 新增或优先级变化的 → 写入
+    for (name, level) in &new {
+        if old.get(name) != Some(level) {
+            match apply_game_ifeo_registry(name, *level) {
+                Ok(()) => log::info!("[游戏进程优化] 已应用 IFEO: {}", name),
+                Err(e) => log::warn!("[游戏进程优化] 应用 IFEO 失败 ({}): {}", name, e),
+            }
         }
     }
 }
@@ -407,6 +533,10 @@ pub async fn init(app: tauri::AppHandle) -> Result<(), String> {
         log::info!("[游戏进程优化] 首次运行，已预置默认游戏：三角洲行动");
     }
 
+    // 启动时同步一次 IFEO 注册表，确保与持久化配置一致
+    let current = get_configs();
+    sync_ifeo_registry(&current, &[]);
+
     ensure_auto_thread();
     Ok(())
 }
@@ -425,6 +555,7 @@ pub async fn save_game_optimize_configs(
     app: tauri::AppHandle,
     configs: Vec<GameOptimizeConfig>,
 ) -> Result<(), String> {
+    let old_configs = get_configs();
     let cleaned: Vec<GameOptimizeConfig> = configs
         .into_iter()
         .filter(|c| !c.name.trim().is_empty() && !c.process_names.is_empty())
@@ -454,6 +585,8 @@ pub async fn save_game_optimize_configs(
     }
 
     save_persisted_configs(&app, &cleaned).await;
+    // 同步 IFEO 注册表（新增/删除/改名/关闭都会据此写入或清除）
+    sync_ifeo_registry(&cleaned, &old_configs);
     ensure_auto_thread();
     Ok(())
 }
@@ -495,6 +628,86 @@ pub async fn optimize_game_priority(
             format!("「{}」未运行，请先启动游戏", game.name)
         },
         found_count: pids.len(),
+        modified_count: modified,
+    })
+}
+
+/// 手动应用指定游戏的 IFEO 强制优先级（注册表级，进程启动即生效，需管理员权限）
+#[tauri::command]
+pub async fn apply_game_ifeo(
+    _app: tauri::AppHandle,
+    game_id: String,
+) -> Result<GameOptimizeResult, String> {
+    if !optimization::is_admin() {
+        return Err("写入 IFEO 注册表需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
+    }
+    let configs = get_configs();
+    let game = configs
+        .iter()
+        .find(|c| c.id == game_id)
+        .ok_or_else(|| "未找到该游戏配置".to_string())?
+        .clone();
+
+    let mut modified = 0usize;
+    let mut failed = 0usize;
+    for name in &game.process_names {
+        match apply_game_ifeo_registry(name, game.priority) {
+            Ok(()) => modified += 1,
+            Err(e) => {
+                failed += 1;
+                log::warn!("[游戏进程优化] 手动应用 IFEO 失败 ({}): {}", name, e);
+            }
+        }
+    }
+
+    Ok(GameOptimizeResult {
+        success: modified > 0,
+        message: if modified > 0 {
+            format!("已为「{}」写入 {} 个进程的 IFEO 强制优先级（进程重启后生效）", game.name, modified)
+        } else {
+            format!("「{}」IFEO 写入失败（{} 个进程）", game.name, failed)
+        },
+        found_count: failed,
+        modified_count: modified,
+    })
+}
+
+/// 恢复指定游戏的 IFEO 强制优先级：删除注册表 PerfOptions，解除强制（需管理员权限）
+#[tauri::command]
+pub async fn restore_game_ifeo(
+    _app: tauri::AppHandle,
+    game_id: String,
+) -> Result<GameOptimizeResult, String> {
+    if !optimization::is_admin() {
+        return Err("写入 IFEO 注册表需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
+    }
+    let configs = get_configs();
+    let game = configs
+        .iter()
+        .find(|c| c.id == game_id)
+        .ok_or_else(|| "未找到该游戏配置".to_string())?
+        .clone();
+
+    let mut modified = 0usize;
+    let mut failed = 0usize;
+    for name in &game.process_names {
+        match remove_game_ifeo_registry(name) {
+            Ok(()) => modified += 1,
+            Err(e) => {
+                failed += 1;
+                log::warn!("[游戏进程优化] 恢复 IFEO 失败 ({}): {}", name, e);
+            }
+        }
+    }
+
+    Ok(GameOptimizeResult {
+        success: modified > 0,
+        message: if modified > 0 {
+            format!("已为「{}」清除 {} 个进程的 IFEO 强制优先级", game.name, modified)
+        } else {
+            format!("「{}」IFEO 恢复失败（{} 个进程）", game.name, failed)
+        },
+        found_count: failed,
         modified_count: modified,
     })
 }
@@ -543,7 +756,7 @@ pub async fn optimize_game_affinity(
     })
 }
 
-/// 开关指定游戏的「进程/核心自动优化」之一（kind: "priority" | "affinity"，每游戏独立）
+/// 开关指定游戏的「进程/核心/IFEO」自动优化之一（kind: "priority" | "affinity" | "ifeo"，每游戏独立）
 #[tauri::command]
 pub async fn set_game_auto_optimize(
     app: tauri::AppHandle,
@@ -551,6 +764,12 @@ pub async fn set_game_auto_optimize(
     kind: String,
     enabled: bool,
 ) -> Result<(), String> {
+    // IFEO 开启需要管理员权限写注册表；未授权时先拒绝，避免配置被持久化为开启但注册表未写入
+    if kind == "ifeo" && enabled && !optimization::is_admin() {
+        return Err("开启 IFEO 优先级优化需要管理员权限。当前 NexBox 未以管理员身份运行，请右键「以管理员身份运行」后重试".to_string());
+    }
+
+    let old_configs = get_configs();
     let mut configs = get_configs();
     let game = configs
         .iter_mut()
@@ -560,19 +779,28 @@ pub async fn set_game_auto_optimize(
     match kind.as_str() {
         "priority" => game.auto_optimize_priority = enabled,
         "affinity" => game.auto_optimize_affinity = enabled,
+        "ifeo" => game.auto_optimize_ifeo = enabled,
         _ => return Err(format!("未知的自动优化类型: {}", kind)),
     }
 
+    let updated = configs.clone();
     {
         let mut lock = CONFIGS.lock().map_err(|e| e.to_string())?;
-        *lock = Some(configs.clone());
+        *lock = Some(updated.clone());
     }
-    save_persisted_configs(&app, &configs).await;
+    save_persisted_configs(&app, &updated).await;
+    if kind == "ifeo" {
+        sync_ifeo_registry(&updated, &old_configs);
+    }
     ensure_auto_thread();
     log::info!(
         "[游戏进程优化] 游戏 {} 的「{}」自动优化已{}",
         game_id,
-        if kind == "priority" { "进程" } else { "核心" },
+        match kind.as_str() {
+            "priority" => "进程",
+            "affinity" => "核心",
+            _ => "IFEO",
+        },
         if enabled { "开启" } else { "关闭" }
     );
     Ok(())
@@ -588,11 +816,21 @@ pub async fn get_game_auto_optimize_status(
     let result = configs
         .iter()
         .map(|c| {
-            guard
+            let mut status = guard
                 .as_ref()
                 .and_then(|map| map.get(&c.id))
                 .cloned()
-                .unwrap_or_default()
+                .unwrap_or_default();
+            // IFEO 是注册表持久状态，与进程是否运行无关，直接按注册表实际值报告
+            if c.auto_optimize_ifeo {
+                status.ifeo_applied = c
+                    .process_names
+                    .iter()
+                    .any(|n| ifeo_is_applied(n));
+            } else {
+                status.ifeo_applied = false;
+            }
+            status
         })
         .collect();
     Ok(result)

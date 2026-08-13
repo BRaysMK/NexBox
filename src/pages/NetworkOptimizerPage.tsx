@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { memo, useState, useEffect, useCallback } from "react";
 import {
   Box,
   Heading,
@@ -17,6 +17,7 @@ import {
 } from "@chakra-ui/react";
 import { ArrowLeft, Copy, Globe, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { store } from "@/lib/store";
@@ -32,6 +33,232 @@ import {
 
 const STORE_KEY = "network_optimizer_states";
 const DNS_STORE_KEY = "network_optimizer_dns";
+
+// ============ 模块级 memo 组件（避免因父组件重渲染导致卸载重挂载，保证 Switch 动画正常） ============
+
+interface OptimizeCardProps {
+  item: NetworkOptimizerItem;
+  state: boolean;
+  isToggling: boolean;
+  onToggle: (item: NetworkOptimizerItem, enable: boolean) => void;
+  headingColor: string;
+  subTextColor: string;
+  activeColor: string;
+  cardBg: string;
+  cardBorder: string;
+  liquidGlassEnabled: boolean;
+  t: TFunction;
+}
+
+const OptimizeCard = memo(function OptimizeCard({
+  item,
+  state,
+  isToggling,
+  onToggle,
+  headingColor,
+  subTextColor,
+  activeColor,
+  cardBg,
+  cardBorder,
+  liquidGlassEnabled,
+  t,
+}: OptimizeCardProps) {
+  const IconComponent = item.icon;
+
+  const cardContent = (
+    <Flex justify="space-between" align="center" gap={3}>
+      <HStack spacing={3} align="center" flex={1} minW={0}>
+        <Box
+          w={10}
+          h={10}
+          borderRadius="lg"
+          bg={`${item.color}20`}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          color={item.color}
+          flexShrink={0}
+        >
+          <IconComponent size={20} />
+        </Box>
+        <Box minW={0} flex={1}>
+          <Text color={headingColor} fontSize="sm" fontWeight="bold" noOfLines={1}>
+            {t(item.titleKey)}
+          </Text>
+          <Text color={subTextColor} fontSize="xs" noOfLines={2} mt={0.5}>
+            {t(item.descKey)}
+          </Text>
+        </Box>
+      </HStack>
+      <Switch
+        isChecked={state}
+        isDisabled={isToggling}
+        onChange={() => onToggle(item, !state)}
+        sx={{
+          "& .chakra-switch__track[data-checked]": {
+            bg: activeColor,
+          },
+        }}
+        size="md"
+      />
+    </Flex>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <LiquidGlassCard w="full" p={4}>
+        {cardContent}
+      </LiquidGlassCard>
+    );
+  }
+
+  return (
+    <Box
+      w="full"
+      bg={cardBg}
+      borderRadius="xl"
+      border="1px solid"
+      borderColor={cardBorder}
+      p={4}
+      transition="all 0.2s"
+      _hover={{
+        borderColor: item.color,
+        boxShadow: `0 0 12px ${item.color}20`,
+      }}
+    >
+      {cardContent}
+    </Box>
+  );
+});
+
+interface DnsCardProps {
+  preset: DnsPreset;
+  currentDns: { primary: string; secondary: string };
+  applyingId: string | null;
+  onApply: (preset: DnsPreset) => void;
+  headingColor: string;
+  subTextColor: string;
+  activeColor: string;
+  contrastText: string;
+  hoverBg: string;
+  cardBg: string;
+  cardBorder: string;
+  liquidGlassEnabled: boolean;
+  t: TFunction;
+}
+
+const DnsCard = memo(function DnsCard({
+  preset,
+  currentDns,
+  applyingId,
+  onApply,
+  headingColor,
+  subTextColor,
+  activeColor,
+  contrastText,
+  hoverBg,
+  cardBg,
+  cardBorder,
+  liquidGlassEnabled,
+  t,
+}: DnsCardProps) {
+  const isApplied =
+    currentDns.primary === preset.primary &&
+    currentDns.secondary === preset.secondary;
+  const isLoading = applyingId === preset.id;
+
+  const cardContent = (
+    <VStack align="start" spacing={2} w="full">
+      <HStack spacing={3} align="center" w="full">
+        <Box
+          w={10}
+          h={10}
+          borderRadius="lg"
+          bg={`${preset.iconColor}20`}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          color={preset.iconColor}
+          flexShrink={0}
+        >
+          <Globe size={20} />
+        </Box>
+        <Box flex={1} minW={0}>
+          <HStack spacing={2}>
+            <Text color={headingColor} fontSize="sm" fontWeight="bold" noOfLines={1}>
+              {preset.name}
+            </Text>
+            {isApplied && (
+              <Text color={activeColor} fontSize="xs" fontWeight="bold" flexShrink={0}>
+                {t("networkOptimize.dns.applied")}
+              </Text>
+            )}
+          </HStack>
+        </Box>
+      </HStack>
+      <VStack align="start" spacing={0} w="full" px={1}>
+        <Text color={subTextColor} fontSize="xs">
+          {preset.primary}
+        </Text>
+        {preset.secondary ? (
+          <Text color={subTextColor} fontSize="xs">
+            {preset.secondary}
+          </Text>
+        ) : null}
+      </VStack>
+      <Button
+        size="sm"
+        w="full"
+        onClick={() => onApply(preset)}
+        isLoading={isLoading}
+        loadingText={t("networkOptimize.dns.apply")}
+        {...(isApplied
+          ? {
+              variant: "outline",
+              sx: {
+                borderColor: activeColor,
+                color: activeColor,
+                _hover: { bg: hoverBg },
+              },
+            }
+          : {
+              bg: activeColor,
+              color: contrastText,
+              _hover: { opacity: 0.9 },
+              _active: { transform: "scale(0.97)" },
+            })}
+      >
+        {t("networkOptimize.dns.apply")}
+      </Button>
+    </VStack>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <LiquidGlassCard w="full" p={4}>
+        {cardContent}
+      </LiquidGlassCard>
+    );
+  }
+
+  return (
+    <Box
+      w="full"
+      bg={cardBg}
+      borderRadius="xl"
+      border="1px solid"
+      borderColor={isApplied ? activeColor : cardBorder}
+      p={4}
+      transition="all 0.2s"
+      _hover={{
+        borderColor: preset.iconColor,
+        boxShadow: `0 0 12px ${preset.iconColor}20`,
+      }}
+    >
+      {cardContent}
+    </Box>
+  );
+});
 
 export default function NetworkOptimizerPage() {
   const { t } = useTranslation();
@@ -54,6 +281,7 @@ export default function NetworkOptimizerPage() {
   const [applyingDnsId, setApplyingDnsId] = useState<string | null>(null);
   const [isRestoringDns, setIsRestoringDns] = useState(false);
   const [isClearingDns, setIsClearingDns] = useState(false);
+  const [isResettingNetwork, setIsResettingNetwork] = useState(false);
   const [customPrimary, setCustomPrimary] = useState("");
   const [customSecondary, setCustomSecondary] = useState("");
   const [isApplyingCustomDns, setIsApplyingCustomDns] = useState(false);
@@ -263,17 +491,19 @@ export default function NetworkOptimizerPage() {
     [scannedStates, savedStates],
   );
 
-  // 切换单个网络优化项
+  // 切换单个网络优化项（乐观更新：先切 UI 再后台执行，失败回滚，保证开关流畅）
   const toggleItem = useCallback(
     async (item: NetworkOptimizerItem, enable: boolean) => {
       const cmd = enable ? item.enableCmd : item.disableCmd;
       setTogglingItems((prev) => new Set(prev).add(item.id));
+      const prevVal = savedStates[item.id];
+      // 乐观更新开关状态，让过渡动画立即播放
+      const optimistic = { ...savedStates, [item.id]: enable };
+      setSavedStates(optimistic);
+      setScannedStates((prev) => ({ ...prev, [item.stateKey]: enable }));
       try {
         await invoke(cmd);
-        const newSaved = { ...savedStates, [item.id]: enable };
-        setSavedStates(newSaved);
-        setScannedStates((prev) => ({ ...prev, [item.stateKey]: enable }));
-        persistStates(newSaved);
+        persistStates(optimistic);
         toast({
           title: enable
             ? t("networkOptimize.optimized")
@@ -284,6 +514,10 @@ export default function NetworkOptimizerPage() {
           isClosable: true,
         });
       } catch (err) {
+        // 失败时回滚开关状态
+        const rollback = { ...savedStates, [item.id]: prevVal };
+        setSavedStates(rollback);
+        setScannedStates((prev) => ({ ...prev, [item.stateKey]: prevVal }));
         toast({
           title: t("networkOptimize.operationError"),
           description: String(err),
@@ -458,6 +692,30 @@ export default function NetworkOptimizerPage() {
     }
   }, [toast, t]);
 
+  // 重置网络（Winsock + TCP/IP）
+  const handleResetNetwork = useCallback(async () => {
+    setIsResettingNetwork(true);
+    try {
+      await invoke("reset_network");
+      toast({
+        title: t("networkOptimize.resetNetwork.done"),
+        status: "success",
+        duration: 4000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: t("networkOptimize.resetNetwork.error"),
+        description: String(err),
+        status: "error",
+        duration: 4000,
+        isClosable: true,
+      });
+    } finally {
+      setIsResettingNetwork(false);
+    }
+  }, [toast, t]);
+
   // 应用自定义 DNS
   const handleApplyCustomDns = useCallback(async () => {
     if (!customPrimary.trim()) {
@@ -476,183 +734,6 @@ export default function NetworkOptimizerPage() {
       setIsApplyingCustomDns(false);
     }
   }, [customPrimary, customSecondary, applyDns, toast, t]);
-
-  // DNS 预设卡片
-  function DnsCard({ preset }: { preset: DnsPreset }) {
-    const isApplied =
-      currentDns.primary === preset.primary &&
-      currentDns.secondary === preset.secondary;
-    const isLoading = applyingDnsId === preset.id;
-
-    const cardContent = (
-      <VStack align="start" spacing={2} w="full">
-        <HStack spacing={3} align="center" w="full">
-          <Box
-            w={10}
-            h={10}
-            borderRadius="lg"
-            bg={`${preset.iconColor}20`}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            color={preset.iconColor}
-            flexShrink={0}
-          >
-            <Globe size={20} />
-          </Box>
-          <Box flex={1} minW={0}>
-            <HStack spacing={2}>
-              <Text color={headingColor} fontSize="sm" fontWeight="bold" noOfLines={1}>
-                {preset.name}
-              </Text>
-              {isApplied && (
-                <Text color={activeColor} fontSize="xs" fontWeight="bold" flexShrink={0}>
-                  {t("networkOptimize.dns.applied")}
-                </Text>
-              )}
-            </HStack>
-          </Box>
-        </HStack>
-        <VStack align="start" spacing={0} w="full" px={1}>
-          <Text color={subTextColor} fontSize="xs">
-            {preset.primary}
-          </Text>
-          {preset.secondary ? (
-            <Text color={subTextColor} fontSize="xs">
-              {preset.secondary}
-            </Text>
-          ) : null}
-        </VStack>
-        <Button
-          size="sm"
-          w="full"
-          onClick={() => handleApplyPreset(preset)}
-          isLoading={isLoading}
-          loadingText={t("networkOptimize.dns.apply")}
-          {...(isApplied
-            ? {
-                variant: "outline",
-                sx: {
-                  borderColor: activeColor,
-                  color: activeColor,
-                  _hover: { bg: hoverBg },
-                },
-              }
-            : {
-                bg: activeColor,
-                color: contrastText,
-                _hover: { opacity: 0.9 },
-                _active: { transform: "scale(0.97)" },
-              })}
-        >
-          {t("networkOptimize.dns.apply")}
-        </Button>
-      </VStack>
-    );
-
-    if (liquidGlassEnabled) {
-      return (
-        <LiquidGlassCard w="full" p={4}>
-          {cardContent}
-        </LiquidGlassCard>
-      );
-    }
-
-    return (
-      <Box
-        w="full"
-        bg={cardBg}
-        borderRadius="xl"
-        border="1px solid"
-        borderColor={isApplied ? activeColor : cardBorder}
-        p={4}
-        transition="all 0.2s"
-        _hover={{
-          borderColor: preset.iconColor,
-          boxShadow: `0 0 12px ${preset.iconColor}20`,
-        }}
-      >
-        {cardContent}
-      </Box>
-    );
-  }
-
-  // 网络优化项卡片
-  function OptimizeCard({ item }: { item: NetworkOptimizerItem }) {
-    const isOptimized = getItemState(item);
-    const isToggling = togglingItems.has(item.id);
-    const IconComponent = item.icon;
-
-    const cardContent = (
-      <Flex justify="space-between" align="center" gap={3}>
-        <HStack spacing={3} align="center" flex={1} minW={0}>
-          <Box
-            w={10}
-            h={10}
-            borderRadius="lg"
-            bg={`${item.color}20`}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            color={item.color}
-            flexShrink={0}
-          >
-            <IconComponent size={20} />
-          </Box>
-          <Box minW={0} flex={1}>
-            <Text
-              color={headingColor}
-              fontSize="sm"
-              fontWeight="bold"
-              noOfLines={1}
-            >
-              {t(item.titleKey)}
-            </Text>
-            <Text color={subTextColor} fontSize="xs" noOfLines={2} mt={0.5}>
-              {t(item.descKey)}
-            </Text>
-          </Box>
-        </HStack>
-        <Switch
-          isChecked={isOptimized}
-          isDisabled={isToggling}
-          onChange={() => toggleItem(item, !isOptimized)}
-          sx={{
-            "& .chakra-switch__track[data-checked]": {
-              bg: activeColor,
-            },
-          }}
-          size="md"
-        />
-      </Flex>
-    );
-
-    if (liquidGlassEnabled) {
-      return (
-        <LiquidGlassCard w="full" p={4}>
-          {cardContent}
-        </LiquidGlassCard>
-      );
-    }
-
-    return (
-      <Box
-        w="full"
-        bg={cardBg}
-        borderRadius="xl"
-        border="1px solid"
-        borderColor={cardBorder}
-        p={4}
-        transition="all 0.2s"
-        _hover={{
-          borderColor: item.color,
-          boxShadow: `0 0 12px ${item.color}20`,
-        }}
-      >
-        {cardContent}
-      </Box>
-    );
-  }
 
   // Scanning state
   if (isInitialScanning) {
@@ -909,7 +990,22 @@ export default function NetworkOptimizerPage() {
         {/* DNS 预设列表 */}
         <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={3} mb={3}>
           {dnsPresets.map((preset) => (
-            <DnsCard key={preset.id} preset={preset} />
+            <DnsCard
+              key={preset.id}
+              preset={preset}
+              currentDns={currentDns}
+              applyingId={applyingDnsId}
+              onApply={handleApplyPreset}
+              headingColor={headingColor}
+              subTextColor={subTextColor}
+              activeColor={activeColor}
+              contrastText={contrastText}
+              hoverBg={hoverBg}
+              cardBg={cardBg}
+              cardBorder={cardBorder}
+              liquidGlassEnabled={liquidGlassEnabled}
+              t={t}
+            />
           ))}
         </SimpleGrid>
 
@@ -928,6 +1024,7 @@ export default function NetworkOptimizerPage() {
                   size="sm"
                   flex={1}
                   minW="140px"
+                  focusBorderColor={activeColor}
                 />
                 <Input
                   placeholder={t("networkOptimize.dns.secondary")}
@@ -936,6 +1033,7 @@ export default function NetworkOptimizerPage() {
                   size="sm"
                   flex={1}
                   minW="140px"
+                  focusBorderColor={activeColor}
                 />
                 <Button
                   size="sm"
@@ -1027,9 +1125,85 @@ export default function NetworkOptimizerPage() {
         </Heading>
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
           {networkOptimizerItems.map((item) => (
-            <OptimizeCard key={item.id} item={item} />
+            <OptimizeCard
+              key={item.id}
+              item={item}
+              state={getItemState(item)}
+              isToggling={togglingItems.has(item.id)}
+              onToggle={toggleItem}
+              headingColor={headingColor}
+              subTextColor={subTextColor}
+              activeColor={activeColor}
+              cardBg={cardBg}
+              cardBorder={cardBorder}
+              liquidGlassEnabled={liquidGlassEnabled}
+              t={t}
+            />
           ))}
         </SimpleGrid>
+      </Box>
+
+      {/* Section 3: 网络重置 */}
+      <Box w="full">
+        <Heading
+          as="h3"
+          fontSize="md"
+          fontWeight="bold"
+          color={headingColor}
+          mb={3}
+          position="relative"
+          pl={3}
+          sx={{
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              left: 0,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: "3px",
+              height: "16px",
+              borderRadius: "full",
+              bg: activeColor,
+            },
+          }}
+        >
+          {t("networkOptimize.resetNetwork.title")}
+        </Heading>
+        {(() => {
+          const resetContent = (
+            <HStack justify="space-between" align="center" gap={3} flexWrap="wrap">
+              <VStack align="start" spacing={1} flex={1} minW={0}>
+                <Text fontSize="sm" fontWeight="bold" color={headingColor}>
+                  {t("networkOptimize.resetNetwork.title")}
+                </Text>
+                <Text fontSize="xs" color={subTextColor}>
+                  {t("networkOptimize.resetNetwork.description")}
+                </Text>
+              </VStack>
+              <Button
+                size="sm"
+                onClick={handleResetNetwork}
+                isLoading={isResettingNetwork}
+                loadingText={t("networkOptimize.resetNetwork.resetting")}
+                bg={activeColor}
+                color={contrastText}
+                _hover={{ opacity: 0.9 }}
+                _active={{ transform: "scale(0.97)" }}
+                flexShrink={0}
+              >
+                {t("networkOptimize.resetNetwork.reset")}
+              </Button>
+            </HStack>
+          );
+          if (liquidGlassEnabled) {
+            return <LiquidGlassCard w="full" p={4}>{resetContent}</LiquidGlassCard>;
+          }
+          return (
+            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4}>
+              {resetContent}
+            </Box>
+          );
+        })()}
       </Box>
     </VStack>
   );

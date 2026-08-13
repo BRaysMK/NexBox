@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "7.6.0"
+version = "7.7.8"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -85,6 +85,9 @@ lofty = "0.21"
 walkdir = "2"
 jwalk = "0.8"
 glob = "0.3"
+
+# 启动项图标：从 exe 提取图标并编码为 PNG
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(windows)'.dependencies]
 mslnk = "0.1"

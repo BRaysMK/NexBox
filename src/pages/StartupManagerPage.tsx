@@ -75,6 +75,33 @@ export default function StartupManagerPage() {
   const [items, setItems] = useState<StartupItem[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [disablingItems, setDisablingItems] = useState<Set<string>>(new Set());
+  // 启动项软件图标（file_location -> data URI），空字符串表示未取到
+  const [icons, setIcons] = useState<Record<string, string>>({});
+
+  // 扫描完成后异步获取每个启动项的软件图标（不阻塞列表渲染）
+  useEffect(() => {
+    let cancelled = false;
+    const fetchIcons = async () => {
+      const next: Record<string, string> = {};
+      for (const item of items) {
+        const path = item.file_location;
+        if (!path || next[path]) continue;
+        try {
+          const dataUri = await invoke<string>("get_startup_item_icon", { fileLocation: path });
+          if (!cancelled && dataUri) next[path] = dataUri;
+        } catch {
+          // 单条图标获取失败不影响其他项
+        }
+      }
+      if (!cancelled && Object.keys(next).length > 0) {
+        setIcons((prev) => ({ ...prev, ...next }));
+      }
+    };
+    fetchIcons();
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
 
   const doScan = useCallback(
     async (showSpinner = true) => {
@@ -274,14 +301,22 @@ export default function StartupManagerPage() {
                           w={8}
                           h={8}
                           borderRadius="md"
-                          bg={`${themeConfig.primaryColor}15`}
+                          bg={icons[item.file_location] ? "transparent" : `${themeConfig.primaryColor}15`}
                           display="flex"
                           alignItems="center"
                           justifyContent="center"
                           color={themeConfig.primaryColor}
                           flexShrink={0}
+                          overflow="hidden"
                         >
-                          {item.item_type === "Registry" ? (
+                          {icons[item.file_location] ? (
+                            <img
+                              src={icons[item.file_location]}
+                              alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                              loading="lazy"
+                            />
+                          ) : item.item_type === "Registry" ? (
                             <Search size={14} />
                           ) : (
                             <FileCode size={14} />

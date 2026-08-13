@@ -10,6 +10,11 @@ static TRAY_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static CLOSE_BEHAVIOR: LazyLock<Mutex<String>> = LazyLock::new(|| Mutex::new(String::from("ask")));
 static DONT_ASK_AGAIN: AtomicBool = AtomicBool::new(false);
 
+/// 悬停面板当前是否应显示（光标悬停在托盘图标上时为 true）
+static HOVER_ACTIVE: AtomicBool = AtomicBool::new(false);
+/// 悬停数据推送线程是否已启动（避免重复 spawn）
+static HOVER_THREAD_SPAWNED: AtomicBool = AtomicBool::new(false);
+
 /// 获取指定屏幕坐标所在显示器的工作区（已排除任务栏），返回物理像素 (x, y, width, height)。
 #[cfg(target_os = "windows")]
 fn get_monitor_work_area(px: i32, py: i32) -> Option<(i32, i32, i32, i32)> {
@@ -113,6 +118,12 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                         let _ = menu_window.set_focus();
                     }
                 }
+                tauri::tray::TrayIconEvent::Enter { .. } => {
+                    start_tray_hover_tooltip(tray);
+                }
+                tauri::tray::TrayIconEvent::Leave { .. } => {
+                    stop_tray_hover_tooltip(tray);
+                }
                 _ => {}
             }
         })
@@ -121,6 +132,65 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
     TRAY_INITIALIZED.store(true, Ordering::SeqCst);
 
     Ok(tray)
+}
+
+/// 生成托盘悬停提示文本（核心四项：CPU/GPU 占用+温度、内存、磁盘）。
+/// 受原生 tooltip 128 字符硬限制，仅保留最关键的指标；数据取自常驻轮询缓存，不额外采样。
+fn build_hover_tooltip() -> String {
+    let snap = crate::overlay_panel::current_hover_snapshot();
+    let disk = crate::hardware::disk_usage_percent();
+    let s = snap.as_ref();
+
+    let pct = |v: Option<f64>| match v {
+        Some(x) => format!("{:.0}%", x),
+        None => "--".to_string(),
+    };
+    let temp = |v: Option<f64>| match v {
+        Some(x) => format!("{:.0}°C", x),
+        None => "--".to_string(),
+    };
+
+    let cpu_usage = s.and_then(|x| x.cpu_usage).map(|v| v as f64);
+    let cpu_temp = s.and_then(|x| x.cpu_temp);
+    let gpu_usage = s.and_then(|x| x.gpu_usage).map(|v| v as f64);
+    let gpu_temp = s.and_then(|x| x.gpu_temp);
+    let memory = s.and_then(|x| x.memory_usage);
+
+    format!(
+        "CPU {} {}\r\nGPU {} {}\r\n内存 {}\r\n磁盘 {}",
+        pct(cpu_usage),
+        temp(cpu_temp),
+        pct(gpu_usage),
+        temp(gpu_temp),
+        pct(memory),
+        pct(disk),
+    )
+}
+
+/// 光标悬停托盘图标：立即更新一次提示，并启动每秒刷新（仅悬停期间运行，离开即停止）。
+fn start_tray_hover_tooltip<R: Runtime>(tray: &TrayIcon<R>) {
+    let _ = tray.set_tooltip(Some(build_hover_tooltip()));
+
+    HOVER_ACTIVE.store(true, Ordering::SeqCst);
+    if !HOVER_THREAD_SPAWNED.swap(true, Ordering::SeqCst) {
+        let tray = tray.clone();
+        std::thread::spawn(move || {
+            while HOVER_ACTIVE.load(Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                if !HOVER_ACTIVE.load(Ordering::SeqCst) {
+                    break;
+                }
+                let _ = tray.set_tooltip(Some(build_hover_tooltip()));
+            }
+            HOVER_THREAD_SPAWNED.store(false, Ordering::SeqCst);
+        });
+    }
+}
+
+/// 光标离开托盘图标：停止刷新并清除提示文本。
+fn stop_tray_hover_tooltip<R: Runtime>(tray: &TrayIcon<R>) {
+    HOVER_ACTIVE.store(false, Ordering::SeqCst);
+    let _ = tray.set_tooltip::<&str>(None);
 }
 
 #[tauri::command]
@@ -191,5 +261,6 @@ pub fn check_update_and_show(app: AppHandle) {
 }
 
 pub fn cleanup() {
+    HOVER_ACTIVE.store(false, Ordering::SeqCst);
     TRAY_INITIALIZED.store(false, Ordering::SeqCst);
 }

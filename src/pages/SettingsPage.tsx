@@ -63,7 +63,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { useFont } from "@/contexts/font-context";
 import { PRESET_COLORS, hexToRgba } from "@/lib/color-utils";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
-import { fetchReleaseByTag, type GiteeRelease } from "@/lib/update-checker";
+import { fetchReleaseByTag, type ReleaseInfo } from "@/lib/update-checker";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
@@ -219,6 +219,7 @@ function GeneralSettings() {
   const [pageTransitionMode, setPageTransitionMode] = useState<"slide" | "fade" | "off">("fade");
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
+  const [minimizedStart, setMinimizedStart] = useState(false);
   const { autoUpdateEnabled, setAutoUpdateEnabled } = useUpdate();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
@@ -478,6 +479,14 @@ function GeneralSettings() {
       .catch(() => {})
       .finally(() => setAutoStartLoading(false));
 
+    // 读取"开机最小化启动"设置
+    store
+      .get<boolean>("nexbox_minimized_start")
+      .then((v) => {
+        if (typeof v === "boolean") setMinimizedStart(v);
+      })
+      .catch(() => {});
+
     // 监听主页卡片显示变化，保持同步
     const handleWinKeyCardSync = (e: CustomEvent) => {
       setGameWinKeyCardEnabled(e.detail);
@@ -674,7 +683,17 @@ function GeneralSettings() {
     if (autoStartLoading) return;
     const newValue = !autoStart;
     setAutoStartLoading(true);
-    invoke("set_nexbox_auto_start", { enable: newValue })
+
+    // 关闭开机自启时，同步关闭"开机最小化启动"（最小化启动依赖自启）
+    if (!newValue && minimizedStart) {
+      setMinimizedStart(false);
+      store
+        .set("nexbox_minimized_start", false)
+        .then(() => store.save())
+        .catch(() => {});
+    }
+
+    invoke("set_nexbox_auto_start", { enable: newValue, minimizedStart: newValue ? minimizedStart : false })
       .then(() => {
         setAutoStart(newValue);
         toast({
@@ -702,6 +721,43 @@ function GeneralSettings() {
       .finally(() => {
         setAutoStartLoading(false);
       });
+  };
+
+  // 切换"开机最小化启动"：保存设置；若自启已开启，则重写 Run 键以应用/移除 --autostart
+  const handleMinimizedStartToggle = () => {
+    const newValue = !minimizedStart;
+    setMinimizedStart(newValue);
+    store
+      .set("nexbox_minimized_start", newValue)
+      .then(() => store.save())
+      .catch(() => {});
+
+    if (autoStart) {
+      invoke("set_nexbox_auto_start", { enable: true, minimizedStart: newValue })
+        .catch((err) => {
+          const errMsg = typeof err === "string"
+            ? err
+            : (err && typeof err === "object" && "message" in err)
+              ? String((err as { message: unknown }).message)
+              : String(err);
+          toast({
+            title: t("settings.generalSettings.autoStartError", "开机自启设置失败"),
+            description: errMsg,
+            status: "error",
+            duration: 4000,
+            isClosable: true,
+          });
+        });
+    }
+
+    toast({
+      title: newValue
+        ? t("settings.generalSettings.minimizedStartEnabled", "开机最小化启动已开启")
+        : t("settings.generalSettings.minimizedStartDisabled", "开机最小化启动已关闭"),
+      status: "success",
+      duration: 2000,
+      isClosable: true,
+    });
   };
 
   const handlePageTransitionChange = (newMode: "slide" | "fade" | "off") => {
@@ -734,15 +790,28 @@ function GeneralSettings() {
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
                 {t("settings.generalSettings.autoStartLabel")}
               </Text>
-              <Text fontSize="xs" color={subLabelColor} mt={1}>
-                （部分电脑可能开机无法自启，还没修好qwq）
-              </Text>
             </Box>
             <ThemeSwitch
               size="md"
               isChecked={autoStart}
               onChange={handleAutoStartToggle}
               isDisabled={autoStartLoading}
+            />
+          </HStack>
+          <HStack justify="space-between" py={2}>
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("settings.generalSettings.minimizedStartLabel", "开机最小化启动")}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={1}>
+                {t("settings.generalSettings.minimizedStartDesc", "开机时不显示主窗口，仅后台运行并保留托盘")}
+              </Text>
+            </Box>
+            <ThemeSwitch
+              size="md"
+              isChecked={minimizedStart}
+              onChange={handleMinimizedStartToggle}
+              isDisabled={autoStartLoading || !autoStart}
             />
           </HStack>
           <HStack justify="space-between" py={2}>
@@ -2149,7 +2218,7 @@ function NetworkSettings() {
 
   const presetServers = [
     { id: "baidu", url: "https://www.baidu.com/img/flexible/logo/pc/result.png" },
-    { id: "gitee", url: "https://gitee.com/favicon.ico" },
+    { id: "gitcode", url: "https://gitcode.com/favicon.ico" },
     { id: "github", url: "https://github.githubassets.com/favicons/favicon-dark.svg" },
     { id: "qq", url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2312B7F5'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='white' font-size='14' font-weight='bold' font-family='Arial,sans-serif'%3EQQ%3C/text%3E%3C/svg%3E" },
     { id: "aliyun", url: "https://img.alicdn.com/tfs/TB1_ZXuNcfpK1RjSZFOXXa6nFXa-32-32.ico" },
@@ -3007,6 +3076,7 @@ function PawnioSettings() {
 function AboutSettings() {
   const { t } = useTranslation();
   const toast = useToast();
+  const { getActiveColor } = useThemeColor();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
@@ -3014,9 +3084,10 @@ function AboutSettings() {
   const appNameColor = useColorModeValue("gray.400", "#ffffff");
   const graphicLogoSrc = useColorModeValue("/logo/NBB.png", "/logo/NBW.png");
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
+  const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "7.6.0";
-  const [currentRelease, setCurrentRelease] = useState<GiteeRelease | null>(null);
+  const currentVersion = "7.7.8";
+  const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
   // LOGO 连续点击 5 次跳转原神官网的彩蛋
@@ -3317,7 +3388,20 @@ function AboutSettings() {
             <Text color={subLabelColor}>{t("settings.aboutSettings.loadingChangelog")}</Text>
           </Box>
         ) : currentRelease && currentRelease.body ? (
-          <Box maxH="300px" overflowY="auto">
+          <Box
+            maxH="300px"
+            overflowY="auto"
+            sx={{
+              scrollbarGutter: "stable",
+              "&::-webkit-scrollbar": { width: "4px" },
+              "&::-webkit-scrollbar-track": { background: "transparent" },
+              "&::-webkit-scrollbar-thumb": {
+                background: `${changelogScrollColor}88`,
+                borderRadius: "2px",
+              },
+              "&::-webkit-scrollbar-thumb:hover": { background: changelogScrollColor },
+            }}
+          >
             <Text color={labelColor} fontSize="sm" whiteSpace="pre-wrap">
               {currentRelease.body}
             </Text>

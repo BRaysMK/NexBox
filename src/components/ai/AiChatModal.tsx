@@ -136,6 +136,15 @@ export default function AiChatModal({ isOpen, onClose }: AiChatModalProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  // 打开弹窗时直接跳到最新消息（等弹窗渲染出最终高度后再滚动）
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
   // 持久化消息历史（仅保留 user/assistant，跳过空消息）
   useEffect(() => {
     if (!historyLoadedRef.current) return;
@@ -378,7 +387,23 @@ export default function AiChatModal({ isOpen, onClose }: AiChatModalProps) {
         <ModalBody p={0}>
           <Flex direction="column" h="55vh">
             {/* 消息列表 */}
-            <Box ref={scrollRef} flex={1} overflowY="auto" px={4} py={2}>
+            <Box
+              ref={scrollRef}
+              flex={1}
+              overflowY="auto"
+              px={4}
+              py={2}
+              sx={{
+                scrollbarGutter: "stable",
+                "&::-webkit-scrollbar": { width: "5px" },
+                "&::-webkit-scrollbar-track": { background: "transparent" },
+                "&::-webkit-scrollbar-thumb": {
+                  background: `${primary}88`,
+                  borderRadius: "3px",
+                },
+                "&::-webkit-scrollbar-thumb:hover": { background: primary },
+              }}
+            >
               <AnimatePresence>
                 {messages.map((msg, i) => {
                   // 搜索结果消息：显示在 AI 输出上方（user 之后、assistant 之前）
@@ -558,7 +583,20 @@ export default function AiChatModal({ isOpen, onClose }: AiChatModalProps) {
                     {customMemories.length}
                   </Badge>
                 </HStack>
-                <Box maxH="160px" overflowY="auto" mb={2}>
+                <Box
+                  maxH="160px"
+                  overflowY="auto"
+                  mb={2}
+                  sx={{
+                    "&::-webkit-scrollbar": { width: "4px" },
+                    "&::-webkit-scrollbar-track": { background: "transparent" },
+                    "&::-webkit-scrollbar-thumb": {
+                      background: `${primary}88`,
+                      borderRadius: "2px",
+                    },
+                    "&::-webkit-scrollbar-thumb:hover": { background: primary },
+                  }}
+                >
                   {customMemories.length === 0 ? (
                     <Text fontSize="xs" color={subTextColor} py={2}>
                       {t("ai.memoryEmpty", "还没有自定义记忆，给盒子喵加点吧喵~")}
