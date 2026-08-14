@@ -138,6 +138,26 @@ pub async fn stop_vertical_overlay(
         });
     }
 
+    // 关闭前以窗口实际位置为准兜底保存：拖动结束到立即关闭之间可能不足 300ms
+    // （前端 onMoved 节流/鼠标事件在系统拖动中被吞掉），最后一次位置来不及保存，
+    // 这里直接读取窗口当前位置保存，保证"拖完立刻关闭"不丢失。
+    if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+        if let Ok(pos) = window.outer_position() {
+            let x = pos.x;
+            let y = pos.y;
+            {
+                let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
+                if let Some(ref mut settings) = *settings_lock {
+                    settings.vertical_position_x = Some(x);
+                    settings.vertical_position_y = Some(y);
+                }
+            }
+            persist_vertical_overlay_position(&app_handle, x, y);
+            log::info!("[vertical-overlay] save position on stop x={x} y={y}");
+            let _ = app_handle.emit("overlay-position-saved", serde_json::json!({ "x": x, "y": y }));
+        }
+    }
+
     VERTICAL_OVERLAY_ACTIVE.store(false, Ordering::SeqCst);
 
     if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
@@ -334,6 +354,22 @@ pub fn stop_data_thread() {
 /// 清理（应用退出时调用）
 pub fn cleanup(app_handle: &tauri::AppHandle) {
     if VERTICAL_OVERLAY_ACTIVE.load(Ordering::SeqCst) {
+        // 退出前同样以窗口实际位置兜底保存
+        if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+            if let Ok(pos) = window.outer_position() {
+                let x = pos.x;
+                let y = pos.y;
+                {
+                    let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
+                    if let Some(ref mut settings) = *settings_lock {
+                        settings.vertical_position_x = Some(x);
+                        settings.vertical_position_y = Some(y);
+                    }
+                }
+                persist_vertical_overlay_position(app_handle, x, y);
+                log::info!("[vertical-overlay] save position on cleanup x={x} y={y}");
+            }
+        }
         VERTICAL_OVERLAY_ACTIVE.store(false, Ordering::SeqCst);
         if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
             let _ = window.destroy();

@@ -270,6 +270,8 @@ export default function VerticalOverlayPage() {
   // 记录拖动过程中的最新窗口位置，避免 startDragging 返回后读取到旧坐标
   const movedPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastSaveRef = useRef(0);
+  // 移动停止后的兜底保存定时器（拖动结束 → 立即关闭时防止最后一次位置丢失）
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 保存竖排悬浮框位置：Rust 端负责更新内存并写入 settings.json（仅更新位置字段、保留其他键），
   // 主应用通过 overlay-position-saved 事件同步共享 store。
@@ -293,9 +295,19 @@ export default function VerticalOverlayPage() {
           lastSaveRef.current = now;
           persistPosition(payload.x, payload.y);
         }
+        // 移动停止约 200ms 后兜底保存最终位置（配合 Rust 端关闭时保存，双保险）
+        if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = setTimeout(() => {
+          flushTimerRef.current = null;
+          const pos = movedPosRef.current;
+          if (pos) persistPosition(pos.x, pos.y);
+        }, 200);
       });
     })();
-    return () => { unlisten?.(); };
+    return () => {
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+      unlisten?.();
+    };
   }, [win, persistPosition]);
 
   // 页面渲染完成后通知 Rust 端 show 窗口（避免加载时的白屏闪烁）
