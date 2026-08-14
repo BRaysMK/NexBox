@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { type HardwareInfo, getHardwareInfo } from "@/lib/hardware";
 
@@ -203,6 +203,10 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [lyricsBtnHotkey, setLyricsBtnHotkey] = useState("");
   const [hotkeysEnabled, setHotkeysEnabled] = useState(true);
   const hasStarted = useRef(false);
+  // 最新的 overlay 设置（供事件监听器读取，避免闭包过期）
+  const overlaySettingsRef = useRef<OverlaySettings | null>(null);
+  // 最新竖排悬浮框位置（null = 尚未加载；{ x: null, y: null } = 已重置清除）
+  const verticalPosRef = useRef<{ x: number | null; y: number | null } | null>(null);
 
   const updateProgress = (progress: number, message: string) => {
     setStartupProgress(progress);
@@ -318,6 +322,11 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         settingsToUse = DEFAULT_OVERLAY_SETTINGS;
       }
       setOverlaySettings(settingsToUse);
+      overlaySettingsRef.current = settingsToUse;
+      verticalPosRef.current = {
+        x: settingsToUse.vertical_position_x ?? null,
+        y: settingsToUse.vertical_position_y ?? null,
+      };
       
       // 仅在存在已保存设置时同步到后端，避免在 LazyStore 未就绪时用默认值覆盖后端已正确加载的设置
       if (savedSettings) {
@@ -327,6 +336,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
       console.error("Failed to load overlay settings:", error);
       // 加载失败时仅设置前端 UI 默认值，不覆盖后端已有的设置
       setOverlaySettings(DEFAULT_OVERLAY_SETTINGS);
+      overlaySettingsRef.current = DEFAULT_OVERLAY_SETTINGS;
+      verticalPosRef.current = { x: null, y: null };
     }
   };
 
@@ -568,6 +579,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
 
 const saveOverlaySettings = async (settings: OverlaySettings) => {
 	setOverlaySettings(settings);
+	overlaySettingsRef.current = settings;
 	pendingSettingsRef.current = settings;
 	if (saveTimerRef.current) {
 	clearTimeout(saveTimerRef.current);
@@ -576,9 +588,20 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
 	saveTimerRef.current = null;
 	const s = pendingSettingsRef.current;
 	if (s) {
+        // 合并最新竖排位置：s 可能是旧快照（不含拖动后保存的位置），直接写回会把刚保存的位置覆盖掉。
+        // verticalPosRef 为 null 表示尚未加载（沿用 s 自身的值）；否则以 ref 为准（{x:null,y:null} 表示已重置）。
+        const vp = verticalPosRef.current;
+        const merged =
+          vp === null
+            ? {
+                ...s,
+                vertical_position_x: s.vertical_position_x ?? null,
+                vertical_position_y: s.vertical_position_y ?? null,
+              }
+            : { ...s, vertical_position_x: vp.x, vertical_position_y: vp.y };
         try {
-          await invoke("update_overlay_settings", { settings: s });
-          await store.set("overlay-settings", s);
+          await invoke("update_overlay_settings", { settings: merged });
+          await store.set("overlay-settings", merged);
           await store.save();
         } catch (error) {
           console.error("Failed to save overlay settings:", error);
@@ -587,24 +610,53 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
     }, 100);
   };
 
-  // 主应用监听竖排悬浮框位置保存事件，同步本地状态与共享 store，
-  // 避免后续保存其他 overlay 设置时用旧缓存把位置覆盖回旧值
+  // 主应用监听竖排悬浮框位置保存/重置事件，同步本地状态与共享 store，
+  // 避免后续保存其他 overlay 设置时用旧缓存把位置覆盖回旧值。
+  // 只订阅一次（通过 ref 读取最新状态），避免随状态变化反复重订阅时漏掉事件；
+  // 且仅在主窗口订阅：独立窗口（竖排悬浮框/桌面歌词/托盘等）的 LazyStore 缓存可能过期，
+  // 整体写回会覆盖主应用刚保存的其他设置。
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    const standalonePaths = [
+      "/vertical-overlay",
+      "/desktop-lyrics",
+      "/lyrics-unlock-btn",
+      "/tray-menu",
+      "/sensor-monitor",
+    ];
+    if (standalonePaths.includes(window.location.pathname)) return;
+
+    let unlistenPos: UnlistenFn | undefined;
+    let unlistenReset: UnlistenFn | undefined;
     (async () => {
-      unlisten = await listen<{ x: number; y: number }>("overlay-position-saved", async (event) => {
+      unlistenPos = await listen<{ x: number; y: number }>("overlay-position-saved", async (event) => {
         const { x, y } = event.payload;
-        const current = overlaySettings;
+        verticalPosRef.current = { x, y };
+        const current = overlaySettingsRef.current;
         if (current) {
           const updated = { ...current, vertical_position_x: x, vertical_position_y: y };
+          overlaySettingsRef.current = updated;
+          setOverlaySettings(updated);
+          await store.set("overlay-settings", updated);
+          await store.save();
+        }
+      });
+      unlistenReset = await listen("vertical-overlay-position-reset", async () => {
+        verticalPosRef.current = { x: null, y: null };
+        const current = overlaySettingsRef.current;
+        if (current) {
+          const updated = { ...current, vertical_position_x: null, vertical_position_y: null };
+          overlaySettingsRef.current = updated;
           setOverlaySettings(updated);
           await store.set("overlay-settings", updated);
           await store.save();
         }
       });
     })();
-    return () => { unlisten?.(); };
-  }, [overlaySettings]);
+    return () => {
+      unlistenPos?.();
+      unlistenReset?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (hasStarted.current) return;

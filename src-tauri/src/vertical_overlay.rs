@@ -31,10 +31,22 @@ pub async fn start_vertical_overlay(
         std::thread::sleep(Duration::from_millis(200));
     }
 
-    // 保存设置
-    if let Some(ref s) = settings {
+    // 保存设置；保留 CURRENT_SETTINGS 中已保存的竖排位置（前端传入的设置可能来自旧缓存，不含最新位置）
+    if let Some(s) = settings {
         let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
-        *settings_lock = Some(s.clone());
+        let preserved = settings_lock
+            .as_ref()
+            .map(|cur| (cur.vertical_position_x, cur.vertical_position_y));
+        let mut merged = s;
+        if let Some((vx, vy)) = preserved {
+            if merged.vertical_position_x.is_none() {
+                merged.vertical_position_x = vx;
+            }
+            if merged.vertical_position_y.is_none() {
+                merged.vertical_position_y = vy;
+            }
+        }
+        *settings_lock = Some(merged);
     }
 
     let settings = get_or_init_settings();
@@ -252,6 +264,9 @@ pub async fn reset_vertical_overlay_position(
     }
     // 同步清除持久化文件中的竖排位置
     clear_persisted_vertical_overlay_position(&app_handle);
+
+    // 通知主应用清除本地缓存的竖排位置，避免后续保存其他设置时把旧位置写回
+    let _ = app_handle.emit("vertical-overlay-position-reset", ());
 
     // 移动窗口到默认位置（右上角）
     if let Some(window) = app_handle.get_webview_window("vertical-overlay") {

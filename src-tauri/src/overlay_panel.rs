@@ -2235,6 +2235,7 @@ pub async fn get_overlay_hardware_data() -> Result<OverlayHardwareData, String> 
 
 #[tauri::command]
 pub async fn update_overlay_settings(app_handle: tauri::AppHandle, settings: OverlaySettings) -> Result<OverlayResult, String> {
+    let mut settings = settings;
     let (old_style, old_font) = {
         let lock = CURRENT_SETTINGS.lock().unwrap();
         let s = lock.as_ref();
@@ -2246,9 +2247,32 @@ pub async fn update_overlay_settings(app_handle: tauri::AppHandle, settings: Ove
     let _old_was_vertical = old_style.as_deref() == Some("vertical_panel");
     let new_is_vertical = new_style == "vertical_panel";
 
-    // 保存新设置
+    // 保存新设置；但保留当前位置字段（position_x/y、vertical_position_x/y）：
+    // 设置页保存的 settings 可能来自旧缓存（不含拖动后保存的最新位置），整体替换会把刚保存的位置覆盖回旧值/空值。
     {
         let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
+        let preserved = settings_lock.as_ref().map(|cur| {
+            (
+                cur.position_x,
+                cur.position_y,
+                cur.vertical_position_x,
+                cur.vertical_position_y,
+            )
+        });
+        if let Some((px, py, vx, vy)) = preserved {
+            if settings.position_x.is_none() {
+                settings.position_x = px;
+            }
+            if settings.position_y.is_none() {
+                settings.position_y = py;
+            }
+            if settings.vertical_position_x.is_none() {
+                settings.vertical_position_x = vx;
+            }
+            if settings.vertical_position_y.is_none() {
+                settings.vertical_position_y = vy;
+            }
+        }
         *settings_lock = Some(settings.clone());
     }
 

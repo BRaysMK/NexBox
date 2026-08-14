@@ -14,7 +14,6 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { store } from "@/lib/store";
 import {
   Gauge,
   Thermometer,
@@ -272,22 +271,16 @@ export default function VerticalOverlayPage() {
   const movedPosRef = useRef<{ x: number; y: number } | null>(null);
   const lastSaveRef = useRef(0);
 
-  // 保存竖排悬浮框位置：更新 Rust 内存 + 广播事件 + 写入共享 store（竖排独立字段）
+  // 保存竖排悬浮框位置：Rust 端负责更新内存并写入 settings.json（仅更新位置字段、保留其他键），
+  // 主应用通过 overlay-position-saved 事件同步共享 store。
+  // 这里不再直接写 LazyStore：独立窗口的 store 缓存可能过期，整体写回会覆盖主应用的其他设置。
   const persistPosition = useCallback(async (x: number, y: number) => {
     try {
       await invoke("save_vertical_overlay_position", { x, y });
-      try {
-        const cur = await store.get<OverlaySettings>("overlay-settings");
-        const base = cur || settings;
-        await store.set("overlay-settings", { ...base, vertical_position_x: x, vertical_position_y: y });
-        await store.save();
-      } catch (e) {
-        console.error("Failed to persist overlay position to store:", e);
-      }
     } catch (e) {
       console.error("Failed to save vertical overlay position:", e);
     }
-  }, [settings]);
+  }, []);
 
   // 监听窗口移动，拖动过程中实时保存位置（节流），保证不依赖 startDragging 结束后的捕获
   useEffect(() => {
