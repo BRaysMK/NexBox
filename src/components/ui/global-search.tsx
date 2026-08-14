@@ -27,7 +27,7 @@ import {
   type SearchCategory,
 } from "@/config/search-index";
 import { invoke } from "@tauri-apps/api/core";
-import { useToast } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 
 interface GroupedResults {
   [key: string]: SearchItem[];
@@ -50,7 +50,7 @@ function matchSearch(query: string, item: SearchItem, t: (key: string) => string
 export function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("search");
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const { tools } = useAppStartup();

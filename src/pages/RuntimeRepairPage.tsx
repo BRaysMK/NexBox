@@ -11,8 +11,8 @@ import {
   Text,
   VStack,
   useColorModeValue,
-  useToast,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowLeft, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
@@ -87,7 +87,7 @@ export default function RuntimeRepairPage() {
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
-  const toast = useToast();
+  const toast = useDynamicIsland("wrench");
   const [activeId, setActiveId] = useState<RuntimeId | null>(null);
   const [progress, setProgress] = useState<RepairProgress | null>(null);
   const [statuses, setStatuses] = useState<Record<string, RuntimeStatus>>({});

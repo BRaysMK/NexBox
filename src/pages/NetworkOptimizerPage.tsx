@@ -12,9 +12,9 @@ import {
   IconButton,
   Input,
   useColorModeValue,
-  useToast,
   Spinner,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { ArrowLeft, Copy, Globe, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -264,7 +264,7 @@ export default function NetworkOptimizerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { liquidGlassEnabled } = useBackground();
-  const toast = useToast();
+  const toast = useDynamicIsland("network");
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
 
   const [scannedStates, setScannedStates] = useState<Record<string, boolean>>({});

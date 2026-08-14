@@ -7,7 +7,6 @@ import {
   useColorModeValue,
   Badge,
   Spinner,
-  useToast,
   SimpleGrid,
   Input,
   InputGroup,
@@ -28,6 +27,7 @@ import {
   Divider,
   IconButton,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -108,7 +108,7 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 // ── PasswordCard (unchanged) ──
 function PasswordCard() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("target");
   const [passwords, setPasswords] = useState<DeltaPasswordItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -294,7 +294,7 @@ function OfficialMapCard() {
   const { liquidGlassEnabled } = useBackground();
   const textColor = useColorModeValue("#000000", "#ffffff");
   const [isOpening, setIsOpening] = useState(false);
-  const toast = useToast();
+  const toast = useDynamicIsland("target");
 
   const handleOpen = async () => {
     if (isOpening) return;
@@ -370,7 +370,7 @@ function OfficialWallpaperCard() {
   const { liquidGlassEnabled } = useBackground();
   const textColor = useColorModeValue("#000000", "#ffffff");
   const [isOpening, setIsOpening] = useState(false);
-  const toast = useToast();
+  const toast = useDynamicIsland("target");
 
   const handleOpen = async () => {
     if (isOpening) return;
@@ -570,7 +570,7 @@ const LoadoutCard = memo(function LoadoutCard({
 // ── GunLoadoutBrowser ──
 const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("target");
   const { getActiveColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理

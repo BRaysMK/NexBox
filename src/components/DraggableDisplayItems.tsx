@@ -1,4 +1,5 @@
-import { Box, HStack, Text, Switch, useColorModeValue, Icon, useToast, Button, IconButton, useDisclosure } from "@chakra-ui/react";
+import { Box, HStack, Text, Switch, useColorModeValue, Icon, Button, IconButton, useDisclosure } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock, Download, Settings } from "lucide-react";
@@ -80,7 +81,7 @@ function SortableItem({
   const iconColor = useColorModeValue("gray.500", "#999999");
   const hoverBg = useColorModeValue("gray.50", "#1a1a1a");
   const dragBg = useColorModeValue("gray.100", "#222222");
-  const toast = useToast();
+  const toast = useDynamicIsland("layout");
   const { getActiveColor } = useThemeColor();
 
   const {

@@ -19,6 +19,7 @@ export interface DesktopLyricsSettings {
   lineCount: 1 | 2;
   isLocked: boolean;
   showTranslation: boolean;
+  hideUnlockBtn: boolean;
 }
 
 const DEFAULT_SETTINGS: DesktopLyricsSettings = {
@@ -28,6 +29,7 @@ const DEFAULT_SETTINGS: DesktopLyricsSettings = {
   lineCount: 2,
   isLocked: false,
   showTranslation: true,
+  hideUnlockBtn: false,
 };
 
 export type ControlAction =

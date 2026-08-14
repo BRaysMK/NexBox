@@ -51,7 +51,11 @@ pub async fn start_vertical_overlay(
     let _ = window.set_size(tauri::LogicalSize { width: init_width, height: init_height });
 
     // 恢复保存的位置或使用默认位置（屏幕右上角）
-    if let (Some(x), Some(y)) = (settings.position_x, settings.position_y) {
+    // 竖排悬浮框位置独立于 Win32 悬浮框，优先从持久化文件读取，避免前端传入的设置覆盖已保存的位置
+    let restored_pos = read_persisted_vertical_overlay_position(&app_handle)
+        .or_else(|| settings.vertical_position_x.zip(settings.vertical_position_y));
+    log::info!("[vertical-overlay] restore position: {:?}", restored_pos);
+    if let Some((x, y)) = restored_pos {
         let _ = window.set_position(tauri::PhysicalPosition { x, y });
     } else {
         // 默认：屏幕右上角
@@ -135,21 +139,83 @@ pub async fn stop_vertical_overlay(
     })
 }
 
-/// 保存悬浮框位置
+/// 保存竖排悬浮框位置（更新内存并持久化到 settings.json 的 overlay-settings 键，与 Win32 悬浮框位置独立）
 #[tauri::command]
 pub async fn save_vertical_overlay_position(
+    app_handle: tauri::AppHandle,
     x: i32,
     y: i32,
 ) -> Result<OverlayResult, String> {
-    let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
-    if let Some(ref mut settings) = *settings_lock {
-        settings.position_x = Some(x);
-        settings.position_y = Some(y);
+    {
+        let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
+        if let Some(ref mut settings) = *settings_lock {
+            settings.vertical_position_x = Some(x);
+            settings.vertical_position_y = Some(y);
+        }
     }
+    log::info!("[vertical-overlay] save position x={x} y={y}");
+    persist_vertical_overlay_position(&app_handle, x, y);
+    // 通知主应用同步位置状态，避免其持有旧缓存后续保存时覆盖
+    let _ = app_handle.emit("overlay-position-saved", serde_json::json!({ "x": x, "y": y }));
     Ok(OverlayResult {
         success: true,
         message: "位置已保存".to_string(),
     })
+}
+
+/// 将竖排悬浮框位置写入 settings.json 的 overlay-settings 键（仅更新 vertical_position，保留其他 key，兼容前端 LazyStore）
+fn persist_vertical_overlay_position(app_handle: &tauri::AppHandle, x: i32, y: i32) {
+    let Ok(dir) = app_handle.path().app_data_dir() else {
+        return;
+    };
+    let path = dir.join("settings.json");
+    let mut json: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    if let Some(obj) = json.as_object_mut() {
+        let overlay = obj.entry("overlay-settings").or_insert(serde_json::json!({}));
+        if let Some(o) = overlay.as_object_mut() {
+            o.insert("vertical_position_x".to_string(), serde_json::json!(x));
+            o.insert("vertical_position_y".to_string(), serde_json::json!(y));
+        }
+    }
+    if let Ok(content) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, content);
+    }
+}
+
+/// 从持久化 settings.json 读取竖排悬浮框保存的位置（物理坐标），作为恢复位置的权威来源
+fn read_persisted_vertical_overlay_position(app_handle: &tauri::AppHandle) -> Option<(i32, i32)> {
+    let dir = app_handle.path().app_data_dir().ok()?;
+    let path = dir.join("settings.json");
+    let content = std::fs::read_to_string(path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let overlay = json.get("overlay-settings")?;
+    let x = overlay.get("vertical_position_x")?.as_i64()? as i32;
+    let y = overlay.get("vertical_position_y")?.as_i64()? as i32;
+    Some((x, y))
+}
+
+/// 从持久化 settings.json 清除竖排悬浮框保存的位置
+fn clear_persisted_vertical_overlay_position(app_handle: &tauri::AppHandle) {
+    let Ok(dir) = app_handle.path().app_data_dir() else {
+        return;
+    };
+    let path = dir.join("settings.json");
+    let mut json: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    if let Some(obj) = json.as_object_mut() {
+        if let Some(overlay) = obj.get_mut("overlay-settings").and_then(|o| o.as_object_mut()) {
+            overlay.remove("vertical_position_x");
+            overlay.remove("vertical_position_y");
+        }
+    }
+    if let Ok(content) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, content);
+    }
 }
 
 /// 设置鼠标穿透
@@ -176,14 +242,16 @@ pub async fn set_vertical_overlay_click_through(
 pub async fn reset_vertical_overlay_position(
     app_handle: tauri::AppHandle,
 ) -> Result<OverlayResult, String> {
-    // 清除保存的位置
+    // 清除保存的竖排位置
     {
         let mut settings_lock = CURRENT_SETTINGS.lock().unwrap();
         if let Some(ref mut settings) = *settings_lock {
-            settings.position_x = None;
-            settings.position_y = None;
+            settings.vertical_position_x = None;
+            settings.vertical_position_y = None;
         }
     }
+    // 同步清除持久化文件中的竖排位置
+    clear_persisted_vertical_overlay_position(&app_handle);
 
     // 移动窗口到默认位置（右上角）
     if let Some(window) = app_handle.get_webview_window("vertical-overlay") {

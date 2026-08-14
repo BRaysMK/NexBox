@@ -5,7 +5,6 @@ import {
   Text,
   VStack,
   useColorModeValue,
-  useToast,
   HStack,
   IconButton,
   Card,
@@ -17,6 +16,7 @@ import {
   TabPanels,
   TabPanel,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -51,7 +51,7 @@ interface GpuRenameResult {
 export default function GpuRenamePage() {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
-  const toast = useToast();
+  const toast = useDynamicIsland("gpu");
   const navigate = useNavigate();
 
   const { getActiveColor, getContrastTextColor } = useThemeColor();

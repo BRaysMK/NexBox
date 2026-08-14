@@ -1,0 +1,743 @@
+"use client";
+
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { motion, useAnimationControls } from "framer-motion";
+import { useColorModeValue } from "@chakra-ui/react";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import {
+  Zap,
+  MemoryStick,
+  Globe,
+  Cpu,
+  Layers,
+  HardDrive,
+  AudioWaveform,
+  Gamepad2,
+  Rocket,
+  Sparkles,
+  ShieldCheck,
+  Crosshair,
+  Mouse,
+  SlidersHorizontal,
+  Wrench,
+  Monitor,
+  Music,
+  Download,
+  Bluetooth,
+  Image,
+  Search,
+  FileText,
+  LayoutGrid,
+  PanelsTopLeft,
+  Gauge,
+  Settings,
+} from "lucide-react";
+
+export type IslandStatus = "success" | "error" | "info" | "warning" | "loading" | "blue";
+
+/** 预设语义图标键，按页面/操作类型区分（如电源计划→闪电） */
+export type IconKey =
+  | "power"
+  | "memory"
+  | "network"
+  | "cpu"
+  | "layers"
+  | "disk"
+  | "audio"
+  | "gamepad"
+  | "rocket"
+  | "sparkles"
+  | "shield"
+  | "target"
+  | "mouse"
+  | "gpu"
+  | "filter"
+  | "wrench"
+  | "monitor"
+  | "music"
+  | "download"
+  | "bluetooth"
+  | "image"
+  | "search"
+  | "file"
+  | "layout"
+  | "panels"
+  | "gauge"
+  | "settings";
+
+export interface IslandOptions {
+  id?: string;
+  title?: string;
+  description?: string;
+  status?: IslandStatus;
+  duration?: number | null;
+  isClosable?: boolean;
+  /** 兼容 Chakra toast 传入的 variant（如 "left-accent"），灵动岛样式固定，忽略该值 */
+  variant?: string;
+  icon?: React.ReactNode;
+  /** 预设语义图标键，优先于 status 默认图标 */
+  iconKey?: IconKey;
+  onCloseComplete?: () => void;
+}
+
+interface IslandItem {
+  id: string;
+  title?: string;
+  description?: string;
+  status: IslandStatus;
+  duration: number | null;
+  isClosable?: boolean;
+  icon?: React.ReactNode;
+  iconKey?: IconKey;
+  onCloseComplete?: () => void;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+/* ------------------------------------------------------------------ */
+/* 提示文案精简：灵动岛只显示核心动作短语，去掉冗长解释，保持简洁。    */
+/* 例如「未找到运行中的 ACE 进程」→「未找到」，「已限制 N 个进程」→「已限制」 */
+/* ------------------------------------------------------------------ */
+const SHORT_VERBS = [
+  "未找到",
+  "未检测到",
+  "未发现",
+  "已限制",
+  "已优化",
+  "已恢复",
+  "已启用",
+  "已禁用",
+  "已清除",
+  "已清理",
+  "已设置",
+  "已应用",
+  "已暂停",
+  "已更新",
+  "已重置",
+  "已关闭",
+  "已开启",
+  "已锁定",
+  "已解锁",
+  "已添加",
+  "已删除",
+  "已保存",
+  "已安装",
+  "已复制",
+  "已上传",
+  "已下载",
+  "已提升",
+  "已分配",
+  "导入失败",
+  "应用失败",
+];
+
+function shortenMessage(text?: string): string | undefined {
+  if (!text) return text;
+  const t0 = text.trim();
+  if (!t0) return t0;
+  let t = t0;
+
+  // 1) 已知动作动词开头 → 只保留动词本身（未找到 / 已限制 / 已优化…）
+  for (const v of SHORT_VERBS) {
+    if (t.startsWith(v)) return v;
+  }
+
+  // 2) 「需要管理员权限」类长句 → 统一为短提示
+  if (t.includes("需要管理员权限")) return "需要管理员权限";
+
+  // 3) 特定长句映射为短词
+  if (t.includes("应用注册表强制限制")) return "已限制";
+  if (t.includes("IFEO 强制优先级")) return t.includes("清除") ? "已清除" : "已应用";
+  if (t.includes("分配指定核心")) return "已分配";
+
+  // 4) 截断到第一句主干：去掉「。」/「，」后的解释、冒号后的细节、尾部括号说明
+  for (const sep of ["。", "，", "：", ":", "（", "("]) {
+    const idx = t.indexOf(sep);
+    if (idx > 0) {
+      t = t.slice(0, idx).trim();
+      break;
+    }
+  }
+
+  return t;
+}
+
+/* ------------------------------------------------------------------ */
+/* 模块级全局 store：只保留单个灵动岛，新提示替换旧提示                */
+/* ------------------------------------------------------------------ */
+let current: IslandItem | null = null;
+let revision = 0;
+const listeners = new Set<() => void>();
+let idSeed = 0;
+// getSnapshot 必须返回缓存引用（仅 store 变化时替换），否则 useSyncExternalStore 会无限重渲染
+let cachedSnapshot: { item: IslandItem | null; revision: number } = { item: null, revision: 0 };
+
+function emit() {
+  cachedSnapshot = { item: current, revision };
+  for (const l of listeners) l();
+}
+
+function show(options: IslandOptions) {
+  const id = options.id ?? `island-${++idSeed}`;
+  const next: IslandItem = {
+    id,
+    // 保留原始完整文案：折叠时显示精简版，悬停展开时显示详情
+    title: options.title,
+    description: options.description,
+    status: options.status ?? "info",
+    duration: options.duration ?? 2000,
+    isClosable: options.isClosable,
+    icon: options.icon,
+    iconKey: options.iconKey,
+    onCloseComplete: options.onCloseComplete,
+  };
+  if (current) revision++; // 已有提示，触发「缩小→换内容→扩散」
+  if (current?.timer) clearTimeout(current.timer);
+  current = next;
+  if (typeof next.duration === "number" && next.duration > 0) {
+    next.timer = setTimeout(() => close(next.id), next.duration);
+  }
+  emit();
+}
+
+function update(id: string, options: IslandOptions) {
+  show({ ...options, id });
+}
+
+function close(id: string) {
+  if (!current || current.id !== id) return;
+  if (current.timer) clearTimeout(current.timer);
+  const cb = current.onCloseComplete;
+  current = null;
+  emit();
+  cb?.();
+}
+
+function closeAll() {
+  if (current?.timer) clearTimeout(current.timer);
+  current = null;
+  emit();
+}
+
+function isActive(id: string) {
+  return current?.id === id;
+}
+
+/** 悬停展开时暂停自动关闭 */
+function hold(id: string) {
+  if (!current || current.id !== id) return;
+  if (current.timer) clearTimeout(current.timer);
+  current.timer = undefined;
+}
+
+/** 移开后恢复自动关闭计时 */
+function extend(id: string) {
+  if (!current || current.id !== id) return;
+  if (current.timer) clearTimeout(current.timer);
+  if (typeof current.duration === "number" && current.duration > 0) {
+    current.timer = setTimeout(() => close(current.id), current.duration);
+  }
+}
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+}
+
+function getSnapshot() {
+  return cachedSnapshot;
+}
+
+export type DynamicIslandToast = ((options: IslandOptions) => void) & {
+  update: typeof update;
+  isActive: typeof isActive;
+  close: typeof close;
+  closeAll: typeof closeAll;
+};
+
+/** 返回与 Chakra useToast 兼容的调用签名，旧 toast({...}) 调用体无需改动。
+ *  传入 defaultIcon 后，该页面的成功/信息提示会自动带上对应语义图标。 */
+export function useDynamicIsland(defaultIcon?: IconKey): DynamicIslandToast {
+  return useMemo(() => makeToast(defaultIcon), [defaultIcon]);
+}
+
+function makeToast(defaultIcon?: IconKey): DynamicIslandToast {
+  const resolveIcon = (options: IslandOptions): IslandOptions => {
+    if (options.icon || options.iconKey) return options;
+    if (defaultIcon && (options.status === "success" || options.status === "info")) {
+      return { ...options, iconKey: defaultIcon };
+    }
+    return options;
+  };
+  const fn = ((options: IslandOptions) => show(resolveIcon(options))) as DynamicIslandToast;
+  fn.update = (id, options) => update(id, resolveIcon(options));
+  fn.isActive = isActive;
+  fn.close = close;
+  fn.closeAll = closeAll;
+  return fn;
+}
+
+/* ------------------------------------------------------------------ */
+/* 状态图标：自绘 SVG（渐变 + 发光），info/loading 复用品牌主题色        */
+/* ------------------------------------------------------------------ */
+function StatusIcon({
+  status,
+  iconKey,
+  primaryColor,
+  size = 22,
+}: {
+  status: IslandStatus;
+  iconKey?: IconKey;
+  primaryColor: string;
+  size?: number;
+}) {
+  const gid = useId().replace(/:/g, "");
+  const palette: Record<IslandStatus, { from: string; to: string }> = {
+    success: { from: "#34d399", to: "#10b981" },
+    error: { from: "#f87171", to: "#ef4444" },
+    warning: { from: "#fbbf24", to: "#f59e0b" },
+    info: { from: primaryColor, to: primaryColor },
+    loading: { from: primaryColor, to: primaryColor },
+    blue: { from: "#3b82f6", to: "#22d3ee" },
+  };
+  const p = palette[status];
+  const glowColor = status === "info" || status === "loading" ? `${primaryColor}55` : `${p.to}55`;
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: size,
+        height: size,
+        borderRadius: 999,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: `0 0 14px 0 ${glowColor}, inset 0 1px 0 rgba(255,255,255,0.35)`,
+      }}
+    >
+      <svg width={size} height={size} viewBox="0 0 36 36">
+        <defs>
+          <linearGradient id={`ig-${gid}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={p.from} stopOpacity="0.8" />
+            <stop offset="100%" stopColor={p.to} stopOpacity="1" />
+          </linearGradient>
+        </defs>
+        <circle cx="18" cy="18" r="18" fill={`url(#ig-${gid})`} />
+        {!iconKey && <StatusSymbol status={status} />}
+      </svg>
+      {iconKey && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <SemanticIcon iconKey={iconKey} />
+        </div>
+      )}
+      {status === "loading" && (
+        <motion.svg
+          width={size * 0.55}
+          height={size * 0.55}
+          viewBox="0 0 24 24"
+          style={{ position: "absolute", inset: 0, margin: "auto" }}
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
+        >
+          <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.6" />
+          <path
+            d="M12 3a9 9 0 0 1 8.4 5.2"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+          />
+        </motion.svg>
+      )}
+    </div>
+  );
+}
+
+function StatusSymbol({ status }: { status: IslandStatus }) {
+  if (status === "success")
+    return <path d="M12.2 18.2 16.3 22.4 23.6 14.6" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />;
+  if (status === "error")
+    return <g><path d="M18 12.2v7.6" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" /><circle cx="18" cy="22.6" r="1.4" fill="#fff" /></g>;
+  if (status === "warning")
+    return <g><path d="M18 10.4 25.6 22.6H10.4Z" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" /><path d="M18 15.2v4.2" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" /><circle cx="18" cy="21.8" r="1.3" fill="#fff" /></g>;
+  if (status === "info")
+    return <g><circle cx="18" cy="13.2" r="1.4" fill="#fff" /><path d="M17.1 17.4h1.8v5.4h-1.8z" fill="#fff" /></g>;
+  if (status === "blue")
+    return <g><circle cx="18" cy="13.2" r="1.4" fill="#fff" /><path d="M17.1 17.4h1.8v5.4h-1.8z" fill="#fff" /></g>;
+  return null;
+}
+
+function SemanticIcon({ iconKey }: { iconKey: IconKey }) {
+  const p = { size: 15, strokeWidth: 2.4, color: "#fff" as const, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  switch (iconKey) {
+    case "power":     return <Zap {...p} />;
+    case "memory":    return <MemoryStick {...p} />;
+    case "network":   return <Globe {...p} />;
+    case "cpu":       return <Cpu {...p} />;
+    case "layers":    return <Layers {...p} />;
+    case "disk":      return <HardDrive {...p} />;
+    case "audio":     return <AudioWaveform {...p} />;
+    case "gamepad":   return <Gamepad2 {...p} />;
+    case "rocket":    return <Rocket {...p} />;
+    case "sparkles":  return <Sparkles {...p} />;
+    case "shield":    return <ShieldCheck {...p} />;
+    case "target":    return <Crosshair {...p} />;
+    case "mouse":     return <Mouse {...p} />;
+    case "gpu":       return <Cpu {...p} />;
+    case "filter":    return <SlidersHorizontal {...p} />;
+    case "wrench":    return <Wrench {...p} />;
+    case "monitor":   return <Monitor {...p} />;
+    case "music":     return <Music {...p} />;
+    case "download":  return <Download {...p} />;
+    case "bluetooth": return <Bluetooth {...p} />;
+    case "image":     return <Image {...p} />;
+    case "search":    return <Search {...p} />;
+    case "file":      return <FileText {...p} />;
+    case "layout":    return <LayoutGrid {...p} />;
+    case "panels":    return <PanelsTopLeft {...p} />;
+    case "gauge":     return <Gauge {...p} />;
+    case "settings":  return <Settings {...p} />;
+    default: return null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Host：单个灵动岛，置于顶部标题栏拖拽区内。                           */
+/* 动画：淡化出圆形 → 向两侧扩散成胶囊 → 缩回圆形 → 淡出；             */
+/*       多条触发时先缩成圆形、换内容、再扩散成胶囊。                    */
+/* 交互：悬停时横向扩散成更大的圆角长矩形，显示完整详细文案，          */
+/*       移开后直接收起为小胶囊（不经过圆形），悬停期间暂停自动关闭。    */
+/*       展开态点击收起为小胶囊，折叠态点击关闭。                        */
+/* ------------------------------------------------------------------ */
+const EXPANDED_WIDTH = 320;
+const COLLAPSED_HEIGHT = 30;
+
+export function DynamicIslandHost() {
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot);
+  const { item, revision } = snapshot;
+  const { config } = useThemeColor();
+  const primaryColor = config.primaryColor;
+
+  const controls = useAnimationControls();
+  const [displayed, setDisplayed] = useState<IslandItem | null>(null);
+  const [textVisible, setTextVisible] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [expandedTextVisible, setExpandedTextVisible] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [textOverflowing, setTextOverflowing] = useState(false);
+
+  const itemRef = useRef<IslandItem | null>(item);
+  const visibleRef = useRef(false);
+  const expandedRef = useRef(false);
+  const lastRevisionRef = useRef(revision);
+  const chainRef = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    itemRef.current = item;
+  }, [item]);
+
+  // 文字显示不全时用右端淡出代替省略号：实时测量是否溢出
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const check = () => setTextOverflowing(el.scrollWidth > el.clientWidth + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [displayed, textVisible, expanded]);
+
+  const run = useCallback((fn: () => Promise<void>) => {
+    chainRef.current = chainRef.current.then(fn).catch(() => {});
+  }, []);
+
+  const playAppear = useCallback(async () => {
+    if (visibleRef.current) return;
+    const next = itemRef.current;
+    if (!next) return;
+    visibleRef.current = true;
+    expandedRef.current = false;
+    setExpanded(false);
+    setExpandedTextVisible(false);
+    setDisplayed(next);
+    setTextVisible(false);
+    // 1. 淡化出圆形（图标已直接显示在圆形上）
+    await controls.start({ opacity: 1, width: 30, height: COLLAPSED_HEIGHT });
+    if (!visibleRef.current || !itemRef.current) return;
+    // 2. 文字浮现，向两侧扩散成胶囊
+    setTextVisible(true);
+    await controls.start({ width: "auto" });
+  }, [controls]);
+
+  const playReplace = useCallback(async () => {
+    const next = itemRef.current;
+    if (!next) return;
+    // 展开中收到新提示：直接换内容，保持展开状态
+    if (expandedRef.current) {
+      setDisplayed(next);
+      return;
+    }
+    // 1. 缩成圆形（隐藏文字，图标保留在圆形上）
+    setTextVisible(false);
+    await controls.start({ width: 30 });
+    if (!visibleRef.current || !itemRef.current) return;
+    // 2. 换上新内容，再扩散成胶囊
+    setDisplayed(next);
+    setTextVisible(true);
+    await controls.start({ width: "auto" });
+  }, [controls]);
+
+  const playDismiss = useCallback(async () => {
+    // 1. 缩成圆形（图标保留在圆形上）
+    expandedRef.current = false;
+    setExpanded(false);
+    setExpandedTextVisible(false);
+    setTextVisible(false);
+    await controls.start({ width: 30 });
+    // 2. 淡出
+    await controls.start({ opacity: 0 });
+    visibleRef.current = false;
+    setDisplayed(null);
+  }, [controls]);
+
+  const playExpand = useCallback(async () => {
+    const next = itemRef.current;
+    if (!next || expandedRef.current) return;
+    expandedRef.current = true;
+    setExpanded(true);
+    // 横向扩散成圆角长矩形（折叠短文案保持可见，稍后交叉淡出）
+    await controls.start({
+      width: EXPANDED_WIDTH,
+      height: next.description ? 62 : 34,
+    });
+    if (!expandedRef.current) return;
+    // 详细内容淡入，短文案淡出
+    setExpandedTextVisible(true);
+    setTextVisible(false);
+  }, [controls]);
+
+  const playCollapse = useCallback(async () => {
+    if (!expandedRef.current) return;
+    expandedRef.current = false;
+    // 1. 详情淡出（折叠短文案暂不显示，避免缩小过程中文字移动）
+    setExpandedTextVisible(false);
+    // 2. 切换回折叠内容（外层宽度仍为展开宽，overflow:hidden 使内层切换不产生可见跳变）
+    setExpanded(false);
+    // 3. 等一帧让折叠布局提交，避免「auto」测量到展开内容宽度的歧义
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    if (expandedRef.current) return; // 若期间被重新展开则中止
+    // 4. 直接收缩回小灵动岛（胶囊），不再经过圆形
+    await controls.start({ width: "auto", height: COLLAPSED_HEIGHT });
+    // 5. 收缩完成后，短文案淡化浮现（纯透明度变化，无位置移动）
+    setTextVisible(true);
+  }, [controls]);
+
+  const handleMouseEnter = useCallback(() => {
+    const id = itemRef.current?.id;
+    if (!visibleRef.current || !id || expandedRef.current) return;
+    run(playExpand);
+    hold(id); // 悬停期间不自动关闭
+  }, [run, playExpand]);
+
+  const handleMouseLeave = useCallback(() => {
+    const id = itemRef.current?.id;
+    if (!visibleRef.current || !expandedRef.current || !id) return;
+    run(playCollapse);
+    extend(id); // 移开后恢复自动关闭
+  }, [run, playCollapse]);
+
+  // 展开态点击 → 收起为小灵动岛；折叠态点击 → 关闭
+  const handleClick = useCallback(() => {
+    const id = itemRef.current?.id;
+    if (!id) return;
+    if (expandedRef.current) {
+      run(playCollapse);
+      extend(id); // 收起后恢复自动关闭计时
+    } else {
+      close(id);
+    }
+  }, [run, playCollapse]);
+
+  useEffect(() => {
+    if (item) {
+      if (!visibleRef.current) {
+        run(playAppear);
+      } else if (revision !== lastRevisionRef.current) {
+        run(playReplace);
+      }
+      lastRevisionRef.current = revision;
+    } else if (visibleRef.current) {
+      run(playDismiss);
+    }
+  }, [item, revision, run, playAppear, playReplace, playDismiss]);
+
+  const pillBg = useColorModeValue("rgba(255,255,255,0.9)", "rgba(20,20,20,0.88)");
+  const pillBorder = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.12)");
+  const titleColor = useColorModeValue("#1a1a1a", "#ffffff");
+  const descColor = useColorModeValue("rgba(0,0,0,0.62)", "rgba(255,255,255,0.66)");
+  const highlight = useColorModeValue("rgba(255,255,255,0.9)", "rgba(255,255,255,0.14)");
+
+  // 折叠：只显示精简短文案；展开：显示完整标题 + 详细描述
+  const collapsedText = displayed
+    ? shortenMessage(displayed.title || displayed.description || "")
+    : "";
+  const detailTitle = displayed?.title || displayed?.description || "";
+  const detailDesc =
+    displayed?.title && displayed?.description ? displayed.description : undefined;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 4,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 1001,
+        display: "flex",
+        alignItems: "center",
+        pointerEvents: "none",
+      }}
+    >
+      <motion.div
+        animate={controls}
+        initial={{ opacity: 0, width: 30, height: COLLAPSED_HEIGHT }}
+        role="status"
+        aria-live="polite"
+        onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          borderRadius: expanded ? 20 : 999,
+          background: pillBg,
+          border: `1px solid ${pillBorder}`,
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          overflow: "hidden",
+          cursor: "pointer",
+          pointerEvents: displayed ? "auto" : "none",
+          display: "flex",
+          alignItems: "center",
+          position: "relative",
+        }}
+      >
+        {/* 顶部高光细线，玻璃质感 */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: "6%",
+            right: "6%",
+            height: 1,
+            background: highlight,
+            opacity: 0.5,
+          }}
+        />
+        {/* 图标始终显示（圆形阶段即图标），扩散/收缩时文字淡入淡出 */}
+        <div style={{ padding: "0 0 0 4px", flexShrink: 0, display: "flex" }}>
+          {displayed?.icon ??
+            (displayed && (
+              <StatusIcon
+                status={displayed.status}
+                iconKey={displayed.iconKey}
+                primaryColor={primaryColor}
+                size={22}
+              />
+            ))}
+        </div>
+        {/* 折叠状态：精简短文案（单行） */}
+        <motion.div
+          animate={{ opacity: textVisible && !expanded ? 1 : 0 }}
+          transition={{ duration: 0.16 }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+            whiteSpace: "nowrap",
+            paddingRight: 10,
+            width: expanded ? 0 : "auto",
+            overflow: "hidden",
+          }}
+        >
+          {/* 中间留空 */}
+          <div style={{ flex: 1, minWidth: 12 }} />
+          <div
+            ref={textRef}
+            style={{
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: titleColor,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              maxWidth: 120,
+              minWidth: 0,
+              // 溢出时右端淡出，而不是显示省略号
+              maskImage: textOverflowing
+                ? "linear-gradient(to right, #000 88%, transparent 100%)"
+                : undefined,
+              WebkitMaskImage: textOverflowing
+                ? "linear-gradient(to right, #000 88%, transparent 100%)"
+                : undefined,
+            }}
+          >
+            {collapsedText}
+          </div>
+        </motion.div>
+        {/* 展开状态：完整标题 + 详细描述 */}
+        <motion.div
+          animate={{ opacity: expandedTextVisible ? 1 : 0 }}
+          transition={{ duration: 0.18 }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            minWidth: 0,
+            // 无描述（如「已切换为默认」单行提示）时文字右对齐，图标在左、文字靠右
+            marginLeft: detailDesc ? undefined : "auto",
+            padding: "5px 12px 5px 4px",
+            gap: 2,
+            width: expanded ? "auto" : 0,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: titleColor,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+            }}
+          >
+            {detailTitle}
+          </div>
+          {detailDesc && (
+            <div
+              style={{
+                fontSize: 10.5,
+                lineHeight: 1.35,
+                color: descColor,
+                maxHeight: 30,
+                overflow: "hidden",
+              }}
+            >
+              {detailDesc}
+            </div>
+          )}
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}

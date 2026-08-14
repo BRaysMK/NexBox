@@ -5,7 +5,6 @@ import {
   VStack,
   HStack,
   useColorModeValue,
-  useToast,
   Button,
   Badge,
   Spinner,
@@ -27,6 +26,7 @@ import {
   FormControl,
   FormLabel,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -436,7 +436,7 @@ function EqBandSlider({
 export default function AudioEqPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("audio");
 
   const headingColor = useColorModeValue("#1A202C", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");

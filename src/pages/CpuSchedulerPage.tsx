@@ -7,7 +7,6 @@ import {
   useColorModeValue,
   Button,
   Badge,
-  useToast,
   Alert,
   AlertIcon,
   AlertDescription,
@@ -24,6 +23,7 @@ import {
   TabPanels,
   TabPanel,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -92,7 +92,7 @@ type PresetType = "allPCores" | "allECores" | "allCores" | "custom";
 export default function CpuSchedulerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("cpu");
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
 

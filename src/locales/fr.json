@@ -459,8 +459,8 @@
         "error": "Échec du nettoyage"
     },
     "aceOptimize": {
-        "title": "Optimisation anti-triche ACE",
-        "description": "Limiter l'utilisation des ressources des processus anti-triche ACE pour libérer plus de performances pour le jeu",
+      "title": "Optimisation Anti-Triche",
+      "description": "Limiter l'utilisation des ressources des processus anti-triche pour libérer plus de performances pour le jeu",
         "deltaSection": {
             "title": "Optimisation Delta Force",
             "subtitle": "Améliorez les performances du jeu Delta Force"
@@ -774,6 +774,11 @@
     "sjmclDesc": "Lanceur Minecraft tiers développé par l'Université Jiao Tong de Shanghai",
     "ddegameDesc": "Les jeux ne sont pas que des jeux, ils peuvent entrer dans la vie et la changer",
     "huorongDesc": "Protection terminale pure. Léger, silencieux, défense complète",
+    "deepseekHarnessDesc": "Base d'agent IA open source de DeepSeek, tout est un plugin",
+    "lingtabDesc": "Extension de beauté de nouvelle page d'onglet de navigateur",
+    "lxmusicDesc": "Outil de recherche musicale open source gratuit et sans publicité",
+    "gameppDesc": "Outil d'optimisation des performances de jeu et d'augmentation des FPS",
+    "shudaxiaDesc": "Outil d'automatisation de clic souris intelligent et d'enregistrement de macros",
     "descriptions": {
       "assistantCrosshair": "Outil d'assistance de réticule d'écran de jeu",
       "memreduct": "Outil de nettoyage de mémoire",

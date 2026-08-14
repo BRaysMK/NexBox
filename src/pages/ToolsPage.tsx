@@ -10,10 +10,10 @@ import {
   VStack,
   HStack,
   Divider,
-  useToast,
   IconButton,
   Tooltip,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassToolCard } from "@/components/special/liquid-glass-tool-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import {
@@ -47,6 +47,7 @@ import {
   Gauge,
   LineChart,
   Gamepad2,
+  MousePointer,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
@@ -177,7 +178,7 @@ function ThirdPartyToolCard({
   const { t } = useTranslation();
   const [installed, setInstalled] = useState(initialInstalled);
   const [isAdding, setIsAdding] = useState(false);
-  const toast = useToast();
+  const toast = useDynamicIsland("wrench");
 
   const iconColor = useColorModeValue("gray.700", "#cccccc");
   const titleColor = useColorModeValue("gray.800", "#ffffff");
@@ -606,6 +607,46 @@ function OfficialToolSection({
       open("https://mineradio.cn/");
     }).catch(() => {
       window.open("https://mineradio.cn/", "_blank");
+    });
+  };
+
+  const handleOpenDeepseek = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://www.deepseek.com/harness/");
+    }).catch(() => {
+      window.open("https://www.deepseek.com/harness/", "_blank");
+    });
+  };
+
+  const handleOpenLingTab = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://lingtab.nexbox.top/");
+    }).catch(() => {
+      window.open("https://lingtab.nexbox.top/", "_blank");
+    });
+  };
+
+  const handleOpenLXMusic = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://lxmusic.toside.cn/");
+    }).catch(() => {
+      window.open("https://lxmusic.toside.cn/", "_blank");
+    });
+  };
+
+  const handleOpenGamepp = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://gamepp.com/");
+    }).catch(() => {
+      window.open("https://gamepp.com/", "_blank");
+    });
+  };
+
+  const handleOpenShudaxia = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://www.shudaxia.com/");
+    }).catch(() => {
+      window.open("https://www.shudaxia.com/", "_blank");
     });
   };
 
@@ -1092,6 +1133,186 @@ function OfficialToolSection({
               </HStack>
               <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
                 随音乐律动的沉浸式可视化音乐播放器，把每一首歌，变成一场只属于你的私人视觉演出。
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenDeepseek}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("deepseek") || ""}
+                alt={"DeepSeek Harness"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<Bot size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  DeepSeek Harness
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.deepseekHarnessDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenLingTab}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("lingtab") || ""}
+                alt={"灵动标签"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  灵动标签
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.lingtabDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenLXMusic}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("lx") || ""}
+                alt={"落雪音乐"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  落雪音乐
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.lxmusicDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenGamepp}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("gamepp") || ""}
+                alt={"游戏加加"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<Bot size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  游戏加加
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.gameppDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenShudaxia}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("sdx") || ""}
+                alt={"鼠大侠"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<MousePointer size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  鼠大侠
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                {t("tools.shudaxiaDesc")}
               </Text>
             </Box>
           </VStack>

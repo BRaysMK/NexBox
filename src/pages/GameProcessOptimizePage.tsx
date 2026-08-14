@@ -7,7 +7,6 @@ import {
   Button,
   SimpleGrid,
   useColorModeValue,
-  useToast,
   Badge,
   IconButton,
   Switch,
@@ -25,6 +24,7 @@ import {
   InputGroup,
   InputLeftElement,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -211,9 +211,6 @@ function CoreSelectionModal({
                 ))}
               </SimpleGrid>
             </Box>
-            <Text fontSize="2xs" color="gray.500" mt={2}>
-              {t("gameProcessOptimize.affinitySettings.defaultHint")}
-            </Text>
           </VStack>
         </ModalBody>
         <ModalFooter gap={3}>
@@ -459,7 +456,7 @@ function GameCard({
   const affinityApplied = status?.affinity_applied ?? false;
   const ifeoApplied = status?.ifeo_applied ?? false;
 
-  const row = (icon: React.ReactNode, title: string, desc: string, action: React.ReactNode) => (
+  const row = (icon: React.ReactNode, title: React.ReactNode, desc: React.ReactNode, action: React.ReactNode) => (
     <HStack align="center" spacing={3} p={3} borderRadius="lg" bg={rowBg} border="1px solid" borderColor={borderColor} flexWrap="wrap">
       <Box w={8} h={8} borderRadius="md" bg={`${getActiveColor()}15`} display="flex" alignItems="center" justifyContent="center" color={getActiveColor()} flexShrink={0}>
         {icon}
@@ -727,7 +724,7 @@ function GameCard({
 
 export default function GameProcessOptimizePage() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("gamepad");
   const navigate = useNavigate();
 
   const { liquidGlassEnabled } = useBackground();
@@ -741,6 +738,8 @@ export default function GameProcessOptimizePage() {
   const [isAdmin, setIsAdmin] = useState(true);
   const [coreCount, setCoreCount] = useState(4);
   const [busy, setBusy] = useState<Record<string, { priority: boolean; affinity: boolean; ifeo: boolean; ifeoRestore: boolean; all: boolean }>>({});
+  // 大小核拓扑：是否有 E 核 + 后端实际使用的默认掩码
+  const [topology, setTopology] = useState<{ has_e_cores: boolean; default_mask: number }>({ has_e_cores: false, default_mask: 0 });
 
   // 核心选择弹窗
   const [coreTarget, setCoreTarget] = useState<string | null>(null);
@@ -762,6 +761,9 @@ export default function GameProcessOptimizePage() {
     isMountedRef.current = true;
     setCoreCount(navigator.hardwareConcurrency || 4);
     invoke<boolean>("check_game_optimize_admin").then(setIsAdmin).catch(() => setIsAdmin(true));
+    invoke<{ has_e_cores: boolean; default_mask: number }>("get_affinity_topology")
+      .then(tp => { if (isMountedRef.current) setTopology(tp); })
+      .catch(e => console.error("加载 CPU 拓扑信息失败:", e));
     invoke<GameOptimizeConfig[]>("get_game_optimize_configs")
       .then(cfg => setConfigs(cfg))
       .catch(e => console.error("加载游戏优化配置失败:", e));
@@ -851,7 +853,7 @@ export default function GameProcessOptimizePage() {
       const pr = await invoke<{ success: boolean; message: string }>("optimize_game_priority", { gameId: id });
       const ar = await invoke<{ success: boolean; message: string }>("optimize_game_affinity", { gameId: id, mask: null });
       toast({
-        title: pr.success || ar.success ? t("gameProcessOptimize.optimizeNowDone") : `${pr.message} / ${ar.message}`,
+        title: pr.success || ar.success ? t("gameProcessOptimize.optimizeNowDone") : "优化失败",
         status: (pr.success || ar.success) ? "success" : "info",
         duration: 2500,
       });
@@ -871,11 +873,12 @@ export default function GameProcessOptimizePage() {
     if (!coreTarget) return;
     const game = configs.find(c => c.id === coreTarget);
     if (!game) return;
-    // 若选择的是默认掩码（除 CPU0 外全部）则存 null，由后端运行时计算
-    const normalized: number | null = mask === getDefaultMask(coreCount) ? null : mask;
+    // 若选择的是后端默认掩码（有 E 核则排除 E 核，否则全核心）则存 null，由后端运行时计算
+    const defaultMask = topology.default_mask || getDefaultMask(coreCount);
+    const normalized: number | null = mask === defaultMask ? null : mask;
     await persist(configs.map(c => c.id === coreTarget ? { ...c, affinity_mask: normalized } : c));
     toast({ title: t("gameProcessOptimize.affinitySettings.configSaved"), status: "success", duration: 1500 });
-  }, [configs, coreTarget, persist, getDefaultMask, coreCount, toast, t]);
+  }, [configs, coreTarget, persist, getDefaultMask, coreCount, toast, t, topology]);
 
   // 独立开关：进程自动优化 / 核心自动优化
   const handleToggleAuto = useCallback(async (id: string, kind: AutoKind, checked: boolean) => {
@@ -1108,8 +1111,8 @@ export default function GameProcessOptimizePage() {
         coreCount={coreCount}
         currentSavedMask={
           coreTarget
-            ? (configs.find(c => c.id === coreTarget)?.affinity_mask ?? getDefaultMask(coreCount))
-            : getDefaultMask(coreCount)
+            ? (configs.find(c => c.id === coreTarget)?.affinity_mask ?? (topology.default_mask || getDefaultMask(coreCount)))
+            : (topology.default_mask || getDefaultMask(coreCount))
         }
         onSave={handleSaveCoreConfig}
       />

@@ -32,6 +32,7 @@ pub fn apply_hotkeys_enabled(app_handle: &tauri::AppHandle, enabled: bool) {
             get_music_prev_shortcut(),
             get_music_next_shortcut(),
             get_music_playpause_shortcut(),
+            get_lyrics_btn_toggle_shortcut(),
         ];
 
         for s in keyboard_shortcuts {
@@ -85,6 +86,9 @@ static MUSIC_NEXT_SHORTCUT_ID: AtomicU32 = AtomicU32::new(0);
 
 static MUSIC_PLAYPAUSE_SHORTCUT: Mutex<Option<String>> = Mutex::new(None);
 static MUSIC_PLAYPAUSE_SHORTCUT_ID: AtomicU32 = AtomicU32::new(0);
+
+static LYRIC_BTN_TOGGLE_SHORTCUT: Mutex<Option<String>> = Mutex::new(None);
+static LYRIC_BTN_TOGGLE_SHORTCUT_ID: AtomicU32 = AtomicU32::new(0);
 
 pub fn init_overlay(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_overlay_shortcut(shortcut);
@@ -609,6 +613,85 @@ fn set_music_playpause_shortcut(shortcut: &str) {
     }
 }
 
+// ==================== 桌面歌词解锁按钮显示/隐藏热键 ====================
+
+pub fn init_lyrics_btn_toggle(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
+    set_lyrics_btn_toggle_shortcut(shortcut);
+
+    // 留空（未设置）时跳过注册，避免注册空串失败
+    if shortcut.is_empty() {
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+        app_handle
+            .global_shortcut()
+            .register(shortcut)
+            .map_err(|e| format!("注册解锁按钮热键失败: {}", e))?;
+    }
+
+    log::info!("解锁按钮热键已注册: {}", shortcut);
+    Ok(())
+}
+
+pub fn update_lyrics_btn_toggle(
+    app_handle: &tauri::AppHandle,
+    new_shortcut: &str,
+) -> Result<(), String> {
+    let old_shortcut = get_lyrics_btn_toggle_shortcut();
+
+    if old_shortcut == new_shortcut {
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+        if !old_shortcut.is_empty() {
+            let _ = app_handle.global_shortcut().unregister(old_shortcut.as_str());
+        }
+
+        if !new_shortcut.is_empty() {
+            if let Err(e) = app_handle.global_shortcut().register(new_shortcut) {
+                if !old_shortcut.is_empty() {
+                    let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
+                }
+                return Err(hotkey_register_error("注册解锁按钮热键", new_shortcut, e));
+            }
+        }
+    }
+
+    set_lyrics_btn_toggle_shortcut(new_shortcut);
+    log::info!(
+        "解锁按钮热键已更新: {} -> {}",
+        old_shortcut,
+        new_shortcut
+    );
+    Ok(())
+}
+
+pub fn get_lyrics_btn_toggle_shortcut() -> String {
+    LYRIC_BTN_TOGGLE_SHORTCUT
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_default()
+}
+
+pub fn get_lyrics_btn_toggle_shortcut_id() -> u32 {
+    LYRIC_BTN_TOGGLE_SHORTCUT_ID.load(Ordering::SeqCst)
+}
+
+fn set_lyrics_btn_toggle_shortcut(shortcut: &str) {
+    *LYRIC_BTN_TOGGLE_SHORTCUT.lock().unwrap() = Some(shortcut.to_string());
+    if let Ok(hotkey) = tauri_plugin_global_shortcut::Shortcut::from_str(shortcut) {
+        LYRIC_BTN_TOGGLE_SHORTCUT_ID.store(hotkey.id(), Ordering::SeqCst);
+    }
+}
+
 /// 触发音乐热键动作，向主窗口发送对应控制事件
 pub fn trigger_music_action(app_handle: &tauri::AppHandle, action: &str) {
     emit_music_action(app_handle, action);
@@ -652,6 +735,11 @@ pub fn cleanup(app_handle: &tauri::AppHandle) {
         let music_playpause = get_music_playpause_shortcut();
         if !music_playpause.is_empty() {
             let _ = app_handle.global_shortcut().unregister(music_playpause.as_str());
+        }
+
+        let lyric_btn_toggle = get_lyrics_btn_toggle_shortcut();
+        if !lyric_btn_toggle.is_empty() {
+            let _ = app_handle.global_shortcut().unregister(lyric_btn_toggle.as_str());
         }
     }
 }
@@ -766,6 +854,22 @@ pub fn set_music_playpause_hotkey(
     save_settings_value(
         &app_handle,
         "music-playpause-hotkey",
+        serde_json::Value::String(shortcut),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_lyrics_btn_hotkey() -> String {
+    get_lyrics_btn_toggle_shortcut()
+}
+
+#[tauri::command]
+pub fn set_lyrics_btn_hotkey(app_handle: tauri::AppHandle, shortcut: String) -> Result<(), String> {
+    update_lyrics_btn_toggle(&app_handle, &shortcut)?;
+    save_settings_value(
+        &app_handle,
+        "lyrics-btn-hotkey",
         serde_json::Value::String(shortcut),
     );
     Ok(())

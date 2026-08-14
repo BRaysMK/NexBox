@@ -7,8 +7,8 @@ import {
   SimpleGrid,
   useColorModeValue,
   Button,
-  useToast,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -30,7 +30,7 @@ const KEYBOARD_OPTIONS = [16, 18, 20, 22];
 export default function PeripheralOptimizePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("mouse");
   const { liquidGlassEnabled } = useBackground();
 
   const [selectedMouse, setSelectedMouse] = useState<number | null>(null);

@@ -9,13 +9,13 @@ import {
   Button,
   Spinner,
   Badge,
-  useToast,
   Alert,
   AlertIcon,
   AlertTitle,
   AlertDescription,
   Flex,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -137,7 +137,7 @@ const SETTING_IDS: Record<string, number> = {
 export default function NvidiaDriverPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("gpu");
   const { liquidGlassEnabled } = useBackground();
   const { config, getActiveColor, getContrastTextColor } = useThemeColor();
   const isDark = useColorModeValue(false, true);

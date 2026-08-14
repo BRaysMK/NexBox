@@ -13,13 +13,13 @@ import {
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useToast } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useTranslation } from "react-i18next";
 import { store } from "@/lib/store";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
 
-const CURRENT_VERSION = "v7.7.8";
+const CURRENT_VERSION = "v7.9.0";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 
 interface UpdateContextValue {
@@ -55,7 +55,7 @@ export function useUpdate() {
 export function UpdateProvider({ children }: { children: ReactNode }) {
   const { isStartupComplete } = useAppStartup();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("download");
   const { t } = useTranslation();
 
   const [autoUpdateEnabled, setAutoUpdateEnabledState] = useState(true);

@@ -16,7 +16,6 @@ import {
   SimpleGrid,
   useColorModeValue,
   useDisclosure,
-  useToast,
   Tooltip,
   Slider,
   SliderTrack,
@@ -30,6 +29,7 @@ import {
   VStack,
   HStack,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LayoutGrid, Plus, Search, Trash2, Settings as SettingsIcon } from "lucide-react";
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -439,7 +439,7 @@ function DraggableCard({
 export default function CustomPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("layout");
   const { isOpen: isAddOpen, onOpen: onAddOpen, onClose: onAddClose } = useDisclosure();
 
   const [config, setConfig] = useState<CustomDashboardConfig>(() => loadConfig());

@@ -20,8 +20,8 @@ import {
   MenuList,
   MenuItem,
   useColorModeValue,
-  useToast,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import {
   ExternalLink,
   LogOut,
@@ -115,7 +115,7 @@ export function MusicLoginSection() {
     }))
   );
   const { getActiveColor, getContrastTextColor } = useThemeColor();
-  const toast = useToast();
+  const toast = useDynamicIsland("music");
   const [isSelecting, setIsSelecting] = useState(false);
 
   const activeColor = getActiveColor();

@@ -8,7 +8,6 @@ import {
   useColorModeValue,
   Button,
   Badge,
-  useToast,
   Grid,
   IconButton,
   Switch,
@@ -27,6 +26,7 @@ import {
   Spinner,
   Divider,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -183,7 +183,7 @@ function SectionCard({
 function DLSSCard() {
   const { t } = useTranslation();
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
-  const toast = useToast();
+  const toast = useDynamicIsland("gpu");
   const [selectedPreset, setSelectedPreset] = useState("K");
   const [selectedQuality, setSelectedQuality] = useState("default");
   const [selectedTextureQuality, setSelectedTextureQuality] = useState("default");
@@ -450,7 +450,7 @@ function GpuInfoCard() {
 function DLSSIndicatorCard() {
   const { t } = useTranslation();
   const { config: themeConfig } = useThemeColor();
-  const toast = useToast();
+  const toast = useDynamicIsland("gpu");
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 

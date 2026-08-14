@@ -7,7 +7,6 @@ import {
   useColorModeValue,
   Button,
   Badge,
-  useToast,
   Alert,
   AlertIcon,
   AlertDescription,
@@ -18,6 +17,7 @@ import {
   TabPanel,
   Input,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
@@ -61,7 +61,7 @@ export default function MemoryLimitPage() {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("memory");
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");

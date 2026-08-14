@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { LuMinus, LuSquare, LuCopy, LuX } from "react-icons/lu";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { GlobalSearch } from "./global-search";
+import { GameModeSwitch } from "./game-mode-switch";
 import { UpdateProgressIndicator } from "./update-progress-indicator";
 import { CloseConfirmDialog } from "../CloseConfirmDialog";
 import { store } from "@/lib/store";
@@ -206,6 +207,7 @@ export function TitleBar() {
             <UpdateProgressIndicator />
           </Flex>
           <HStack id="window-controls" spacing={1} h="40px" align="center">
+            <Box transform="translateX(-12px)"><GameModeSwitch /></Box>
             <IconButton
               icon={<LuMinus size={18} />}
               aria-label="最小化"

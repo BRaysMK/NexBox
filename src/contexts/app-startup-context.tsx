@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { type HardwareInfo, getHardwareInfo } from "@/lib/hardware";
 
@@ -62,6 +63,8 @@ interface OverlaySettings {
   _version?: number;
   position_x?: number | null;
   position_y?: number | null;
+  vertical_position_x?: number | null;
+  vertical_position_y?: number | null;
   delta_password_maps?: string[];
 }
 
@@ -105,6 +108,8 @@ interface AppStartupContextType {
   saveMusicNextHotkey: (shortcut: string) => Promise<string | null>;
   musicPlayPauseHotkey: string;
   saveMusicPlayPauseHotkey: (shortcut: string) => Promise<string | null>;
+  lyricsBtnHotkey: string;
+  saveLyricsBtnHotkey: (shortcut: string) => Promise<string | null>;
   hotkeysEnabled: boolean;
   saveHotkeysEnabled: (enabled: boolean) => Promise<void>;
 }
@@ -143,6 +148,8 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   font_color: "#ffffff",
   position_x: null,
   position_y: null,
+  vertical_position_x: null,
+  vertical_position_y: null,
   delta_password_maps: [],
 };
 
@@ -169,6 +176,8 @@ const AppStartupContext = createContext<AppStartupContextType>({
   saveMusicNextHotkey: async () => null,
   musicPlayPauseHotkey: DEFAULT_MUSIC_PLAYPAUSE_HOTKEY,
   saveMusicPlayPauseHotkey: async () => null,
+  lyricsBtnHotkey: "",
+  saveLyricsBtnHotkey: async () => null,
   hotkeysEnabled: true,
   saveHotkeysEnabled: async () => {},
 });
@@ -191,6 +200,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [musicPrevHotkey, setMusicPrevHotkey] = useState(DEFAULT_MUSIC_PREV_HOTKEY);
   const [musicNextHotkey, setMusicNextHotkey] = useState(DEFAULT_MUSIC_NEXT_HOTKEY);
   const [musicPlayPauseHotkey, setMusicPlayPauseHotkey] = useState(DEFAULT_MUSIC_PLAYPAUSE_HOTKEY);
+  const [lyricsBtnHotkey, setLyricsBtnHotkey] = useState("");
   const [hotkeysEnabled, setHotkeysEnabled] = useState(true);
   const hasStarted = useRef(false);
 
@@ -221,7 +231,19 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
 
   const loadOverlaySettings = async () => {
     try {
-      const savedSettings = await store.get<OverlaySettings>("overlay-settings");
+      let savedSettings = await store.get<OverlaySettings>("overlay-settings");
+      // 若前端 store 未读到（时序/缓存问题导致读到默认），回退到 Rust 权威来源，
+      // 该来源由 try_load_persisted_settings 在启动时从 settings.json 加载，保证拿到持久化的样式与位置
+      if (!savedSettings) {
+        try {
+          const rustSettings = await invoke<OverlaySettings>("get_overlay_current_settings");
+          if (rustSettings) {
+            savedSettings = { ...rustSettings, _version: 4 };
+          }
+        } catch {
+          // 忽略，继续走默认
+        }
+      }
       let settingsToUse: OverlaySettings;
       let needsMigration = false;
       if (savedSettings) {
@@ -498,6 +520,29 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loadLyricsBtnHotkey = async () => {
+    try {
+      const saved = await invoke<string>("get_lyrics_btn_hotkey");
+      if (saved) {
+        setLyricsBtnHotkey(saved);
+      }
+    } catch (error) {
+      console.error("Failed to load lyrics btn hotkey:", error);
+    }
+  };
+
+  const saveLyricsBtnHotkey = async (shortcut: string): Promise<string | null> => {
+    try {
+      await invoke("set_lyrics_btn_hotkey", { shortcut });
+      await store.set("lyrics-btn-hotkey", shortcut);
+      setLyricsBtnHotkey(shortcut);
+      return null;
+    } catch (error) {
+      console.error("Failed to save lyrics btn hotkey:", error);
+      return extractError(error);
+    }
+  };
+
   const loadHotkeysEnabled = async () => {
     try {
       // 总开关已由 Rust 端在启动时恢复，这里只同步 UI 显示值
@@ -542,6 +587,25 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
     }, 100);
   };
 
+  // 主应用监听竖排悬浮框位置保存事件，同步本地状态与共享 store，
+  // 避免后续保存其他 overlay 设置时用旧缓存把位置覆盖回旧值
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      unlisten = await listen<{ x: number; y: number }>("overlay-position-saved", async (event) => {
+        const { x, y } = event.payload;
+        const current = overlaySettings;
+        if (current) {
+          const updated = { ...current, vertical_position_x: x, vertical_position_y: y };
+          setOverlaySettings(updated);
+          await store.set("overlay-settings", updated);
+          await store.save();
+        }
+      });
+    })();
+    return () => { unlisten?.(); };
+  }, [overlaySettings]);
+
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
@@ -558,6 +622,7 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         { name: "music-prev-hotkey", fn: loadMusicPrevHotkey, weight: 1 },
         { name: "music-next-hotkey", fn: loadMusicNextHotkey, weight: 1 },
         { name: "music-playpause-hotkey", fn: loadMusicPlayPauseHotkey, weight: 1 },
+        { name: "lyrics-btn-hotkey", fn: loadLyricsBtnHotkey, weight: 1 },
         { name: "hotkeys-enabled", fn: loadHotkeysEnabled, weight: 1 },
         {
           name: "filter-restore",
@@ -638,6 +703,8 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         saveMusicNextHotkey,
         musicPlayPauseHotkey,
         saveMusicPlayPauseHotkey,
+        lyricsBtnHotkey,
+        saveLyricsBtnHotkey,
         hotkeysEnabled,
         saveHotkeysEnabled,
       }}

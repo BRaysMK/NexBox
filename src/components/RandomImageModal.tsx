@@ -15,9 +15,9 @@ import {
   IconButton,
   Spinner,
   Center,
-  useToast,
   useColorModeValue,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useTranslation } from "react-i18next";
 import { FaRotate, FaDownload, FaImage } from "react-icons/fa6";
 import { CustomSelect } from "@/components/special/custom-select";
@@ -40,7 +40,7 @@ interface RandomImageModalProps {
 
 export default function RandomImageModal({ isOpen, onClose }: RandomImageModalProps) {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("image");
   const { getActiveColor, getContrastTextColor, getHoverColor } = useThemeColor();
 
   const [category, setCategory] = useState("");

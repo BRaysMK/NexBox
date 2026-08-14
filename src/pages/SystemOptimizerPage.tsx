@@ -12,7 +12,6 @@ import {
   Button,
   IconButton,
   useColorModeValue,
-  useToast,
   Spinner,
   Tooltip,
   Badge,
@@ -23,6 +22,7 @@ import {
   ModalBody,
   ModalFooter,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -274,7 +274,7 @@ export default function SystemOptimizerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { liquidGlassEnabled } = useBackground();
-  const toast = useToast();
+  const toast = useDynamicIsland("sparkles");
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
 
   const [savedStates, setSavedStatesState] = useState<Record<string, boolean | string>>({});

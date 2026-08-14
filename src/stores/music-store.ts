@@ -109,6 +109,7 @@ interface MusicState {
   desktopLyricsLineCount: 1 | 2;
   desktopLyricsLocked: boolean;
   desktopLyricsShowTranslation: boolean;
+  desktopLyricsHideUnlockBtn: boolean;
 
   // UI 状态
   searching: boolean;
@@ -171,6 +172,8 @@ interface MusicState {
   setDesktopLyricsLineCount: (count: 1 | 2) => Promise<void>;
   setDesktopLyricsLocked: (locked: boolean) => Promise<void>;
   setDesktopLyricsShowTranslation: (show: boolean) => Promise<void>;
+  setDesktopLyricsHideUnlockBtn: (hide: boolean) => Promise<void>;
+  toggleDesktopLyricsHideUnlockBtn: () => Promise<void>;
   emitDesktopLyricsSettings: () => void;
   emitDesktopLyricsData: () => void;
 
@@ -489,6 +492,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   desktopLyricsLineCount: 2,
   desktopLyricsLocked: false,
   desktopLyricsShowTranslation: true,
+  desktopLyricsHideUnlockBtn: false,
 
   searching: false,
   loadingPlaylists: false,
@@ -577,6 +581,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const dlLineCount = await store.get<1 | 2>("desktopLyricsLineCount");
       const dlLocked = await store.get<boolean>("desktopLyricsLocked");
       const dlShowTranslation = await store.get<boolean>("desktopLyricsShowTranslation");
+      const dlHideUnlockBtn = await store.get<boolean>("desktopLyricsHideUnlockBtn");
       if (vol != null) set({ volume: vol, prevVolume: vol > 0 ? vol : 0.7 });
       if (mode) set({ playMode: mode });
       if (quality) set({ playbackQuality: quality });
@@ -594,6 +599,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (dlBaseColor) set({ desktopLyricsBaseColor: dlBaseColor });
       if (dlLineCount) set({ desktopLyricsLineCount: dlLineCount });
       if (dlShowTranslation != null) set({ desktopLyricsShowTranslation: dlShowTranslation });
+      if (dlHideUnlockBtn != null) set({ desktopLyricsHideUnlockBtn: dlHideUnlockBtn });
       if (dlLocked != null) {
         // 锁定状态仅在当前会话有效，启动时始终重置为 false
         // 防止跨会话残留导致桌面歌词未开但解锁按钮仍在的问题
@@ -680,7 +686,6 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // 解决窗口首次打开时 emit 早于 listen 注册的时序问题
     unlistenFns.push(
       await listen("desktop-lyrics:request-data", () => {
-        // 小延时确保请求方 listener 完全就绪
         setTimeout(() => {
           get().emitDesktopLyricsData();
           get().emitDesktopLyricsSettings();
@@ -690,6 +695,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             volume: get().volume,
           });
         }, 50);
+      })
+    );
+
+    // 监听解锁按钮显示/隐藏热键事件（Rust 端触发，切换 hideUnlockBtn 开关）
+    unlistenFns.push(
+      await listen("lyrics:toggle-hide-unlock-btn", () => {
+        get().toggleDesktopLyricsHideUnlockBtn();
       })
     );
 
@@ -1044,7 +1056,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           set({
             musicToast: {
               type: "warning",
-              message: isCopyright ? "该音乐暂无版权" : (result.message || "无法播放，已自动跳过"),
+              message: isCopyright ? "无版权" : (result.message || "无法播放"),
             },
           });
           // 延迟跳转，让 toast 可见
@@ -1364,6 +1376,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             lineCount: get().desktopLyricsLineCount,
             isLocked: false,
             showTranslation: get().desktopLyricsShowTranslation,
+            hideUnlockBtn: get().desktopLyricsHideUnlockBtn,
           });
           try {
             await invoke("hide_lyrics_unlock_btn");
@@ -1414,6 +1427,16 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     get().emitDesktopLyricsSettings();
   },
 
+  setDesktopLyricsHideUnlockBtn: async (hide) => {
+    set({ desktopLyricsHideUnlockBtn: hide });
+    getStore().then((s) => s.set("desktopLyricsHideUnlockBtn", hide).then(() => s.save()));
+    get().emitDesktopLyricsSettings();
+  },
+
+  toggleDesktopLyricsHideUnlockBtn: async () => {
+    await get().setDesktopLyricsHideUnlockBtn(!get().desktopLyricsHideUnlockBtn);
+  },
+
   emitDesktopLyricsSettings: () => {
     const s = get();
     emit("desktop-lyrics:settings", {
@@ -1423,6 +1446,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       lineCount: s.desktopLyricsLineCount,
       isLocked: s.desktopLyricsLocked,
       showTranslation: s.desktopLyricsShowTranslation,
+      hideUnlockBtn: s.desktopLyricsHideUnlockBtn,
     });
   },
 

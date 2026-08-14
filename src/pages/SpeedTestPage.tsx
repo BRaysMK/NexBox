@@ -286,7 +286,7 @@ function MetricCard({
 }) {
   const subColor = useColorModeValue("gray.600", "#999999");
   return (
-    <LiquidGlassCard forceGlass p={4} textAlign="center">
+    <LiquidGlassCard p={4} textAlign="center">
       <VStack spacing={1}>
         <Box color={accent}>{icon}</Box>
         <HStack spacing={1} align="baseline">
@@ -439,8 +439,8 @@ export default function SpeedTestPage() {
           <StageBadge stage={stage} />
         </HStack>
 
-        {/* 主测速卡片：液态玻璃效果，左侧下载/上传大数字 + 右侧超大折线图 */}
-        <LiquidGlassCard forceGlass p={6}>
+        {/* 主测速卡片：液态玻璃效果（跟随全局开关），左侧下载/上传大数字 + 右侧超大折线图 */}
+        <LiquidGlassCard p={6}>
           <SimpleGrid columns={{ base: 1, lg: 4 }} spacing={6} alignItems="center">
             {/* 左侧：下载/上传 */}
             <VStack spacing={6} align="stretch">

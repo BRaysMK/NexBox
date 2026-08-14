@@ -8,10 +8,10 @@ import {
   Badge,
   Button,
   useColorModeValue,
-  useToast,
   Spinner,
   SimpleGrid,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { motion } from "framer-motion";
 import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -32,7 +32,7 @@ interface UpdateState {
 
 export default function WindowsUpdatePage() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("download");
   const navigate = useNavigate();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");

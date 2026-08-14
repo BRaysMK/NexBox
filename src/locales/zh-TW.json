@@ -459,8 +459,8 @@
         "error": "清理失敗"
     },
     "aceOptimize": {
-        "title": "ACE 反作弊最佳化",
-        "description": "限制 ACE 反作弊程序的資源佔用，釋放更多效能給遊戲",
+      "title": "反作弊最佳化",
+      "description": "限制反作弊程序的資源佔用，釋放更多效能給遊戲",
         "deltaBoost": {
             "title": "三角洲優先順序提升",
             "description": "提升 DeltaForceClient-Win64-Shipping.exe 程序優先順序為「即時」，提升遊戲流暢度",
@@ -758,6 +758,11 @@
     "sjmclDesc": "上海交通大學開發的第三方我的世界啟動器",
     "ddegameDesc": "遊戲不僅僅是遊戲，遊戲可以走進生活改變生活",
     "huorongDesc": "暢享純粹終端防護。輕快運行，靜享守護，全面防禦",
+    "deepseekHarnessDesc": "DeepSeek 開源的一切皆插件的 AI 智能體底座",
+    "lingtabDesc": "讓每個標籤頁都成為風景的瀏覽器新標籤頁美化外掛",
+    "lxmusicDesc": "免費且無廣告的多端開源音樂查找工具",
+    "gameppDesc": "遊戲效能優化與幀數提升工具",
+    "shudaxiaDesc": "智能滑鼠連點與巨集錄製自動化工具",
     "descriptions": {
       "assistantCrosshair": "遊戲畫面準心輔助工具",
       "memreduct": "記憶體清理工具",

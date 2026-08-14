@@ -8,6 +8,7 @@
 //! 参考 `optimization.rs` 的 ACE 自动检测模式（generation 代次控制线程生命周期 +
 //! `app.store` 持久化配置）。
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
@@ -339,17 +340,24 @@ fn process_matches(process_name: &str, entry_names: &[String]) -> bool {
 /// 检测是否有名单内游戏在运行（复用 System 实例，避免每次重建）
 /// 供 game_win_key 模块复用同一份游戏名单
 pub(crate) fn any_game_running(system: &System) -> bool {
+    !running_game_pids(system).is_empty()
+}
+
+/// 返回当前正在运行的滤镜名单游戏进程 PID 集合（内置 + 自定义名单）
+/// 供 game_mode 模块复用同一份名单来豁免游戏进程
+pub(crate) fn running_game_pids(system: &System) -> HashSet<u32> {
     let games = merge_games();
+    let mut pids = HashSet::new();
     if games.is_empty() {
-        return false;
+        return pids;
     }
     for (_, process) in system.processes() {
         let name = process.name().to_string();
         if games.iter().any(|g| process_matches(&name, &g.process_names)) {
-            return true;
+            pids.insert(process.pid().as_u32());
         }
     }
-    false
+    pids
 }
 
 // ─── 自动应用 / 恢复滤镜 ───

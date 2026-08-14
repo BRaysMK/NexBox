@@ -30,8 +30,10 @@ import {
 } from "@chakra-ui/react";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { useMusicStore } from "@/stores/music-store";
+import { useAppStartup } from "@/contexts/app-startup-context";
+import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { Eraser, LocateFixed } from "lucide-react";
 import { centerLyricsWindow } from "@/lib/desktop-lyrics-window";
-import { LocateFixed } from "lucide-react";
 
 interface DesktopLyricsSettingsModalProps {
   isOpen: boolean;
@@ -81,6 +83,8 @@ function DesktopLyricsSettingsModalInner({
   const desktopLyricsBaseColor = useMusicStore((s) => s.desktopLyricsBaseColor);
   const desktopLyricsLineCount = useMusicStore((s) => s.desktopLyricsLineCount);
   const desktopLyricsShowTranslation = useMusicStore((s) => s.desktopLyricsShowTranslation);
+  const desktopLyricsHideUnlockBtn = useMusicStore((s) => s.desktopLyricsHideUnlockBtn);
+  const { lyricsBtnHotkey, saveLyricsBtnHotkey } = useAppStartup();
 
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
@@ -100,13 +104,20 @@ function DesktopLyricsSettingsModalInner({
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="md">
       <ModalOverlay />
-      <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="xl">
+      <ModalContent
+        bg={modalBg}
+        borderColor={modalBorderColor}
+        borderRadius="xl"
+        maxHeight="80vh"
+        display="flex"
+        flexDirection="column"
+      >
         <ModalHeader color={labelColor} fontSize="lg" fontWeight="bold">
           桌面歌词设置
         </ModalHeader>
         <ModalCloseButton />
 
-        <ModalBody>
+        <ModalBody overflowY="auto" flex="1" minH={0} pr={4}>
           <VStack spacing={5} align="stretch">
             {/* 字体大小 */}
             <Box>
@@ -224,6 +235,64 @@ function DesktopLyricsSettingsModalInner({
                     },
                   }}
                 />
+              </HStack>
+            </Box>
+
+            {/* 隐藏解锁按钮 */}
+            <Box>
+              <HStack justify="space-between" align="center">
+                <Box>
+                  <Text color={labelColor} fontSize="sm" fontWeight="medium">
+                    隐藏解锁按钮
+                  </Text>
+                  <Text color={subLabelColor} fontSize="xs">
+                    锁定歌词后不显示解锁按钮
+                  </Text>
+                </Box>
+                <Switch
+                  size="lg"
+                  isChecked={desktopLyricsHideUnlockBtn}
+                  onChange={(e) =>
+                    useMusicStore.getState().setDesktopLyricsHideUnlockBtn(
+                      (e.target as HTMLInputElement).checked
+                    )
+                  }
+                  sx={{
+                    "& .chakra-switch__track": {
+                      bg: desktopLyricsHideUnlockBtn ? accentColor : undefined,
+                    },
+                  }}
+                />
+              </HStack>
+            </Box>
+
+            {/* 显示/隐藏解锁按钮热键 */}
+            <Box>
+              <Text color={labelColor} fontSize="sm" fontWeight="medium" mb={1}>
+                解锁按钮热键
+              </Text>
+              <Text color={subLabelColor} fontSize="xs" mb={2}>
+                按下可切换解锁按钮的显示/隐藏，可留空
+              </Text>
+              <HStack spacing={2}>
+                <HotkeyRecorder
+                  value={lyricsBtnHotkey}
+                  onChange={async (val) => {
+                    await saveLyricsBtnHotkey(val);
+                  }}
+                />
+                {lyricsBtnHotkey && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    leftIcon={<Eraser size={14} />}
+                    onClick={() => saveLyricsBtnHotkey("")}
+                    color={subLabelColor}
+                    _hover={{ color: labelColor }}
+                  >
+                    清除
+                  </Button>
+                )}
               </HStack>
             </Box>
 

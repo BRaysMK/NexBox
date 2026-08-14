@@ -16,8 +16,8 @@ import {
   Text,
   VStack,
   useColorModeValue,
-  useToast,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import {
@@ -100,7 +100,7 @@ export default function CpuIsolationPanel({
   loadProcesses,
 }: CpuIsolationPanelProps) {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("cpu");
   const { getActiveColor } = useThemeColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");

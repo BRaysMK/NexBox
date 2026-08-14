@@ -163,6 +163,11 @@ pub struct OverlaySettings {
     pub position_x: Option<i32>,
     #[serde(default)]
     pub position_y: Option<i32>,
+    /// 竖排悬浮框独立位置（与 Win32 悬浮框的 position_x/y 解耦，互不影响）
+    #[serde(default)]
+    pub vertical_position_x: Option<i32>,
+    #[serde(default)]
+    pub vertical_position_y: Option<i32>,
     /// 三角洲密码选中的地图名称列表（空 = 显示全部）
     #[serde(default)]
     pub delta_password_maps: Vec<String>,
@@ -181,6 +186,8 @@ impl Default for OverlaySettings {
             font_color: "#ffffff".to_string(),
             position_x: None,
             position_y: None,
+            vertical_position_x: None,
+            vertical_position_y: None,
             delta_password_maps: Vec::new(),
         }
     }

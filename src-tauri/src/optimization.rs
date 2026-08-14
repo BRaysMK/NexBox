@@ -52,6 +52,19 @@ extern "system" {
         ProcessInformation: *const std::ffi::c_void,
         ProcessInformationSize: u32,
     ) -> i32;
+    fn NtQueryInformationProcess(
+        ProcessHandle: HANDLE,
+        ProcessInformationClass: u32,
+        ProcessInformation: *mut std::ffi::c_void,
+        ProcessInformationSize: u32,
+        ReturnLength: *mut u32,
+    ) -> i32;
+}
+
+#[link(name = "gdi32")]
+extern "system" {
+    fn D3DKMTSetProcessSchedulingPriorityClass(hProcess: HANDLE, priority: i32) -> i32;
+    fn D3DKMTGetProcessSchedulingPriorityClass(hProcess: HANDLE, priority: *mut i32) -> i32;
 }
 
 extern "system" {
@@ -61,9 +74,15 @@ extern "system" {
         ProcessInformation: *const std::ffi::c_void,
         ProcessInformationSize: u32,
     ) -> i32;
+    fn GetProcessInformation(
+        hProcess: HANDLE,
+        ProcessInformationClass: u32,
+        ProcessInformation: *mut std::ffi::c_void,
+        ProcessInformationSize: u32,
+    ) -> i32;
 }
 
-fn enable_process_efficiency_mode(pid: u32) -> bool {
+pub(crate) fn enable_process_efficiency_mode(pid: u32) -> bool {
     unsafe {
         let handle = open_process_any(pid);
         if handle.is_null() {
@@ -213,7 +232,7 @@ pub(crate) fn is_admin() -> bool {
     }
 }
 
-fn set_process_low_priority(pid: u32) -> bool {
+pub(crate) fn set_process_low_priority(pid: u32) -> bool {
     unsafe {
         let handle = open_process_any(pid);
         if handle.is_null() {
@@ -259,6 +278,216 @@ pub(crate) fn set_process_affinity(pid: u32, mask: u64) -> bool {
         }
         CloseHandle(handle);
         ok
+    }
+}
+
+// ─── 游戏模式压制原语（快照/恢复用） ───
+// 常量与类别编号对齐 Windows 内核与 Pavise：I/O 优先级=33、内存页优先级=39、
+// ProcessPowerThrottling=4 / Nt 类=77、GPU 调度优先级类（Idle=0..High=4）。
+
+fn nt_query_u32(handle: HANDLE, class: u32) -> Option<i32> {
+    let mut v: i32 = 0;
+    unsafe {
+        let r = NtQueryInformationProcess(
+            handle,
+            class,
+            &mut v as *mut i32 as *mut std::ffi::c_void,
+            4,
+            std::ptr::null_mut(),
+        );
+        if r == 0 {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+fn nt_set_u32(handle: HANDLE, class: u32, v: i32) -> bool {
+    unsafe {
+        NtSetInformationProcess(
+            handle,
+            class,
+            &v as *const i32 as *const std::ffi::c_void,
+            4,
+        ) == 0
+    }
+}
+
+/// 设置进程优先级类别（NORMAL/BELOW_NORMAL/IDLE 等）
+pub(crate) fn set_process_priority_class(pid: u32, class: u32) -> bool {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return false;
+        }
+        let ok = SetPriorityClass(handle, class) != 0;
+        CloseHandle(handle);
+        ok
+    }
+}
+
+/// 查询进程当前优先级类别
+pub(crate) fn query_process_priority(pid: u32) -> Option<u32> {
+    use windows_sys::Win32::System::Threading::GetPriorityClass;
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return None;
+        }
+        let v = GetPriorityClass(handle);
+        CloseHandle(handle);
+        if v == 0 {
+            None
+        } else {
+            Some(v)
+        }
+    }
+}
+
+/// 查询进程当前 CPU 亲和性掩码
+pub(crate) fn query_process_affinity(pid: u32) -> Option<u64> {
+    use windows_sys::Win32::System::Threading::GetProcessAffinityMask;
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return None;
+        }
+        let mut process_mask: usize = 0;
+        let mut system_mask: usize = 0;
+        let ok = GetProcessAffinityMask(handle, &mut process_mask, &mut system_mask) != 0;
+        CloseHandle(handle);
+        if ok {
+            Some(process_mask as u64)
+        } else {
+            None
+        }
+    }
+}
+
+/// 设置进程 I/O 优先级（0=VeryLow, 1=Low, 2=Normal, 3=High）
+pub(crate) fn set_process_io_priority(pid: u32, priority: i32) -> bool {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return false;
+        }
+        let ok = nt_set_u32(handle, 33, priority);
+        CloseHandle(handle);
+        ok
+    }
+}
+
+/// 查询进程 I/O 优先级（-1 表示失败）
+pub(crate) fn query_process_io_priority(pid: u32) -> Option<i32> {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return None;
+        }
+        let v = nt_query_u32(handle, 33);
+        CloseHandle(handle);
+        v
+    }
+}
+
+/// 设置进程内存页优先级（1=VeryLow, 2=Low, 3=Medium, 4=High, 5=RealTime）
+pub(crate) fn set_process_memory_priority(pid: u32, priority: i32) -> bool {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return false;
+        }
+        let ok = nt_set_u32(handle, 39, priority);
+        CloseHandle(handle);
+        ok
+    }
+}
+
+/// 查询进程内存页优先级（-1 表示失败）
+pub(crate) fn query_process_memory_priority(pid: u32) -> Option<i32> {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return None;
+        }
+        let v = nt_query_u32(handle, 39);
+        CloseHandle(handle);
+        v
+    }
+}
+
+/// 设置进程 EcoQoS 效率模式（on=true 开启，on=false 关闭）
+pub(crate) fn set_process_eco_qos(pid: u32, on: bool) -> bool {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return false;
+        }
+        // POWER_THROTTLING_PROCESS_STATE: Version=1(u32), ControlMask(u32), StateMask(u32)
+        let state: [u32; 3] = if on { [1, 1, 1] } else { [1, 0, 0] };
+        let ok = SetProcessInformation(
+            handle,
+            4, // ProcessPowerThrottling
+            state.as_ptr() as *const std::ffi::c_void,
+            std::mem::size_of::<[u32; 3]>() as u32,
+        ) != 0;
+        CloseHandle(handle);
+        ok
+    }
+}
+
+/// 查询进程 EcoQoS 状态，返回 Some((control_mask, state_mask))；失败返回 None
+pub(crate) fn query_process_eco_state(pid: u32) -> Option<(u32, u32)> {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return None;
+        }
+        let mut state: [u32; 3] = [1, 0, 0];
+        let ok = GetProcessInformation(
+            handle,
+            4,
+            state.as_mut_ptr() as *mut std::ffi::c_void,
+            std::mem::size_of::<[u32; 3]>() as u32,
+        ) != 0;
+        CloseHandle(handle);
+        if ok {
+            Some((state[1], state[2]))
+        } else {
+            None
+        }
+    }
+}
+
+/// 设置进程 GPU 调度优先级类（0=Idle, 1=BelowNormal, 2=Normal, 4=High）
+pub(crate) fn set_process_gpu_priority(pid: u32, priority: i32) -> bool {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return false;
+        }
+        let ok = D3DKMTSetProcessSchedulingPriorityClass(handle, priority) == 0;
+        CloseHandle(handle);
+        ok
+    }
+}
+
+/// 查询进程 GPU 调度优先级类（-1 表示失败）
+pub(crate) fn query_process_gpu_priority(pid: u32) -> Option<i32> {
+    unsafe {
+        let handle = open_process_any(pid);
+        if handle.is_null() {
+            return None;
+        }
+        let mut v: i32 = -1;
+        let ok = D3DKMTGetProcessSchedulingPriorityClass(handle, &mut v) == 0;
+        CloseHandle(handle);
+        if ok {
+            Some(v)
+        } else {
+            None
+        }
     }
 }
 
@@ -1279,6 +1508,135 @@ pub async fn stop_auto_clean() -> Result<(), String> {
 pub async fn get_auto_clean_config() -> Result<Option<AutoCleanConfig>, String> {
     let cfg = AUTO_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
     Ok(cfg.clone())
+}
+
+// ===== 游戏启动时自动清理内存 =====
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct GameStartCleanConfig {
+    pub enabled: bool,
+}
+
+static GAME_START_CLEAN_CONFIG: Mutex<Option<GameStartCleanConfig>> = Mutex::new(None);
+static GAME_START_CLEAN_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+fn load_game_start_clean_config(app: &tauri::AppHandle) -> GameStartCleanConfig {
+    match app.store("game_start_clean.json") {
+        Ok(store) => {
+            if let Some(value) = store.get("config") {
+                if let Ok(config) = serde_json::from_value::<GameStartCleanConfig>(value) {
+                    return config;
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("Failed to open game_start_clean store: {}", e);
+        }
+    }
+    GameStartCleanConfig::default()
+}
+
+fn save_game_start_clean_config(app: &tauri::AppHandle, config: &GameStartCleanConfig) {
+    match app.store("game_start_clean.json") {
+        Ok(store) => {
+            store.set("config", serde_json::to_value(config).unwrap());
+            if let Err(e) = store.save() {
+                log::error!("Failed to save game_start_clean config: {}", e);
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to open game_start_clean store for saving: {}", e);
+        }
+    }
+}
+
+/// 后台轮询：检测到滤镜名单内游戏启动时自动清理一次内存（完整清理）
+fn game_start_clean_loop(generation: u64) {
+    let mut system = System::new();
+    let mut was_running = false;
+    loop {
+        if GAME_START_CLEAN_GENERATION.load(Ordering::Relaxed) != generation {
+            break;
+        }
+        thread::sleep(Duration::from_secs(2));
+        if GAME_START_CLEAN_GENERATION.load(Ordering::Relaxed) != generation {
+            break;
+        }
+
+        let enabled = {
+            let cfg = GAME_START_CLEAN_CONFIG.lock().unwrap_or_else(|e| e.into_inner());
+            cfg.as_ref().map(|c| c.enabled).unwrap_or(false)
+        };
+        if !enabled {
+            was_running = false;
+            continue;
+        }
+
+        system.refresh_processes();
+        let running = crate::game_filter::any_game_running(&system);
+        if running && !was_running {
+            // 完整清理：待机缓存 + 工作集收紧 并行执行
+            thread::scope(|s| {
+                s.spawn(|| {
+                    clean_standby_memory_inner();
+                });
+                s.spawn(|| {
+                    trim_working_set_inner();
+                });
+            });
+            log::info!("[游戏启动清理] 检测到滤镜名单游戏启动，已自动清理一次内存");
+        }
+        was_running = running;
+    }
+}
+
+#[tauri::command]
+pub async fn get_game_start_clean_config(
+    _app: tauri::AppHandle,
+) -> Result<GameStartCleanConfig, String> {
+    let cfg = GAME_START_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
+    Ok(cfg.clone().unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn set_game_start_clean_config(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<GameStartCleanConfig, String> {
+    let config = GameStartCleanConfig { enabled };
+    {
+        let mut lock = GAME_START_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
+        *lock = Some(config.clone());
+    }
+    save_game_start_clean_config(&app, &config);
+
+    let gen = GAME_START_CLEAN_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    if enabled {
+        thread::spawn(move || {
+            let _ = std::panic::catch_unwind(|| game_start_clean_loop(gen));
+        });
+        log::info!("[游戏启动清理] 已开启");
+    } else {
+        log::info!("[游戏启动清理] 已关闭");
+    }
+    Ok(config)
+}
+
+/// 应用启动时调用：恢复持久化配置，开启时启动后台轮询
+pub async fn init_game_start_clean(app: tauri::AppHandle) -> Result<(), String> {
+    let config = load_game_start_clean_config(&app);
+    {
+        let mut lock = GAME_START_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
+        *lock = Some(config.clone());
+    }
+    if config.enabled {
+        let gen = GAME_START_CLEAN_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+        thread::spawn(move || {
+            let _ = std::panic::catch_unwind(|| game_start_clean_loop(gen));
+        });
+        log::info!("[游戏启动清理] 已根据持久化配置启动后台轮询");
+    }
+    Ok(())
 }
 
 // ===== ACE 自动检测与优化 =====
@@ -3894,4 +4252,367 @@ pub fn check_defender_state() -> Result<bool, String> {
         .unwrap_or(false);
 
     Ok(disabled)
+}
+
+// ===================== 虚拟内存（页面文件）管理 =====================
+// 完全基于 winreg + ShellExecuteExW(runas)，不使用 PowerShell。
+
+/// 虚拟内存合理性诊断结果
+#[derive(serde::Serialize)]
+pub struct PagefileRecommendation {
+    pub verdict: String, // "low" | "ok" | "high"（偏少/合理/偏多）
+    pub suggested_initial_mb: u64,
+    pub suggested_max_mb: u64,
+    pub message: String, // 中文建议文案
+}
+
+/// 页面文件当前状态
+#[derive(serde::Serialize)]
+pub struct PagefileStatus {
+    pub physical_memory_mb: u64,
+    pub total_virtual_memory_mb: u64, // GlobalMemoryStatusEx.ullTotalPageFile（提交限制）
+    pub pagefile_size_mb: u64,        // total_virtual - physical（当前页面文件容量）
+    pub drives: Vec<PagefileDrive>,   // 每个磁盘盘符各自的模式与大小
+    pub recommendation: PagefileRecommendation,
+}
+
+/// 单个磁盘盘符的页面文件设置（用于状态展示与写入）
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct PagefileDrive {
+    pub path: String,    // 如 "C:\\pagefile.sys"
+    pub drive: String,   // 如 "C:"
+    pub mode: String,    // "none" | "system" | "custom"
+    pub initial_mb: u64,
+    pub max_mb: u64,
+}
+
+/// 设置页面文件的结果
+#[derive(serde::Serialize)]
+pub struct PagefileResult {
+    pub success: bool,
+    pub message: String,
+    pub requires_restart: bool,
+}
+
+const PAGE_MANAGEMENT_REG_KEY: &str = r"System\CurrentControlSet\Control\Session Manager\Memory Management";
+const PAGE_MANAGEMENT_VALUE: &str = "PagingFiles";
+const DRIVE_FIXED: u32 = 3;
+
+/// 读取注册表中的页面文件条目（REG_MULTI_SZ），返回原始行（如 "C:\\pagefile.sys 0 0"）
+fn read_pagefile_lines_from_registry() -> Vec<String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let Ok(key) = hklm.open_subkey(PAGE_MANAGEMENT_REG_KEY) else {
+        return Vec::new();
+    };
+    key.get_value::<Vec<String>, _>(PAGE_MANAGEMENT_VALUE).unwrap_or_default()
+}
+
+/// 从一行注册表条目解析出（路径, 初始, 最大）
+fn parse_pagefile_line(line: &str) -> Option<(String, u64, u64)> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let initial_mb = parts[1].parse::<u64>().ok()?;
+    let max_mb = parts[2].parse::<u64>().ok()?;
+    Some((parts[0].to_string(), initial_mb, max_mb))
+}
+
+/// 枚举所有固定磁盘盘符（如 C:、D:、E:），不含软驱/光驱/网络盘
+fn enumerate_fixed_drives() -> Vec<String> {
+    use windows_sys::Win32::Storage::FileSystem::{GetDriveTypeW, GetLogicalDrives};
+
+    let mask = unsafe { GetLogicalDrives() };
+    let mut drives = Vec::new();
+    for i in 0..26 {
+        if mask & (1 << i) != 0 {
+            let letter = (b'A' + i as u8) as char;
+            let root = format!("{}:\\", letter);
+            let root_w: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
+            let dtype = unsafe { GetDriveTypeW(root_w.as_ptr()) };
+            if dtype == DRIVE_FIXED {
+                drives.push(format!("{}:", letter));
+            }
+        }
+    }
+    drives
+}
+
+/// 读取当前所有磁盘盘符及其页面文件模式（none/system/custom）
+fn read_pagefile_drives() -> Vec<PagefileDrive> {
+    let lines = read_pagefile_lines_from_registry();
+    let drives = enumerate_fixed_drives();
+
+    drives
+        .into_iter()
+        .map(|drive| {
+            // 在注册表条目中按盘符前缀匹配（如 C: -> c:\pagefile.sys）
+            let drive_upper = drive.to_uppercase();
+            let entry = lines.iter().find_map(|line| {
+                parse_pagefile_line(line).filter(|(path, _, _)| {
+                    path.to_uppercase().starts_with(&drive_upper)
+                })
+            });
+
+            match entry {
+                Some((path, initial_mb, max_mb)) if initial_mb == 0 && max_mb == 0 => PagefileDrive {
+                    path,
+                    drive,
+                    mode: "system".to_string(),
+                    initial_mb: 0,
+                    max_mb: 0,
+                },
+                Some((path, initial_mb, max_mb)) => PagefileDrive {
+                    path,
+                    drive,
+                    mode: "custom".to_string(),
+                    initial_mb,
+                    max_mb,
+                },
+                None => PagefileDrive {
+                    path: format!(r"{}\pagefile.sys", drive),
+                    drive,
+                    mode: "none".to_string(),
+                    initial_mb: 0,
+                    max_mb: 0,
+                },
+            }
+        })
+        .collect()
+}
+
+/// 通过 ShellExecuteExW 提权运行 reg.exe 写入 PagingFiles（REG_MULTI_SZ）。
+/// 应用非管理员时弹出 UAC，等待提权进程结束。零 PowerShell。
+fn run_reg_set_pagefiles_elevated(entries: &[String]) -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
+    use windows::Win32::UI::Shell::{
+        ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+
+    // reg.exe 的 REG_MULTI_SZ 使用 \0 分隔多个条目；单个条目直接传入即可
+    let data = entries.join("\\0");
+    let system_root = env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+    let reg_path = format!(r"{}\System32\reg.exe", system_root);
+    let args = format!(
+        "add HKLM\\{} /v {} /t REG_MULTI_SZ /d \"{}\" /f",
+        PAGE_MANAGEMENT_REG_KEY, PAGE_MANAGEMENT_VALUE, data
+    );
+
+    let to_w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let verb_w = to_w("runas");
+    let file_w = to_w(&reg_path);
+    let args_w = to_w(&args);
+
+    let mut sei: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    sei.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+    sei.lpVerb = PCWSTR(verb_w.as_ptr());
+    sei.lpFile = PCWSTR(file_w.as_ptr());
+    sei.lpParameters = PCWSTR(args_w.as_ptr());
+    sei.nShow = SW_HIDE.0;
+
+    if unsafe { ShellExecuteExW(&mut sei) }.is_err() {
+        let code = unsafe { GetLastError() };
+        return Err(format!(
+            "需要管理员权限：提权失败（错误码 {}），可能是用户取消了授权",
+            code
+        ));
+    }
+
+    unsafe { WaitForSingleObject(sei.hProcess, u32::MAX) };
+
+    let mut exit_code: u32 = 0;
+    if unsafe { GetExitCodeProcess(sei.hProcess, &mut exit_code) }.is_err() {
+        let _ = unsafe { CloseHandle(sei.hProcess) };
+        return Err("无法获取 reg.exe 执行结果".to_string());
+    }
+    let _ = unsafe { CloseHandle(sei.hProcess) };
+
+    if exit_code != 0 {
+        return Err(format!("reg.exe 写入失败（退出码 {}）", exit_code));
+    }
+    Ok(())
+}
+
+/// 写入页面文件条目。先尝试直接 winreg 写（管理员），失败则提权 reg.exe。
+fn write_pagefiles(entries: Vec<String>) -> Result<(), String> {
+    // 1) 应用以管理员运行时直接写入（纯 winreg，速度快）
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let direct = hklm
+        .open_subkey_with_flags(
+            PAGE_MANAGEMENT_REG_KEY,
+            winreg::enums::KEY_READ | winreg::enums::KEY_WRITE,
+        )
+        .and_then(|key| key.set_value(PAGE_MANAGEMENT_VALUE, &entries));
+
+    if direct.is_ok() {
+        return Ok(());
+    }
+
+    // 2) 非管理员：ShellExecuteEx 提权运行 reg.exe（弹 UAC）
+    run_reg_set_pagefiles_elevated(&entries)
+}
+
+/// 根据物理内存给出页面文件建议大小与合理性判定
+fn recommend_pagefile(physical_mb: u64, current_pagefile_mb: u64) -> PagefileRecommendation {
+    let (mut init, mut max) = match physical_mb {
+        p if p < 8 * 1024 => (p * 3 / 2, p * 3),
+        p if p < 16 * 1024 => (p, p * 2),
+        p => ((p / 2).max(4096), p),
+    };
+    // 四舍五入到整 MB（保留原始以 1024 为基准的值即可）
+    if init < 1024 {
+        init = 1024;
+    }
+    if max < init {
+        max = init;
+    }
+
+    let verdict = if current_pagefile_mb < (init as u64 / 2) {
+        "low"
+    } else if current_pagefile_mb > (max as u64 * 3 / 2) {
+        "high"
+    } else {
+        "ok"
+    };
+
+    let message = match verdict {
+        "low" => format!(
+            "当前页面文件偏少，建议初始 {} MB、最大 {} MB",
+            init, max
+        ),
+        "high" => format!(
+            "当前页面文件偏多，建议初始 {} MB、最大 {} MB",
+            init, max
+        ),
+        _ => format!("当前页面文件大小合理（建议区间 初始 {} MB ~ 最大 {} MB）", init, max),
+    };
+
+    PagefileRecommendation {
+        verdict: verdict.to_string(),
+        suggested_initial_mb: init,
+        suggested_max_mb: max,
+        message,
+    }
+}
+
+/// 获取页面文件（虚拟内存）当前状态
+#[tauri::command]
+pub async fn get_pagefile_status() -> Result<PagefileStatus, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+
+    let physical_memory_mb = get_physical_memory_mb();
+
+    // 总虚拟内存（提交限制）来自 GlobalMemoryStatusEx.ullTotalPageFile
+    let mut total_virtual_memory_mb: u64 = 0;
+    unsafe {
+        let mut status: MEMORYSTATUSEX = std::mem::zeroed();
+        status.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+        if GlobalMemoryStatusEx(&mut status) != 0 {
+            total_virtual_memory_mb = status.ullTotalPageFile / 1024 / 1024;
+        }
+    }
+
+    // 每个磁盘盘符各自的模式与大小
+    let drives = read_pagefile_drives();
+    let pagefile_size_mb = total_virtual_memory_mb.saturating_sub(physical_memory_mb);
+
+    let recommendation = recommend_pagefile(physical_memory_mb, pagefile_size_mb);
+
+    Ok(PagefileStatus {
+        physical_memory_mb,
+        total_virtual_memory_mb,
+        pagefile_size_mb,
+        drives,
+        recommendation,
+    })
+}
+
+/// 设置页面文件：按磁盘独立设置模式（none 无分页 / system 系统管理 / custom 自定义）。
+/// 只更新传入的盘符，其余盘的现有设置保持不变（合并写入）。
+#[tauri::command]
+pub async fn set_pagefile(
+    drives: Vec<PagefileDrive>,
+) -> Result<PagefileResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+    if drives.is_empty() {
+        return Err("缺少磁盘条目".to_string());
+    }
+
+    let physical_memory_mb = get_physical_memory_mb();
+
+    // 校验传入条目
+    for d in &drives {
+        if d.mode == "custom" {
+            if d.initial_mb == 0 {
+                return Err(format!("{} 的初始大小必须大于 0", d.path));
+            }
+            if d.max_mb < d.initial_mb {
+                return Err(format!("{} 的最大大小不能小于初始大小", d.path));
+            }
+            if d.max_mb > physical_memory_mb.saturating_mul(4) {
+                return Err(format!(
+                    "{} 的最大大小过大（上限为物理内存的 4 倍 = {} MB）",
+                    d.path,
+                    physical_memory_mb.saturating_mul(4)
+                ));
+            }
+        } else if d.mode != "none" && d.mode != "system" {
+            return Err(format!("未知模式: {}", d.mode));
+        }
+    }
+
+    // 读取现有所有盘的条目（盘符 -> 原始行），用于保留未修改的盘
+    let existing_lines = read_pagefile_lines_from_registry();
+    let mut merged: Vec<(String, String)> = Vec::new(); // (drive, raw_line)
+    for line in &existing_lines {
+        if let Some((path, _, _)) = parse_pagefile_line(line) {
+            let drive = path
+                .get(..2)
+                .map(|s| s.to_uppercase())
+                .unwrap_or_else(|| path.to_uppercase());
+            merged.push((drive, line.clone()));
+        }
+    }
+
+    // 应用传入的盘
+    for d in &drives {
+        let drive_key = d.drive.to_uppercase();
+        // 移除该盘原有条目
+        merged.retain(|(k, _)| *k != drive_key);
+        match d.mode.as_str() {
+            // 无分页：不写入该盘条目
+            "none" => {}
+            // 系统管理：写 "路径 0 0"
+            "system" => merged.push((drive_key, format!(r"{} 0 0", d.path))),
+            // 自定义：写 "路径 初始 最大"
+            "custom" => {
+                merged.push((drive_key, format!(r"{} {} {}", d.path, d.initial_mb, d.max_mb)));
+            }
+            _ => {}
+        }
+    }
+
+    let raw_entries: Vec<String> = if merged.is_empty() {
+        // 所有盘都设为无分页时，写空 REG_MULTI_SZ
+        vec![String::new()]
+    } else {
+        merged.into_iter().map(|(_, line)| line).collect()
+    };
+
+    match write_pagefiles(raw_entries) {
+        Ok(_) => Ok(PagefileResult {
+            success: true,
+            message: "虚拟内存设置已应用，需要重启生效".to_string(),
+            requires_restart: true,
+        }),
+        Err(e) => Err(format!("设置虚拟内存失败: {}。请以管理员身份运行应用。", e)),
+    }
 }

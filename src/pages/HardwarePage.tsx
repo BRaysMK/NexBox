@@ -11,9 +11,9 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
-  useToast,
   useDisclosure,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useBackground } from "@/contexts/background-context";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -368,7 +368,7 @@ function DetailCard({
 }
 
 export default function HardwarePage() {
-  const toast = useToast();
+  const toast = useDynamicIsland("cpu");
   const { hardwareInfo } = useAppStartup();
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();

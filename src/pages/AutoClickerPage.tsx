@@ -9,13 +9,13 @@ import {
   IconButton,
   useColorModeValue,
   useColorMode,
-  useToast,
   NumberInput,
   NumberInputField,
   NumberInputStepper,
   NumberIncrementStepper,
   NumberDecrementStepper,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -84,7 +84,7 @@ function SettingCard({ title, children }: { title: string; children: React.React
 
 export default function AutoClickerPage() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("mouse");
   const navigate = useNavigate();
   const { getActiveColor, getHoverColor, getBorderColor } = useThemeColor();
 

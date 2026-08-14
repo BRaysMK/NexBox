@@ -2,6 +2,7 @@
 
 import { Box, Text, useColorModeValue } from "@chakra-ui/react";
 import { useState, useCallback, useRef } from "react";
+import { useThemeColor } from "@/contexts/theme-color-context";
 
 export function keyToHotkeyFormat(key: string): string | null {
   if (key.startsWith("F") && key.length >= 2 && key.length <= 3) {
@@ -65,8 +66,9 @@ export function HotkeyRecorder({
   const pendingRef = useRef<string[]>([]);
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const borderColor = useColorModeValue("gray.200", "#333333");
-  const recordBg = useColorModeValue("teal.50", "rgba(0,150,136,0.1)");
-  const recordBorder = useColorModeValue("teal.400", "teal.300");
+  const { getActiveColor, getHoverColor } = useThemeColor();
+  const recordBg = getHoverColor();
+  const recordBorder = getActiveColor();
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -150,7 +152,7 @@ export function HotkeyRecorder({
       userSelect="none"
     >
       {isRecording ? (
-        <Text color="teal.400" fontSize="sm" fontWeight="medium">
+        <Text color={recordBorder} fontSize="sm" fontWeight="medium">
           {displayText || "按下快捷键..."}
         </Text>
       ) : (

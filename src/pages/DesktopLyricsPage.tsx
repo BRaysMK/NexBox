@@ -43,6 +43,8 @@ export default function DesktopLyricsPage() {
   const [isHovered, setIsHovered] = useState(false);
   const isLockedRef = useRef(isLocked);
   isLockedRef.current = isLocked;
+  const hideUnlockBtnRef = useRef(settings.hideUnlockBtn);
+  hideUnlockBtnRef.current = settings.hideUnlockBtn;
 
   // 强制 html/body/#root 背景透明
   // index.css 中 :root 设置了 background-color: #242424，
@@ -94,6 +96,14 @@ export default function DesktopLyricsPage() {
     intervalId = setInterval(async () => {
       if (!active || !isLockedRef.current) return;
       try {
+        // 隐藏解锁按钮开关开启时，强制隐藏，鼠标移入也不自动显示
+        if (hideUnlockBtnRef.current) {
+          if (btnShown) {
+            btnShown = false;
+            hideUnlockBtn();
+          }
+          return;
+        }
         const inside = await isCursorInWindow();
         if (inside && !btnShown) {
           btnShown = true;

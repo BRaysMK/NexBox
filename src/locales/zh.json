@@ -395,11 +395,38 @@
       "cleanTypeWorkingSet": "收紧系统工作集",
       "autoCleanEnabled": "定时清理已开启",
       "autoCleanDisabled": "定时清理已关闭",
-      "configSaved": "定时清理配置已保存"
+      "configSaved": "定时清理配置已保存",
+      "cleanOnGameStart": "游戏启动时自动清理内存",
+      "pagefile": {
+        "title": "虚拟内存（页面文件）设置",
+        "description": "查看并调整系统虚拟内存（页面文件）大小",
+        "currentStatus": "当前状态",
+        "physicalMemory": "物理内存",
+        "totalVirtualMemory": "总虚拟内存（提交限制）",
+        "currentPagefile": "当前页面文件",
+        "currentMode": "当前模式",
+        "modeNone": "无分页",
+        "modeSystem": "系统管理",
+        "modeCustom": "自定义",
+        "initialSize": "初始大小 (MB)",
+        "maxSize": "最大大小 (MB)",
+        "apply": "应用",
+        "restore": "恢复为系统管理",
+        "setRecommended": "设为推荐",
+        "needsRestart": "更改需要重启系统后生效",
+        "recommendation": "合理性诊断",
+        "verdictLow": "偏少",
+        "verdictOk": "合理",
+        "verdictHigh": "偏多",
+        "loadError": "获取虚拟内存状态失败",
+        "applyError": "应用虚拟内存设置失败",
+        "noCustomEntries": "当前无自定义页面文件条目",
+        "perDrive": "按磁盘设置（每个磁盘独立模式）"
+      }
     },
     "aceOptimize": {
-      "title": "ACE反作弊优化",
-      "description": "限制 ACE 反作弊进程的资源占用，释放更多性能给游戏",
+      "title": "反作弊优化",
+      "description": "限制反作弊进程的资源占用，释放更多性能给游戏",
       "deltaSection": {
         "title": "三角洲优化",
         "subtitle": "提升三角洲行动游戏性能表现"
@@ -789,6 +816,11 @@
     "nvidiaAppDesc": "NVIDIA 官方驱动与应用管理工具",
     "pcl2Desc": "开源、强大的我的世界启动器",
     "obsDesc": "免费开源的视频录制和直播推流软件",
+    "deepseekHarnessDesc": "DeepSeek 开源的一切皆插件的 AI 智能体底座",
+    "lingtabDesc": "让每个标签页都成为风景的浏览器新标签页美化插件",
+    "lxmusicDesc": "免费且无广告的多端开源音乐查找工具",
+    "gameppDesc": "游戏性能优化与帧数提升工具",
+    "shudaxiaDesc": "智能鼠标连点与宏录制自动化工具",
     "descriptions": {
       "assistantCrosshair": "游戏屏幕准心辅助工具",
       "memreduct": "内存清理工具",

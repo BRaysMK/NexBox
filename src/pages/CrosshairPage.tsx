@@ -13,7 +13,6 @@ import {
   Input,
   useColorModeValue,
   useColorMode,
-  useToast,
   Badge,
   Icon,
   IconButton,
@@ -24,6 +23,7 @@ import {
   MenuItem,
   Portal,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -163,7 +163,7 @@ function SettingCard({
 
 export default function CrosshairPage() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("target");
   const navigate = useNavigate();
   const { crosshairHotkey, saveCrosshairHotkey } = useAppStartup();
   const { getActiveColor, getHoverColor, getBorderColor, getContrastTextColor } = useThemeColor();

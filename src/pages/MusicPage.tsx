@@ -13,7 +13,6 @@ import {
   Text,
   Spinner,
   useColorModeValue,
-  useToast,
   IconButton,
   Tooltip,
   Menu,
@@ -31,6 +30,7 @@ import {
   Switch,
   SimpleGrid,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import {
   Search,
   Volume2,
@@ -453,7 +453,7 @@ const CommentPanel = memo(function CommentPanel({
   const sendingComment = useMusicStore((s) => s.sendingComment);
   const commentError = useMusicStore((s) => s.commentError);
   const [commentInput, setCommentInput] = useState("");
-  const toast = useToast();
+  const toast = useDynamicIsland("music");
   const [page, setPage] = useState(1);
   const [lastLoadedSong, setLastLoadedSong] = useState("");
 
@@ -2502,14 +2502,13 @@ export default function MusicPage() {
   const searchingPlaylists = useMusicStore((s) => s.searchingPlaylists);
   const musicToast = useMusicStore((s) => s.musicToast);
 
-  const toast = useToast();
+  const toast = useDynamicIsland("music");
 
   // 监听 musicToast 变化，弹出提示
   useEffect(() => {
     if (musicToast) {
       toast({
-        title: "提示",
-        description: musicToast.message,
+        title: musicToast.message,
         status: "warning",
         duration: 3000,
         isClosable: true,

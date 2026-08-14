@@ -8,7 +8,6 @@ import {
   useColorModeValue,
   Card,
   CardBody,
-  useToast,
   IconButton,
   Tooltip,
   SimpleGrid,
@@ -32,6 +31,7 @@ import {
   ModalBody,
   ModalCloseButton,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { ThemeSwitch } from "@/components/special/theme-switch";
@@ -249,7 +249,7 @@ export default function DisplayFilterPage() {
   
   const { t } = useTranslation();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const toast = useToast();
+  const toast = useDynamicIsland("filter");
 
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();

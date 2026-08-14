@@ -267,7 +267,9 @@ fn set_process_priority(pid: u32, level: PriorityLevel) -> bool {
     }
 }
 
-/// 解析亲和性掩码：`Some(m)` 且 `m>0` 用指定掩码，否则用「除 CPU0 外全部核心」
+/// 解析亲和性掩码：`Some(m)` 且 `m>0` 用指定掩码，否则：
+/// - 有 E 核（大小核 CPU）时排除 E 核，让游戏跑在 P 核
+/// - 无 E 核时使用全部核心
 fn resolve_affinity_mask(mask: Option<u64>) -> u64 {
     match mask {
         Some(m) if m > 0 => m,
@@ -280,7 +282,12 @@ fn resolve_affinity_mask(mask: Option<u64>) -> u64 {
             } else {
                 (1u64 << num_cores) - 1
             };
-            all_cores_mask ^ 1
+            let e_mask = crate::anticheat::get_e_core_mask();
+            if e_mask != 0 {
+                all_cores_mask & !e_mask // 排除 E 核，游戏跑在 P 核
+            } else {
+                all_cores_mask // 无 E 核，全核心运行
+            }
         }
     }
 }
@@ -1034,6 +1041,23 @@ pub async fn list_running_processes() -> Result<Vec<RunningProcessInfo>, String>
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     Ok(list)
+}
+
+/// 大小核拓扑信息：供前端判断「排除 E 核」是否有效，并展示后端实际使用的默认核心掩码
+#[derive(Serialize)]
+pub struct AffinityTopologyInfo {
+    pub has_e_cores: bool,
+    pub default_mask: u64,
+}
+
+/// 获取 CPU 大小核拓扑信息：是否具有 E 核、后端在未指定掩码时实际使用的默认亲和性掩码
+#[tauri::command]
+pub async fn get_affinity_topology() -> Result<AffinityTopologyInfo, String> {
+    let e_mask = crate::anticheat::get_e_core_mask();
+    Ok(AffinityTopologyInfo {
+        has_e_cores: e_mask != 0,
+        default_mask: resolve_affinity_mask(None),
+    })
 }
 
 /// 当前进程是否以管理员身份运行（前端用于权限提示）

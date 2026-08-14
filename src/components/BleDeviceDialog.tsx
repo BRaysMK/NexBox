@@ -13,9 +13,9 @@ import {
   Badge,
   Spinner,
   useColorModeValue,
-  useToast,
   Divider,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Bluetooth, Radio, Wifi, WifiOff } from "lucide-react";
@@ -54,7 +54,7 @@ export function BleDeviceDialog({ isOpen, onClose }: BleDeviceDialogProps) {
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const cardBg = useColorModeValue("gray.50", "#1a1a1a");
-  const toast = useToast();
+  const toast = useDynamicIsland("bluetooth");
   const { getActiveColor } = useThemeColor();
 
   const refreshStatus = useCallback(async () => {

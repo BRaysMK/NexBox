@@ -7,7 +7,6 @@ import {
   HStack,
   Button,
   useColorModeValue,
-  useToast,
   Spinner,
   Table,
   Thead,
@@ -19,6 +18,7 @@ import {
   Tooltip,
   Badge,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -53,7 +53,7 @@ interface StartupItem {
 
 export default function StartupManagerPage() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("rocket");
   const { liquidGlassEnabled } = useBackground();
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const navigate = useNavigate();

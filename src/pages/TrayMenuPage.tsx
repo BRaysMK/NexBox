@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, Window } from "@tauri-apps/api/window";
-import { Box, useColorModeValue } from "@chakra-ui/react";
+import { Box, useColorMode, useColorModeValue } from "@chakra-ui/react";
 import { Monitor, RefreshCw, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -13,8 +13,9 @@ interface MenuItemProps {
 }
 
 function MenuItem({ icon, label, onClick, color }: MenuItemProps) {
-  const hoverBg = useColorModeValue("rgba(255,255,255,0.15)", "rgba(255,255,255,0.08)");
-  const labelColor = color ?? useColorModeValue("#e0e0e0", "#ffffff");
+  const hoverBg = useColorModeValue("rgba(0,0,0,0.06)", "rgba(255,255,255,0.08)");
+  const activeBg = useColorModeValue("rgba(0,0,0,0.10)", "rgba(255,255,255,0.12)");
+  const labelColor = color ?? useColorModeValue("#1a1a1a", "#ffffff");
 
   return (
     <Box
@@ -32,7 +33,7 @@ function MenuItem({ icon, label, onClick, color }: MenuItemProps) {
       cursor="pointer"
       transition="background 0.15s ease"
       _hover={{ bg: hoverBg }}
-      _active={{ bg: "rgba(255,255,255,0.12)" }}
+      _active={{ bg: activeBg }}
       onClick={onClick}
     >
       <Box display="flex" alignItems="center" justifyContent="center" w="18px">
@@ -44,8 +45,22 @@ function MenuItem({ icon, label, onClick, color }: MenuItemProps) {
 }
 
 export default function TrayMenuPage() {
-  const bg = "#1a1a1a";
-  const borderColor = "rgba(255,255,255,0.08)";
+  const { colorMode, setColorMode } = useColorMode();
+  const bg = useColorModeValue("#ffffff", "#1a1a1a");
+  const borderColor = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)");
+  const dividerColor = useColorModeValue("rgba(0,0,0,0.06)", "rgba(255,255,255,0.06)");
+
+  // 与主窗口同步深浅主题：主窗口切换主题会写入 localStorage(chakra-ui-color-mode)，
+  // 本窗口监听 storage 事件实时跟随，保证托盘菜单每次打开都是当前主题
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === "chakra-ui-color-mode" && (e.newValue === "light" || e.newValue === "dark")) {
+        if (e.newValue !== colorMode) setColorMode(e.newValue);
+      }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, [colorMode, setColorMode]);
 
   // 确保窗口背景完全透明（该窗口设置了 transparent: true）
   useEffect(() => {
@@ -128,13 +143,13 @@ export default function TrayMenuPage() {
             label="打开主窗口"
             onClick={handleShowWindow}
           />
-          <Box h="1px" bg="rgba(255,255,255,0.06)" mx={3} />
+          <Box h="1px" bg={dividerColor} mx={3} />
           <MenuItem
             icon={<RefreshCw size={16} strokeWidth={2} />}
             label="检查更新"
             onClick={handleCheckUpdate}
           />
-          <Box h="1px" bg="rgba(255,255,255,0.06)" mx={3} />
+          <Box h="1px" bg={dividerColor} mx={3} />
           <MenuItem
             icon={<LogOut size={16} strokeWidth={2} />}
             label="退出"

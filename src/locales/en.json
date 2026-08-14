@@ -568,11 +568,38 @@
       "cleanTypeWorkingSet": "Trim Working Set",
       "autoCleanEnabled": "Auto clean enabled",
       "autoCleanDisabled": "Auto clean disabled",
-      "configSaved": "Auto clean config saved"
+      "configSaved": "Auto clean config saved",
+      "cleanOnGameStart": "Clean memory on game start",
+      "pagefile": {
+        "title": "Virtual Memory (Page File) Settings",
+        "description": "View and adjust the system virtual memory (page file) size",
+        "currentStatus": "Current Status",
+        "physicalMemory": "Physical Memory",
+        "totalVirtualMemory": "Total Virtual Memory (Commit Limit)",
+        "currentPagefile": "Current Page File",
+        "currentMode": "Current Mode",
+        "modeNone": "No Paging File",
+        "modeSystem": "System Managed",
+        "modeCustom": "Custom",
+        "initialSize": "Initial Size (MB)",
+        "maxSize": "Maximum Size (MB)",
+        "apply": "Apply",
+        "restore": "Restore to System Managed",
+        "setRecommended": "Set Recommended",
+        "needsRestart": "Changes take effect after a system restart",
+        "recommendation": "Reasonableness Check",
+        "verdictLow": "Too Small",
+        "verdictOk": "Reasonable",
+        "verdictHigh": "Too Large",
+        "loadError": "Failed to get virtual memory status",
+        "applyError": "Failed to apply virtual memory settings",
+        "noCustomEntries": "No custom page file entries",
+        "perDrive": "Per-drive settings (each drive has its own mode)"
+      }
     },
     "aceOptimize": {
-      "title": "ACE Anti-Cheat Optimize",
-      "description": "Limit ACE anti-cheat resource usage, free more performance for the game",
+      "title": "Anti-Cheat Optimize",
+      "description": "Limit anti-cheat process resource usage, free more performance for the game",
       "deltaSection": {
         "title": "Delta Force Optimize",
         "subtitle": "Boost Delta Force gaming performance"
@@ -958,6 +985,11 @@
     "nvidiaAppDesc": "NVIDIA official driver and application management tool",
     "pcl2Desc": "Open-source, powerful Minecraft launcher",
     "obsDesc": "Free and open-source video recording and live streaming software",
+    "deepseekHarnessDesc": "DeepSeek's open-source AI agent harness — everything is a plugin",
+    "lingtabDesc": "Browser new-tab beautification extension that turns every tab into a view",
+    "lxmusicDesc": "Free, ad-free, open-source music finder for all platforms",
+    "gameppDesc": "Game performance optimization and FPS boosting tool",
+    "shudaxiaDesc": "Smart mouse auto-clicker and macro recording tool",
     "descriptions": {
       "assistantCrosshair": "Game screen crosshair assistant tool",
       "memreduct": "Memory cleaning tool",

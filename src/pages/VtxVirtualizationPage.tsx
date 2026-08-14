@@ -15,8 +15,8 @@ import {
   Tooltip,
   VStack,
   useColorModeValue,
-  useToast,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeft, RefreshCw, ShieldCheck, ShieldOff, Cpu, AlertTriangle, RotateCcw, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -42,7 +42,7 @@ export default function VtxVirtualizationPage() {
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
-  const toast = useToast();
+  const toast = useDynamicIsland("shield");
 
   const [status, setStatus] = useState<VtxStatus | null>(null);
   const [isChecking, setIsChecking] = useState(true);

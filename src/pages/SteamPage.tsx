@@ -21,7 +21,6 @@ import {
   AlertDialogHeader,
   AlertDialogContent,
   AlertDialogOverlay,
-  useToast,
   useDisclosure,
   Menu,
   MenuButton,
@@ -33,6 +32,7 @@ import {
   Collapse,
   Portal,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
@@ -644,7 +644,7 @@ function LibraryCard({ lib, gameCount, gameSize }: { lib: SteamLibrary; gameCoun
 
 export default function SteamPage() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("gamepad");
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getBorderColor } = useThemeColor();
   const { colorMode } = useColorMode();

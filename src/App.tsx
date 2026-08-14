@@ -8,7 +8,7 @@ import ToolsPage from "./pages/ToolsPage";
 import OptimizePage from "./pages/OptimizePage";
 import MemoryLimitPage from "./pages/MemoryLimitPage";
 import MemoryCleanupPage from "./pages/MemoryCleanupPage";
-import AceOptimizePage from "./pages/AceOptimizePage";
+import AceOptimizePage from "./pages/AntiCheatOptimizePage";
 import DisplayFilterPage from "./pages/DisplayFilterPage";
 import SettingsPage from "./pages/SettingsPage";
 import CrosshairPage from "./pages/CrosshairPage";
@@ -54,6 +54,7 @@ import { useAppStartup } from "./contexts/app-startup-context";
 import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
+import { DynamicIslandHost } from "./components/ui/dynamic-island";
 
 function App() {
   const { isStartupComplete } = useAppStartup();
@@ -196,6 +197,7 @@ function App() {
 
       <UpdateModal />
       <ImportantAnnouncementModal />
+      <DynamicIslandHost />
       </>
       </MusicProvider>
   );

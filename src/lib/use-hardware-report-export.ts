@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { useToast } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useTranslation } from "react-i18next";
 
 /**
@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
  * 点击导出 → 弹出文件保存对话框 → 调用后端生成 HTML → 写入文件 → toast 反馈
  */
 export function useHardwareReportExport() {
-  const toast = useToast();
+  const toast = useDynamicIsland("file");
   const { t } = useTranslation();
   const [isExporting, setIsExporting] = useState(false);
 

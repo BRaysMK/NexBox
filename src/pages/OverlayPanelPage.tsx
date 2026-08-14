@@ -11,7 +11,6 @@ import {
   SliderThumb,
   Button,
   useColorModeValue,
-  useToast,
   Badge,
   Icon,
   IconButton,
@@ -27,6 +26,7 @@ import {
   ModalCloseButton,
   useDisclosure,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -70,6 +70,8 @@ interface OverlaySettings {
   font_color: string;
   position_x?: number | null;
   position_y?: number | null;
+  vertical_position_x?: number | null;
+  vertical_position_y?: number | null;
   delta_password_maps?: string[];
 }
 
@@ -275,7 +277,7 @@ function CustomItemCard({ item, onUpdate, onRemove }: CustomItemCardProps) {
 
 export default function OverlayPanelPage() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("panels");
   const { overlaySettings, saveOverlaySettings, overlayHotkey, saveOverlayHotkey } = useAppStartup();
   const { exportReport, isExporting } = useHardwareReportExport();
   const navigate = useNavigate();

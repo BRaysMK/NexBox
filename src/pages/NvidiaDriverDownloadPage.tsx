@@ -9,7 +9,6 @@ import {
   Button,
   Spinner,
   Badge,
-  useToast,
   Alert,
   AlertIcon,
   AlertTitle,
@@ -19,6 +18,7 @@ import {
   InputGroup,
   InputLeftElement,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
@@ -66,7 +66,7 @@ interface GpuDetection {
 export default function NvidiaDriverDownloadPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast = useDynamicIsland("download");
   const { liquidGlassEnabled } = useBackground();
   const { config, getActiveColor, getContrastTextColor } = useThemeColor();
   const isDark = useColorModeValue(false, true);

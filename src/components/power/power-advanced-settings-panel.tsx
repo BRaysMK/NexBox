@@ -9,7 +9,6 @@ import {
   Button,
   Spinner,
   Checkbox,
-  useToast,
   useDisclosure,
   useColorModeValue,
   AlertDialog,
@@ -20,6 +19,7 @@ import {
   AlertDialogOverlay,
   AlertDialogCloseButton,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -53,7 +53,7 @@ const UNLOCK_STORE_KEY = "powerAdvancedUnlocked";
 
 export default function PowerAdvancedSettingsPanel() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("power");
   const { getActiveColor, getBorderColor, getContrastTextColor, getHoverColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();

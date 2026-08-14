@@ -12,9 +12,9 @@ import {
   Badge,
   Spinner,
   Progress,
-  useToast,
   Tooltip,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -79,7 +79,7 @@ function isSsdMedia(mediaType: string): boolean {
 // 分区整理/优化按钮：机械盘做碎片整理，固态盘做 TRIM/优化
 function OptimizeButton({ letter, mediaType }: { letter: string; mediaType: string }) {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("disk");
   const { getActiveColor } = useThemeColor();
   const [loading, setLoading] = useState(false);
 

@@ -460,8 +460,8 @@
         "error": "クリーニングに失敗しました"
     },
     "aceOptimize": {
-        "title": "ACEアンチチート最適化",
-        "description": "ACEアンチチートプロセスのリソース使用を制限し、ゲームにより多くのパフォーマンスを解放",
+        "title": "アンチチート最適化",
+        "description": "アンチチートプロセスのリソース使用を制限し、ゲームにより多くのパフォーマンスを解放",
         "deltaSection": {
             "title": "デルタフォース最適化",
             "subtitle": "デルタフォースのゲームパフォーマンスを向上"
@@ -818,6 +818,11 @@
     "sjmclDesc": "上海交通大学が開発したサードパーティMinecraftランチャー",
     "ddegameDesc": "ゲームはただのゲームではなく、生活に入り込み生活を変えることができる",
     "huorongDesc": "純粋なエンドポイント保護。軽快な動作、静かな守り、全面防御",
+    "deepseekHarnessDesc": "DeepSeekのオープンソースAIエージェント基盤、すべてがプラグイン",
+    "lingtabDesc": "新しいタブページを美しくするブラウザ拡張機能",
+    "lxmusicDesc": "無料で広告なしのオープンソース音楽検索ツール",
+    "gameppDesc": "ゲーム性能最適化とFPS向上ツール",
+    "shudaxiaDesc": "スマートマウス連打・マクロ録画自動化ツール",
     "descriptions": {
       "assistantCrosshair": "ゲーム画面クロスヘアアシスタントツール",
       "memreduct": "メモリクリーニングツール",

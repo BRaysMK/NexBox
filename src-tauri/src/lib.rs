@@ -15,9 +15,11 @@ mod spectrum;
 mod display_cache;
 mod display_filter;
 mod downloader;
+mod anticheat;
 mod game_fps;
 mod game_filter;
 mod game_launcher;
+mod game_mode;
 mod game_process_optimize;
 mod game_win_key;
 mod game_ping;
@@ -212,6 +214,9 @@ pub fn run() {
                             hotkey::trigger_music_action(app, "next");
                         } else if shortcut.id() == hotkey::get_music_playpause_shortcut_id() {
                             hotkey::trigger_music_action(app, "play-pause");
+                        } else if shortcut.id() == hotkey::get_lyrics_btn_toggle_shortcut_id() {
+                            use tauri::Emitter;
+                            let _ = app.emit("lyrics:toggle-hide-unlock-btn", ());
                         }
                     }
                 })
@@ -274,10 +279,12 @@ pub fn run() {
             overlay_panel::start_hardware_poller();
             hardware_report::start_recording();
 
-            // 初始化 ACE 自动检测（读取持久化配置并启动后台任务）
+            // 初始化 ACE / 反作弊自动检测（读取持久化配置并启动后台任务）
             let app_handle = app.handle().clone();
+            let app_handle_anticheat = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let _ = optimization::init_ace_auto_detect(app_handle).await;
+                let _ = anticheat::init(app_handle_anticheat).await;
             });
 
             // 启动时自动应用已保存的 CPU 调度规则
@@ -292,6 +299,12 @@ pub fn run() {
                 let _ = game_filter::init(app_handle_for_game_filter).await;
             });
 
+            // 初始化游戏启动时自动清理内存（读取持久化配置并启动后台轮询）
+            let app_handle_for_game_start_clean = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = optimization::init_game_start_clean(app_handle_for_game_start_clean).await;
+            });
+
             // 初始化游戏启动时禁用 Win 键（读取持久化配置并启动后台轮询）
             let app_handle_for_game_win_key = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -302,6 +315,12 @@ pub fn run() {
             let app_handle_for_game_opt = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let _ = game_process_optimize::init(app_handle_for_game_opt).await;
+            });
+
+            // 初始化游戏模式（读取持久化配置并启动后台扫描/压制线程）
+            let app_handle_for_game_mode = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = game_mode::init(app_handle_for_game_mode).await;
             });
 
             // 启动时自动清理旧版开机自启残留（计划任务/启动快捷方式），
@@ -371,6 +390,7 @@ pub fn run() {
             let music_prev_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-prev-hotkey", "Alt+[");
             let music_next_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-next-hotkey", "Alt+]");
             let music_playpause_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-playpause-hotkey", "Alt+Space");
+            let lyrics_btn_hotkey = hotkey::load_saved_hotkey(app.handle(), "lyrics-btn-hotkey", "");
             hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
 
             let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
@@ -380,6 +400,7 @@ pub fn run() {
             let _ = hotkey::init_music_prev(app.handle(), &music_prev_hotkey);
             let _ = hotkey::init_music_next(app.handle(), &music_next_hotkey);
             let _ = hotkey::init_music_playpause(app.handle(), &music_playpause_hotkey);
+            let _ = hotkey::init_lyrics_btn_toggle(app.handle(), &lyrics_btn_hotkey);
 
             // 若保存的总开关为“关闭”，上面已注册的热键需立即注销以释放按键
             if !hotkey::is_hotkeys_enabled() {
@@ -506,6 +527,10 @@ pub fn run() {
         optimization::start_auto_clean,
         optimization::stop_auto_clean,
         optimization::get_auto_clean_config,
+        optimization::get_game_start_clean_config,
+        optimization::set_game_start_clean_config,
+        optimization::get_pagefile_status,
+        optimization::set_pagefile,
         optimization::boost_delta_force_priority,
         optimization::boost_delta_force_affinity,
         optimization::boost_delta_force_affinity_with_mask,
@@ -519,6 +544,14 @@ pub fn run() {
         optimization::set_ace_auto_detect,
         optimization::get_ace_auto_detect_status,
         optimization::init_ace_auto_detect,
+        anticheat::anticheat_get_groups,
+        anticheat::anticheat_limit_priority,
+        anticheat::anticheat_restrict_affinity,
+        anticheat::anticheat_set_efficiency,
+        anticheat::anticheat_apply_registry,
+        anticheat::anticheat_restore_registry,
+        anticheat::anticheat_set_auto_detect,
+        anticheat::anticheat_get_auto_detect_status,
         optimization::get_builtin_power_plans,
         optimization::get_system_power_plans,
         optimization::get_active_power_plan,
@@ -608,6 +641,12 @@ pub fn run() {
         game_process_optimize::select_game_executable,
         game_process_optimize::list_running_processes,
         game_process_optimize::check_game_optimize_admin,
+        game_process_optimize::get_affinity_topology,
+        game_mode::game_mode_get_config,
+        game_mode::game_mode_set_preset,
+        game_mode::game_mode_set_manual,
+        game_mode::game_mode_set_auto,
+        game_mode::game_mode_get_status,
         game_win_key::get_game_win_key_status,
         game_win_key::set_game_win_key_enabled,
         // === EQ 调音命令 ===
@@ -685,6 +724,8 @@ pub fn run() {
         hotkey::set_music_next_hotkey,
         hotkey::get_music_playpause_hotkey,
         hotkey::set_music_playpause_hotkey,
+        hotkey::get_lyrics_btn_hotkey,
+        hotkey::set_lyrics_btn_hotkey,
         hotkey::set_hotkeys_enabled_cmd,
         hotkey::get_hotkeys_enabled_cmd,
         autoclicker::autoclicker_start,
@@ -864,6 +905,7 @@ pub fn run() {
                 game_win_key::cleanup();
                 speedtest::cleanup();
                 display_filter::cleanup();
+                game_mode::shutdown();
                 vertical_overlay::cleanup(app_handle);
                 crosshair::cleanup();
                 autoclicker::cleanup();

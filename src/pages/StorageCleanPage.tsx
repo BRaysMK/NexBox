@@ -9,7 +9,6 @@ import {
   Checkbox,
   Button,
   useColorModeValue,
-  useToast,
   Spinner,
   SimpleGrid,
   Icon,
@@ -38,9 +37,11 @@ import {
   AlertDialogBody,
   AlertDialogFooter,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { motion } from "framer-motion";
 import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
+import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -239,16 +240,7 @@ const CleanItemCard = memo(function CleanItemCard({
   const headingColor = useColorModeValue("gray.800", "#ffffff");
   const descColor = useColorModeValue("gray.500", "#ffffff");
   const pathColor = useColorModeValue("gray.400", "#666666");
-  const cardBg = liquidGlassEnabled
-    ? "rgba(255,255,255,0.7)"
-    : useColorModeValue("#ffffff", "#1a1a1a");
-  const borderColor = liquidGlassEnabled
-    ? "rgba(255,255,255,0.3)"
-    : useColorModeValue("gray.200", "#333333");
-  const cardHoverBg = liquidGlassEnabled
-    ? "rgba(255,255,255,0.85)"
-    : useColorModeValue("gray.50", "#252525");
-  const cardHoverBorder = liquidGlassEnabled
+  const hoverBorderColor = liquidGlassEnabled
     ? "rgba(255,255,255,0.5)"
     : useColorModeValue("gray.300", "#444444");
   const IconComponent = getItemIcon(item.id);
@@ -256,11 +248,8 @@ const CleanItemCard = memo(function CleanItemCard({
   const hasContent = item.exists && item.size_bytes > 0;
 
   return (
-    <Box
-      bg={cardBg}
+    <LiquidGlassCard
       borderRadius="lg"
-      border="1px solid"
-      borderColor={isSelected ? primaryColor : borderColor}
       p={4}
       cursor={hasContent ? "pointer" : "not-allowed"}
       onClick={hasContent ? () => onToggleSelect(item.id) : undefined}
@@ -268,12 +257,12 @@ const CleanItemCard = memo(function CleanItemCard({
       _hover={
         hasContent && !isSelected
           ? {
-              borderColor: cardHoverBorder,
-              bg: cardHoverBg,
+              borderColor: hoverBorderColor,
             }
           : undefined
       }
       opacity={hasContent ? 1 : 0.45}
+      {...(isSelected ? { borderColor: primaryColor } : {})}
     >
       <Flex justify="space-between" align="start">
         <HStack spacing={3}>
@@ -337,7 +326,7 @@ const CleanItemCard = memo(function CleanItemCard({
       <Text fontSize="xs" color={descColor} mt={2}>
         {t(`storageClean.items.${item.id}.description`)}
       </Text>
-    </Box>
+    </LiquidGlassCard>
   );
 });
 
@@ -363,17 +352,11 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
   primaryColor,
 }: JunkCategoryCardProps) {
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
   const headingColor = useColorModeValue("gray.800", "#ffffff");
   const descColor = useColorModeValue("gray.500", "#ffffff");
   const pathColor = useColorModeValue("gray.400", "#666666");
   const rowBg = useColorModeValue("#f7fafc", "#232323");
-  const cardBg = liquidGlassEnabled
-    ? "rgba(255,255,255,0.7)"
-    : useColorModeValue("#ffffff", "#1a1a1a");
-  const borderColor = liquidGlassEnabled
-    ? "rgba(255,255,255,0.3)"
-    : useColorModeValue("gray.200", "#333333");
+  const dividerColor = useColorModeValue("gray.200", "#333333");
 
   const hasContent = category.file_count > 0;
 
@@ -389,13 +372,11 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
   const hasMoreFiles = category.files.length > fileLimit;
 
   return (
-    <Box
-      bg={cardBg}
+    <LiquidGlassCard
       borderRadius="lg"
-      border="1px solid"
-      borderColor={isSelected ? primaryColor : borderColor}
       overflow="hidden"
       transition="all 0.2s ease"
+      {...(isSelected ? { borderColor: primaryColor } : {})}
     >
       <Flex justify="space-between" align="start" p={4}>
         <HStack spacing={3} align="start">
@@ -471,7 +452,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
 
       {/* 仅展开时才挂载文件列表,避免大量 DOM 常驻导致勾选/切换卡顿 */}
       {isExpanded && (
-        <Box maxH="320px" overflowY="auto" borderTop="1px solid" borderColor={borderColor}>
+        <Box maxH="320px" overflowY="auto" borderTop="1px solid" borderColor={dividerColor}>
           {visibleFiles.map((file, index) => (
             <Flex
               key={`${file.path}-${index}`}
@@ -511,7 +492,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
           )}
         </Box>
       )}
-    </Box>
+    </LiquidGlassCard>
   );
 });
 
@@ -541,17 +522,9 @@ const BigFilesTable = memo(function BigFilesTable({
   themeColorRgba,
 }: BigFilesTableProps) {
   const { t } = useTranslation();
-  const statsBg = useColorModeValue("#f7fafc", "#1e2024");
-  const statsBorder = useColorModeValue("gray.200", "#2d3748");
 
   return (
-    <Box
-      borderRadius="xl"
-      border="1px solid"
-      borderColor={statsBorder}
-      bg={statsBg}
-      overflow="hidden"
-    >
+    <LiquidGlassCard borderRadius="xl" overflow="hidden">
       <HStack justify="space-between" px={4} py={3}>
         <Text fontSize="sm" fontWeight="bold" color={headingColor}>
           {t("storageClean.bigResults")}
@@ -642,7 +615,7 @@ const BigFilesTable = memo(function BigFilesTable({
           </Tbody>
         </Table>
       </Box>
-    </Box>
+    </LiquidGlassCard>
   );
 });
 
@@ -652,8 +625,7 @@ const BigFilesTable = memo(function BigFilesTable({
 
 export default function StorageCleanPage() {
   const { t } = useTranslation();
-  const toast = useToast();
-  const { liquidGlassEnabled } = useBackground();
+  const toast = useDynamicIsland("disk");
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const navigate = useNavigate();
 
@@ -663,20 +635,7 @@ export default function StorageCleanPage() {
   const themeColorHex = themeConfig.primaryColor;
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
 
-  const statsBg = liquidGlassEnabled
-    ? "rgba(255,255,255,0.6)"
-    : useColorModeValue("#f7fafc", "#1e2024");
-  const statsBorder = liquidGlassEnabled
-    ? "rgba(255,255,255,0.3)"
-    : useColorModeValue("gray.200", "#2d3748");
-
   // 使用提示框改为跟随主题色
-  const tipBg = liquidGlassEnabled
-    ? "rgba(255,255,255,0.5)"
-    : useColorModeValue(`${themeColorHex}14`, themeColorRgba(0.08));
-  const tipBorder = liquidGlassEnabled
-    ? "rgba(255,255,255,0.25)"
-    : useColorModeValue(themeColorRgba(0.25), themeColorRgba(0.3));
   const tipTitleColor = themeConfig.primaryColor;
   const tipTextColor = useColorModeValue("gray.600", "rgba(200,200,200,0.85)");
   const selectBg = useColorModeValue("#ffffff", "#1e2024");
@@ -1188,13 +1147,9 @@ export default function StorageCleanPage() {
           <TabPanel px={0} pt={0}>
             <VStack align="stretch" spacing={6}>
               {scanResult && (
-                <Box
+                <LiquidGlassCard
                   p={4}
-                  borderRadius="xl"
-                  border="1px solid"
-                  borderColor={statsBorder}
-                  bg={statsBg}
-                >
+                  borderRadius="xl">
                   <SimpleGrid columns={3} spacing={4}>
                     <VStack align="center">
                       <Icon as={HardDrive} color={themeConfig.primaryColor} boxSize={6} />
@@ -1224,7 +1179,7 @@ export default function StorageCleanPage() {
                       </Text>
                     </VStack>
                   </SimpleGrid>
-                </Box>
+                </LiquidGlassCard>
               )}
 
               <HStack spacing={2}>
@@ -1310,13 +1265,9 @@ export default function StorageCleanPage() {
           <TabPanel px={0} pt={0}>
             <VStack align="stretch" spacing={6}>
               {junkResult && (
-                <Box
+                <LiquidGlassCard
                   p={4}
-                  borderRadius="xl"
-                  border="1px solid"
-                  borderColor={statsBorder}
-                  bg={statsBg}
-                >
+                  borderRadius="xl">
                   <SimpleGrid columns={3} spacing={4}>
                     <VStack align="center">
                       <Icon as={Trash2} color={themeConfig.primaryColor} boxSize={6} />
@@ -1346,7 +1297,7 @@ export default function StorageCleanPage() {
                       </Text>
                     </VStack>
                   </SimpleGrid>
-                </Box>
+                </LiquidGlassCard>
               )}
 
               <HStack spacing={2}>
@@ -1433,13 +1384,9 @@ export default function StorageCleanPage() {
           {/* ================= 大文件扫描 ================= */}
           <TabPanel px={0} pt={0}>
             <VStack align="stretch" spacing={6}>
-              <Box
+              <LiquidGlassCard
                 p={4}
-                borderRadius="xl"
-                border="1px solid"
-                borderColor={statsBorder}
-                bg={statsBg}
-              >
+                borderRadius="xl">
                 {/* 磁盘选择 + 开始扫描 同一行,按钮紧贴选择框右侧 */}
                 <HStack spacing={3} alignItems="end" flexWrap="wrap">
                   <VStack align="start" spacing={2}>
@@ -1546,7 +1493,7 @@ export default function StorageCleanPage() {
                     </Text>
                   </VStack>
                 )}
-              </Box>
+              </LiquidGlassCard>
 
               {bigResults.length > 0 ? (
                 <BigFilesTable
@@ -1641,7 +1588,7 @@ export default function StorageCleanPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Box p={5} borderRadius="xl" border="1px solid" borderColor={tipBorder} bg={tipBg}>
+      <LiquidGlassCard p={5} borderRadius="xl">
         <HStack mb={3}>
           <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
             {t("storageClean.tip.title")}
@@ -1658,7 +1605,7 @@ export default function StorageCleanPage() {
             {t("storageClean.tip.note2")}
           </Text>
         </VStack>
-      </Box>
+      </LiquidGlassCard>
     </VStack>
   );
 

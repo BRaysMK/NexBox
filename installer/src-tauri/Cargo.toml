@@ -1,6 +1,6 @@
 [package]
 name = "nexbox-installer"
-version = "7.7.8"
+version = "7.9.0"
 description = "NexBox Installer"
 authors = ["MuLiu"]
 edition = "2021"

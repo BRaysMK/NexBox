@@ -19,7 +19,6 @@ import {
   ModalBody,
   ModalFooter,
   Progress,
-  useToast,
   useDisclosure,
   Slider,
   SliderTrack,
@@ -27,6 +26,7 @@ import {
   SliderThumb,
   Spinner,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 
 import {
   LuMonitor,
@@ -182,7 +182,7 @@ function SortableNavItem({
 
 function GeneralSettings() {
   const { t, i18n } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("settings");
   const { config, getContrastTextColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
@@ -1505,7 +1505,7 @@ function AppearanceSettings() {
   const modeButtonActiveBg = useColorModeValue("blue.500", "blue.400");
   const modeButtonInactiveBg = useColorModeValue("gray.100", "#1a1a1a");
   const modeButtonInactiveBorder = useColorModeValue("gray.200", "#333333");
-  const toast = useToast();
+  const toast = useDynamicIsland("settings");
 
   const themeOptions = [
     { value: "light", label: "浅色" },
@@ -2854,7 +2854,7 @@ function SponsorSettings() {
 
 function PawnioSettings() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("settings");
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
@@ -3075,7 +3075,7 @@ function PawnioSettings() {
 
 function AboutSettings() {
   const { t } = useTranslation();
-  const toast = useToast();
+  const toast = useDynamicIsland("settings");
   const { getActiveColor } = useThemeColor();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
@@ -3086,7 +3086,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "7.7.8";
+  const currentVersion = "7.9.0";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
@@ -3419,7 +3419,7 @@ function AboutSettings() {
 function HotkeySettings() {
   const { t } = useTranslation();
   const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, autoclickerHotkey, saveAutoclickerHotkey, musicPrevHotkey, saveMusicPrevHotkey, musicNextHotkey, saveMusicNextHotkey, musicPlayPauseHotkey, saveMusicPlayPauseHotkey, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
-  const toast = useToast();
+  const toast = useDynamicIsland("settings");
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");

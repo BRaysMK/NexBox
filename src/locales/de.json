@@ -459,8 +459,8 @@
         "error": "Bereinigung fehlgeschlagen"
     },
     "aceOptimize": {
-        "title": "ACE Anti-Cheat-Optimierung",
-        "description": "Begrenzen Sie die Ressourcennutzung der ACE-Anti-Cheat-Prozesse, um mehr Leistung für das Spiel freizugeben",
+        "title": "Anti-Cheat-Optimierung",
+        "description": "Begrenzen Sie die Ressourcennutzung der Anti-Cheat-Prozesse, um mehr Leistung für das Spiel freizugeben",
         "deltaSection": {
             "title": "Delta Force Optimierung",
             "subtitle": "Steigern Sie die Spielleistung von Delta Force"
@@ -774,6 +774,11 @@
     "sjmclDesc": "Drittanbieter-Minecraft-Launcher, entwickelt von der Shanghai Jiao Tong Universität",
     "ddegameDesc": "Spiele sind nicht nur Spiele, sie können ins Leben treten und es verändern",
     "huorongDesc": "Reiner Endpunktschutz. Leicht, leise, umfassende Verteidigung",
+    "deepseekHarnessDesc": "DeepSeeks Open-Source-AI-Agent-Basis, alles ist ein Plugin",
+    "lingtabDesc": "Browser-Erweiterung zur Verschönerung der neuen Tab-Seite",
+    "lxmusicDesc": "Kostenloses, werbefreies Open-Source-Musiksuchwerkzeug",
+    "gameppDesc": "Tool zur Spieloptimierung und FPS-Steigerung",
+    "shudaxiaDesc": "Intelligentes Maus-Auto-Klick- und Makro-Aufnahme-Tool",
     "descriptions": {
       "assistantCrosshair": "Fadenkreuz-Hilfswerkzeug für Spielbildschirme",
       "memreduct": "Speicherbereinigungs-Tool",

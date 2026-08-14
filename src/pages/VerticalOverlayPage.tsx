@@ -14,6 +14,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { store } from "@/lib/store";
 import {
   Gauge,
   Thermometer,
@@ -57,6 +58,8 @@ interface OverlaySettings {
   font_color: string;
   position_x?: number | null;
   position_y?: number | null;
+  vertical_position_x?: number | null;
+  vertical_position_y?: number | null;
 }
 
 interface HardwareData {
@@ -265,6 +268,42 @@ export default function VerticalOverlayPage() {
   const [, setTick] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const win = getCurrentWindow();
+  // 记录拖动过程中的最新窗口位置，避免 startDragging 返回后读取到旧坐标
+  const movedPosRef = useRef<{ x: number; y: number } | null>(null);
+  const lastSaveRef = useRef(0);
+
+  // 保存竖排悬浮框位置：更新 Rust 内存 + 广播事件 + 写入共享 store（竖排独立字段）
+  const persistPosition = useCallback(async (x: number, y: number) => {
+    try {
+      await invoke("save_vertical_overlay_position", { x, y });
+      try {
+        const cur = await store.get<OverlaySettings>("overlay-settings");
+        const base = cur || settings;
+        await store.set("overlay-settings", { ...base, vertical_position_x: x, vertical_position_y: y });
+        await store.save();
+      } catch (e) {
+        console.error("Failed to persist overlay position to store:", e);
+      }
+    } catch (e) {
+      console.error("Failed to save vertical overlay position:", e);
+    }
+  }, [settings]);
+
+  // 监听窗口移动，拖动过程中实时保存位置（节流），保证不依赖 startDragging 结束后的捕获
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      unlisten = await win.onMoved(({ payload }) => {
+        movedPosRef.current = { x: payload.x, y: payload.y };
+        const now = Date.now();
+        if (now - lastSaveRef.current > 300) {
+          lastSaveRef.current = now;
+          persistPosition(payload.x, payload.y);
+        }
+      });
+    })();
+    return () => { unlisten?.(); };
+  }, [win, persistPosition]);
 
   // 页面渲染完成后通知 Rust 端 show 窗口（避免加载时的白屏闪烁）
   useEffect(() => {
@@ -376,17 +415,26 @@ export default function VerticalOverlayPage() {
         border: "none",
         overflow: "hidden",
       }}
-      onMouseDown={async (e) => {
+      onMouseDown={(e) => {
         e.preventDefault();
-        try {
-          await win.startDragging();
-          // 拖动结束，保存位置并恢复鼠标穿透
-          const pos = await win.outerPosition();
-          await invoke("save_vertical_overlay_position", { x: pos.x, y: pos.y });
-          await invoke("set_vertical_overlay_click_through", { enabled: true });
-        } catch {
-          // ignore
-        }
+        // 发起 OS 级拖动（不依赖其返回时机，避免读到拖动前位置）
+        win.startDragging().catch(() => {});
+        // 拖动结束后（mouseup）保存最终位置
+        const handleUp = async () => {
+          window.removeEventListener("mouseup", handleUp);
+          try {
+            const pos = movedPosRef.current ?? (await win.outerPosition());
+            if (pos) {
+              await persistPosition(pos.x, pos.y);
+            }
+          } catch (err) {
+            console.error("Failed to save vertical overlay position:", err);
+          } finally {
+            // 无论是否出错都恢复鼠标穿透，避免面板卡在可拖动状态
+            invoke("set_vertical_overlay_click_through", { enabled: true }).catch(() => {});
+          }
+        };
+        window.addEventListener("mouseup", handleUp, { once: true });
       }}
     >
       {!settingsLoaded ? (

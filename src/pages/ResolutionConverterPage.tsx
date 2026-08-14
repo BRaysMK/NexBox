@@ -11,10 +11,10 @@ import {
   useBreakpointValue,
   Button,
   Spinner,
-  useToast,
   Badge,
   Input,
 } from "@chakra-ui/react";
+import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -313,7 +313,7 @@ export default function ResolutionConverterPage() {
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const toast = useToast();
+  const toast = useDynamicIsland("monitor");
   const [selectedResolution, setSelectedResolution] = useState<ResolutionType>("1K");
 
   // 显示器分辨率管理状态
