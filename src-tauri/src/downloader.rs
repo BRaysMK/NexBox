@@ -116,6 +116,26 @@ pub fn launch_installer_sync(file_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// GitCode API 返回的 release 资产 URL 可能落在 test.gitcode.net 等
+/// 在当前网络环境不可达的 CDN 域名上。统一替换为主站域名 gitcode.com，
+/// 由其 302 重定向到可达的 file-cdn.gitcode.com 并生成签名链接。
+/// reqwest 默认自动跟随重定向，因此替换后即可正常下载。
+fn normalize_gitcode_url(url: &str) -> String {
+    const GITCODE_CDN_HOSTS: [&str; 2] = ["test.gitcode.net", "download.gitcode.net"];
+    let mut normalized = url.to_string();
+    for host in GITCODE_CDN_HOSTS {
+        normalized = normalized.replace(
+            &format!("https://{host}/"),
+            "https://gitcode.com/",
+        );
+        normalized = normalized.replace(
+            &format!("http://{host}/"),
+            "https://gitcode.com/",
+        );
+    }
+    normalized
+}
+
 #[tauri::command]
 pub async fn download_file(
     url: String,
@@ -123,6 +143,7 @@ pub async fn download_file(
     window: Window,
 ) -> Result<String, String> {
     let client = Client::new();
+    let url = normalize_gitcode_url(&url);
     let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
     let total_size = response.content_length().unwrap_or(0);

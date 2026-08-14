@@ -227,8 +227,14 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
           (a) => a.name.endsWith(".msi") || a.name.endsWith(".exe"),
         );
         if (asset) {
+          // GitCode API 返回的资产 URL 落在 test.gitcode.net 等不可达 CDN，
+          // 替换为主站域名后由其 302 重定向到 file-cdn.gitcode.com 正常下载
+          const downloadUrl = asset.browser_download_url.replace(
+            "https://test.gitcode.net/",
+            "https://gitcode.com/",
+          );
           const filePath = await invoke<string>("download_update", {
-            url: asset.browser_download_url,
+            url: downloadUrl,
             fileName: asset.name,
             silent: !manual,
           });
