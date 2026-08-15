@@ -3,6 +3,7 @@ import { LuChevronDown, LuCheck } from "react-icons/lu";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { LiquidGlassCard } from "./liquid-glass-card";
+import { useThemeColor } from "@/contexts/theme-color-context";
 
 interface SelectOption {
   value: string;
@@ -36,12 +37,12 @@ export function CustomSelect({
   const textColor = useColorModeValue("gray.700", "#ffffff");
   const iconColor = useColorModeValue("gray.500", "#999999");
   const dropdownBg = useColorModeValue("white", "#111111");
-  const dropdownBorder = useColorModeValue("gray.200", "#333333");
   const itemBg = useColorModeValue("white", "#111111");
-  const itemBgActive = useColorModeValue("gray.100", "#222222");
+  // 主题色适配：选中项高亮使用主题色
+  const { getActiveColor, getHoverColor, getBorderColor } = useThemeColor();
+  const itemBgActive = getHoverColor();
   const itemText = useColorModeValue("gray.600", "#cccccc");
-  const itemTextActive = useColorModeValue("gray.900", "#ffffff");
-  const hoverBg = useColorModeValue("gray.50", "#222222");
+  const itemTextActive = useColorModeValue("gray.900", getActiveColor());
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -172,7 +173,7 @@ export function CustomSelect({
             width={`${dropdownPos.width}px`}
             bg={dropdownBg}
             border="1px solid"
-            borderColor={dropdownBorder}
+            borderColor={getBorderColor()}
             borderRadius="lg"
             boxShadow="2xl"
             zIndex={99999}
@@ -185,9 +186,9 @@ export function CustomSelect({
                 px={3}
                 py={2}
                 cursor="pointer"
-                bg={option.value === value ? itemBgActive : itemBg}
+                bg={itemBg}
                 color={option.value === value ? itemTextActive : itemText}
-                _hover={{ bg: hoverBg }}
+                _hover={{ bg: itemBgActive }}
                 onClick={() => {
                   onChange(option.value);
                   setIsOpen(false);
@@ -210,7 +211,7 @@ export function CustomSelect({
                       </Badge>
                     )}
                   </HStack>
-                  {option.value === value && <LuCheck size={14} />}
+                  {option.value === value && <LuCheck size={14} color={getActiveColor()} />}
                 </HStack>
               </Box>
             ))}

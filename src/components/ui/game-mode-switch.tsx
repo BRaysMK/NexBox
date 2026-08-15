@@ -1,10 +1,13 @@
-import { Box, Flex, Text, useColorModeValue } from "@chakra-ui/react";
+import { Box, Flex, HStack, Text, useColorModeValue } from "@chakra-ui/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { LuSettings } from "react-icons/lu";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useBackground } from "@/contexts/background-context";
 import { useDynamicIsland, type IslandStatus } from "@/components/ui/dynamic-island";
+import { CustomSelect } from "@/components/special/custom-select";
 
 type Preset = "default" | "regular" | "competitive";
 
@@ -13,6 +16,19 @@ const OPTIONS: { value: Preset; label: string }[] = [
   { value: "regular", label: "常规" },
   { value: "competitive", label: "竞技" },
 ];
+
+// 游戏启动时自动切换档位：default=关 / regular=常规 / competitive=竞技
+const AUTO_OPTIONS: { value: Preset; label: string }[] = [
+  { value: "default", label: "关" },
+  { value: "regular", label: "常规" },
+  { value: "competitive", label: "竞技" },
+];
+
+const AUTO_TOAST: Record<Preset, { title: string; status: IslandStatus }> = {
+  default: { title: "已关闭自动切换", status: "info" },
+  regular: { title: "自动切换：常规", status: "blue" },
+  competitive: { title: "自动切换：竞技", status: "info" },
+};
 
 // 顶部切换模式时的灵动岛提示文案与状态色
 // 常规：蓝色；竞技：主题色（info）；默认：主题色（info）
@@ -89,6 +105,7 @@ export function GameModeSwitch() {
   const toast = useDynamicIsland("gamepad");
   const textColor = useColorModeValue("gray.600", "gray.300");
   const activeTextColor = useColorModeValue("white", "white");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
   // 玻璃开启时使用半透明玻璃底色 + 柔和边框；关闭时用普通底色
   const glassTrackBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const plainTrackBg = useColorModeValue("whiteAlpha.700", "blackAlpha.500");
@@ -101,12 +118,77 @@ export function GameModeSwitch() {
     ? `blur(${effectiveBlur}px) saturate(1.3)`
     : "blur(10px)";
 
+  // 弹窗玻璃：开启时半透明 + 模糊（与软件内一致），关闭时纯色不透明
+  const glassPopupBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const plainPopupBg = useColorModeValue("white", "#111111");
+  const popupBg = liquidGlassEnabled ? glassPopupBg : plainPopupBg;
+  const popupBackdropFilter = liquidGlassEnabled
+    ? `blur(${effectiveBlur}px) saturate(1.3)`
+    : "none";
+  const popupBorderColor = liquidGlassEnabled ? glassBorderColor : plainBorderColor;
+
   const [preset, setPreset] = useState<Preset>("default");
   const [slider, setSlider] = useState({ left: 0, width: 0 });
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const presetRef = useRef<Preset>("default");
   presetRef.current = preset;
+
+  // 自动切换设置：内联浮层 + 当前档位
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [autoPreset, setAutoPreset] = useState<Preset>("default");
+  const [savingAuto, setSavingAuto] = useState(false);
+  const popupRef = useRef<HTMLDivElement | null>(null);
+
+  // 打开浮层时读取当前自动档
+  const toggleSettings = useCallback(async () => {
+    const next = !settingsOpen;
+    setSettingsOpen(next);
+    if (next) {
+      try {
+        const c = await invoke<{ auto_preset?: Preset }>("game_mode_get_config");
+        setAutoPreset(c.auto_preset || "default");
+      } catch (e) {
+        console.error("读取自动切换设置失败:", e);
+      }
+    }
+  }, [settingsOpen]);
+
+  // 点空白处关闭浮层
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [settingsOpen]);
+
+  const handleAutoChange = useCallback(
+    async (raw: string) => {
+      if (savingAuto) return;
+      const value = raw as Preset;
+      setSavingAuto(true);
+      try {
+        await invoke("game_mode_set_auto_preset", { preset: value });
+        setAutoPreset(value);
+        setSettingsOpen(false);
+        toast({
+          title: AUTO_TOAST[value].title,
+          status: AUTO_TOAST[value].status,
+          description: "游戏启动时自动切换已更新",
+          iconKey: "gamepad",
+        });
+      } catch (e) {
+        console.error("设置自动切换失败:", e);
+      } finally {
+        setSavingAuto(false);
+      }
+    },
+    [savingAuto, toast]
+  );
 
   // 精确测量滑块位置：相对容器 padding box 定位，消除 border/offsetParent 歧义
   const measureSlider = useCallback(() => {
@@ -214,61 +296,123 @@ export function GameModeSwitch() {
       : "gm-slider";
 
   return (
-    <Flex
-      ref={trackRef}
-      position="relative"
-      align="center"
-      p="3px"
-      gap="2px"
-      borderRadius="full"
-      bg={trackBg}
-      border="1px solid"
-      borderColor={borderColor}
-      backdropFilter={backdropFilter}
-      onMouseDown={(e) => e.stopPropagation()}
-      className={
-        isRegular ? "gm-regular-track" : isCompetitive ? "gm-comp-track" : undefined
-      }
-    >
-      {slider.width > 0 && (
-        <Box
-          className={sliderClass}
-          style={{ left: slider.left, width: slider.width }}
-          bg={!isRegular && !isCompetitive ? getActiveColor() : undefined}
-          aria-hidden
-        />
-      )}
-      {OPTIONS.map((opt, i) => {
-        const active = preset === opt.value;
-        return (
+    <Box position="relative" onMouseDown={(e) => e.stopPropagation()}>
+      <Flex
+        ref={trackRef}
+        position="relative"
+        align="center"
+        p="3px"
+        gap="2px"
+        borderRadius="full"
+        bg={trackBg}
+        border="1px solid"
+        borderColor={borderColor}
+        backdropFilter={backdropFilter}
+        className={
+          isRegular ? "gm-regular-track" : isCompetitive ? "gm-comp-track" : undefined
+        }
+      >
+        {slider.width > 0 && (
           <Box
-            key={opt.value}
-            as="button"
-            ref={(el) => {
-              btnRefs.current[i] = el;
-            }}
-            px={3}
-            py="4px"
-            borderRadius="full"
-            bg="transparent"
-            color={active ? activeTextColor : textColor}
-            fontSize="xs"
-            fontWeight="medium"
-            cursor="pointer"
-            transition="color 0.15s"
-            zIndex={1}
-            _hover={!active ? { bg: useColorModeValue("gray.100", "gray.700") } : undefined}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSelect(opt.value);
+            className={sliderClass}
+            style={{ left: slider.left, width: slider.width }}
+            bg={!isRegular && !isCompetitive ? getActiveColor() : undefined}
+            aria-hidden
+          />
+        )}
+        {OPTIONS.map((opt, i) => {
+          const active = preset === opt.value;
+          return (
+            <Box
+              key={opt.value}
+              as="button"
+              ref={(el) => {
+                btnRefs.current[i] = el;
+              }}
+              px={3}
+              py="4px"
+              borderRadius="full"
+              bg="transparent"
+              color={active ? activeTextColor : textColor}
+              fontSize="xs"
+              fontWeight="medium"
+              cursor="pointer"
+              transition="color 0.15s"
+              zIndex={1}
+              _hover={!active ? { bg: useColorModeValue("gray.100", "gray.700") } : undefined}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelect(opt.value);
+              }}
+            >
+              <Text fontSize="xs" lineHeight="1.2" fontWeight="medium">
+                {opt.label}
+              </Text>
+            </Box>
+          );
+        })}
+        <Box
+          as="button"
+          aria-label="游戏模式设置"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          w="26px"
+          h="26px"
+          borderRadius="full"
+          ml={1}
+          color={textColor}
+          cursor="pointer"
+          transition="color 0.15s, background 0.15s"
+          zIndex={1}
+          _hover={{ color: useColorModeValue("gray.800", "gray.100"), bg: useColorModeValue("gray.100", "gray.700") }}
+          onClick={toggleSettings}
+        >
+          <LuSettings size={14} />
+        </Box>
+      </Flex>
+
+      <AnimatePresence>
+        {settingsOpen && (
+          <motion.div
+            ref={popupRef}
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.15 }}
+            style={{
+              position: "absolute",
+              top: "calc(100% + 8px)",
+              right: 0,
+              zIndex: 30,
+              pointerEvents: "auto",
             }}
           >
-            <Text fontSize="xs" lineHeight="1.2" fontWeight="medium">
-              {opt.label}
-            </Text>
-          </Box>
-        );
-      })}
-    </Flex>
+            <Box
+              data-backdrop-filter
+              bg={popupBg}
+              border="1px solid"
+              borderColor={popupBorderColor}
+              borderRadius="lg"
+              boxShadow="lg"
+              minW="260px"
+              style={{ backdropFilter: popupBackdropFilter, WebkitBackdropFilter: popupBackdropFilter }}
+            >
+              <HStack justify="space-between" px={5} py={4} spacing={4}>
+                <Text fontSize="sm" color={labelColor} whiteSpace="nowrap">
+                  游戏启动时自动切换为
+                </Text>
+                <CustomSelect
+                  value={autoPreset}
+                  onChange={handleAutoChange}
+                  options={AUTO_OPTIONS}
+                  width="150px"
+                />
+              </HStack>
+            </Box>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Box>
   );
 }

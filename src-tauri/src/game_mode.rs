@@ -6,16 +6,19 @@
 //! - 常规：将明显占资源的后台进程压制到 `Eco`（省电）级，保留后台可用。
 //! - 竞技：将除豁免外的所有后台进程压制到 `Isolated`（隔离）级，只放行前台全屏游戏家族。
 //!
-//! 触发方式（任一命中即生效，全部结束才还原）：
-//! - 手动开关（`manual_enabled`）
-//! - 滤镜名单自动检测（`auto_enabled`，复用 `game_filter` 名单，名单内游戏运行即开启）
+//! 生效档位（以用户选择为准）：
+//! - 顶栏手动选择「常规/竞技/默认」：生效档位即为所选档位（手动优先）。
+//! - 弹窗可设「游戏启动时自动切换」档位（默认=关）：游戏运行时且用户未手动覆盖时，
+//!   自动切到该档位；手动覆盖仅对当前游戏会话生效，游戏退出后自动清除，
+//!   下次启动游戏仍按自动档切换（除非用户改了自动档设置）。
+//!   竞技档下，滤镜名单内正在运行的游戏进程家族会被豁免（只压制其他后台进程）。
 //!
 //! 压制采用"完整组合 + 快照还原"：记录每个进程的原始值（优先级/亲和/I/O/内存/EcoQoS/GPU），
 //! 模式关闭或进程退出时逐项还原。参考 `optimization.rs` 的 ACE 自动检测模式
 //! （generation 代次控制线程生命周期 + `app.store` 持久化配置 + 进程快照还原）。
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
@@ -33,7 +36,6 @@ const STORE_FILE: &str = "game_mode.json";
 const POLL_INTERVAL_SECS: u64 = 3;
 
 // Windows 优先级类别
-const IDLE_PRIORITY_CLASS: u32 = 0x00000040;
 const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x00004000;
 // I/O 优先级
 const IO_VERY_LOW: i32 = 0;
@@ -49,9 +51,10 @@ const REGULAR_CPU_THRESHOLD: f32 = 5.0;
 
 // ─── 数据结构 ───
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum GameModePreset {
+    #[default]
     Default,
     Regular,
     Competitive,
@@ -86,6 +89,9 @@ pub struct GameModeConfig {
     pub preset: GameModePreset,
     pub manual_enabled: bool,
     pub auto_enabled: bool,
+    /// 游戏启动时自动切换的档位；`Default` 表示「关」（不自动切换）
+    #[serde(default)]
+    pub auto_preset: GameModePreset,
 }
 
 #[derive(Serialize)]
@@ -127,8 +133,10 @@ static BLOCKED: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 static ACTIVE: Mutex<bool> = Mutex::new(false);
 /// 滤镜名单内是否有游戏在运行（由扫描线程更新，供状态查询）
 static GAME_RUNNING: Mutex<bool> = Mutex::new(false);
-/// 当前生效档位（游戏运行时强制竞技，否则等于用户档位；由扫描线程维护）
+/// 当前生效档位（由扫描线程维护；游戏运行时可为自动档或用户手动选择）
 static EFFECTIVE_PRESET: Mutex<GameModePreset> = Mutex::new(GameModePreset::Default);
+/// 用户是否已手动切换过（持久覆盖）：一旦手工切换，自动切换不再生效，直至重新设置自动档
+static MANUAL_OVERRIDE: AtomicBool = AtomicBool::new(false);
 
 // ─── 配置存取 ───
 
@@ -141,6 +149,7 @@ fn get_config() -> GameModeConfig {
             preset: GameModePreset::Default,
             manual_enabled: false,
             auto_enabled: false,
+            auto_preset: GameModePreset::Default,
         })
 }
 
@@ -149,6 +158,7 @@ async fn load_persisted_config(app: &tauri::AppHandle) -> GameModeConfig {
         preset: GameModePreset::Default,
         manual_enabled: false,
         auto_enabled: false,
+        auto_preset: GameModePreset::Default,
     };
     match app.store(STORE_FILE) {
         Ok(store) => match store.get("config") {
@@ -288,13 +298,15 @@ fn apply_level(pid: u32, level: SuppressionLevel, background_mask: u64) -> bool 
     let mut ok = true;
     match level {
         SuppressionLevel::Eco => {
+            // 低于正常优先级 + EcoQoS：任务管理器显示"效率模式"绿叶
             ok &= optimization::set_process_priority_class(pid, BELOW_NORMAL_PRIORITY_CLASS);
             ok &= optimization::set_process_io_priority(pid, IO_LOW);
             ok &= optimization::set_process_memory_priority(pid, MEM_MEDIUM);
             ok &= optimization::set_process_eco_qos(pid, true);
         }
         SuppressionLevel::Isolated => {
-            ok &= optimization::set_process_priority_class(pid, IDLE_PRIORITY_CLASS);
+            // 低于正常优先级 + EcoQoS：任务管理器显示"效率模式"绿叶
+            ok &= optimization::set_process_priority_class(pid, BELOW_NORMAL_PRIORITY_CLASS);
             ok &= optimization::set_process_io_priority(pid, IO_VERY_LOW);
             ok &= optimization::set_process_memory_priority(pid, MEM_VERY_LOW);
             ok &= optimization::set_process_eco_qos(pid, true);
@@ -382,6 +394,7 @@ fn release_all() {
 
 fn sweep_loop(app: tauri::AppHandle, generation: u64) {
     let mut system = System::new();
+    let mut prev_game_running = false;
     loop {
         if GENERATION.load(Ordering::Relaxed) != generation {
             break;
@@ -393,11 +406,22 @@ fn sweep_loop(app: tauri::AppHandle, generation: u64) {
 
         let config = get_config();
         system.refresh_processes_specifics(ProcessRefreshKind::everything());
-        // 始终检测滤镜名单内游戏运行（不再依赖 auto_enabled）
+        // 游戏运行状态：仅供状态展示与竞技档豁免游戏进程家族，也参与自动切换判定
         let game_running = game_filter::any_game_running(&system);
-        // 生效档位：游戏运行时强制竞技，否则等于用户档位
-        let effective = if game_running {
-            GameModePreset::Competitive
+        // 游戏会话结束（运行→退出）：清除手动覆盖，恢复自动切换能力。
+        // 这样下次启动游戏时仍按「自动档」切换（用户未改设置）。
+        if prev_game_running && !game_running {
+            MANUAL_OVERRIDE.store(false, Ordering::Relaxed);
+        }
+        prev_game_running = game_running;
+        // 生效档位：游戏运行且未手动覆盖且设置了自动档时用自动档，否则用用户手动选择。
+        // 手动覆盖（MANUAL_OVERRIDE）仅对当前游戏会话生效，游戏退出后自动清除。
+        let manual_override = MANUAL_OVERRIDE.load(Ordering::Relaxed);
+        let effective = if game_running
+            && !manual_override
+            && config.auto_preset != GameModePreset::Default
+        {
+            config.auto_preset
         } else {
             config.preset
         };
@@ -564,6 +588,8 @@ pub async fn game_mode_set_preset(
         // 顶栏选择模式即激活（等价于手动开启）
         config.manual_enabled = true;
     }
+    // 手动切换即视为手动覆盖：自动切换不再生效，直至重新设置自动档
+    MANUAL_OVERRIDE.store(true, Ordering::Relaxed);
     save_persisted_config(&app, &config).await;
     apply_config(&app, config);
     Ok(())
@@ -585,6 +611,21 @@ pub async fn game_mode_set_manual(app: tauri::AppHandle, enabled: bool) -> Resul
 pub async fn game_mode_set_auto(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let mut config = get_config();
     config.auto_enabled = enabled;
+    save_persisted_config(&app, &config).await;
+    apply_config(&app, config);
+    Ok(())
+}
+
+/// 设置「游戏启动时自动切换」档位（default=关 / regular=常规 / competitive=竞技）。
+/// 重新设置自动档会清除手动覆盖标记，恢复自动切换能力。
+#[tauri::command]
+pub async fn game_mode_set_auto_preset(
+    app: tauri::AppHandle,
+    preset: String,
+) -> Result<(), String> {
+    let mut config = get_config();
+    config.auto_preset = GameModePreset::from_str(&preset);
+    MANUAL_OVERRIDE.store(false, Ordering::Relaxed);
     save_persisted_config(&app, &config).await;
     apply_config(&app, config);
     Ok(())

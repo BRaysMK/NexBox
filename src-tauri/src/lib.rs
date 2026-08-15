@@ -672,6 +672,7 @@ pub fn run() {
         game_mode::game_mode_set_preset,
         game_mode::game_mode_set_manual,
         game_mode::game_mode_set_auto,
+        game_mode::game_mode_set_auto_preset,
         game_mode::game_mode_get_status,
         game_win_key::get_game_win_key_status,
         game_win_key::set_game_win_key_enabled,
