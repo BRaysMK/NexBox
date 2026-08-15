@@ -270,17 +270,3 @@ body.jelly-bounce-enabled .jelly-bounce-sidebar-top.jelly-bouncing {
   pointer-events: none;
 }
 
-/* ── 更新下载完成提示呼吸动画 ── */
-@keyframes updatePulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-.update-pulse {
-  animation: updatePulse 2s ease-in-out infinite;
-}
-

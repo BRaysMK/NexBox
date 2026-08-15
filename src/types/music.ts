@@ -150,7 +150,8 @@ export interface ArtistDetail {
   brief_desc: string;
 }
 
-export type PlayMode = "list" | "shuffle" | "one";
+/// 播放模式: list=列表循环, heartbeat=心动模式(相似歌曲动态续播), shuffle=随机播放, one=单曲循环
+export type PlayMode = "list" | "heartbeat" | "shuffle" | "one";
 
 export type PlaybackQuality = "jymaster" | "hires" | "lossless" | "exhigh" | "standard";
 

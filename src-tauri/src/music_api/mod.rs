@@ -185,6 +185,13 @@ pub async fn music_recommend_resource() -> Result<Vec<Playlist>, String> {
     netease::recommend_resource(&app_cookie).await
 }
 
+/// 相似歌曲 (心动模式): 根据当前歌曲 id 返回口味相似的歌曲
+#[tauri::command]
+pub async fn music_simi_song(id: String, limit: Option<u32>) -> Result<Vec<Song>, String> {
+    let app_cookie = get_app_cookie().await;
+    netease::simi_song(&id, limit.unwrap_or(50), &app_cookie).await
+}
+
 #[tauri::command]
 pub async fn music_artist_search(keywords: String, limit: Option<u32>) -> Result<Vec<Artist>, String> {
     let app_cookie = get_app_cookie().await;

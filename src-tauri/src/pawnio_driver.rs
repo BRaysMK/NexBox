@@ -72,15 +72,8 @@ pub async fn check_pawnio_status() -> PawnIoStatus {
     }
 }
 
-/// 安装 PawnIO 驱动（同 LHM InstallPawnIO 流程：提取 → 提权运行 -install 并等待完成）
-#[tauri::command]
-pub async fn install_pawnio_driver(app: tauri::AppHandle) -> Result<String, String> {
-    // 如果已安装，直接返回
-    if check_pawnio_installed() {
-        return Ok("already_installed".to_string());
-    }
-
-    // 从 Tauri 资源中查找 PawnIO_setup.exe（多路径兼容 dev / bundle / updater 模式）
+/// 从 Tauri 资源中查找 PawnIO_setup.exe（多路径兼容 dev / bundle / updater 模式）
+fn locate_pawnio_setup(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     let resource_dir = app
         .path()
         .resource_dir()
@@ -103,26 +96,30 @@ pub async fn install_pawnio_driver(app: tauri::AppHandle) -> Result<String, Stri
         candidates.push(d.join("_up_").join("PawnIO_setup.exe"));
     }
 
-    let resource_path = candidates
+    candidates
         .iter()
         .find(|p| p.exists())
+        .cloned()
         .ok_or_else(|| {
             let paths: Vec<String> = candidates.iter().map(|p| p.display().to_string()).collect();
             format!("未找到 PawnIO_setup.exe 资源文件，已尝试路径: {:?}", paths)
-        })?;
+        })
+}
 
+/// 提取到临时目录后提权运行安装器并等待完成（同 LHM WaitForExit，关键！）
+fn run_pawnio_setup(exe: &std::path::Path, flag: &str) -> Result<(), String> {
     // 提取到临时目录（同 LHM ExtractPawnIO）
     let temp_dir = std::env::temp_dir().join("NexBox_PawnIO");
     let _ = std::fs::create_dir_all(&temp_dir);
     let temp_exe = temp_dir.join("PawnIO_setup.exe");
 
-    std::fs::copy(&resource_path, &temp_exe)
+    std::fs::copy(exe, &temp_exe)
         .map_err(|e| format!("复制安装程序失败: {}", e))?;
 
-    // 提权运行 -install 并等待完成（同 LHM WaitForExit，关键！）
     let ps_script = format!(
-        "Start-Process -FilePath '{}' -ArgumentList '-install' -Verb RunAs -Wait -WindowStyle Hidden",
-        temp_exe.to_string_lossy().replace('\'', "''")
+        "Start-Process -FilePath '{}' -ArgumentList '{}' -Verb RunAs -Wait -WindowStyle Hidden",
+        temp_exe.to_string_lossy().replace('\'', "''"),
+        flag
     );
 
     let output = Command::new("powershell")
@@ -137,8 +134,21 @@ pub async fn install_pawnio_driver(app: tauri::AppHandle) -> Result<String, Stri
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("安装失败: {}", stderr));
+        return Err(format!("操作失败: {}", stderr));
     }
+    Ok(())
+}
+
+/// 安装 PawnIO 驱动（同 LHM InstallPawnIO 流程：提取 → 提权运行 -install 并等待完成）
+#[tauri::command]
+pub async fn install_pawnio_driver(app: tauri::AppHandle) -> Result<String, String> {
+    // 如果已安装，直接返回
+    if check_pawnio_installed() {
+        return Ok("already_installed".to_string());
+    }
+
+    let resource_path = locate_pawnio_setup(&app)?;
+    run_pawnio_setup(&resource_path, "-install")?;
 
     // 等待注册表写入并验证
     std::thread::sleep(std::time::Duration::from_secs(3));
@@ -146,5 +156,25 @@ pub async fn install_pawnio_driver(app: tauri::AppHandle) -> Result<String, Stri
         Ok("success".to_string())
     } else {
         Err("安装验证失败：注册表中未检测到 PawnIO 信息，请尝试手动安装".to_string())
+    }
+}
+
+/// 卸载 PawnIO 驱动（提权运行 -uninstall 并等待完成，验证注册表移除）
+#[tauri::command]
+pub async fn uninstall_pawnio_driver(app: tauri::AppHandle) -> Result<String, String> {
+    // 如果未安装，直接返回
+    if !check_pawnio_installed() {
+        return Ok("not_installed".to_string());
+    }
+
+    let resource_path = locate_pawnio_setup(&app)?;
+    run_pawnio_setup(&resource_path, "-uninstall")?;
+
+    // 等待注册表移除并验证
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    if !check_pawnio_installed() {
+        Ok("success".to_string())
+    } else {
+        Err("卸载验证失败：注册表中仍检测到 PawnIO 信息，请尝试手动卸载".to_string())
     }
 }

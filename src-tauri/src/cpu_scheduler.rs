@@ -46,6 +46,7 @@ pub struct ProcessInfo {
     pub name: String,
     pub memory_mb: f64,
     pub cpu_usage: f32,
+    pub exe_path: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -339,6 +340,7 @@ pub async fn get_process_list() -> Result<Vec<ProcessInfo>, String> {
             name,
             memory_mb,
             cpu_usage: proc_.cpu_usage(),
+            exe_path: proc_.exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
         });
     }
 

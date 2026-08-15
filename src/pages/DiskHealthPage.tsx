@@ -18,7 +18,7 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, HardDrive, RefreshCw, Thermometer, AlertTriangle, Star, Wrench, Sparkles } from "lucide-react";
+import { ArrowLeft, HardDrive, RefreshCw, Thermometer, AlertTriangle, Star, Sparkles, Wrench, Clock, Download, Upload, Power } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -44,6 +44,9 @@ interface DiskHealthInfo {
   temperature_c: number | null;
   wear_percentage: number | null;
   power_on_hours: number | null;
+  power_on_count: number | null;
+  data_read_bytes: number | null;
+  data_written_bytes: number | null;
   read_errors: number | null;
   write_errors: number | null;
   status: string;
@@ -54,6 +57,8 @@ interface DiskHealthInfo {
   partitions: PartitionInfo[];
   total_usage_gb: number;
   total_capacity_gb: number;
+  health_percent: number | null;
+  is_ssd: boolean;
 }
 
 interface DiskHealthResponse {
@@ -68,44 +73,68 @@ interface DiskOptimizeResult {
   drive_letter: string;
   operation: string;
   is_ssd: boolean;
+  background: boolean;
   success: boolean;
   message: string;
 }
 
-function isSsdMedia(mediaType: string): boolean {
-  return /ssd|nvme|solid|flash/i.test(mediaType);
-}
-
-// 分区整理/优化按钮：机械盘做碎片整理，固态盘做 TRIM/优化
-function OptimizeButton({ letter, mediaType }: { letter: string; mediaType: string }) {
+// 分区整理/优化按钮：固态盘做 TRIM/优化，机械盘做碎片整理。
+// isSsd 由后端 SMART 直读判定返回（前端 MediaType 对 NVMe 盘常为空导致误判）。
+function OptimizeButton({
+  letter,
+  index,
+  interfaceType,
+  model,
+  isSsd,
+}: {
+  letter: string;
+  index: number;
+  interfaceType: string;
+  model: string;
+  isSsd: boolean;
+}) {
   const { t } = useTranslation();
   const toast = useDynamicIsland("disk");
   const { getActiveColor } = useThemeColor();
   const [loading, setLoading] = useState(false);
 
-  const ssd = isSsdMedia(mediaType);
-  const label = ssd ? t("diskHealth.optimize") : t("diskHealth.defrag");
+  // 按钮文案与图标依据后端判定：SSD 显示「优化/TRIM」，机械盘显示「整理碎片」
+  const label = isSsd ? t("diskHealth.optimize") : t("diskHealth.defrag");
 
   const handle = async () => {
     setLoading(true);
     try {
       const res = await invoke<DiskOptimizeResult>("optimize_disk", {
         driveLetter: letter,
-        mediaType,
+        index,
+        interfaceType,
+        model,
       });
-      const done = res.operation === "retrim"
-        ? t("diskHealth.optimizeDone")
-        : res.operation === "defrag"
-          ? t("diskHealth.defragDone")
-          : t("diskHealth.optimizeDone");
-      toast({
-        title: `${letter}: ${done}`,
-        description: res.message,
-        status: "success",
-        duration: 6000,
-        isClosable: true,
-        variant: "left-accent",
-      });
+      if (res.background) {
+        // 机械盘碎片整理：已在后台低优先级启动，立即返回，不阻塞使用
+        toast({
+          title: `${letter}: ${t("diskHealth.defragStarted")}`,
+          description: res.message,
+          status: "info",
+          duration: 6000,
+          isClosable: true,
+          variant: "left-accent",
+        });
+      } else {
+        const done = res.operation === "retrim"
+          ? t("diskHealth.optimizeDone")
+          : res.operation === "defrag"
+            ? t("diskHealth.defragDone")
+            : t("diskHealth.optimizeDone");
+        toast({
+          title: `${letter}: ${done}`,
+          description: res.message,
+          status: "success",
+          duration: 6000,
+          isClosable: true,
+          variant: "left-accent",
+        });
+      }
     } catch (e) {
       toast({
         title: t("diskHealth.optimizeFailed"),
@@ -121,9 +150,9 @@ function OptimizeButton({ letter, mediaType }: { letter: string; mediaType: stri
   };
 
   return (
-    <Tooltip label={ssd ? t("diskHealth.optimizeHint") : t("diskHealth.defragHint")} hasArrow>
+    <Tooltip label={isSsd ? t("diskHealth.optimizeHint") : t("diskHealth.defragHint")} hasArrow>
       <Button
-        leftIcon={ssd ? <Sparkles size={13} /> : <Wrench size={13} />}
+        leftIcon={isSsd ? <Sparkles size={13} /> : <Wrench size={13} />}
         size="xs"
         variant="outline"
         color={getActiveColor()}
@@ -175,8 +204,10 @@ function HealthBadge({ status }: { status: string }) {
       return <Badge colorScheme="green" px={2} py={0.5} borderRadius="full">Healthy</Badge>;
     case "warning":
       return <Badge colorScheme="yellow" px={2} py={0.5} borderRadius="full">Warning</Badge>;
+    case "unhealthy":
+      return <Badge colorScheme="red" px={2} py={0.5} borderRadius="full">Unhealthy</Badge>;
     default:
-      return <Badge colorScheme="red" px={2} py={0.5} borderRadius="full">{status}</Badge>;
+      return <Badge colorScheme="gray" px={2} py={0.5} borderRadius="full">{status}</Badge>;
   }
 }
 
@@ -191,6 +222,26 @@ function formatGb(gb: number): string {
   if (gb >= 1024) return `${(gb / 1024).toFixed(2)}TB`;
   if (gb >= 1) return `${gb.toFixed(2)}GB`;
   return `${(gb * 1024).toFixed(1)}MB`;
+}
+
+// 通电小时数格式化（千分位）
+function formatPowerOnHours(hours: number | null): string {
+  if (hours === null || hours < 0) return "--";
+  return Math.round(hours).toLocaleString();
+}
+
+// 通电次数格式化（千分位）
+function formatCount(count: number | null): string {
+  if (count === null || count < 0) return "--";
+  return Math.round(count).toLocaleString();
+}
+
+// 数据量格式化（字节 → TB/GB，1024^3 进制，与分区容量一致）
+function formatBytes(bytes: number | null): string {
+  if (bytes === null || bytes < 0) return "--";
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1024) return `${(gb / 1024).toFixed(2)} TB`;
+  return `${gb.toFixed(1)} GB`;
 }
 
 export default function DiskHealthPage() {
@@ -315,11 +366,28 @@ export default function DiskHealthPage() {
                       </Badge>
                     )}
                   </HStack>
-                  <Text fontSize="sm" color={subTextColor}>
-                    {disk.size_gb >= 1024
-                      ? `${(disk.size_gb / 1024).toFixed(2)} TB`
-                      : `${disk.size_gb.toFixed(2)} GB`}
-                  </Text>
+                  <HStack align="center" gap={3}>
+                    <Text fontSize="sm" color={subTextColor}>
+                      {disk.size_gb >= 1024
+                        ? `${(disk.size_gb / 1024).toFixed(2)} TB`
+                        : `${disk.size_gb.toFixed(2)} GB`}
+                    </Text>
+                    {/* 健康度纯大数字（CrystalDiskInfo 方案） */}
+                    <Box textAlign="center">
+                      <Text
+                        fontSize="3xl"
+                        fontWeight="bold"
+                        lineHeight="1"
+                        color={disk.health_percent !== null
+                          ? disk.health_percent > 50 ? "green.400" : disk.health_percent > 20 ? "yellow.400" : "red.400"
+                          : subTextColor}
+                        sx={{ fontVariantNumeric: "tabular-nums" }}
+                      >
+                        {disk.health_percent !== null ? disk.health_percent : "--"}
+                      </Text>
+                      <Text fontSize="10px" color={subTextColor} mt={0.5}>{t("diskHealth.health")}</Text>
+                    </Box>
+                  </HStack>
                 </HStack>
 
                 {disk.partitions.map((part) => (
@@ -341,7 +409,13 @@ export default function DiskHealthPage() {
                       <Text fontSize="xs" fontWeight="medium" color={part.usage_percent > 90 ? "red.400" : part.usage_percent > 75 ? "yellow.400" : textColor}>
                         {part.usage_percent.toFixed(0)}%
                       </Text>
-                      <OptimizeButton letter={part.drive_letter} mediaType={disk.media_type} />
+                      <OptimizeButton
+                        letter={part.drive_letter}
+                        index={disk.index}
+                        interfaceType={disk.interface_type}
+                        model={disk.model}
+                        isSsd={disk.is_ssd}
+                      />
                     </HStack>
                     <Progress
                       value={part.usage_percent}
@@ -353,7 +427,7 @@ export default function DiskHealthPage() {
                   </Box>
                 ))}
 
-                <SimpleGrid columns={{ base: 2, md: 2 }} spacing={4}>
+                <SimpleGrid columns={{ base: 2, md: 3 }} spacing={4}>
                   {liquidGlassEnabled ? (
                     <LiquidGlassCard p={3} textAlign="center">
                       <HStack justify="center" mb={1}>
@@ -381,6 +455,120 @@ export default function DiskHealthPage() {
                       ) : (
                         <Text fontSize="lg" color={subTextColor}>--</Text>
                       )}
+                    </Box>
+                  )}
+
+                  {liquidGlassEnabled ? (
+                    <LiquidGlassCard p={3} textAlign="center">
+                      <HStack justify="center" mb={1}>
+                        <Clock size={14} />
+                        <Text fontSize="xs" color={headingColor}>{t("diskHealth.powerOnHours")}</Text>
+                      </HStack>
+                      {disk.power_on_hours !== null ? (
+                        <Text
+                          fontSize="lg"
+                          fontWeight="bold"
+                          color={headingColor}
+                          sx={{ fontVariantNumeric: "tabular-nums" }}
+                        >
+                          {t("diskHealth.powerOnHoursValue", { hours: formatPowerOnHours(disk.power_on_hours) })}
+                        </Text>
+                      ) : (
+                        <Text fontSize="lg" color={headingColor}>--</Text>
+                      )}
+                    </LiquidGlassCard>
+                  ) : (
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                      <HStack justify="center" mb={1}>
+                        <Clock size={14} />
+                        <Text fontSize="xs" color={subTextColor}>{t("diskHealth.powerOnHours")}</Text>
+                      </HStack>
+                      {disk.power_on_hours !== null ? (
+                        <Text
+                          fontSize="lg"
+                          fontWeight="bold"
+                          color={textColor}
+                          sx={{ fontVariantNumeric: "tabular-nums" }}
+                        >
+                          {t("diskHealth.powerOnHoursValue", { hours: formatPowerOnHours(disk.power_on_hours) })}
+                        </Text>
+                      ) : (
+                        <Text fontSize="lg" color={subTextColor}>--</Text>
+                      )}
+                    </Box>
+                  )}
+
+                  {liquidGlassEnabled ? (
+                    <LiquidGlassCard p={3} textAlign="center">
+                      <HStack justify="center" mb={1}>
+                        <Power size={14} />
+                        <Text fontSize="xs" color={headingColor}>{t("diskHealth.powerOnCount")}</Text>
+                      </HStack>
+                      {disk.power_on_count !== null ? (
+                        <Text fontSize="lg" fontWeight="bold" color={headingColor} sx={{ fontVariantNumeric: "tabular-nums" }}>
+                          {formatCount(disk.power_on_count)}
+                        </Text>
+                      ) : (
+                        <Text fontSize="lg" color={headingColor}>--</Text>
+                      )}
+                    </LiquidGlassCard>
+                  ) : (
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                      <HStack justify="center" mb={1}>
+                        <Power size={14} />
+                        <Text fontSize="xs" color={subTextColor}>{t("diskHealth.powerOnCount")}</Text>
+                      </HStack>
+                      {disk.power_on_count !== null ? (
+                        <Text fontSize="lg" fontWeight="bold" color={textColor} sx={{ fontVariantNumeric: "tabular-nums" }}>
+                          {formatCount(disk.power_on_count)}
+                        </Text>
+                      ) : (
+                        <Text fontSize="lg" color={subTextColor}>--</Text>
+                      )}
+                    </Box>
+                  )}
+
+                  {liquidGlassEnabled ? (
+                    <LiquidGlassCard p={3} textAlign="center">
+                      <HStack justify="center" mb={1}>
+                        <Download size={14} />
+                        <Text fontSize="xs" color={headingColor}>{t("diskHealth.dataRead")}</Text>
+                      </HStack>
+                      <Text fontSize="lg" fontWeight="bold" color={headingColor} sx={{ fontVariantNumeric: "tabular-nums" }}>
+                        {formatBytes(disk.data_read_bytes)}
+                      </Text>
+                    </LiquidGlassCard>
+                  ) : (
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                      <HStack justify="center" mb={1}>
+                        <Download size={14} />
+                        <Text fontSize="xs" color={subTextColor}>{t("diskHealth.dataRead")}</Text>
+                      </HStack>
+                      <Text fontSize="lg" fontWeight="bold" color={textColor} sx={{ fontVariantNumeric: "tabular-nums" }}>
+                        {formatBytes(disk.data_read_bytes)}
+                      </Text>
+                    </Box>
+                  )}
+
+                  {liquidGlassEnabled ? (
+                    <LiquidGlassCard p={3} textAlign="center">
+                      <HStack justify="center" mb={1}>
+                        <Upload size={14} />
+                        <Text fontSize="xs" color={headingColor}>{t("diskHealth.dataWritten")}</Text>
+                      </HStack>
+                      <Text fontSize="lg" fontWeight="bold" color={headingColor} sx={{ fontVariantNumeric: "tabular-nums" }}>
+                        {formatBytes(disk.data_written_bytes)}
+                      </Text>
+                    </LiquidGlassCard>
+                  ) : (
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                      <HStack justify="center" mb={1}>
+                        <Upload size={14} />
+                        <Text fontSize="xs" color={subTextColor}>{t("diskHealth.dataWritten")}</Text>
+                      </HStack>
+                      <Text fontSize="lg" fontWeight="bold" color={textColor} sx={{ fontVariantNumeric: "tabular-nums" }}>
+                        {formatBytes(disk.data_written_bytes)}
+                      </Text>
                     </Box>
                   )}
 

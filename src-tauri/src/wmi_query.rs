@@ -17,6 +17,15 @@ pub fn wmi_query(wql: &str) -> Result<Vec<HashMap<String, Variant>>, String> {
         .map_err(|e| format!("WMI查询失败: {}", e))
 }
 
+/// 在指定命名空间执行 WQL 查询（如 ROOT\WMI 读取 SMART），返回行列表
+pub fn wmi_query_ns(namespace: &str, wql: &str) -> Result<Vec<HashMap<String, Variant>>, String> {
+    let com_con = COMLibrary::new().map_err(|e| format!("COM初始化失败: {}", e))?;
+    let con = WMIConnection::with_namespace_path(namespace, com_con.into())
+        .map_err(|e| format!("WMI连接失败({}): {}", namespace, e))?;
+    con.raw_query(wql)
+        .map_err(|e| format!("WMI查询失败({}): {}", namespace, e))
+}
+
 // ─── Variant 提取辅助函数 ───
 
 /// 提取为字符串（null/empty 返回 None）

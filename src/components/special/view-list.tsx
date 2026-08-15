@@ -55,14 +55,16 @@ function SortableListItem({ tool, activeDrag }: { tool: ViewItem; activeDrag: bo
     listeners,
     setNodeRef,
     transform,
-    transition,
     isDragging,
   } = useSortable({ id: tool.id });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
+    // 拖动中的卡片快速跟随指针；其它卡片用弹性过冲曲线产生"被挤"果冻 + 回弹
+    transition: isDragging
+      ? "transform 0ms"
+      : "transform 380ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+    opacity: 1,
     zIndex: isDragging ? 100 : 1,
     position: "relative",
   };

@@ -19,8 +19,10 @@ import { store } from "@/lib/store";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
 
-const CURRENT_VERSION = "v7.9.0";
+const CURRENT_VERSION = "v8.0.7";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
+/** 灵动岛更新下载岛的固定 id */
+const UPDATE_ISLAND_ID = "update-download";
 
 interface UpdateContextValue {
   latestRelease: ReleaseInfo | null;
@@ -77,6 +79,12 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   const isDownloadingRef = useRef(false);
   const targetProgressRef = useRef(0);
   const displayProgressRef = useRef(0);
+  // 下载完成后的安装包路径 ref：供灵动岛内 onClick 等闭包读取最新值，避免过期捕获
+  const downloadedFilePathRef = useRef("");
+  // 完成态标记：进度监听器据此阻止回写，避免延迟事件覆盖「点击重启」导致进度条回退/闪烁
+  const isDownloadCompleteRef = useRef(false);
+  // 岛内进度只涨不跌的保险
+  const lastIslandProgressRef = useRef(0);
 
   // 平滑动画：显示值每 50ms 向目标值逼近，且强制单调递增、永不倒退
   useEffect(() => {
@@ -138,6 +146,12 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     isDownloadingRef.current = isDownloading;
   }, [isDownloading]);
+  useEffect(() => {
+    downloadedFilePathRef.current = downloadedFilePath;
+  }, [downloadedFilePath]);
+  useEffect(() => {
+    isDownloadCompleteRef.current = isDownloadComplete;
+  }, [isDownloadComplete]);
 
   const setAutoUpdateEnabled = useCallback(async (value: boolean) => {
     setAutoUpdateEnabledState(value);
@@ -181,19 +195,48 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
       // 关闭更新弹窗与"有新版本"标记，彻底隐藏更新入口
       setIsModalOpen(false);
       setHasUpdate(false);
+      // 关闭灵动岛更新下载岛
+      toast.closePersistent(UPDATE_ISLAND_ID);
     }
-  }, []);
+  }, [toast]);
 
-  // 下载进度事件：后端已按 200ms 节流，此处直接更新目标值
+  // 下载进度事件：后端已按 200ms 节流，此处直接更新目标值，并静默同步灵动岛进度
   useEffect(() => {
     const unlisten = listen<{ progress: number; total: number }>("download-progress", (event) => {
       targetProgressRef.current = event.payload.progress;
       setDownloadProgress(event.payload.progress);
+      // 完成态不再回写进度，避免延迟事件覆盖「点击重启」导致进度条回退/闪烁
+      if (isDownloadCompleteRef.current) return;
+      // 岛内进度只涨不跌（保险，杜绝任何回退）
+      const next = Math.max(lastIslandProgressRef.current, event.payload.progress);
+      lastIslandProgressRef.current = next;
+      // 静默更新（animate=false），避免每 200ms 触发缩→扩动画
+      toast.updatePersistent(UPDATE_ISLAND_ID, { progress: next }, false);
     });
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, []);
+  }, [toast]);
+
+  // 重启安装：路径从 ref 读取，供灵动岛内 onClick 闭包获取最新值（不捕获过期 state）
+  const handleInstall = useCallback(async () => {
+    const filePath = downloadedFilePathRef.current;
+    if (!filePath) return;
+    try {
+      await invoke("clear_pending_install");
+      await invoke("install_update", {
+        filePath,
+      });
+    } catch (error) {
+      console.error("Failed to install:", error);
+      toast({
+        title: t("settings.aboutSettings.installFailed") || "安装失败",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  }, [t, toast]);
 
   // 核心下载逻辑（静默与手动共用，互斥进行）
   // manual=true 表示用户手动点击下载：始终允许，不受静默开关限制
@@ -222,6 +265,21 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
       setIsDownloadComplete(false);
       if (openModalOnStart) setIsModalOpen(true);
 
+      // 重置岛内进度/完成标记
+      lastIslandProgressRef.current = 0;
+      isDownloadCompleteRef.current = false;
+
+      // 灵动岛显示更新下载基线（持久，不自动关闭）
+      toast.showPersistent({
+        id: UPDATE_ISLAND_ID,
+        iconKey: "download",
+        status: "blue",
+        persistent: true,
+        title: t("settings.aboutSettings.islandDownloading") || "新版本下载",
+        description: release.tag_name,
+        progress: 0,
+      });
+
       try {
         const asset = release.assets.find(
           (a) => a.name.endsWith(".msi") || a.name.endsWith(".exe"),
@@ -245,6 +303,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
             } catch (error) {
               console.error("Failed to delete cancelled download:", error);
             }
+            toast.closePersistent(UPDATE_ISLAND_ID);
             downloadStartedRef.current = false;
             setIsDownloading(false);
             setIsDownloadComplete(false);
@@ -258,8 +317,17 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
           setDownloadedFilePath(filePath);
           targetProgressRef.current = 100;
           setDownloadProgress(100);
+          // 同步置完成标记，杜绝延迟进度事件回写
+          isDownloadCompleteRef.current = true;
           setIsDownloadComplete(true);
           setIsDownloading(false);
+          // 灵动岛切换为「点击重启」，点击直接重启安装；常驻显示直至用户点击或跳过
+          toast.updatePersistent(UPDATE_ISLAND_ID, {
+            title: t("settings.aboutSettings.islandClickRestart") || "点击重启",
+            status: "success",
+            progress: undefined,
+            onClick: handleInstall,
+          });
           // 登记待安装标记：仅当静默更新仍开启时，关闭软件退出流程才自动启动安装向导
           if (autoUpdateEnabledRef.current) {
             try {
@@ -274,11 +342,13 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
             } catch (error) {
               console.error("Failed to delete stale download:", error);
             }
+            toast.closePersistent(UPDATE_ISLAND_ID);
             setIsDownloadComplete(false);
             setDownloadedFilePath("");
           }
           // 手动下载即使静默关闭也保留文件，显示"重启安装"供用户点击（但不登记自动安装）
         } else {
+          toast.closePersistent(UPDATE_ISLAND_ID);
           downloadStartedRef.current = false;
           setIsDownloading(false);
           try {
@@ -291,6 +361,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         // 静默更新已关闭（用户主动取消 / 后端拒绝）：静默重置，绝不提示"下载失败"
         if (downloadCancelledRef.current || !autoUpdateEnabledRef.current) {
+          toast.closePersistent(UPDATE_ISLAND_ID);
           downloadStartedRef.current = false;
           setIsDownloading(false);
           setDownloadProgress(0);
@@ -306,11 +377,12 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
           duration: 2000,
           isClosable: true,
         });
+        toast.closePersistent(UPDATE_ISLAND_ID);
         setIsDownloading(false);
         downloadStartedRef.current = false;
       }
     },
-    [t, toast],
+    [t, toast, handleInstall],
   );
 
   // 启动完成后的自动检查：开启静默 → 后台下载不弹窗；关闭 → 弹窗但不下载
@@ -482,25 +554,9 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     await startDownload(release, false, true);
   }, [isDownloading, isDownloadComplete, latestRelease, startDownload, t, toast]);
 
-  const handleInstall = useCallback(async () => {
-    if (!downloadedFilePath) return;
-    try {
-      await invoke("clear_pending_install");
-      await invoke("install_update", {
-        filePath: downloadedFilePath,
-      });
-    } catch (error) {
-      console.error("Failed to install:", error);
-      toast({
-        title: t("settings.aboutSettings.installFailed") || "安装失败",
-        status: "error",
-        duration: 2000,
-        isClosable: true,
-      });
-    }
-  }, [downloadedFilePath, t, toast]);
-
   const handleSkip = useCallback(async () => {
+    // 关闭灵动岛更新下载岛
+    toast.closePersistent(UPDATE_ISLAND_ID);
     if (downloadedFilePath) {
       try {
         await invoke("delete_download_file", {
@@ -522,7 +578,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     setIsDownloading(false);
     setLatestRelease(null);
     setHasUpdate(false);
-  }, [downloadedFilePath]);
+  }, [downloadedFilePath, toast]);
 
   const openModal = useCallback(() => setIsModalOpen(true), []);
   const closeModal = useCallback(() => setIsModalOpen(false), []);

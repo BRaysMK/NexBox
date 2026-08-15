@@ -35,9 +35,16 @@ interface MusicState {
   playMode: PlayMode;
   playQueue: Song[];
   currentIndex: number;
+  // 心动模式：基于当前歌曲的相似歌曲动态队列（仅网易云源）
+  heartbeatQueue: Song[];
+  heartbeatLoading: boolean;
+  // 心动模式已播放过的歌曲 ID（用于去重，避免相似歌曲重复播放）
+  heartbeatPlayedIds: Set<string>;
 
   // 本地导入歌曲
   localSongs: Song[];
+  // 本地导入进行中（文件夹/多文件导入耗时长，用于 UI 反馈避免误以为卡死）
+  importingLocal: boolean;
 
   // 登录状态 (多平台)
   loginInfo: LoginInfo | null; // 当前播放源的登录信息 (向后兼容)
@@ -135,6 +142,7 @@ interface MusicState {
   loadLocalSongs: () => Promise<void>;
   importLocalSongs: (paths: string[]) => Promise<{ count: number; noCoverCount: number }>;
   importLocalFolder: (folder: string) => Promise<{ count: number; noCoverCount: number }>;
+  setImportingLocal: (importing: boolean) => void;
   removeLocalSong: (id: string) => Promise<void>;
   clearLocalSongs: () => Promise<void>;
 
@@ -154,6 +162,7 @@ interface MusicState {
   seekTo: (time: number) => void;
   setVolume: (v: number) => void;
   togglePlayMode: () => void;
+  loadHeartbeatSongs: (baseSong: Song | null) => Promise<void>;
   setPlaybackQuality: (quality: PlaybackQuality) => Promise<void>;
   setLyricsFontSize: (size: number) => Promise<void>;
   setLyricsHighlightColor: (color: string) => Promise<void>;
@@ -283,17 +292,15 @@ async function mergeLocalSongInfos(
 
   set((state) => {
     const st = state as { localSongs: Song[] };
-    // 已存在的歌曲更新元数据，新歌曲追加
-    const merged = [...st.localSongs];
-    for (const song of newSongs) {
-      const idx = merged.findIndex((s) => s.id === song.id);
-      if (idx >= 0) {
-        merged[idx] = song;
-      } else {
-        merged.push(song);
-      }
+    // 用 Map 以 id 为键做去重合并，O(n) 而非 O(n²)，避免大列表导入时卡顿
+    const merged = new Map<string, Song>();
+    for (const song of st.localSongs) {
+      merged.set(song.id, song);
     }
-    return { localSongs: merged };
+    for (const song of newSongs) {
+      merged.set(song.id, song);
+    }
+    return { localSongs: Array.from(merged.values()) };
   });
 
   // 持久化完整 Song 对象，确保重启后 provider 等字段不丢失
@@ -424,8 +431,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   playMode: "list",
   playQueue: [],
   currentIndex: -1,
+  heartbeatQueue: [],
+  heartbeatLoading: false,
+  heartbeatPlayedIds: new Set(),
 
   localSongs: [],
+  importingLocal: false,
 
   loginInfo: null,
   loginInfos: { netease: null, kugou: null, qqmusic: null },
@@ -514,24 +525,32 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   importLocalSongs: async (paths) => {
+    set({ importingLocal: true });
     try {
       const infos = await invoke<LocalSongInfoPayload[]>("import_local_music", { paths });
       return await mergeLocalSongInfos(infos, set, get);
     } catch (e) {
       console.error("Import local songs failed:", e);
       return { count: 0, noCoverCount: 0 };
+    } finally {
+      set({ importingLocal: false });
     }
   },
 
   importLocalFolder: async (folder) => {
+    set({ importingLocal: true });
     try {
       const infos = await invoke<LocalSongInfoPayload[]>("import_local_music_folder", { folder });
       return await mergeLocalSongInfos(infos, set, get);
     } catch (e) {
       console.error("Import local music folder failed:", e);
       return { count: 0, noCoverCount: 0 };
+    } finally {
+      set({ importingLocal: false });
     }
   },
+
+  setImportingLocal: (importing) => set({ importingLocal: importing }),
 
   removeLocalSong: async (id) => {
     set((state) => ({ localSongs: state.localSongs.filter((s) => s.id !== id) }));
@@ -989,6 +1008,31 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
     set({ currentSong: song, currentTime: 0, duration: 0, isPlaying: false });
     get().loadLyricsForSong(song);
+    // 心动模式：仅对"我喜欢"歌单生效。
+    // 用户手动播放（传入 queue）且队列非"我喜欢"歌单时自动降级为随机播放；
+    // 心动模式自动续播（不传 queue）不触发降级，保证相似歌曲连续播放
+    if (get().playMode === "heartbeat") {
+      if (queue && queue.length > 0 && !queue.every((s) => get().likedSongIds.has(s.id))) {
+        // 非"我喜欢"歌单：降级为随机播放（保留已播放记录，重新回到心动时不重复）
+        set({ playMode: "shuffle", heartbeatQueue: [] });
+        getStore().then((s) => s.set("playMode", "shuffle").then(() => s.save()));
+        if (get().desktopLyricsVisible) {
+          emit("desktop-lyrics:state", { isPlaying: get().isPlaying, playMode: "shuffle", volume: get().volume });
+        }
+      } else if (song.provider === "netease") {
+        // 记录已播放，用于去重（带上限，防止长期挂机集合无限增长）
+        set((st) => {
+          const next = new Set(st.heartbeatPlayedIds);
+          next.add(song.id);
+          if (next.size > 2000) {
+            return { heartbeatPlayedIds: new Set([song.id]) };
+          }
+          return { heartbeatPlayedIds: next };
+        });
+        // 以当前播放歌曲为基准预拉相似歌曲，保证连续播放
+        get().loadHeartbeatSongs(song);
+      }
+    }
 
     try {
       // ── 本地歌曲：直接播放本地文件，无需获取网络 URL ──
@@ -1186,7 +1230,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   nextTrack: () => {
-    const { playQueue, currentIndex, playMode, audioRef } = get();
+    const { playQueue, currentIndex, playMode, audioRef, heartbeatQueue } = get();
     if (playQueue.length === 0) return;
 
     // 单曲循环：重新播放当前歌曲
@@ -1194,6 +1238,22 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (audioRef) {
         audioRef.currentTime = 0;
         audioRef.play().catch(() => {});
+      }
+      return;
+    }
+
+    // 心动模式：从相似歌曲队列取下一首，队列空则回退随机（队列会由 playSong 自动补充）
+    if (playMode === "heartbeat") {
+      let heartbeatNext: Song | null = null;
+      if (heartbeatQueue.length > 0) {
+        const [first, ...rest] = heartbeatQueue;
+        heartbeatNext = first;
+        set({ heartbeatQueue: rest });
+      } else {
+        heartbeatNext = playQueue[Math.floor(Math.random() * playQueue.length)] || null;
+      }
+      if (heartbeatNext) {
+        get().playSong(heartbeatNext);
       }
       return;
     }
@@ -1243,12 +1303,58 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     getStore().then((s) => s.set("volume", v).then(() => s.save()));
   },
 
+  // 心动模式：根据基准歌曲拉取相似歌曲并追加到心动队列（自动去重已播放/已排队歌曲）
+  loadHeartbeatSongs: async (baseSong) => {
+    if (!baseSong || baseSong.provider !== "netease") return;
+    const state = get();
+    // 一次只允许一个拉取任务，避免快速切歌时并发请求造成队列错乱
+    if (state.heartbeatLoading) return;
+    set({ heartbeatLoading: true });
+    try {
+      const songs = await invoke<Song[]>("music_simi_song", { id: baseSong.id, limit: 20 });
+      // 去重：排除当前播放队列、心动队列、已播放过的相似歌曲
+      const playedIds = new Set<string>([...state.playQueue.map((s) => s.id), ...state.heartbeatPlayedIds]);
+      const queueIds = new Set(state.heartbeatQueue.map((s) => s.id));
+      const currentId = get().currentSong?.id;
+      const fresh = songs.filter(
+        (s) => s.id && !playedIds.has(s.id) && !queueIds.has(s.id) && s.id !== currentId
+      );
+      if (fresh.length > 0) {
+        set((st) => ({ heartbeatQueue: [...st.heartbeatQueue, ...fresh] }));
+      }
+    } catch (e) {
+      console.error("[Music] loadHeartbeatSongs failed:", e);
+    } finally {
+      set({ heartbeatLoading: false });
+    }
+  },
+
   togglePlayMode: () => {
-    const modes: PlayMode[] = ["list", "shuffle", "one"];
+    const modes: PlayMode[] = ["list", "heartbeat", "shuffle", "one"];
     const current = modes.indexOf(get().playMode);
     const next = modes[(current + 1) % modes.length];
-    set({ playMode: next });
+    // 心动模式：仅"我喜欢"歌单（网易云）可用，否则自动切换为随机播放
+    if (next === "heartbeat") {
+      const st = get();
+      const usable = st.playbackSource === "netease"
+        && st.playQueue.length > 0
+        && st.playQueue.every((s) => st.likedSongIds.has(s.id));
+      if (!usable) {
+        set({ playMode: "shuffle", heartbeatQueue: [] });
+        getStore().then((s) => s.set("playMode", "shuffle").then(() => s.save()));
+        if (get().desktopLyricsVisible) {
+          emit("desktop-lyrics:state", { isPlaying: get().isPlaying, playMode: "shuffle", volume: get().volume });
+        }
+        return;
+      }
+    }
+    // 离开心动模式时清空相似歌曲队列，防止残留旧数据
+    set({ playMode: next, heartbeatQueue: next === "heartbeat" ? get().heartbeatQueue : [] });
     getStore().then((s) => s.set("playMode", next).then(() => s.save()));
+    // 进入心动模式：以当前歌曲为基准预拉相似歌曲
+    if (next === "heartbeat") {
+      get().loadHeartbeatSongs(get().currentSong);
+    }
     if (get().desktopLyricsVisible) {
       emit("desktop-lyrics:state", { isPlaying: get().isPlaying, playMode: next, volume: get().volume });
     }
@@ -1557,6 +1663,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
       await invoke("music_switch_provider", { provider });
     } catch {}
+    // 心动模式仅支持网易云：切换到其他平台时自动降级为随机播放
+    if (provider !== "netease" && get().playMode === "heartbeat") {
+      set({ playMode: "shuffle", heartbeatQueue: [] });
+      getStore().then((s) => s.set("playMode", "shuffle").then(() => s.save()));
+    }
     // 更新 loginInfo 为当前平台的登录状态
     const info = get().loginInfos[provider];
     // 切换平台时立即清空榜单/推荐，避免旧平台数据残留闪烁

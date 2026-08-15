@@ -60,6 +60,7 @@ interface ProcessInfo {
   name: string;
   memory_mb: number;
   cpu_usage: number;
+  exe_path: string;
 }
 
 interface IsolationApplyResult {
@@ -90,6 +91,7 @@ interface CpuIsolationPanelProps {
   topology: CpuTopology | null;
   processes: ProcessInfo[];
   loadProcesses: () => Promise<void>;
+  icons: Record<string, string>;
 }
 
 // ── Component ──────────────────────────────────────────────
@@ -98,6 +100,7 @@ export default function CpuIsolationPanel({
   topology,
   processes,
   loadProcesses,
+  icons,
 }: CpuIsolationPanelProps) {
   const { t } = useTranslation();
   const toast = useDynamicIsland("cpu");
@@ -588,6 +591,28 @@ export default function CpuIsolationPanel({
                     bg={excludeProcess?.pid === proc.pid ? themeColorHex : "transparent"}
                     flexShrink={0}
                   />
+                  <Box
+                    w={6}
+                    h={6}
+                    borderRadius="md"
+                    bg={icons[proc.exe_path] ? "transparent" : themeColorRgba(0.1)}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexShrink={0}
+                    overflow="hidden"
+                  >
+                    {icons[proc.exe_path] ? (
+                      <img
+                        src={icons[proc.exe_path]}
+                        alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Cpu size={13} color={subTextColor} />
+                    )}
+                  </Box>
                   <Text color={textColor} fontSize="sm" fontWeight="500" flex={1} isTruncated>{proc.name}</Text>
                   <Text color={subTextColor} fontSize="xs" flexShrink={0}>PID: {proc.pid}</Text>
                   <Text color={subTextColor} fontSize="xs" flexShrink={0} minW="70px" textAlign="right">{proc.memory_mb.toFixed(0)} MB</Text>

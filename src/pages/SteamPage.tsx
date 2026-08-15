@@ -600,9 +600,11 @@ function LibraryCard({ lib, gameCount, gameSize }: { lib: SteamLibrary; gameCoun
         <LuHardDrive size={20} />
       </Box>
       <Box flex={1} minW={0}>
-        <Text fontSize="sm" fontWeight="medium" color={headerColor} noOfLines={1} title={lib.path}>
-          {lib.path}
-        </Text>
+        <Tooltip label={lib.path}>
+          <Text fontSize="sm" fontWeight="medium" color={headerColor} noOfLines={1}>
+            {lib.path}
+          </Text>
+        </Tooltip>
         {lib.label && (
           <Text fontSize="xs" color={subTextColor}>
             {lib.label}

@@ -26,11 +26,11 @@ export function LiquidGlassMenuItem({
 
   const activeBg = getActiveColor();
   const activeTextFinal = getContrastTextColor();
-  // 关闭液态玻璃时：设置子菜单作为独立白面板，使用纯白背景 + 黑字（亮/暗模式一致）
-  const inactiveText = "#000000";
+  // 关闭液态玻璃时：设置子菜单作为独立面板，背景/文字跟随主题（深色模式保持深色）
+  const inactiveText = useColorModeValue("#000000", "#ffffff");
   const glassInactiveText = useColorModeValue("gray.900", "#ffffff");
-  const defaultInactiveBg = "#ffffff";
-  const hoverBg = "#f0f0f0";
+  const defaultInactiveBg = useColorModeValue("#ffffff", "#1a1a1a");
+  const hoverBg = useColorModeValue("#f0f0f0", "#2a2a2a");
 
   const glassInactiveBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassHoverBg = useColorModeValue("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");

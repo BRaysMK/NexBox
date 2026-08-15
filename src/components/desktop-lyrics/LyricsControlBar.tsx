@@ -4,7 +4,7 @@
  * 锁定状态的解锁按钮由独立小窗口（/lyrics-unlock-btn）提供，
  * 不受 WebView2 穿透影响。
  *
- * [上一句] [播放/暂停] [下一句] [随机播放] | [锁定] | [关闭]
+ * [上一句] [播放/暂停] [下一句] [播放顺序] | [锁定] | [关闭]
  */
 
 import { memo } from "react";
@@ -12,11 +12,15 @@ import {
   SkipBack,
   SkipForward,
   Shuffle,
+  Repeat,
+  Repeat1,
+  HeartPulse,
   Play,
   Pause,
   Lock,
   X,
 } from "lucide-react";
+import { Tooltip } from "@chakra-ui/react";
 import type { PlayMode } from "@/types/music";
 import type { ControlAction } from "@/hooks/useDesktopLyricsSync";
 
@@ -64,51 +68,65 @@ function LyricsControlBarInner({
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <button
-        style={btnBase}
-        onClick={() => onControl("prev")}
-        title="上一首"
-        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-      >
-        <SkipBack size={16} />
-      </button>
+      <Tooltip label="上一首">
+        <button
+          style={btnBase}
+          onClick={() => onControl("prev")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <SkipBack size={16} />
+        </button>
+      </Tooltip>
 
-      <button
-        style={{
-          ...btnBase,
-          background: "rgba(255,255,255,0.2)",
-        }}
-        onClick={() => onControl("play-pause")}
-        title={isPlaying ? "暂停" : "播放"}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.3)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.2)")}
-      >
-        {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-      </button>
+      <Tooltip label={isPlaying ? "暂停" : "播放"}>
+        <button
+          style={{
+            ...btnBase,
+            background: "rgba(255,255,255,0.2)",
+          }}
+          onClick={() => onControl("play-pause")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.3)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.2)")}
+        >
+          {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+      </Tooltip>
 
-      <button
-        style={btnBase}
-        onClick={() => onControl("next")}
-        title="下一首"
-        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-      >
-        <SkipForward size={16} />
-      </button>
+      <Tooltip label="下一首">
+        <button
+          style={btnBase}
+          onClick={() => onControl("next")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <SkipForward size={16} />
+        </button>
+      </Tooltip>
 
-      <button
-        style={{
-          ...btnBase,
-          color: playMode === "shuffle" ? "#4FC3F7" : "rgba(255,255,255,0.9)",
-        }}
-        onClick={() => onControl("toggle-shuffle")}
-        title={playMode === "shuffle" ? "随机播放中" : "随机播放"}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      <Tooltip
+        label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : playMode === "heartbeat" ? "心动模式" : "列表循环"}
       >
-        <Shuffle size={16} />
-      </button>
+        <button
+          style={{
+            ...btnBase,
+            color: playMode !== "list" ? "#4FC3F7" : "rgba(255,255,255,0.9)",
+          }}
+          onClick={() => onControl("toggle-shuffle")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          {playMode === "one" ? (
+            <Repeat1 size={16} />
+          ) : playMode === "shuffle" ? (
+            <Shuffle size={16} />
+          ) : playMode === "heartbeat" ? (
+            <HeartPulse size={16} />
+          ) : (
+            <Repeat size={16} />
+          )}
+        </button>
+      </Tooltip>
 
       {/* 分隔线 */}
       <div
@@ -120,15 +138,16 @@ function LyricsControlBarInner({
         }}
       />
 
-      <button
-        style={btnBase}
-        onClick={() => onControl("lock")}
-        title="锁定歌词"
-        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-      >
-        <Lock size={16} />
-      </button>
+      <Tooltip label="锁定歌词">
+        <button
+          style={btnBase}
+          onClick={() => onControl("lock")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <Lock size={16} />
+        </button>
+      </Tooltip>
 
       {/* 分隔线 */}
       <div
@@ -140,15 +159,16 @@ function LyricsControlBarInner({
         }}
       />
 
-      <button
-        style={btnBase}
-        onClick={() => onControl("close")}
-        title="关闭桌面歌词"
-        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-      >
-        <X size={16} />
-      </button>
+      <Tooltip label="关闭桌面歌词">
+        <button
+          style={btnBase}
+          onClick={() => onControl("close")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <X size={16} />
+        </button>
+      </Tooltip>
     </div>
   );
 }

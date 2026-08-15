@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback, useMemo } from "react";
+import { useColorMode } from "@chakra-ui/react";
 import { store } from "@/lib/store";
 
 type BackgroundMode = "none" | "preset" | "image" | "dynamic";
@@ -95,6 +96,27 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [activePresetIndex, setActivePresetIndex] = useState(0);
   const [carouselEnabled, setCarouselEnabled] = useState(false);
   const [jellyBounceEnabled, setJellyBounceEnabled] = useState(false);
+
+  const { colorMode } = useColorMode();
+
+  // 同步 Tooltip 样式到 CSS 变量：跟随液态玻璃开关与深浅主题，由 theme.ts 的 Tooltip baseStyle 消费。
+  // 液态玻璃开启 → 半透明 + 模糊；关闭 → 实心胶囊（不再是液态玻璃效果）。
+  useEffect(() => {
+    const root = document.documentElement;
+    const glass = liquidGlassEnabled;
+    const isDark = colorMode === "dark";
+    const bg = glass
+      ? isDark ? "rgba(28,28,32,0.66)" : "rgba(255,255,255,0.55)"
+      : isDark ? "#262626" : "#ffffff";
+    const fg = isDark ? "#f0f0f0" : "#1a1a1a";
+    const border = glass
+      ? isDark ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.5)"
+      : isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)";
+    root.style.setProperty("--nexbox-tooltip-bg", bg);
+    root.style.setProperty("--nexbox-tooltip-fg", fg);
+    root.style.setProperty("--nexbox-tooltip-border", border);
+    root.style.setProperty("--nexbox-tooltip-blur", glass ? "blur(12px) saturate(1.4)" : "none");
+  }, [liquidGlassEnabled, colorMode]);
 
   useEffect(() => {
     async function loadSettings() {

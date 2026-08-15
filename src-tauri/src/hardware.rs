@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use thiserror::Error;
@@ -9,8 +8,6 @@ use crate::wmi_query;
 
 #[derive(Error, Debug)]
 pub enum HardwareError {
-    #[error("PowerShell执行失败: {0}")]
-    PowerShellError(String),
     #[error("JSON解析失败: {0}")]
     JsonError(#[from] serde_json::Error),
     #[error("NVML错误: {0}")]
@@ -281,8 +278,8 @@ struct StaticHardwareInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct GpuStaticInfo {
-    name: String,
+pub(crate) struct GpuStaticInfo {
+    pub(crate) name: String,
     vendor: GpuVendor,
     memory_gb: Option<f64>,
     driver_version: String,
@@ -295,7 +292,7 @@ struct GpuStaticInfo {
     resolution_height: Option<u32>,
     refresh_rate: Option<u32>,
     device_id: String,
-    pnp_device_id: String,
+    pub(crate) pnp_device_id: String,
     status: String,
     inf_filename: String,
     video_architecture: Option<String>,
@@ -318,59 +315,6 @@ fn detect_gpu_vendor(name: &str) -> GpuVendor {
         GpuVendor::Intel
     } else {
         GpuVendor::Unknown
-    }
-}
-
-fn run_powershell<T: for<'de> Deserialize<'de>>(command: &str) -> Result<Vec<T>, HardwareError> {
-    // 强制所有 PowerShell 输出使用 UTF-8 编码，防止中文乱码
-    let full_cmd = format!(
-        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; {}",
-        command
-    );
-    let mut cmd = Command::new("powershell");
-    cmd.args(&["-Command", &full_cmd]);
-    
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-    
-    let output = cmd.output()
-        .map_err(|e| HardwareError::PowerShellError(e.to_string()))?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(HardwareError::PowerShellError(error.to_string()));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stdout_trimmed = stdout.trim();
-
-    // 尝试解析为数组，如果失败则尝试解析为单个对象并包装到数组中
-    match serde_json::from_str::<Vec<T>>(&stdout_trimmed) {
-        Ok(results) => Ok(results),
-        Err(e_vec) => {
-            match serde_json::from_str::<T>(&stdout_trimmed) {
-                Ok(single) => Ok(vec![single]),
-                Err(e_single) => {
-                    let preview: String = if stdout_trimmed.len() > 300 {
-                        format!("{}...", &stdout_trimmed[..300])
-                    } else {
-                        stdout_trimmed.to_string()
-                    };
-                    log::warn!(
-                        "PowerShell JSON 解析失败 (type={}): vec_err={:?} single_err={:?}\n  原始输出: {}",
-                        std::any::type_name::<T>(),
-                        e_vec,
-                        e_single,
-                        preview
-                    );
-                    Ok(vec![])
-                }
-            }
-        }
     }
 }
 
@@ -578,13 +522,13 @@ fn format_driver_date(d: &str) -> String {
 ///
 /// 这是「列出所有显卡」的可靠来源 —— NVML 只枚举 NVIDIA，LHML 在存在 NVIDIA 独显时
 /// 又会跳过 Intel 核显，因此静态列表必须用 WMI 全量枚举。
-fn get_gpus_static_from_wmi() -> Vec<GpuStaticInfo> {
+pub(crate) fn get_gpus_static_from_wmi() -> Vec<GpuStaticInfo> {
     use crate::wmi_query::{self, v_str, v_u32, v_u64};
 
     let rows = match wmi_query::wmi_query(
         "SELECT Name, VideoProcessor, AdapterCompatibility, AdapterRAM, DriverVersion, DriverDate, \
          InstalledDisplayDrivers, VideoModeDescription, CurrentHorizontalResolution, \
-         CurrentVerticalResolution, CurrentRefreshRate, PNPDeviceID, DeviceID, Status, InfName, \
+         CurrentVerticalResolution, CurrentRefreshRate, PNPDeviceID, DeviceID, Status, \
          VideoArchitecture, VideoMemoryType FROM Win32_VideoController",
     ) {
         Ok(rows) => rows,
@@ -1722,7 +1666,7 @@ pub fn get_os_version() -> Result<String, String> {
     sysinfo::System::long_os_version().ok_or_else(|| "无法获取操作系统版本".to_string())
 }
 
-// ─── Disk Health ───
+// ─── Disk Health（纯 Rust + WinAPI 直读 SMART，移植自 CrystalDiskInfo）───
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PartitionInfo {
@@ -1746,6 +1690,12 @@ pub struct DiskHealthInfo {
     pub temperature_c: Option<f64>,
     pub wear_percentage: Option<f64>,
     pub power_on_hours: Option<u64>,
+    /// 通电次数
+    pub power_on_count: Option<u64>,
+    /// 累计数据读取量（字节）
+    pub data_read_bytes: Option<u64>,
+    /// 累计数据写入量（字节）
+    pub data_written_bytes: Option<u64>,
     pub read_errors: Option<u64>,
     pub write_errors: Option<u64>,
     pub status: String,
@@ -1756,6 +1706,10 @@ pub struct DiskHealthInfo {
     pub partitions: Vec<PartitionInfo>,
     pub total_usage_gb: f64,
     pub total_capacity_gb: f64,
+    /// 健康度百分比 0-100（与 CrystalDiskInfo 一致的 Life；HDD 按状态映射）
+    pub health_percent: Option<u8>,
+    /// 是否为 SSD（由后端 SMART 直读判定，前端据此显示 TRIM/碎片整理文案）
+    pub is_ssd: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1767,131 +1721,169 @@ pub struct DiskHealthResponse {
     pub unhealthy_count: u32,
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case, dead_code)]
-struct PsDiskHealthRaw {
-    DeviceId: String,
-    FriendlyName: String,
-    Model: String,
-    MediaType: Option<String>,
-    Size: Option<u64>,
-    BusType: String,
-    HealthStatus: String,
-    OperationalStatus: String,
-    SerialNumber: Option<String>,
-    NumberOfPartitions: Option<u32>,
-    Temperature: Option<f64>,
-    WearPercentage: Option<f64>,
-    PowerOnHours: Option<u64>,
-    ReadErrorsTotal: Option<u64>,
-    WriteErrorsTotal: Option<u64>,
-    WmiStatus: Option<String>,
-    WmiInterfaceType: Option<String>,
-    PartitionStyle: Option<String>,
-    IsBoot: Option<bool>,
-    Partitions: Option<Vec<PsPartitionRaw>>,
-}
+/// 枚举固定盘符（C:、D:…）并映射到物理盘号，收集分区容量/文件系统信息。
+/// 使用 winapi（GetLogicalDrives + GetDriveTypeW + IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS），
+/// 全程无需 PowerShell。
+fn enumerate_volumes_by_disk() -> std::collections::HashMap<u32, Vec<PartitionInfo>> {
+    use winapi::shared::minwindef::{DWORD, LPVOID};
+    use winapi::um::errhandlingapi::GetLastError;
+    use winapi::um::fileapi::{
+        CreateFileW, GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW, OPEN_EXISTING,
+    };
+    use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
+    use winapi::um::ioapiset::DeviceIoControl;
+    use winapi::um::winnt::{
+        FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ,
+    };
 
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-struct PsPartitionRaw {
-    DriveLetter: Option<String>,
-    SizeRemaining: Option<u64>,
-    Size: Option<u64>,
-    FileSystem: Option<String>,
+    // 手动声明（winapi 的签名使用 ULARGE_INTEGER union，这里直接映射为 u64）
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetDiskFreeSpaceExW(
+            directory: *const u16,
+            free_bytes_available: *mut u64,
+            total_bytes: *mut u64,
+            total_free_bytes: *mut u64,
+        ) -> i32;
+    }
+
+    const IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS: DWORD = 0x0056_0000;
+    const DRIVE_FIXED: u32 = 3;
+
+    #[repr(C)]
+    struct DiskExtent {
+        disk_number: u32,
+        starting_offset: i64,
+        extent_length: i64,
+    }
+    #[repr(C)]
+    struct VolumeDiskExtents {
+        number_of_disk_extents: u32,
+        extents: [DiskExtent; 1],
+    }
+
+    let mut map: std::collections::HashMap<u32, Vec<PartitionInfo>> = std::collections::HashMap::new();
+    let mask = unsafe { GetLogicalDrives() };
+    for i in 0..26 {
+        if mask & (1 << i) == 0 {
+            continue;
+        }
+        let letter = (b'A' + i as u8) as char;
+        let root = format!("{}:\\", letter);
+        let root_w: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
+        let dtype = unsafe { GetDriveTypeW(root_w.as_ptr()) };
+        if dtype != DRIVE_FIXED {
+            continue;
+        }
+
+        // 打开卷设备，查询所属物理盘号
+        let vol = format!("\\\\.\\{}:", letter);
+        let vol_w: Vec<u16> = vol.encode_utf16().chain(std::iter::once(0)).collect();
+        let h = unsafe {
+            CreateFileW(
+                vol_w.as_ptr(),
+                GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null_mut(),
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                std::ptr::null_mut(),
+            )
+        };
+        if h == INVALID_HANDLE_VALUE {
+            continue;
+        }
+        let mut extents: VolumeDiskExtents = unsafe { std::mem::zeroed() };
+        let mut returned: DWORD = 0;
+        let ok = unsafe {
+            DeviceIoControl(
+                h,
+                IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                std::ptr::null_mut(),
+                0,
+                &mut extents as *mut _ as LPVOID,
+                std::mem::size_of::<VolumeDiskExtents>() as DWORD,
+                &mut returned,
+                std::ptr::null_mut(),
+            )
+        };
+        unsafe { CloseHandle(h) };
+        if ok == 0 || extents.number_of_disk_extents == 0 {
+            continue;
+        }
+        let disk_number = extents.extents[0].disk_number;
+
+        // 容量（GetDiskFreeSpaceExW）
+        let (total, free) = {
+            let mut free_bytes: u64 = 0;
+            let mut total_bytes: u64 = 0;
+            let mut total_free: u64 = 0;
+            let r = unsafe {
+                GetDiskFreeSpaceExW(
+                    root_w.as_ptr(),
+                    &mut free_bytes,
+                    &mut total_bytes,
+                    &mut total_free,
+                )
+            };
+            if r == 0 {
+                log::warn!("GetDiskFreeSpaceExW({}) 失败，错误码 {}", root, unsafe { GetLastError() });
+                (0u64, 0u64)
+            } else {
+                (total_bytes, total_free)
+            }
+        };
+        // 文件系统（GetVolumeInformationW）
+        let filesystem = {
+            let mut fs_buf = [0u16; 32];
+            let r = unsafe {
+                GetVolumeInformationW(
+                    root_w.as_ptr(),
+                    std::ptr::null_mut(),
+                    0,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    fs_buf.as_mut_ptr(),
+                    fs_buf.len() as DWORD,
+                )
+            };
+            if r == 0 {
+                String::new()
+            } else {
+                let len = fs_buf.iter().position(|&c| c == 0).unwrap_or(fs_buf.len());
+                String::from_utf16_lossy(&fs_buf[..len])
+            }
+        };
+
+        let used = total.saturating_sub(free);
+        let usage_pct = if total > 0 {
+            used as f64 / total as f64 * 100.0
+        } else {
+            0.0
+        };
+        map.entry(disk_number).or_default().push(PartitionInfo {
+            drive_letter: letter.to_string(),
+            total_gb: total as f64 / 1_073_741_824.0,
+            available_gb: free as f64 / 1_073_741_824.0,
+            used_gb: used as f64 / 1_073_741_824.0,
+            usage_percent: usage_pct,
+            filesystem,
+        });
+    }
+    map
 }
 
 fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
-    let ps_script = r#"
-$disks = Get-PhysicalDisk -ErrorAction SilentlyContinue
-$wmiDisks = Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue
-$diskLayout = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -Class MSFT_Disk -ErrorAction SilentlyContinue
+    use crate::wmi_query::{self, v_str, v_u32, v_u64};
 
-# Try multiple methods to get reliability/SMART data
-$reliabilityMap = @{}
-# Method 1: Standard PowerShell pipeline
-try {
-    $relData = Get-PhysicalDisk -ErrorAction SilentlyContinue | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
-    if ($relData) {
-        foreach ($r in $relData) {
-            $reliabilityMap[$r.DeviceId] = $r
-        }
-    }
-} catch {}
-# Method 2: WMI MSFT_StorageReliabilityCounter
-if ($reliabilityMap.Count -eq 0) {
-    try {
-        $relWmi = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -Class MSFT_StorageReliabilityCounter -ErrorAction SilentlyContinue
-        if ($relWmi) {
-            foreach ($r in $relWmi) {
-                $did = if ($r.DeviceId) { $r.DeviceId } else { "PhysicalDrive$($r.PSComputerName)" }
-                $reliabilityMap[$did] = $r
-            }
-        }
-    } catch {}
-}
-# Method 3: CIM MSFT_StorageReliabilityCounter
-if ($reliabilityMap.Count -eq 0) {
-    try {
-        $relCim = Get-CimInstance -Namespace root\Microsoft\Windows\Storage -ClassName MSFT_StorageReliabilityCounter -ErrorAction SilentlyContinue
-        if ($relCim) {
-            foreach ($r in $relCim) {
-                $reliabilityMap[$r.DeviceId] = $r
-            }
-        }
-    } catch {}
-}
+    // 1. 静态磁盘信息（WMI COM 直调，非 PowerShell）
+    let rows = wmi_query::wmi_query(
+        "SELECT Index, Model, Size, InterfaceType, SerialNumber, FirmwareRevision, MediaType, Status, PNPDeviceID FROM Win32_DiskDrive",
+    )
+    .map_err(|e| format!("WMI 获取磁盘信息失败: {}", e))?;
 
-$result = $disks | ForEach-Object {
-    $d = $_
-    $rel = $reliabilityMap[$d.DeviceId]
-    $diskNum = [int]($d.DeviceId -replace '.*?(\d+)$', '$1')
-
-    $wmiMatch = $wmiDisks | Where-Object { $_.Model -eq $d.Model -or $_.Model -eq $d.FriendlyName } | Select-Object -First 1
-
-    $layout = $diskLayout | Where-Object { $_.Number -eq $diskNum } | Select-Object -First 1
-
-    $parts = Get-Partition -DiskNumber $diskNum -ErrorAction SilentlyContinue | Where-Object { $_.DriveLetter } | ForEach-Object {
-        $vol = Get-Volume -DriveLetter $_.DriveLetter -ErrorAction SilentlyContinue
-        [PSCustomObject]@{
-            DriveLetter = if ($vol) { $_.DriveLetter.ToString() } else { $null }
-            SizeRemaining = if ($vol) { [long]$vol.SizeRemaining } else { $null }
-            Size = if ($vol) { [long]$vol.Size } else { $null }
-            FileSystem = if ($vol -and $vol.FileSystemType) { $vol.FileSystemType.ToString() } else { $null }
-        }
-    }
-
-    [PSCustomObject]@{
-        DeviceId = $d.DeviceId
-        FriendlyName = $d.FriendlyName
-        Model = if ($d.Model) { $d.Model } else { $d.FriendlyName }
-        MediaType = if ($d.MediaType) { $d.MediaType.ToString() } else { $null }
-        Size = if ($d.Size) { [long]$d.Size } else { $null }
-        BusType = $d.BusType.ToString()
-        HealthStatus = $d.HealthStatus.ToString()
-        OperationalStatus = $d.OperationalStatus.ToString()
-        SerialNumber = $d.SerialNumber
-        NumberOfPartitions = if ($d.NumberOfPartitions -ne $null) { [int]$d.NumberOfPartitions } else { $null }
-        Temperature = if ($rel -and $rel.Temperature -ne $null) { [double]$rel.Temperature } else { $null }
-        WearPercentage = if ($rel -and $rel.WearPercentage -ne $null) { [double]$rel.WearPercentage } else { $null }
-        PowerOnHours = if ($rel -and $rel.PowerOnHours -ne $null) { [long]$rel.PowerOnHours } else { $null }
-        ReadErrorsTotal = if ($rel -and $rel.ReadErrorsTotal -ne $null) { [long]$rel.ReadErrorsTotal } else { $null }
-        WriteErrorsTotal = if ($rel -and $rel.WriteErrorsTotal -ne $null) { [long]$rel.WriteErrorsTotal } else { $null }
-        WmiStatus = if ($wmiMatch) { $wmiMatch.Status } else { $null }
-        WmiInterfaceType = if ($wmiMatch) { $wmiMatch.InterfaceType } else { $null }
-        PartitionStyle = if ($layout) { if ($layout.PartitionStyle -eq 1) { "MBR" } elseif ($layout.PartitionStyle -eq 2) { "GPT" } elseif ($layout.PartitionStyle -eq 3) { "RAW" } else { "Unknown" } } else { $null }
-        IsBoot = if ($layout) { [bool]$layout.IsBoot } else { $false }
-        Partitions = @($parts)
-    }
-}
-
-if ($result) { $result | ConvertTo-Json -Depth 3 -Compress } else { '[]' }
-"#;
-
-    let raw_disks = run_powershell::<PsDiskHealthRaw>(ps_script)
-        .map_err(|e| format!("获取磁盘信息失败: {}", e))?;
-
-    if raw_disks.is_empty() {
+    if rows.is_empty() {
         return Ok(DiskHealthResponse {
             disks: vec![],
             total_count: 0,
@@ -1901,76 +1893,143 @@ if ($result) { $result | ConvertTo-Json -Depth 3 -Compress } else { '[]' }
         });
     }
 
+    // 2. 分区表信息（Win32_DiskPartition，用于 GPT/MBR 与引导盘判定）
+    let partition_rows = wmi_query::wmi_query(
+        "SELECT DiskIndex, Type, BootPartition FROM Win32_DiskPartition",
+    )
+    .unwrap_or_default();
+    let mut part_meta: std::collections::HashMap<u32, (bool, bool)> = std::collections::HashMap::new();
+    for r in &partition_rows {
+        if let Some(idx) = r.get("DiskIndex").and_then(|v| v_u32(v)) {
+            let ty = r.get("Type").and_then(|v| v_str(v)).unwrap_or_default();
+            let is_gpt = ty.to_uppercase().contains("GPT");
+            let is_boot = r
+                .get("BootPartition")
+                .and_then(|v| v_str(v))
+                .map(|s| s.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            let e = part_meta.entry(idx).or_insert((false, false));
+            if is_gpt {
+                e.0 = true;
+            }
+            if is_boot {
+                e.1 = true;
+            }
+        }
+    }
+
+    // 3. 卷 → 物理盘映射（winapi）
+    let volume_map = enumerate_volumes_by_disk();
+
+    // 4. 每块盘：SMART 直读健康判定
     let mut disk_infos = Vec::new();
     let mut healthy = 0u32;
     let mut warning = 0u32;
     let mut unhealthy = 0u32;
 
-    for (i, d) in raw_disks.iter().enumerate() {
-        let media_type = d.MediaType.as_deref().unwrap_or("Unknown").to_string();
-        // 用二进制(2^30)换算，与 Windows 资源管理器显示的容量一致
-        let size_gb = d.Size.map(|s| s as f64 / 1_073_741_824.0).unwrap_or(0.0);
-        let health_status = d.HealthStatus.clone();
-        let partition_count = d.NumberOfPartitions.unwrap_or(0);
-        let serial = d.SerialNumber.as_deref().unwrap_or("").to_string();
-        let interface_type = d.WmiInterfaceType.as_deref().unwrap_or(&d.BusType).to_string();
+    for (i, row) in rows.iter().enumerate() {
+        let index = row.get("Index").and_then(|v| v_u32(v)).unwrap_or(i as u32);
+        let model = row.get("Model").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
+        let media_type = row.get("MediaType").and_then(|v| v_str(v)).unwrap_or_default();
+        let size_gb = row.get("Size").and_then(|v| v_u64(v)).unwrap_or(0) as f64 / 1_073_741_824.0;
+        let interface_type = row.get("InterfaceType").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
+        let serial = row.get("SerialNumber").and_then(|v| v_str(v)).unwrap_or_default();
+        let status = row.get("Status").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
+        let pnp = row.get("PNPDeviceID").and_then(|v| v_str(v)).unwrap_or_default();
 
-        match health_status.to_lowercase().as_str() {
-            "healthy" => healthy += 1,
-            "warning" => warning += 1,
-            _ => unhealthy += 1,
+        // 判定 NVMe / SSD（与前端 isSsdMedia 逻辑保持一致）
+        let is_nvme = pnp.to_lowercase().contains("nvme")
+            || interface_type.to_lowercase().contains("nvme")
+            || model.to_lowercase().contains("nvme");
+        let is_ssd = is_nvme
+            || media_type.to_lowercase().contains("ssd")
+            || media_type.to_lowercase().contains("solid state");
+
+        // 直读 SMART（CrystalDiskInfo 方案：ATA IOCTL 失败时回退 WMI）
+        let smart = crate::smart::read_disk_smart(index, is_nvme, is_ssd, &model, &pnp);
+
+        if !smart.has_smart {
+            log::warn!(
+                "[DiskHealth] PhysicalDrive{} ({}) 无法读取 SMART: {}",
+                index,
+                model,
+                smart.error.as_deref().unwrap_or("未知错误")
+            );
+        } else {
+            log::info!(
+                "[DiskHealth] PhysicalDrive{} {} | NVMe={} | 状态={:?} | 健康度={:?} | 温度={:?}°C | 通电={:?}h",
+                index,
+                model,
+                smart.is_nvme,
+                smart.status,
+                smart.life_percent,
+                smart.temperature_c,
+                smart.power_on_hours
+            );
         }
 
-        let partitions: Vec<PartitionInfo> = d.Partitions.as_ref().map(|parts| {
-            parts.iter().filter_map(|p| {
-                let letter = p.DriveLetter.as_deref()?;
-                let total = p.Size.unwrap_or(0) as f64;
-                let available = p.SizeRemaining.unwrap_or(0) as f64;
-                let used = total - available;
-                let usage_pct = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-                let fs = p.FileSystem.as_deref().unwrap_or("").to_string();
-                Some(PartitionInfo {
-                    drive_letter: letter.to_string(),
-                    // 二进制(2^30)换算，与资源管理器一致
-                    total_gb: total / 1_073_741_824.0,
-                    available_gb: available / 1_073_741_824.0,
-                    used_gb: used / 1_073_741_824.0,
-                    usage_percent: usage_pct,
-                    filesystem: fs,
-                })
-            }).collect()
-        }).unwrap_or_default();
+        let health_status = smart.status.as_str().to_string();
+        match smart.status {
+            crate::smart::DiskStatus::Good => healthy += 1,
+            crate::smart::DiskStatus::Caution => warning += 1,
+            crate::smart::DiskStatus::Bad => unhealthy += 1,
+            crate::smart::DiskStatus::Unknown => {}
+        }
+        let operational_status = match smart.status {
+            crate::smart::DiskStatus::Good => "OK".to_string(),
+            crate::smart::DiskStatus::Caution => "Degraded".to_string(),
+            crate::smart::DiskStatus::Bad => "Failure".to_string(),
+            crate::smart::DiskStatus::Unknown => "Unknown".to_string(),
+        };
 
+        let partitions = volume_map.get(&index).cloned().unwrap_or_default();
+        let partition_count = partitions.len() as u32;
         let total_capacity_gb: f64 = partitions.iter().map(|p| p.total_gb).sum();
         let total_usage_gb: f64 = partitions.iter().map(|p| p.used_gb).sum();
 
+        let (is_gpt, is_boot) = part_meta.get(&index).copied().unwrap_or((false, false));
+        let partition_style = if is_gpt {
+            "GPT"
+        } else if !partitions.is_empty() {
+            "MBR"
+        } else {
+            "Unknown"
+        }
+        .to_string();
+
         disk_infos.push(DiskHealthInfo {
-            index: i as u32,
-            model: d.FriendlyName.clone(),
-            media_type,
+            index,
+            model,
+            media_type: if media_type.is_empty() { "Unknown".to_string() } else { media_type },
             size_gb,
             interface_type,
             health_status,
-            operational_status: d.OperationalStatus.clone(),
-            temperature_c: d.Temperature,
-            wear_percentage: d.WearPercentage,
-            power_on_hours: d.PowerOnHours,
-            read_errors: d.ReadErrorsTotal,
-            write_errors: d.WriteErrorsTotal,
-            status: d.WmiStatus.as_deref().unwrap_or("").to_string(),
+            operational_status,
+            temperature_c: smart.temperature_c.map(|t| t as f64),
+            wear_percentage: smart.life_percent.map(|p| p as f64),
+            power_on_hours: smart.power_on_hours,
+            power_on_count: smart.power_on_count,
+            data_read_bytes: smart.data_read_bytes,
+            data_written_bytes: smart.data_written_bytes,
+            read_errors: None,
+            write_errors: None,
+            status,
             partition_count,
             serial_number: serial,
-            partition_style: d.PartitionStyle.as_deref().unwrap_or("").to_string(),
-            is_boot_disk: d.IsBoot.unwrap_or(false),
+            partition_style,
+            is_boot_disk: is_boot,
             partitions,
             total_usage_gb,
             total_capacity_gb,
+            health_percent: smart.life_percent,
+            // SMART 直读确认 NVMe → 必定 SSD；否则沿用 WMI 介质判定
+            is_ssd: smart.is_nvme || is_ssd,
         });
     }
 
     Ok(DiskHealthResponse {
         disks: disk_infos,
-        total_count: raw_disks.len() as u32,
+        total_count: rows.len() as u32,
         healthy_count: healthy,
         warning_count: warning,
         unhealthy_count: unhealthy,

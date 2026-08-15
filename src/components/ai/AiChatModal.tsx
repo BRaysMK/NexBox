@@ -652,24 +652,26 @@ export default function AiChatModal({ isOpen, onClose }: AiChatModalProps) {
                 </HStack>
               )}
               <HStack spacing={2}>
-                <IconButton
-                  aria-label="clear"
-                  size="sm"
-                  variant="ghost"
-                  color={getContrastTextColor()}
-                  icon={<FiTrash2 />}
-                  onClick={handleClear}
-                  title={t("ai.clear", "清空对话")}
-                />
-                <IconButton
-                  aria-label="memory"
-                  size="sm"
-                  variant="ghost"
-                  color={showMemory ? primary : getContrastTextColor()}
-                  icon={<AiOutlineBranches />}
-                  onClick={() => setShowMemory((v) => !v)}
-                  title={t("ai.memory", "记忆管理")}
-                />
+                <Tooltip label={t("ai.clear", "清空对话")}>
+                  <IconButton
+                    aria-label="clear"
+                    size="sm"
+                    variant="ghost"
+                    color={getContrastTextColor()}
+                    icon={<FiTrash2 />}
+                    onClick={handleClear}
+                  />
+                </Tooltip>
+                <Tooltip label={t("ai.memory", "记忆管理")}>
+                  <IconButton
+                    aria-label="memory"
+                    size="sm"
+                    variant="ghost"
+                    color={showMemory ? primary : getContrastTextColor()}
+                    icon={<AiOutlineBranches />}
+                    onClick={() => setShowMemory((v) => !v)}
+                  />
+                </Tooltip>
                 <Tooltip
                   label={webEnabled ? t("ai.webOn", "联网搜索：开") : t("ai.webOff", "联网搜索：关")}
                   placement="top"
@@ -733,15 +735,16 @@ export default function AiChatModal({ isOpen, onClose }: AiChatModalProps) {
                   }}
                   _disabled={{ opacity: 0.6 }}
                 />
-                <LiquidGlassButton
-                  onClick={loading ? handleStop : handleSend}
-                  isDisabled={!loading && !input.trim()}
-                  size="md"
-                  boxShadow={`0 6px 18px ${hexToRgba(primary, 0.45)}`}
-                  title={loading ? t("ai.stop", "停止输出") : t("ai.send", "发送")}
-                >
-                  {loading ? <FiSquare size={16} /> : <FiSend />}
-                </LiquidGlassButton>
+                <Tooltip label={loading ? t("ai.stop", "停止输出") : t("ai.send", "发送")}>
+                  <LiquidGlassButton
+                    onClick={loading ? handleStop : handleSend}
+                    isDisabled={!loading && !input.trim()}
+                    size="md"
+                    boxShadow={`0 6px 18px ${hexToRgba(primary, 0.45)}`}
+                  >
+                    {loading ? <FiSquare size={16} /> : <FiSend />}
+                  </LiquidGlassButton>
+                </Tooltip>
               </HStack>
             </Box>
           </Flex>

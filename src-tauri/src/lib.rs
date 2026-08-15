@@ -1,5 +1,6 @@
 mod ai;
 mod web_search;
+mod advanced;
 mod announcement;
 mod audio_engine;
 mod audio_eq;
@@ -45,6 +46,7 @@ mod sensor;
 mod sensor_monitor;
 mod shader_cache;
 mod pawnio_driver;
+mod smart;
 mod sponsor;
 mod contributor;
 mod startup_manager;
@@ -63,6 +65,9 @@ use tauri::Manager;
 
 /// 主窗口可见性状态（用于最小化/托盘时暂停动态背景视频）
 static MAIN_WINDOW_VISIBLE: AtomicBool = AtomicBool::new(true);
+
+/// 是否以开机自启(--autostart)方式启动（供前端判断加载完成后是否自隐藏到托盘）
+static AUTOSTART_MODE: AtomicBool = AtomicBool::new(false);
 
 /// 按需创建竖排悬浮框窗口（不常驻，启用时创建、关闭时销毁）。
 /// 创建后 visible(false)，前端渲染完成后调用 `vertical_overlay_ready` 命令 show，避免白屏闪烁。
@@ -175,17 +180,19 @@ pub fn emit_main_visibility<R: tauri::Runtime>(app: &tauri::AppHandle<R>, visibl
     }
 }
 
+/// 当前是否处于开机自启(--autostart)模式。
+/// 前端在主窗口加载完成后据此决定是否调用 minimize_to_tray 隐藏到托盘。
+#[tauri::command]
+fn is_autostart_mode() -> bool {
+    AUTOSTART_MODE.load(Ordering::SeqCst)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _: () = window.show().unwrap_or(());
-                let _: () = window.set_focus().unwrap_or(());
-                let _: () = window.unminimize().unwrap_or(());
-                emit_main_visibility(app, true);
-            }
+            // 重复启动时：统一走托盘打开主窗口入口（恢复任务栏、若处于离屏预热则归位到屏幕内）
+            crate::tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -366,16 +373,28 @@ pub fn run() {
                 Err(e) => log::error!("Failed to initialize tray: {}", e),
             }
 
-            // 开机自启模式（--autostart 参数）：主窗口在 tauri.conf.json 中已设 visible:false，
-            // 此处保持隐藏，静默后台运行、不显示启动画面，仅保留托盘
+            // 开机自启模式（--autostart 参数）：主窗口在 tauri.conf.json 中已设 visible:false。
+            // 采用「离屏预热」：将主窗口移到屏幕外并显示，强制 WebView2 初始化加载前端（窗口真实存在
+            // 但位于屏幕外且临时跳过任务栏，对用户完全不可见、零弹窗）；前端加载完成后自行调用
+            // minimize_to_tray 隐藏到托盘；托盘打开时再由 ensure_main_onscreen 归位到屏幕内。
             let is_autostart = std::env::args().any(|a| a == "--autostart");
-            if is_autostart {
-                log::info!("开机自启模式：主窗口保持隐藏，后台静默运行");
-            } else if let Some(main_window) = app.get_webview_window("main") {
-                // 正常启动：显示主窗口（避免 autostart 时闪现启动画面）
-                let _ = main_window.show();
-                emit_main_visibility(app.handle(), true);
-                log::info!("正常启动：主窗口已显示");
+            AUTOSTART_MODE.store(is_autostart, Ordering::SeqCst);
+
+            if let Some(main_window) = app.get_webview_window("main") {
+                if is_autostart {
+                    let _ = main_window.set_skip_taskbar(true);
+                    let _ = main_window.set_position(tauri::Position::Physical(
+                        tauri::PhysicalPosition { x: -30000, y: -30000 },
+                    ));
+                    let _ = main_window.show();
+                    log::info!("开机自启模式：主窗口离屏预热，前端初始化后隐藏到托盘");
+                } else {
+                    // 正常启动：确保非跳过任务栏、正常位置显示（避免 autostart 时闪现启动画面）
+                    let _ = main_window.set_skip_taskbar(false);
+                    let _ = main_window.show();
+                    emit_main_visibility(app.handle(), true);
+                    log::info!("正常启动：主窗口已显示");
+                }
             }
 
             // 提前从持久化存储加载悬浮框设置，确保快捷键触发时使用已保存的配置而非默认值
@@ -449,6 +468,7 @@ pub fn run() {
         music_api::music_personalized,
         music_api::music_recommend_songs,
         music_api::music_recommend_resource,
+        music_api::music_simi_song,
         music_api::music_artist_search,
         music_api::music_artist_songs,
         music_api::music_artist_detail,
@@ -601,6 +621,7 @@ pub fn run() {
         startup_manager::locate_startup_file,
         startup_manager::find_startup_key_in_registry,
         startup_manager::get_startup_item_icon,
+        startup_manager::get_process_icons,
         display_filter::get_displays,
         display_filter::set_active_display,
         display_filter::check_gamma_support,
@@ -629,6 +650,11 @@ pub fn run() {
         game_filter::set_game_filter_enabled,
         game_filter::add_custom_game,
         game_filter::remove_custom_game,
+        // === 高级设置 ===
+        advanced::get_storage_sizes,
+        advanced::clear_cache,
+        advanced::clear_data,
+        advanced::restart_app,
         // === 游戏进程优化 ===
         game_process_optimize::get_game_optimize_configs,
         game_process_optimize::save_game_optimize_configs,
@@ -689,6 +715,7 @@ pub fn run() {
         overlay_panel::reset_overlay_position,
         pawnio_driver::check_pawnio_status,
         pawnio_driver::install_pawnio_driver,
+        pawnio_driver::uninstall_pawnio_driver,
 
         vertical_overlay::start_vertical_overlay,
         vertical_overlay::stop_vertical_overlay,
@@ -810,6 +837,7 @@ pub fn run() {
             tray::set_dont_ask_again,
             tray::exit_app,
             tray::check_update_and_show,
+            is_autostart_mode,
             // === MCTier 命令 ===
             utils::cursor::get_cursor_position,
             utils::cursor::set_desktop_lyrics_click_through,

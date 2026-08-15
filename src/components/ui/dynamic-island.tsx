@@ -78,6 +78,12 @@ export interface IslandOptions {
   /** 预设语义图标键，优先于 status 默认图标 */
   iconKey?: IconKey;
   onCloseComplete?: () => void;
+  /** 持久基线（如更新下载岛）：无自动关闭，普通提示消失后自动恢复显示 */
+  persistent?: boolean;
+  /** 有值时展开态渲染进度条（0-100） */
+  progress?: number;
+  /** 覆盖默认点击行为（如完成态点击重启安装） */
+  onClick?: () => void;
 }
 
 interface IslandItem {
@@ -90,6 +96,9 @@ interface IslandItem {
   icon?: React.ReactNode;
   iconKey?: IconKey;
   onCloseComplete?: () => void;
+  persistent?: boolean;
+  progress?: number;
+  onClick?: () => void;
   timer?: ReturnType<typeof setTimeout>;
 }
 
@@ -136,6 +145,22 @@ function shortenMessage(text?: string): string | undefined {
   if (!t0) return t0;
   let t = t0;
 
+  // 0) 盘符前缀：如 "C: 优化(TRIM)完成" → 保留盘符，精简剩余部分 → "C 已优化"
+  //    （避免盘符冒号被当成句号截断，导致只显示 "C"）
+  const driveMatch = t.match(/^([A-Za-z]):\s*(.*)$/);
+  if (driveMatch && driveMatch[2].trim()) {
+    const rest = driveMatch[2].trim();
+    const shortened = shortenVerb(rest);
+    if (shortened !== rest) {
+      return `${driveMatch[1]} ${shortened}`;
+    }
+    return t;
+  }
+
+  return shortenVerb(t);
+}
+
+function shortenVerb(t: string): string {
   // 1) 已知动作动词开头 → 只保留动词本身（未找到 / 已限制 / 已优化…）
   for (const v of SHORT_VERBS) {
     if (t.startsWith(v)) return v;
@@ -149,7 +174,37 @@ function shortenMessage(text?: string): string | undefined {
   if (t.includes("IFEO 强制优先级")) return t.includes("清除") ? "已清除" : "已应用";
   if (t.includes("分配指定核心")) return "已分配";
 
-  // 4) 截断到第一句主干：去掉「。」/「，」后的解释、冒号后的细节、尾部括号说明
+  // 4) 完成/成功态 → 提取动作词，如 "优化(TRIM)完成" → "已优化"、"Optimization complete" → "Optimized"
+  if (/完成|成功/.test(t)) {
+    if (/优化|整理/.test(t)) return "已优化";
+    if (/恢复/.test(t)) return "已恢复";
+    if (/清理/.test(t)) return "已清理";
+    if (/清除/.test(t)) return "已清除";
+    if (/更新/.test(t)) return "已更新";
+    if (/安装/.test(t)) return "已安装";
+    if (/下载/.test(t)) return "已下载";
+    if (/上传/.test(t)) return "已上传";
+    if (/应用/.test(t)) return "已应用";
+    if (/保存/.test(t)) return "已保存";
+    if (/复制/.test(t)) return "已复制";
+    if (/重置/.test(t)) return "已重置";
+  } else if (/complete|done|finished|successful/i.test(t)) {
+    const lower = t.toLowerCase();
+    if (/optimiz|trim|defrag/.test(lower)) return "Optimized";
+    if (/restor/.test(lower)) return "Restored";
+    if (/clean/.test(lower)) return "Cleaned";
+    if (/clear/.test(lower)) return "Cleared";
+    if (/updat/.test(lower)) return "Updated";
+    if (/install/.test(lower)) return "Installed";
+    if (/download/.test(lower)) return "Downloaded";
+    if (/upload/.test(lower)) return "Uploaded";
+    if (/appl/.test(lower)) return "Applied";
+    if (/sav/.test(lower)) return "Saved";
+    if (/cop/.test(lower)) return "Copied";
+    if (/reset/.test(lower)) return "Reset";
+  }
+
+  // 5) 截断到第一句主干：去掉「。」/「，」后的解释、冒号后的细节、尾部括号说明
   for (const sep of ["。", "，", "：", ":", "（", "("]) {
     const idx = t.indexOf(sep);
     if (idx > 0) {
@@ -165,6 +220,8 @@ function shortenMessage(text?: string): string | undefined {
 /* 模块级全局 store：只保留单个灵动岛，新提示替换旧提示                */
 /* ------------------------------------------------------------------ */
 let current: IslandItem | null = null;
+// 持久基线（如更新下载岛）：普通提示显示时被覆盖，提示关闭后自动恢复
+let pending: IslandItem | null = null;
 let revision = 0;
 const listeners = new Set<() => void>();
 let idSeed = 0;
@@ -176,20 +233,28 @@ function emit() {
   for (const l of listeners) l();
 }
 
-function show(options: IslandOptions) {
+function buildItem(options: IslandOptions): IslandItem {
   const id = options.id ?? `island-${++idSeed}`;
-  const next: IslandItem = {
+  return {
     id,
     // 保留原始完整文案：折叠时显示精简版，悬停展开时显示详情
     title: options.title,
     description: options.description,
     status: options.status ?? "info",
-    duration: options.duration ?? 2000,
+    // 显式 null = 不自动关闭（如持久更新岛）；undefined 才用默认 2000ms
+    duration: options.duration === null ? null : options.duration ?? 2000,
     isClosable: options.isClosable,
     icon: options.icon,
     iconKey: options.iconKey,
     onCloseComplete: options.onCloseComplete,
+    persistent: options.persistent,
+    progress: options.progress,
+    onClick: options.onClick,
   };
+}
+
+function show(options: IslandOptions) {
+  const next = buildItem(options);
   if (current) revision++; // 已有提示，触发「缩小→换内容→扩散」
   if (current?.timer) clearTimeout(current.timer);
   current = next;
@@ -203,19 +268,78 @@ function update(id: string, options: IslandOptions) {
   show({ ...options, id });
 }
 
+/** 显示持久基线（无自动关闭）。若当前正显示普通提示则不覆盖，等待其关闭后由 close() 恢复 */
+function showPersistent(options: IslandOptions) {
+  const next = buildItem({ ...options, duration: null });
+  pending = next;
+  if (!current) {
+    revision++;
+    current = next;
+    emit();
+  } else if (current.id === next.id) {
+    // 当前已是同 id 基线：直接换内容（触发 replace 动画）
+    revision++;
+    if (current.timer) clearTimeout(current.timer);
+    current = next;
+    emit();
+  }
+}
+
+/**
+ * 更新持久基线。animate=true 触发 replace 动画（状态切换：下载中→完成）；
+ * animate=false 静默更新（进度实时刷新，避免每 200ms 缩→扩动画）。
+ * 当前正显示普通提示时仅暂存 pending，待其关闭后恢复。
+ */
+function updatePersistent(id: string, options: IslandOptions, animate = true) {
+  if (!pending || pending.id !== id) return;
+  const next = { ...pending, ...options, id };
+  pending = next;
+  if (current?.id === id) {
+    if (animate) revision++;
+    if (current.timer) clearTimeout(current.timer);
+    current = next;
+    emit();
+  }
+}
+
+/** 关闭持久基线：清除 pending；若正显示基线则淡出，否则不影响当前普通提示 */
+function closePersistent(id: string) {
+  if (!pending || pending.id !== id) return;
+  pending = null;
+  if (current?.id === id) {
+    current = null;
+    revision++;
+    emit();
+  }
+}
+
 function close(id: string) {
   if (!current || current.id !== id) return;
   if (current.timer) clearTimeout(current.timer);
   const cb = current.onCloseComplete;
-  current = null;
+  // 若存在持久基线且被关闭的不是它 → 恢复基线显示（replace 动画）
+  if (pending && pending.id !== id) {
+    revision++;
+    current = pending;
+  } else {
+    current = null;
+  }
   emit();
   cb?.();
 }
 
 function closeAll() {
   if (current?.timer) clearTimeout(current.timer);
-  current = null;
-  emit();
+  // 清空普通提示后恢复持久基线；当前已是基线或无变化时不重复触发动画
+  if (pending && current?.id !== pending.id) {
+    revision++;
+    current = pending;
+    emit();
+  } else if (!pending && current) {
+    current = null;
+    revision++;
+    emit();
+  }
 }
 
 function isActive(id: string) {
@@ -254,6 +378,9 @@ export type DynamicIslandToast = ((options: IslandOptions) => void) & {
   isActive: typeof isActive;
   close: typeof close;
   closeAll: typeof closeAll;
+  showPersistent: typeof showPersistent;
+  updatePersistent: typeof updatePersistent;
+  closePersistent: typeof closePersistent;
 };
 
 /** 返回与 Chakra useToast 兼容的调用签名，旧 toast({...}) 调用体无需改动。
@@ -275,6 +402,9 @@ function makeToast(defaultIcon?: IconKey): DynamicIslandToast {
   fn.isActive = isActive;
   fn.close = close;
   fn.closeAll = closeAll;
+  fn.showPersistent = (options) => showPersistent(resolveIcon(options));
+  fn.updatePersistent = (id, options, animate) => updatePersistent(id, resolveIcon(options), animate);
+  fn.closePersistent = closePersistent;
   return fn;
 }
 
@@ -448,6 +578,13 @@ export function DynamicIslandHost() {
     itemRef.current = item;
   }, [item]);
 
+  // 静默实时更新（如下载进度）：同 id 时同步 displayed 内容，不触发动画
+  useEffect(() => {
+    if (item && displayed?.id === item.id) {
+      setDisplayed(item);
+    }
+  }, [item, displayed?.id]);
+
   // 文字显示不全时用右端淡出代替省略号：实时测量是否溢出
   useEffect(() => {
     const el = textRef.current;
@@ -518,9 +655,10 @@ export function DynamicIslandHost() {
     expandedRef.current = true;
     setExpanded(true);
     // 横向扩散成圆角长矩形（折叠短文案保持可见，稍后交叉淡出）
+    // 持久更新岛为单行长条（30px 高），普通提示按内容行数决定高度
     await controls.start({
       width: EXPANDED_WIDTH,
-      height: next.description ? 62 : 34,
+      height: next.persistent ? COLLAPSED_HEIGHT : next.description ? 62 : 34,
     });
     if (!expandedRef.current) return;
     // 详细内容淡入，短文案淡出
@@ -558,17 +696,26 @@ export function DynamicIslandHost() {
     extend(id); // 移开后恢复自动关闭
   }, [run, playCollapse]);
 
-  // 展开态点击 → 收起为小灵动岛；折叠态点击 → 关闭
+  // 点击：有自定义 onClick 直接触发（如完成态重启安装）；
+  // 展开态收起为小灵动岛；持久岛折叠态点击展开（查看版本+进度）；普通提示折叠态点击关闭
   const handleClick = useCallback(() => {
-    const id = itemRef.current?.id;
-    if (!id) return;
+    const it = itemRef.current;
+    const id = it?.id;
+    if (!it || !id) return;
+    if (it.onClick) {
+      it.onClick();
+      return;
+    }
     if (expandedRef.current) {
       run(playCollapse);
       extend(id); // 收起后恢复自动关闭计时
+    } else if (it.persistent) {
+      run(playExpand);
+      hold(id); // 持久岛无自动关闭，hold 无副作用
     } else {
       close(id);
     }
-  }, [run, playCollapse]);
+  }, [run, playCollapse, playExpand]);
 
   useEffect(() => {
     if (item) {
@@ -588,6 +735,7 @@ export function DynamicIslandHost() {
   const titleColor = useColorModeValue("#1a1a1a", "#ffffff");
   const descColor = useColorModeValue("rgba(0,0,0,0.62)", "rgba(255,255,255,0.66)");
   const highlight = useColorModeValue("rgba(255,255,255,0.9)", "rgba(255,255,255,0.14)");
+  const barTrack = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.14)");
 
   // 折叠：只显示精简短文案；展开：显示完整标题 + 详细描述
   const collapsedText = displayed
@@ -695,48 +843,189 @@ export function DynamicIslandHost() {
             {collapsedText}
           </div>
         </motion.div>
-        {/* 展开状态：完整标题 + 详细描述 */}
-        <motion.div
-          animate={{ opacity: expandedTextVisible ? 1 : 0 }}
-          transition={{ duration: 0.18 }}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            minWidth: 0,
-            // 无描述（如「已切换为默认」单行提示）时文字右对齐，图标在左、文字靠右
-            marginLeft: detailDesc ? undefined : "auto",
-            padding: "5px 12px 5px 4px",
-            gap: 2,
-            width: expanded ? "auto" : 0,
-            overflow: "hidden",
-          }}
-        >
+          {/* 展开状态：持久更新岛为单行长条（中进度条/标题 + 右版本号）；普通提示为两行标题+描述 */}
           <div
             style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: titleColor,
-              whiteSpace: "nowrap",
+              display: "flex",
+              minWidth: 0,
+              width: expanded ? "auto" : 0,
               overflow: "hidden",
+              ...(displayed?.persistent
+                ? { flex: expanded ? 1 : 0, alignItems: "center", padding: "0 12px 0 4px" }
+                : {
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    // 无描述（如「已切换为默认」单行提示）时文字右对齐，图标在左、文字靠右
+                    marginLeft: detailDesc ? undefined : "auto",
+                    padding: "5px 12px 5px 4px",
+                    gap: 4,
+                  }),
             }}
           >
-            {detailTitle}
-          </div>
-          {detailDesc && (
-            <div
+            <motion.div
+              animate={{ opacity: expandedTextVisible ? 1 : 0 }}
+              transition={{ duration: 0.18 }}
               style={{
-                fontSize: 10.5,
-                lineHeight: 1.35,
-                color: descColor,
-                maxHeight: 30,
-                overflow: "hidden",
+                display: "flex",
+                minWidth: 0,
+                ...(displayed?.persistent
+                  ? { flex: 1, alignItems: "center", gap: 10 }
+                  : { flexDirection: "column", gap: 4 }),
               }}
             >
-              {detailDesc}
-            </div>
-          )}
-        </motion.div>
+              {displayed?.persistent ? (
+                <>
+                  {/* 单行长条：中间进度条(或标题) + 百分比 + 右侧版本号 */}
+                  {displayed.progress !== undefined ? (
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 7,
+                        borderRadius: 999,
+                        background: barTrack,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          borderRadius: 999,
+                          background: primaryColor,
+                          width: `${Math.max(0, Math.min(100, displayed.progress))}%`,
+                          transition: "width 0.2s",
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        flex: 1,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: titleColor,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {detailTitle}
+                    </div>
+                  )}
+                  {displayed.progress !== undefined && (
+                    <div
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        color: titleColor,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {Math.round(displayed.progress)}%
+                    </div>
+                  )}
+                  {detailDesc && (
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: descColor,
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {detailDesc}
+                    </div>
+                  )}
+                </>
+              ) : displayed?.progress !== undefined ? (
+                <>
+                  {/* 标题行：左侧标题 + 右侧版本号 */}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: titleColor,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {detailTitle}
+                    </div>
+                    {detailDesc && (
+                      <div
+                        style={{
+                          fontSize: 10.5,
+                          color: descColor,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {detailDesc}
+                      </div>
+                    )}
+                  </div>
+                  {/* 进度条行：主题色填充 + 百分比 */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 6,
+                        borderRadius: 999,
+                        background: barTrack,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          borderRadius: 999,
+                          background: primaryColor,
+                          width: `${Math.max(0, Math.min(100, displayed.progress))}%`,
+                          transition: "width 0.2s",
+                        }}
+                      />
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        color: titleColor,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {Math.round(displayed.progress)}%
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: titleColor,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {detailTitle}
+                  </div>
+                  {detailDesc && (
+                    <div
+                      style={{
+                        fontSize: 10.5,
+                        lineHeight: 1.35,
+                        color: descColor,
+                        maxHeight: 30,
+                        overflow: "hidden",
+                      }}
+                    >
+                      {detailDesc}
+                    </div>
+                  )}
+                </>
+              )}
+            </motion.div>
+          </div>
       </motion.div>
     </div>
   );

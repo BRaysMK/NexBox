@@ -25,6 +25,7 @@ import {
   SliderFilledTrack,
   SliderThumb,
   Spinner,
+  Tooltip,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 
@@ -47,13 +48,9 @@ import {
   LuKeyboard,
   LuPlus,
   LuTrash2,
-  LuCpu,
   LuUsers,
   LuRotateCcw,
-  LuThermometer,
-  LuFan,
-  LuShieldCheck,
-  LuCircleAlert,
+  LuSlidersHorizontal,
 } from "react-icons/lu";
 import { RiBilibiliFill, RiTiktokFill } from "react-icons/ri";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -93,8 +90,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Download } from "lucide-react";
-import { PawnioInstallModal } from "@/components/PawnioInstallModal";
+import { GripVertical } from "lucide-react";
+import AdvancedPage from "@/pages/AdvancedPage";
 import { store } from "@/lib/store";
 
 /** 限制导航栏拖拽只能沿竖直方向移动，禁止左右（向右）拖动 */
@@ -106,7 +103,7 @@ const restrictToVerticalAxis: Modifier = ({ transform }) => ({
 const settingItems = [
   { id: "general", labelKey: "settings.general", icon: LuSettings },
   { id: "appearance", labelKey: "settings.appearance", icon: LuMonitor },
-  { id: "pawnio", labelKey: "settings.pawnio.label", icon: LuCpu },
+  { id: "advanced", labelKey: "settings.advanced.label", icon: LuSlidersHorizontal },
   { id: "hotkeys", labelKey: "settings.hotkeys", icon: LuKeyboard },
   { id: "network", labelKey: "settings.network", icon: LuWifi },
   { id: "contributor", labelKey: "settings.contributor", icon: LuUsers },
@@ -1420,21 +1417,21 @@ function ThemeColorSettings() {
             </HStack>
             <HStack spacing={2} flexWrap="wrap">
               {PRESET_COLORS.map((preset) => (
-                <Box
-                  key={preset.value}
-                  w="32px"
-                  h="32px"
-                  borderRadius="lg"
-                  bg={preset.value}
-                  cursor="pointer"
-                  border="2px solid"
-                  borderColor={config.primaryColor === preset.value ? presetActiveBorderColor : presetBorderColor}
-                  boxShadow={config.primaryColor === preset.value ? "0 0 0 2px rgba(255,255,255,0.2)" : "none"}
-                  onClick={() => handlePresetClick(preset.value)}
-                  transition="all 0.2s"
-                  _hover={{ transform: "scale(1.1)" }}
-                  title={t(preset.labelKey)}
-                />
+                <Tooltip key={preset.value} label={t(preset.labelKey)}>
+                  <Box
+                    w="32px"
+                    h="32px"
+                    borderRadius="lg"
+                    bg={preset.value}
+                    cursor="pointer"
+                    border="2px solid"
+                    borderColor={config.primaryColor === preset.value ? presetActiveBorderColor : presetBorderColor}
+                    boxShadow={config.primaryColor === preset.value ? "0 0 0 2px rgba(255,255,255,0.2)" : "none"}
+                    onClick={() => handlePresetClick(preset.value)}
+                    transition="all 0.2s"
+                    _hover={{ transform: "scale(1.1)" }}
+                  />
+                </Tooltip>
               ))}
             </HStack>
           </Box>
@@ -1682,21 +1679,22 @@ function AppearanceSettings() {
                       {cf.label}
                     </Text>
                     <HStack spacing={2}>
-                      <Box
-                        w="24px"
-                        h="24px"
-                        borderRadius="md"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        cursor="pointer"
-                        transition="all 0.2s"
-                        _hover={{ bg: "rgba(255,0,0,0.1)" }}
-                        onClick={() => removeCustomFont(cf.value)}
-                        title={t("settings.appearanceSettings.removeFont")}
-                      >
-                        <LuX size={14} color="red" />
-                      </Box>
+                      <Tooltip label={t("settings.appearanceSettings.removeFont")}>
+                        <Box
+                          w="24px"
+                          h="24px"
+                          borderRadius="md"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          cursor="pointer"
+                          transition="all 0.2s"
+                          _hover={{ bg: "rgba(255,0,0,0.1)" }}
+                          onClick={() => removeCustomFont(cf.value)}
+                        >
+                          <LuX size={14} color="red" />
+                        </Box>
+                      </Tooltip>
                     </HStack>
                   </HStack>
                 ))}
@@ -2625,46 +2623,48 @@ function ContributorSettings() {
                 </Text>
                 <Flex align="center" gap={2}>
                   {contributor.bilibili && (
-                    <Box
-                      as="a"
-                      href={contributor.bilibili}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      color="#FB7299"
-                      fontSize="18px"
-                      display="flex"
-                      alignItems="center"
-                      _hover={{ opacity: 0.8 }}
-                      cursor="pointer"
-                      onClick={(e: React.MouseEvent) => {
-                        e.preventDefault();
-                        openUrl(contributor.bilibili);
-                      }}
-                      title="Bilibili"
-                    >
-                      <RiBilibiliFill />
-                    </Box>
+                    <Tooltip label="Bilibili">
+                      <Box
+                        as="a"
+                        href={contributor.bilibili}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        color="#FB7299"
+                        fontSize="18px"
+                        display="flex"
+                        alignItems="center"
+                        _hover={{ opacity: 0.8 }}
+                        cursor="pointer"
+                        onClick={(e: React.MouseEvent) => {
+                          e.preventDefault();
+                          openUrl(contributor.bilibili);
+                        }}
+                      >
+                        <RiBilibiliFill />
+                      </Box>
+                    </Tooltip>
                   )}
                   {contributor.douyin && (
-                    <Box
-                      as="a"
-                      href={contributor.douyin}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      color={useColorModeValue("#111111", "#ffffff")}
-                      fontSize="18px"
-                      display="flex"
-                      alignItems="center"
-                      _hover={{ opacity: 0.8 }}
-                      cursor="pointer"
-                      onClick={(e: React.MouseEvent) => {
-                        e.preventDefault();
-                        openUrl(contributor.douyin);
-                      }}
-                      title="抖音"
-                    >
-                      <RiTiktokFill />
-                    </Box>
+                    <Tooltip label="抖音">
+                      <Box
+                        as="a"
+                        href={contributor.douyin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        color={useColorModeValue("#111111", "#ffffff")}
+                        fontSize="18px"
+                        display="flex"
+                        alignItems="center"
+                        _hover={{ opacity: 0.8 }}
+                        cursor="pointer"
+                        onClick={(e: React.MouseEvent) => {
+                          e.preventDefault();
+                          openUrl(contributor.douyin);
+                        }}
+                      >
+                        <RiTiktokFill />
+                      </Box>
+                    </Tooltip>
                   )}
                 </Flex>
               </VStack>
@@ -2852,227 +2852,6 @@ function SponsorSettings() {
   );
 }
 
-function PawnioSettings() {
-  const { t } = useTranslation();
-  const toast = useDynamicIsland("settings");
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
-  const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
-
-  const [status, setStatus] = useState<{ installed: boolean; version?: string } | null>(null);
-  const [checking, setChecking] = useState(true);
-  const [installing, setInstalling] = useState(false);
-  const { isOpen: isPawnioModalOpen, onOpen: onPawnioModalOpen, onClose: onPawnioModalClose } = useDisclosure();
-
-  // 首次加载时检查状态
-  useEffect(() => {
-    setChecking(true);
-    invoke<{ installed: boolean; version?: string }>("check_pawnio_status")
-      .then(setStatus)
-      .catch(() => setStatus(null))
-      .finally(() => setChecking(false));
-  }, []);
-
-  const handleUninstall = async () => {
-    setInstalling(true);
-    try {
-      await invoke<string>("install_pawnio_driver"); // 先检测是否已安装（其实是 install 命令，可以用来获取状态）
-      await invoke("restart_monitor_process");
-      toast({ title: t("settings.pawnio.uninstalled", "已卸载"), status: "success", duration: 3000, isClosable: true });
-      setStatus({ installed: false });
-    } catch (e) {
-      toast({ title: t("settings.pawnio.error", "操作失败"), description: String(e), status: "error", duration: 3000, isClosable: true });
-    } finally {
-      setInstalling(false);
-    }
-  };
-
-  const handleRefreshStatus = () => {
-    setChecking(true);
-    invoke<{ installed: boolean; version?: string }>("check_pawnio_status")
-      .then(setStatus)
-      .catch(() => setStatus(null))
-      .finally(() => setChecking(false));
-  };
-
-  const isInstalled = !!status?.installed;
-  const activeColor = getActiveColor();
-  const accent = getContrastTextColor();
-  const accentBorder = getBorderColor();
-  const accentSoft = getHoverColor();
-
-  return (
-    <Box>
-      <Text fontSize="lg" fontWeight="bold" mb={6} color={titleColor}>
-        {t("settings.pawnio.title", "PawnIO 驱动管理")}
-      </Text>
-
-      {/* 状态卡片 */}
-      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
-        <HStack spacing={4} align="center">
-          <Flex
-            align="center"
-            justify="center"
-            w="56px"
-            h="56px"
-            borderRadius="xl"
-            flexShrink={0}
-            bg={accentSoft}
-            border={`1px solid ${accentBorder}`}
-            color={activeColor}
-          >
-            {isInstalled ? <LuShieldCheck size={28} /> : <LuCircleAlert size={28} />}
-          </Flex>
-          <VStack align="flex-start" spacing={0.5} flex={1}>
-            <HStack spacing={2}>
-              <Text fontSize="sm" color={subLabelColor} fontWeight="medium">
-                {t("settings.pawnio.status", "状态")}
-              </Text>
-              {!checking && (
-                <Badge
-                  variant="solid"
-                  bg={isInstalled ? activeColor : undefined}
-                  color={isInstalled ? accent : undefined}
-                  fontSize="xs"
-                  borderRadius="full"
-                  px={2.5}
-                  py={0.5}
-                  textTransform="none"
-                >
-                  {isInstalled
-                    ? `${t("settings.pawnio.installed", "已安装")}${status.version ? ` v${status.version}` : ""}`
-                    : t("settings.pawnio.notInstalled", "未安装")}
-                </Badge>
-              )}
-            </HStack>
-            <Text fontSize="md" fontWeight="bold" color={labelColor}>
-              {checking
-                ? t("settings.pawnio.checking", "检查中...")
-                : isInstalled
-                  ? t("settings.pawnio.installedDesc", "传感器数据已启用", { defaultValue: "传感器数据已启用" })
-                  : t("settings.pawnio.notInstalledDesc", "当前未启用传感器数据", { defaultValue: "当前未启用传感器数据" })}
-            </Text>
-          </VStack>
-          {checking && <Spinner size="sm" color={activeColor} />}
-        </HStack>
-      </LiquidGlassCard>
-
-      {/* 功能说明卡片 */}
-      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
-        <VStack spacing={4} align="stretch">
-          <HStack spacing={2}>
-            <LuInfo size={16} color={activeColor} />
-            <Text fontSize="sm" color={labelColor} fontWeight="semibold">
-              {t("settings.pawnio.aboutTitle", "关于 PawnIO", { defaultValue: "关于 PawnIO" })}
-            </Text>
-          </HStack>
-          <Text fontSize="sm" color={subLabelColor} lineHeight="1.6">
-            {t("settings.pawnio.description", "PawnIO 是一个可选的内核级驱动，安装后可以获取 CPU 温度、风扇转速等更详细的硬件信息。该驱动为可选组件，不安装不影响 NexBox 的其他功能。")}
-          </Text>
-          <Divider borderColor={dividerColor} />
-          <VStack spacing={3} align="stretch">
-            <HStack spacing={3}>
-              <Flex
-                align="center"
-                justify="center"
-                w="32px"
-                h="32px"
-                borderRadius="lg"
-                flexShrink={0}
-                bg={accentSoft}
-                color={activeColor}
-              >
-                <LuThermometer size={16} />
-              </Flex>
-              <Text fontSize="sm" color={labelColor}>
-                {t("settings.pawnio.featureTemp", "CPU 温度", { defaultValue: "CPU 温度" })}
-              </Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Flex
-                align="center"
-                justify="center"
-                w="32px"
-                h="32px"
-                borderRadius="lg"
-                flexShrink={0}
-                bg={accentSoft}
-                color={activeColor}
-              >
-                <LuFan size={16} />
-              </Flex>
-              <Text fontSize="sm" color={labelColor}>
-                {t("settings.pawnio.featureFan", "风扇转速", { defaultValue: "风扇转速" })}
-              </Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Flex
-                align="center"
-                justify="center"
-                w="32px"
-                h="32px"
-                borderRadius="lg"
-                flexShrink={0}
-                bg={accentSoft}
-                color={activeColor}
-              >
-                <LuCpu size={16} />
-              </Flex>
-              <Text fontSize="sm" color={labelColor}>
-                {t("settings.pawnio.featureDetail", "更详细的硬件数据", { defaultValue: "更详细的硬件数据" })}
-              </Text>
-            </HStack>
-          </VStack>
-        </VStack>
-      </LiquidGlassCard>
-
-      {/* 操作卡片 */}
-      <LiquidGlassCard px={4} py={4} boxShadow="sm">
-        <VStack spacing={3} align="stretch">
-          <Text fontSize="sm" color={labelColor} fontWeight="medium">
-            {t("settings.pawnio.actionTitle", "操作", { defaultValue: "操作" })}
-          </Text>
-          <HStack spacing={3}>
-            {isInstalled ? (
-              <Button
-                size="sm"
-                bg={activeColor}
-                color={accent}
-                _hover={{ bg: activeColor, opacity: 0.85 }}
-                leftIcon={<LuRefreshCw size={14} />}
-                onClick={handleRefreshStatus}
-                isLoading={checking}
-              >
-                {t("settings.pawnio.refresh", "刷新状态")}
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                bg={activeColor}
-                color={accent}
-                _hover={{ bg: activeColor, opacity: 0.85 }}
-                leftIcon={<Download size={14} />}
-                onClick={onPawnioModalOpen}
-              >
-                {t("settings.pawnio.install", "安装 PawnIO 驱动")}
-              </Button>
-            )}
-          </HStack>
-        </VStack>
-      </LiquidGlassCard>
-
-      {/* 安装对话框 */}
-      <PawnioInstallModal
-        isOpen={isPawnioModalOpen}
-        onClose={onPawnioModalClose}
-        onSuccess={handleRefreshStatus}
-      />
-    </Box>
-  );
-}
-
 function AboutSettings() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("settings");
@@ -3086,7 +2865,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "7.9.0";
+  const currentVersion = "8.0.7";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
@@ -3276,38 +3055,40 @@ function AboutSettings() {
               {t("settings.aboutSettings.author")}
             </Text>
             <HStack spacing={2}>
-              <Box
-                w="24px"
-                h="24px"
-                borderRadius="md"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                color="#00A1D6"
-                cursor="pointer"
-                transition="all 0.2s"
-                _hover={{ bg: "rgba(0, 161, 214, 0.1)", transform: "scale(1.1)" }}
-                onClick={() => handleOpenLink("https://space.bilibili.com/1614951812")}
-                title="Bilibili"
-              >
-                <RiBilibiliFill size={18} />
-              </Box>
-              <Box
-                w="24px"
-                h="24px"
-                borderRadius="md"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                color="#000000"
-                cursor="pointer"
-                transition="all 0.2s"
-                _hover={{ bg: "rgba(0, 0, 0, 0.1)", transform: "scale(1.1)" }}
-                onClick={() => handleOpenLink("https://www.douyin.com/user/MS4wLjABAAAAytD1zP6zVeXgPQuG-PWHq4AhsZz9zNXPcJap2JVaoG88Ani9tmBj0FtH7DLrQWsH")}
-                title="抖音"
-              >
-                <RiTiktokFill size={16} />
-              </Box>
+              <Tooltip label="Bilibili">
+                <Box
+                  w="24px"
+                  h="24px"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  color="#00A1D6"
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ bg: "rgba(0, 161, 214, 0.1)", transform: "scale(1.1)" }}
+                  onClick={() => handleOpenLink("https://space.bilibili.com/1614951812")}
+                >
+                  <RiBilibiliFill size={18} />
+                </Box>
+              </Tooltip>
+              <Tooltip label="抖音">
+                <Box
+                  w="24px"
+                  h="24px"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  color="#000000"
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ bg: "rgba(0, 0, 0, 0.1)", transform: "scale(1.1)" }}
+                  onClick={() => handleOpenLink("https://www.douyin.com/user/MS4wLjABAAAAytD1zP6zVeXgPQuG-PWHq4AhsZz9zNXPcJap2JVaoG88Ani9tmBj0FtH7DLrQWsH")}
+                >
+                  <RiTiktokFill size={16} />
+                </Box>
+              </Tooltip>
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
                 木流
               </Text>
@@ -3319,19 +3100,19 @@ function AboutSettings() {
               QQ 交流群
             </Text>
             <HStack spacing={2}>
-              <Box
-                w="24px"
-                h="24px"
-                borderRadius="md"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                cursor="pointer"
-                transition="all 0.2s"
-                _hover={{ transform: "scale(1.1)" }}
-                onClick={() => handleOpenLink("https://qm.qq.com/q/atlGEA2tQk")}
-                title="点击加入 QQ 群"
-              >
+              <Tooltip label="点击加入 QQ 群">
+                <Box
+                  w="24px"
+                  h="24px"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ transform: "scale(1.1)" }}
+                  onClick={() => handleOpenLink("https://qm.qq.com/q/atlGEA2tQk")}
+                >
                 <img
                   src="/icons/qq.png"
                   alt="QQ"
@@ -3348,6 +3129,7 @@ function AboutSettings() {
                   }}
                 />
               </Box>
+              </Tooltip>
               <Text fontSize="sm" color={labelColor} fontWeight="medium" userSelect="all">
                 526045683
               </Text>
@@ -3359,21 +3141,22 @@ function AboutSettings() {
               {t("settings.aboutSettings.joinUs")}
             </Text>
             <HStack spacing={2}>
-              <Box
-                w="24px"
-                h="24px"
-                borderRadius="md"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                cursor="pointer"
-                transition="all 0.2s"
-                _hover={{ transform: "scale(1.1)", bg: "rgba(99, 102, 241, 0.1)" }}
-                onClick={() => handleOpenLink("https://team.nexbox.top")}
-                title={t("settings.aboutSettings.joinUs")}
-              >
-                <LuExternalLink size={16} />
-              </Box>
+              <Tooltip label={t("settings.aboutSettings.joinUs")}>
+                <Box
+                  w="24px"
+                  h="24px"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ transform: "scale(1.1)", bg: "rgba(99, 102, 241, 0.1)" }}
+                  onClick={() => handleOpenLink("https://team.nexbox.top")}
+                >
+                  <LuExternalLink size={16} />
+                </Box>
+              </Tooltip>
             </HStack>
           </HStack>
         </Box>
@@ -3773,7 +3556,7 @@ export default function SettingsPage() {
         <div key={activeItem} style={{ position: 'relative', zIndex: 1 }}>
           {activeItem === "general" && <GeneralSettings />}
           {activeItem === "appearance" && <AppearanceSettings />}
-          {activeItem === "pawnio" && <PawnioSettings />}
+          {activeItem === "advanced" && <AdvancedPage />}
           {activeItem === "hotkeys" && <HotkeySettings />}
           {activeItem === "network" && <NetworkSettings />}
           {activeItem === "contributor" && <ContributorSettings />}

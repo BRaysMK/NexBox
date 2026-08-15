@@ -63,6 +63,7 @@ import {
   FolderOpen,
   FolderPlus,
   FileMusic,
+  HeartPulse,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -701,7 +702,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const menuText = "#1a1a2e";
   const menuMuted = "#666";
 
-  const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : Repeat;
+  const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : playMode === "heartbeat" ? HeartPulse : Repeat;
 
   // memoize scrollbarSx，避免每次渲染创建新对象导致 KaraokeLyricsView 不必要重渲染
   const memoScrollbarSx = useMemo(() => scrollbarSx(activeColor), [activeColor]);
@@ -1165,7 +1166,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             )}
           </Box>
           <HStack spacing={4} justify="center">
-          <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : "列表循环"}>
+          <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : playMode === "heartbeat" ? "心动模式" : "列表循环"}>
             <IconButton
               aria-label="Play mode"
               icon={<ModeIcon size={20} />}
@@ -1610,7 +1611,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
   const dropdownBg = useColorModeValue("white", "#1a1a1a");
   const sliderTrackBg = useColorModeValue("rgba(255,255,255,0.9)", "#333333");
 
-  const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : Repeat;
+  const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : playMode === "heartbeat" ? HeartPulse : Repeat;
 
   if (!currentSong) {
     return (
@@ -1690,7 +1691,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
             <Tooltip label="下一首">
               <IconButton aria-label="Next" icon={<SkipForwardBtn size={18} />} size="sm" variant="ghost" onClick={() => useMusicStore.getState().nextTrack()} />
             </Tooltip>
-            <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : "列表循环"}>
+            <Tooltip label={playMode === "one" ? "单曲循环" : playMode === "shuffle" ? "随机播放" : playMode === "heartbeat" ? "心动模式" : "列表循环"}>
               <IconButton
                 aria-label="Play mode"
                 icon={<ModeIcon size={16} />}
@@ -2460,6 +2461,7 @@ export default function MusicPage() {
   const searchResults = useMusicStore((s) => s.searchResults);
   const userPlaylists = useMusicStore((s) => s.userPlaylists);
   const localSongs = useMusicStore((s) => s.localSongs);
+  const importingLocal = useMusicStore((s) => s.importingLocal);
   const leftPlaylistTracks = useMusicStore((s) => s.leftPlaylistTracks);
   const leftPlaylistMeta = useMusicStore((s) => s.leftPlaylistMeta);
   const rightPlaylistTracks = useMusicStore((s) => s.rightPlaylistTracks);
@@ -3015,22 +3017,23 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
         </Text>
       </VStack>
       {loginInfo?.logged_in && pl.provider === "netease" && !isOwnPlaylist(pl) && (
-        <IconButton
-          aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
-          icon={<Heart size={16} fill={pl.subscribed ? "#e53e3e" : "none"} />}
-          size="sm"
-          variant="ghost"
-          title={pl.subscribed ? "取消收藏" : "收藏歌单"}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleTogglePlaylistSubscribe(pl);
-          }}
-          sx={{
-            color: pl.subscribed ? "#e53e3e" : subTextColor,
-            _hover: { bg: hoverBg },
-            flexShrink: 0,
-          }}
-        />
+        <Tooltip label={pl.subscribed ? "取消收藏" : "收藏歌单"}>
+          <IconButton
+            aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
+            icon={<Heart size={16} fill={pl.subscribed ? "#e53e3e" : "none"} />}
+            size="sm"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTogglePlaylistSubscribe(pl);
+            }}
+            sx={{
+              color: pl.subscribed ? "#e53e3e" : subTextColor,
+              _hover: { bg: hoverBg },
+              flexShrink: 0,
+            }}
+          />
+        </Tooltip>
       )}
     </HStack>
   );
@@ -3881,22 +3884,23 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                             </Text>
                           </VStack>
                           {loginInfo?.logged_in && pl.provider === "netease" && (
-                            <IconButton
-                              aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
-                              icon={<Heart size={14} fill={pl.subscribed ? "#e53e3e" : "none"} />}
-                              size="xs"
-                              variant="ghost"
-                              title={pl.subscribed ? "取消收藏" : "收藏歌单"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleTogglePlaylistSubscribe(pl);
-                              }}
-                              sx={{
-                                color: pl.subscribed ? "#e53e3e" : subTextColor,
-                                _hover: { bg: hoverBg },
-                                flexShrink: 0,
-                              }}
-                            />
+                            <Tooltip label={pl.subscribed ? "取消收藏" : "收藏歌单"}>
+                              <IconButton
+                                aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
+                                icon={<Heart size={14} fill={pl.subscribed ? "#e53e3e" : "none"} />}
+                                size="xs"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTogglePlaylistSubscribe(pl);
+                                }}
+                                sx={{
+                                  color: pl.subscribed ? "#e53e3e" : subTextColor,
+                                  _hover: { bg: hoverBg },
+                                  flexShrink: 0,
+                                }}
+                              />
+                            </Tooltip>
                           )}
                           <Tooltip label="查看曲目">
                             <IconButton
@@ -4203,9 +4207,10 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 <Tooltip label="导入本地歌曲">
                   <IconButton
                     aria-label="导入本地歌曲"
-                    icon={<FolderOpen size={15} />}
+                    icon={importingLocal ? <Spinner size="xs" /> : <FolderOpen size={15} />}
                     size="sm"
                     variant="ghost"
+                    isDisabled={importingLocal}
                     onClick={handleImportLocal}
                     sx={{ color: activeColor, _hover: { bg: hoverBg } }}
                   />
@@ -4213,9 +4218,10 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 <Tooltip label="导入歌曲文件夹">
                   <IconButton
                     aria-label="导入歌曲文件夹"
-                    icon={<FolderPlus size={15} />}
+                    icon={importingLocal ? <Spinner size="xs" /> : <FolderPlus size={15} />}
                     size="sm"
                     variant="ghost"
+                    isDisabled={importingLocal}
                     onClick={handleImportLocalFolder}
                     sx={{ color: activeColor, _hover: { bg: hoverBg } }}
                   />
@@ -4258,11 +4264,14 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 </Text>
                 <Button
                   size="xs"
-                  leftIcon={<FolderOpen size={14} />}
+                  leftIcon={importingLocal ? <Spinner size="xs" /> : <FolderOpen size={14} />}
                   variant="solid"
                   flexShrink={0}
                   bg={activeColor}
                   color={contrastText}
+                  isLoading={importingLocal}
+                  loadingText="导入中..."
+                  isDisabled={importingLocal}
                   _hover={{ opacity: 0.9 }}
                   _active={{ transform: "scale(0.97)" }}
                   onClick={handleImportLocal}
@@ -4271,11 +4280,14 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 </Button>
                 <Button
                   size="xs"
-                  leftIcon={<FolderPlus size={14} />}
+                  leftIcon={importingLocal ? <Spinner size="xs" /> : <FolderPlus size={14} />}
                   variant="outline"
                   flexShrink={0}
                   borderColor={activeColor}
                   color={activeColor}
+                  isLoading={importingLocal}
+                  loadingText="导入中..."
+                  isDisabled={importingLocal}
                   _hover={{ opacity: 0.9 }}
                   _active={{ transform: "scale(0.97)" }}
                   onClick={handleImportLocalFolder}

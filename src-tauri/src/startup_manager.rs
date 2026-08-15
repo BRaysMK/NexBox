@@ -358,6 +358,11 @@ fn draw_hicon_png(hicon: *mut std::ffi::c_void, size: i32) -> Option<Vec<u8>> {
 /// 优先用 SHDefExtractIconW 按 256px 提取高清图标（在 32px 框内缩小显示更清晰），
 /// 失败时回退到 SHGetFileInfoW 的默认图标。
 pub fn extract_icon_data_uri(file_path: &str) -> Option<String> {
+    extract_icon_data_uri_at_size(file_path, 256)
+}
+
+/// 按指定尺寸提取图标 data URI（批量进程图标等场景使用小尺寸以提升效率）
+fn extract_icon_data_uri_at_size(file_path: &str, size: i32) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
         use windows_sys::Win32::UI::Shell::SHDefExtractIconW;
@@ -373,7 +378,7 @@ pub fn extract_icon_data_uri(file_path: &str) -> Option<String> {
                 .chain(std::iter::once(0))
                 .collect();
 
-            // 优先按 256px 提取高清图标（Windows 会从 EXE 资源中取最大可用尺寸），
+            // 优先按指定尺寸提取高清图标（Windows 会从 EXE 资源中取最大可用尺寸），
             // 前端在 32px 框内缩小显示，在高 DPI 屏上也不会发糊。
             let mut hicon: *mut std::ffi::c_void = std::ptr::null_mut();
             let mut bytes: Option<Vec<u8>> = None;
@@ -383,10 +388,10 @@ pub fn extract_icon_data_uri(file_path: &str) -> Option<String> {
                 0,
                 &mut hicon,
                 std::ptr::null_mut(),
-                256,
+                size as u32,
             );
             if hr == 0 && !hicon.is_null() {
-                bytes = draw_hicon_png(hicon, 256);
+                bytes = draw_hicon_png(hicon, size);
                 DestroyIcon(hicon);
             }
 
@@ -416,9 +421,18 @@ pub fn extract_icon_data_uri(file_path: &str) -> Option<String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = file_path;
+        let _ = (file_path, size);
         None
     }
+}
+
+/// 批量提取进程图标 data URI（不使用 PowerShell）；失败项为空字符串
+#[tauri::command]
+pub async fn get_process_icons(exe_paths: Vec<String>) -> Vec<String> {
+    exe_paths
+        .iter()
+        .map(|p| extract_icon_data_uri_at_size(p, 64).unwrap_or_default())
+        .collect()
 }
 
 /// 获取启动项对应软件的图标（data URI），失败返回空字符串

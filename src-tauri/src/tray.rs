@@ -48,6 +48,41 @@ fn get_monitor_work_area(_px: i32, _py: i32) -> Option<(i32, i32, i32, i32)> {
     None
 }
 
+/// 打开主窗口前确保其落在某个显示器内（避免离屏预热后从托盘打开时仍不可见）。
+/// 仅当窗口当前完全位于所有显示器之外时才居中到主显示器；屏幕内则保持用户位置不动。
+fn ensure_main_onscreen<R: Runtime>(app: &AppHandle<R>) -> Option<()> {
+    let win = app.get_webview_window("main")?;
+    let pos = win.outer_position().ok()?;
+    let on_screen = app
+        .available_monitors()
+        .ok()?
+        .iter()
+        .any(|m| {
+            let r = m.position();
+            let s = m.size();
+            let x = pos.x;
+            let y = pos.y;
+            x + 10 >= r.x && x - 10 <= r.x + s.width as i32
+                && y + 10 >= r.y && y - 10 <= r.y + s.height as i32
+        });
+    if !on_screen {
+        let _ = win.center(); // 居中到当前/最近显示器（通常为主显示器）
+    }
+    Some(())
+}
+
+/// 从托盘打开主窗口的统一入口：恢复任务栏 → 若处于离屏预热则归位到屏幕内 → 显示 → 恢复 → 聚焦。
+pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_skip_taskbar(false);
+        ensure_main_onscreen(app);
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        crate::emit_main_visibility(app, true);
+    }
+}
+
 pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn std::error::Error>> {
     if TRAY_INITIALIZED.load(Ordering::SeqCst) {
         return Err("Tray already initialized".into());
@@ -62,12 +97,7 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                     button: tauri::tray::MouseButton::Left,
                     ..
                 } => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.unminimize();
-                        let _ = window.set_focus();
-                        crate::emit_main_visibility(app, true);
-                    }
+                    show_main_window(app);
                 }
                 tauri::tray::TrayIconEvent::Click {
                     button: tauri::tray::MouseButton::Right,
@@ -202,15 +232,8 @@ pub async fn minimize_to_tray<R: Runtime>(window: Window<R>) -> Result<(), Strin
 
 #[tauri::command]
 pub async fn show_window<R: Runtime>(window: Window<R>) -> Result<(), String> {
-    let app = window.app_handle();
-    window.show().map_err(|e| e.to_string())?;
-    window.unminimize().map_err(|e| e.to_string())?;
-    window.set_focus().map_err(|e| e.to_string())?;
-
-    let _ = window.set_focus();
-
-    crate::emit_main_visibility(app, true);
-
+    // 从任意窗口调用均打开主窗口（复用离屏归位逻辑）
+    show_main_window(window.app_handle());
     Ok(())
 }
 
@@ -251,12 +274,7 @@ pub fn exit_app(app: tauri::AppHandle) {
 
 #[tauri::command]
 pub fn check_update_and_show(app: AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-    }
-    crate::emit_main_visibility(&app, true);
+    show_main_window(&app);
     let _ = app.emit("check-update", ());
 }
 

@@ -1006,6 +1006,30 @@ pub async fn recommend_resource(cookie: &str) -> Result<Vec<Playlist>, String> {
         .collect())
 }
 
+/// 相似歌曲 (心动模式核心, 参考 NeteaseCloudMusicApi simi/song: /weapi/v1/discovery/simiSong)
+/// 根据当前歌曲 id 返回口味相似的歌曲, 用于心跳模式动态续播
+pub async fn simi_song(id: &str, limit: u32, cookie: &str) -> Result<Vec<Song>, String> {
+    let client = build_client();
+    let mut payload = serde_json::Map::new();
+    payload.insert("songid".into(), json!(id));
+    payload.insert("limit".into(), json!(limit));
+    payload.insert("offset".into(), json!(0));
+
+    let result = post_weapi(&client, "/api/v1/discovery/simiSong", payload, cookie).await?;
+    let code = result.get("code").and_then(|v| v.as_i64()).unwrap_or(-1);
+    if code != 200 {
+        return Err(format!("simi_song failed: code={code}"));
+    }
+
+    let songs = result
+        .get("songs")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(songs.iter().map(map_song_record).collect())
+}
+
 /// 搜索歌单 (使用 cloudsearch type=1000)
 pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Playlist>, String> {
     let client = build_client();

@@ -11,6 +11,7 @@ import {
   Text,
   VStack,
   useColorModeValue,
+  Tooltip,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
@@ -207,20 +208,23 @@ export default function RuntimeRepairPage() {
                   </Box>
 
                   <VStack align="stretch" spacing={1.5} flex={1} minW={0}>
-                    <Text color={labelColor} fontSize="md" fontWeight="700" noOfLines={1} title={runtime.title}>
-                      {runtime.title}
-                    </Text>
+                    <Tooltip label={runtime.title}>
+                      <Text color={labelColor} fontSize="md" fontWeight="700" noOfLines={1}>
+                        {runtime.title}
+                      </Text>
+                    </Tooltip>
                     <Text color={labelColor} fontSize="sm">{runtime.description}</Text>
                     <Text color={subLabelColor} fontSize="xs">{runtime.detail}</Text>
                     {status && !isComplete && (
-                      <Text
-                        color={subLabelColor}
-                        fontSize="xs"
-                        noOfLines={2}
-                        title={status.missing_components.join("\n")}
-                      >
-                        {status.missing_components.join("；")}
-                      </Text>
+                      <Tooltip label={status.missing_components.join("\n")}>
+                        <Text
+                          color={subLabelColor}
+                          fontSize="xs"
+                          noOfLines={2}
+                        >
+                          {status.missing_components.join("；")}
+                        </Text>
+                      </Tooltip>
                     )}
                     {runtimeProgress && (
                       <Box pt={1}>

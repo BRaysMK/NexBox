@@ -2537,16 +2537,16 @@ export default function DisplayFilterPage() {
           <ModalBody pb={4}>
             <SimpleGrid columns={{ base: 2, sm: 3 }} spacing={2}>
               {gameFilterGames.map((game) => (
-                <Text
-                  key={game.id}
-                  color={textColor}
-                  fontSize="sm"
-                  fontWeight="500"
-                  noOfLines={1}
-                  title={game.name}
-                >
-                  {game.name}
-                </Text>
+                <Tooltip key={game.id} label={game.name}>
+                  <Text
+                    color={textColor}
+                    fontSize="sm"
+                    fontWeight="500"
+                    noOfLines={1}
+                  >
+                    {game.name}
+                  </Text>
+                </Tooltip>
               ))}
             </SimpleGrid>
           </ModalBody>

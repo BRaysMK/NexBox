@@ -47,6 +47,7 @@ import CpuSchedulerPage from "./pages/CpuSchedulerPage";
 import SpeedTestPage from "./pages/SpeedTestPage";
 import CustomPage from "./pages/CustomPage";
 import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 import { UpdateModal } from "./components/UpdateModal";
 import { SplashScreen } from "./components/SplashScreen";
@@ -84,6 +85,20 @@ function App() {
   if (location.pathname === "/sensor-monitor") {
     return <SensorMonitorPage />;
   }
+
+  // 开机自启(--autostart)模式：后端已离屏预热加载本窗口，前端初始化完成后隐藏到托盘，
+  // 复用 minimize_to_tray 正确更新后端可见性并触发 EcoQoS。
+  useEffect(() => {
+    (async () => {
+      try {
+        const autostart = await invoke<boolean>("is_autostart_mode");
+        if (autostart) await invoke("minimize_to_tray");
+      } catch (e) {
+        console.error("autostart hide check failed:", e);
+      }
+    })();
+  }, []);
+
   const [pageTransitionMode, setPageTransitionMode] = useState<TransitionMode>("fade");
 
   useEffect(() => {

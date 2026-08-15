@@ -145,7 +145,13 @@ fn find_gpu_registry_keys() -> Result<Vec<(RegKey, String, bool)>, String> {
         "connection", "lan", "nic", "bluetooth",
     ];
     // 显卡名称关键词（NVIDIA / AMD / Intel）
-    let gpu_keywords = ["nvidia", "geforce", "gtx", "rtx", "amd", "radeon", "intel", "uhd graphics", "iris", "hd graphics"];
+    // 注意：不能包含裸 "intel" —— Intel 的 ME 接口、PCIe 根端口、共享 SRAM、
+    // TypeC PCIe 等非显卡设备名同样含 "Intel"，会被误判为显卡。
+    // 只有强显卡特征词（graphics/iris/uhd/hd/arc 等）才算显卡。
+    let gpu_keywords = [
+        "nvidia", "geforce", "gtx", "rtx", "amd", "radeon",
+        "uhd graphics", "iris", "hd graphics", "arc", "graphics",
+    ];
     
     for vendor_result in enum_key.enum_keys() {
         let vendor_key_name = match vendor_result {
@@ -358,22 +364,118 @@ fn read_gpu_name(key: &RegKey) -> Option<String> {
     None
 }
 
+/// 应用备份信息到显卡列表：
+/// - Multi：按 key_path 精确映射原始名（is_backed_up 与 original_name 恒一致）
+/// - Legacy：旧版单条备份无法按 key_path 映射，仅主显卡（优先独显）视为已备份并附上
+///   原始名，与 Legacy 恢复逻辑（只恢复第一张独显）保持一致，
+///   避免出现「已备份但右侧没有原始显卡」的显示不一致。
+#[cfg(target_os = "windows")]
+fn apply_backup_to_list(list: &mut Vec<GpuInfo>, backup: &Option<BackupData>) {
+    let mut backup_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    if let Some(BackupData::Multi(entries)) = backup {
+        for e in entries {
+            backup_map.insert(e.key_path.clone(), e.original_name.clone());
+        }
+    }
+    for g in list.iter_mut() {
+        let original_name = backup_map.get(&g.key_path).cloned();
+        g.original_name = original_name.clone();
+        g.is_backed_up = original_name.is_some();
+    }
+    if let Some(BackupData::Legacy(legacy_name)) = backup {
+        let primary_index = list
+            .iter()
+            .position(|g| !g.is_integrated)
+            .unwrap_or(0);
+        if let Some(primary) = list.get_mut(primary_index) {
+            primary.is_backed_up = true;
+            primary.original_name = Some(legacy_name.clone());
+        }
+    }
+}
+
+/// 通过 WMI 获取真实显卡列表（Win32_VideoController 只含显示适配器，不会出现
+/// Intel ME/PCIe 根端口等杂项设备），并用每张显卡的 PNPDeviceID 精确定位
+/// Enum\PCI 注册表键，实现「通过显卡反查注册表」。
+#[cfg(target_os = "windows")]
+fn get_gpu_list_from_wmi() -> Vec<GpuInfo> {
+    use crate::hardware;
+
+    let static_gpus = hardware::get_gpus_static_from_wmi();
+    if static_gpus.is_empty() {
+        return Vec::new();
+    }
+
+    let backup = load_backup().ok().flatten();
+
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let mut list: Vec<GpuInfo> = Vec::new();
+    for gs in &static_gpus {
+        let pnp = gs.pnp_device_id.trim();
+        // 只处理 PCI 总线上的真实显卡；ROOT\...（远程/虚拟显示适配器）等直接跳过
+        if !pnp.starts_with("PCI\\") {
+            log::debug!("跳过非 PCI 显卡(WMI): {}", pnp);
+            continue;
+        }
+        // PNPDeviceID 去掉 "PCI\" 前缀即 Enum\PCI 下的 key_path（vendor\device\instance）
+        let key_path = pnp[4..].to_string();
+        let device_key = match hklm.open_subkey(format!(
+            "SYSTEM\\CurrentControlSet\\Enum\\PCI\\{}",
+            key_path
+        )) {
+            Ok(k) => k,
+            Err(e) => {
+                log::warn!("WMI 显卡无对应注册表键，跳过: {} ({}) {}", gs.name, key_path, e);
+                continue;
+            }
+        };
+        let Some(name) = read_gpu_name(&device_key) else {
+            continue;
+        };
+        list.push(GpuInfo {
+            name,
+            is_integrated: check_is_integrated(&device_key, &key_path),
+            original_name: None,
+            is_backed_up: false,
+            key_path,
+        });
+    }
+
+    // 独显在前，核显在后；同类型按原名
+    list.sort_by(|a, b| {
+        a.is_integrated
+            .cmp(&b.is_integrated)
+            .then_with(|| a.name.cmp(&b.name))
+    });
+
+    // 应用备份信息（Multi 按 key_path 映射；Legacy 仅标记主显卡并附上原始名）
+    apply_backup_to_list(&mut list, &backup);
+
+    log::info!(
+        "WMI 显卡映射到注册表: {} 张: {:?}",
+        list.len(),
+        list.iter().map(|g| g.name.as_str()).collect::<Vec<_>>()
+    );
+    list
+}
+
 /// 列出全部显卡（核显 + 独显），独显排前，并关联备份的原始名称。
 #[cfg(target_os = "windows")]
 fn get_gpu_list_inner() -> Result<Vec<GpuInfo>, String> {
+    // 首选 WMI：只枚举真实显卡并用 PNPDeviceID 精确定位注册表键
+    let wmi_list = get_gpu_list_from_wmi();
+    if !wmi_list.is_empty() {
+        return Ok(wmi_list);
+    }
+    log::warn!("WMI 未取到可用显卡，回退到注册表 Display 类枚举");
+
     let gpu_keys = find_gpu_registry_keys()?;
     if gpu_keys.is_empty() {
         return Err("未找到显卡注册表信息".to_string());
     }
 
-    // 备份映射：key_path -> original_name
+    // 备份信息由 apply_backup_to_list 统一处理（Multi 按 key_path 映射；Legacy 仅主显卡）
     let backup = load_backup()?;
-    let mut backup_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    if let Some(BackupData::Multi(entries)) = &backup {
-        for e in entries {
-            backup_map.insert(e.key_path.clone(), e.original_name.clone());
-        }
-    }
 
     let mut list: Vec<GpuInfo> = Vec::new();
     for (key, key_path, is_integrated) in &gpu_keys {
@@ -385,21 +487,13 @@ fn get_gpu_list_inner() -> Result<Vec<GpuInfo>, String> {
             log::info!("跳过基础显示适配器(列表): {} ({})", name, key_path);
             continue;
         }
-        let original_name = backup_map.get(key_path).cloned();
         list.push(GpuInfo {
             name,
             is_integrated: *is_integrated,
-            original_name: original_name.clone(),
-            is_backed_up: original_name.is_some(),
+            original_name: None,
+            is_backed_up: false,
             key_path: key_path.clone(),
         });
-    }
-
-    // 旧版备份（Legacy）无法按 key_path 映射：视为整体已备份，仅主显卡可恢复
-    if matches!(backup, Some(BackupData::Legacy(_))) {
-        for g in list.iter_mut() {
-            g.is_backed_up = true;
-        }
     }
 
     // 独显在前，核显在后；同类型按原名
@@ -408,6 +502,9 @@ fn get_gpu_list_inner() -> Result<Vec<GpuInfo>, String> {
             .cmp(&b.is_integrated)
             .then_with(|| a.name.cmp(&b.name))
     });
+
+    // 应用备份信息（Multi 按 key_path 映射；Legacy 仅标记主显卡并附上原始名）
+    apply_backup_to_list(&mut list, &backup);
 
     Ok(list)
 }
@@ -419,176 +516,125 @@ fn get_gpu_list_inner() -> Result<Vec<GpuInfo>, String> {
 
 #[cfg(target_os = "windows")]
 fn rename_gpu(new_name: &str, target_key_path: &str) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    use std::process::Command;
-
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-
     log::info!(
         "开始修改显卡 {} 的名称为: {}",
         target_key_path, new_name
     );
 
-    // PowerShell 单引号字符串中只需转义单引号（' -> ''）
-    let escaped_name = new_name.replace('\'', "''");
-    let escaped_target = target_key_path.replace('\'', "''");
-
     // 策略：只改写 target_key_path 指定的显卡，避免影响其他显卡
     // 1. Enum\PCI：通过 vendor\device 精确匹配 target_key_path
     // 2. Class：通过 MatchingDeviceId 与目标显卡一致来匹配
     // 3. Video：通过当前名称与目标显卡当前名称一致来匹配
-    let ps_script = format!(
-        r#"
-$ErrorActionPreference = 'Continue'
-$modified = $false
-$targetKeyPath = '{target}'
-$newName = '{name}'
+    // 原生 winreg 直写，不再启动 PowerShell（更快、无弹进程开销）
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
 
-$targetEnumPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\PCI\$targetKeyPath"
-if (-not (Test-Path $targetEnumPath)) {{
-    Write-Host "FAILED: 目标显卡路径不存在: $targetEnumPath"
-    exit 1
-}}
+    // 打开目标显卡的 Enum\PCI 键（需写权限）
+    let enum_path = format!("SYSTEM\\CurrentControlSet\\Enum\\PCI\\{}", target_key_path);
+    let target_key = hklm
+        .open_subkey_with_flags(&enum_path, KEY_READ | KEY_WRITE)
+        .map_err(|e| format!("打开目标显卡注册表键失败: {} ({})", e, enum_path))?;
 
-# 读取目标显卡的 MatchingDeviceId 和当前 FriendlyName，用于 Class/Video 精确匹配
-$targetMatchingId = (Get-ItemProperty -Path $targetEnumPath -Name 'MatchingDeviceId' -ErrorAction SilentlyContinue).MatchingDeviceId
-$targetCurrentName = (Get-ItemProperty -Path $targetEnumPath -Name 'FriendlyName' -ErrorAction SilentlyContinue).FriendlyName
-if (-not $targetCurrentName) {{
-    $desc = (Get-ItemProperty -Path $targetEnumPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
-    if ($desc) {{
-        $parts = $desc -split ';', 2
-        $targetCurrentName = if ($parts.Count -gt 1) {{ $parts[1] }} else {{ $desc }}
-    }}
-}}
-Write-Host "目标显卡: $targetKeyPath"
-Write-Host "目标 MatchingDeviceId: $targetMatchingId"
-Write-Host "目标当前名称: $targetCurrentName"
+    // 读取目标显卡当前名称与 MatchingDeviceId，用于 Class/Video 精确匹配
+    let target_current_name =
+        read_gpu_name(&target_key).ok_or_else(|| "读取目标显卡当前名称失败".to_string())?;
+    let target_matching_id: Option<String> = target_key.get_value("MatchingDeviceId").ok();
 
-# 1. 修改 Enum\PCI 下目标显卡
-try {{
-    Set-ItemProperty -Path $targetEnumPath -Name 'FriendlyName' -Value $newName -ErrorAction Stop
-    Write-Host "成功修改 FriendlyName"
-    $modified = $true
-}} catch {{
-    Write-Host "修改 FriendlyName 失败: $_"
-}}
-try {{
-    $deviceDesc = (Get-ItemProperty -Path $targetEnumPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
-    if ($deviceDesc) {{
-        $parts = $deviceDesc -split ';', 2
-        if ($parts.Count -gt 1) {{
-            $newDesc = "$($parts[0]);$newName"
-            Set-ItemProperty -Path $targetEnumPath -Name 'DeviceDesc' -Value $newDesc -ErrorAction Stop
-            Write-Host "成功修改 DeviceDesc"
-            $modified = $true
-        }}
-    }}
-}} catch {{
-    Write-Host "修改 DeviceDesc 失败: $_"
-}}
+    log::info!("目标显卡: {} 当前名称: {}", target_key_path, target_current_name);
 
-# 2. 修改 Class 下匹配的显卡键（通过 MatchingDeviceId 精确匹配）
-try {{
-    $classPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{{4d36e968-e325-11ce-bfc1-08002be10318}}"
-    if (Test-Path $classPath) {{
-        $subkeys = Get-ChildItem $classPath
-        foreach ($subkey in $subkeys) {{
-            if ($subkey.PSChildName -match "^00\d+") {{
-                try {{
-                    $mid = (Get-ItemProperty -Path $subkey.PSPath -Name 'MatchingDeviceId' -ErrorAction SilentlyContinue).MatchingDeviceId
-                    if ($mid -and $targetMatchingId -and ($mid -eq $targetMatchingId)) {{
-                        $driverDesc = (Get-ItemProperty -Path $subkey.PSPath -Name 'DriverDesc' -ErrorAction SilentlyContinue).DriverDesc
-                        Write-Host "找到目标显卡 Class 键: $($subkey.PSChildName) DriverDesc: $driverDesc"
-                        Set-ItemProperty -Path $subkey.PSPath -Name 'DriverDesc' -Value $newName -ErrorAction Stop
-                        Write-Host "成功修改 DriverDesc"
-                        $modified = $true
-                    }}
-                }} catch {{
-                    Write-Host "处理 Class 键失败: $_"
-                }}
-            }}
-        }}
-    }}
-}} catch {{
-    Write-Host "Class 处理失败: $_"
-}}
+    let mut modified = false;
 
-# 3. 修改 Control\Video 下匹配的显卡键（仅当某字段等于目标显卡当前名称时才改写）
-try {{
-    $videoPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Video"
-    if (Test-Path $videoPath) {{
-        $videoKeys = Get-ChildItem $videoPath
-        foreach ($videoKey in $videoKeys) {{
-            $subkeys = Get-ChildItem $videoKey.PSPath -ErrorAction SilentlyContinue
-            foreach ($subkey in $subkeys) {{
-                try {{
-                    $keyPath = $subkey.PSPath
-                    $driverDesc = (Get-ItemProperty -Path $keyPath -Name 'DriverDesc' -ErrorAction SilentlyContinue).DriverDesc
-                    $deviceDesc = (Get-ItemProperty -Path $keyPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
-                    $description = (Get-ItemProperty -Path $keyPath -Name 'Description' -ErrorAction SilentlyContinue).Description
-                    $friendlyName = (Get-ItemProperty -Path $keyPath -Name 'FriendlyName' -ErrorAction SilentlyContinue).FriendlyName
-
-                    $isTarget = $false
-                    foreach ($v in @($driverDesc, $deviceDesc, $description, $friendlyName)) {{
-                        if ($v -and $targetCurrentName -and ($v -eq $targetCurrentName)) {{
-                            $isTarget = $true
-                            break
-                        }}
-                    }}
-                    if ($isTarget) {{
-                        Write-Host "找到目标显卡 Video 键: $($videoKey.PSChildName)\$($subkey.PSChildName)"
-                        foreach ($n in @('DriverDesc', 'DeviceDesc', 'Description', 'FriendlyName')) {{
-                            try {{
-                                $cur = (Get-ItemProperty -Path $keyPath -Name $n -ErrorAction SilentlyContinue).$n
-                                if ($cur) {{
-                                    Set-ItemProperty -Path $keyPath -Name $n -Value $newName -ErrorAction Stop
-                                    Write-Host "成功修改 $n"
-                                    $modified = $true
-                                }}
-                            }} catch {{}}
-                        }}
-                    }}
-                }} catch {{}}
-            }}
-        }}
-    }}
-}} catch {{
-    Write-Host "Video 处理失败: $_"
-}}
-
-if ($modified) {{
-    Write-Host "SUCCESS: 显卡名称修改完成！"
-    exit 0
-}} else {{
-    Write-Host "FAILED: 未能修改任何显卡注册表键"
-    exit 1
-}}
-"#,
-        target = escaped_target,
-        name = escaped_name
-    );
-
-    log::info!("执行PowerShell脚本修改注册表");
-
-    let output = Command::new("powershell.exe")
-        .args(&["-ExecutionPolicy", "Bypass", "-Command", &ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("无法执行PowerShell: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    log::info!("PowerShell输出: {}", stdout);
-    if !stderr.is_empty() {
-        log::warn!("PowerShell错误: {}", stderr);
+    // 1. 修改 Enum\PCI 下目标显卡的 FriendlyName / DeviceDesc
+    match target_key.set_value("FriendlyName", &new_name) {
+        Ok(_) => {
+            log::info!("成功修改 FriendlyName");
+            modified = true;
+        }
+        Err(e) => log::warn!("修改 FriendlyName 失败: {}", e),
+    }
+    if let Ok(device_desc) = target_key.get_value::<String, _>("DeviceDesc") {
+        let parts: Vec<&str> = device_desc.splitn(2, ';').collect();
+        if parts.len() > 1 {
+            let new_desc = format!("{};{}", parts[0], new_name);
+            match target_key.set_value("DeviceDesc", &new_desc) {
+                Ok(_) => {
+                    log::info!("成功修改 DeviceDesc");
+                    modified = true;
+                }
+                Err(e) => log::warn!("修改 DeviceDesc 失败: {}", e),
+            }
+        }
     }
 
-    if output.status.success() && stdout.contains("SUCCESS") {
+    // 2. 修改 Class 下匹配的显卡键（通过 MatchingDeviceId 精确匹配）
+    if let Some(mid) = target_matching_id {
+        let class_path =
+            r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+        if let Ok(class_key) = hklm.open_subkey_with_flags(class_path, KEY_READ | KEY_WRITE) {
+            for sub in class_key.enum_keys().filter_map(Result::ok) {
+                // 只处理形如 00XX 的驱动键（Properties/Configuration 等非数字子键跳过）
+                if !sub.starts_with("00")
+                    || sub.len() < 3
+                    || !sub[2..].chars().all(|c| c.is_ascii_digit())
+                {
+                    continue;
+                }
+                if let Ok(sub_key) = class_key.open_subkey_with_flags(&sub, KEY_READ | KEY_WRITE) {
+                    if let Ok(smid) = sub_key.get_value::<String, _>("MatchingDeviceId") {
+                        if smid == mid {
+                            match sub_key.set_value("DriverDesc", &new_name) {
+                                Ok(_) => {
+                                    log::info!("找到目标显卡 Class 键: {} 成功修改 DriverDesc", sub);
+                                    modified = true;
+                                }
+                                Err(e) => log::warn!("修改 Class DriverDesc 失败: {} {}", sub, e),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. 修改 Control\Video 下匹配的显卡键（任一名称字段等于目标当前名称时改写）
+    let video_path = r"SYSTEM\CurrentControlSet\Control\Video";
+    if let Ok(video_key) = hklm.open_subkey(video_path) {
+        for guid in video_key.enum_keys().filter_map(Result::ok) {
+            if let Ok(guid_key) = video_key.open_subkey(&guid) {
+                for sub in guid_key.enum_keys().filter_map(Result::ok) {
+                    if let Ok(sub_key) = guid_key.open_subkey_with_flags(&sub, KEY_READ | KEY_WRITE) {
+                        let fields = [
+                            sub_key.get_value::<String, _>("DriverDesc").ok(),
+                            sub_key.get_value::<String, _>("DeviceDesc").ok(),
+                            sub_key.get_value::<String, _>("Description").ok(),
+                            sub_key.get_value::<String, _>("FriendlyName").ok(),
+                        ];
+                        if fields.iter().flatten().any(|v| *v == target_current_name) {
+                            for n in ["DriverDesc", "DeviceDesc", "Description", "FriendlyName"] {
+                                if sub_key.get_value::<String, _>(n).is_ok() {
+                                    match sub_key.set_value(n, &new_name) {
+                                        Ok(_) => {
+                                            log::info!(
+                                                "找到目标显卡 Video 键: {}\\{} 成功修改 {}",
+                                                guid, sub, n
+                                            );
+                                            modified = true;
+                                        }
+                                        Err(e) => log::warn!("修改 Video {} 失败: {} {}", n, sub, e),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if modified {
         log::info!("显卡名称修改成功！");
         Ok(())
     } else {
-        Err(format!("修改失败: {}", if stderr.is_empty() { stdout } else { stderr }))
+        Err("未能修改任何显卡注册表键".to_string())
     }
 }
 
@@ -816,11 +862,6 @@ pub async fn apply_gpu_rename(
 /// 按备份逐张恢复 Enum\PCI 下的显卡键，Class/Video 驱动键按 MatchingDeviceId 关联恢复。
 #[cfg(target_os = "windows")]
 fn restore_gpu_by_entries(entries: &[GpuBackupEntry]) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    use std::process::Command;
-
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-
     // 恢复兜底名称：优先第一张独显的原始名，否则第一条记录（用于 Video 下无法精确匹配的场景）
     let fallback = entries
         .iter()
@@ -828,126 +869,115 @@ fn restore_gpu_by_entries(entries: &[GpuBackupEntry]) -> Result<(), String> {
         .or_else(|| entries.first())
         .map(|e| e.original_name.as_str())
         .unwrap_or("")
-        .replace('\'', "''");
+        .to_string();
 
-    let entries_json = serde_json::to_string(entries)
-        .map_err(|e| format!("序列化恢复数据失败: {}", e))?;
-    // 单引号字符串中只需转义单引号
-    let entries_json_escaped = entries_json.replace('\'', "''");
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
 
-    let ps_script = format!(
-        r#"
-$ErrorActionPreference = 'Continue'
-$fallbackName = '{fallback}'
-$entries = '{entries_json}' | ConvertFrom-Json
-
-# 构建 key_path -> original_name 与 matching_id -> original_name 两个映射
-$keyPathMap = @{{}}
-$matchingIdMap = @{{}}
-foreach ($e in $entries) {{
-    $keyPathMap[$e.key_path] = $e.original_name
-    $enumPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\PCI\$($e.key_path)"
-    if (Test-Path $enumPath) {{
-        $mid = (Get-ItemProperty -Path $enumPath -Name 'MatchingDeviceId' -ErrorAction SilentlyContinue).MatchingDeviceId
-        if ($mid) {{
-            $matchingIdMap[$mid] = $e.original_name
-        }}
-    }}
-}}
-
-# 1. 按 key_path 精确恢复 Enum\PCI 下每张显卡
-# 注意：$keyPath 必须拼接 vendor\device 两段，与 backup 中存储的 key_path 格式一致
-$pciPath = 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI'
-if (Test-Path $pciPath) {{
-    foreach ($vendor in (Get-ChildItem $pciPath -ErrorAction SilentlyContinue)) {{
-        if ($vendor.PSChildName -notmatch 'VEN_10DE|VEN_1002|VEN_8086') {{ continue }}
-        foreach ($device in (Get-ChildItem $vendor.PSPath -ErrorAction SilentlyContinue)) {{
-            $keyPath = $vendor.PSChildName + '\' + $device.PSChildName
-            if ($keyPathMap.ContainsKey($keyPath)) {{
-                $name = $keyPathMap[$keyPath]
-                try {{
-                    Set-ItemProperty -Path $device.PSPath -Name 'FriendlyName' -Value $name -ErrorAction Stop
-                    Write-Host "恢复 FriendlyName: $keyPath -> $name"
-                }} catch {{ Write-Host "恢复 FriendlyName 失败: $_" }}
-                try {{
-                    $desc = (Get-ItemProperty -Path $device.PSPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
-                    if ($desc) {{
-                        $parts = $desc -split ';', 2
-                        if ($parts.Count -gt 1) {{
-                            Set-ItemProperty -Path $device.PSPath -Name 'DeviceDesc' -Value "$($parts[0]);$name" -ErrorAction Stop
-                        }}
-                    }}
-                }} catch {{ Write-Host "恢复 DeviceDesc 失败: $_" }}
-            }}
-        }}
-    }}
-}}
-
-# 2. 通过 MatchingDeviceId 精确恢复 Class 下显卡驱动键
-$classPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{{4d36e968-e325-11ce-bfc1-08002be10318}}'
-if (Test-Path $classPath) {{
-    foreach ($subkey in (Get-ChildItem $classPath -ErrorAction SilentlyContinue)) {{
-        if ($subkey.PSChildName -match '^00\d+') {{
-            try {{
-                $mid = (Get-ItemProperty -Path $subkey.PSPath -Name 'MatchingDeviceId' -ErrorAction SilentlyContinue).MatchingDeviceId
-                if ($mid -and $matchingIdMap.ContainsKey($mid)) {{
-                    $origName = $matchingIdMap[$mid]
-                    Set-ItemProperty -Path $subkey.PSPath -Name 'DriverDesc' -Value $origName -ErrorAction Stop
-                    Write-Host "恢复 Class DriverDesc: $($subkey.PSChildName) -> $origName"
-                }}
-            }} catch {{}}
-        }}
-    }}
-}}
-
-# 3. 恢复 Control\Video 下显卡键（Video 下无 MatchingDeviceId，使用 fallback 恢复所有 GPU 类子键）
-$videoPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Video'
-if (Test-Path $videoPath) {{
-    foreach ($videoKey in (Get-ChildItem $videoPath -ErrorAction SilentlyContinue)) {{
-        foreach ($subkey in (Get-ChildItem $videoKey.PSPath -ErrorAction SilentlyContinue)) {{
-            try {{
-                $d1 = (Get-ItemProperty -Path $subkey.PSPath -Name 'DriverDesc' -ErrorAction SilentlyContinue).DriverDesc
-                $d2 = (Get-ItemProperty -Path $subkey.PSPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
-                $d3 = (Get-ItemProperty -Path $subkey.PSPath -Name 'Description' -ErrorAction SilentlyContinue).Description
-                $checkText = "$d1 $d2 $d3"
-                if ($checkText -match 'NVIDIA|GeForce|GTX|RTX|AMD|Radeon|Intel|UHD Graphics|Iris|HD Graphics') {{
-                    foreach ($n in @('DriverDesc','DeviceDesc','Description','FriendlyName')) {{
-                        try {{
-                            $cur = (Get-ItemProperty -Path $subkey.PSPath -Name $n -ErrorAction SilentlyContinue).$n
-                            if ($cur) {{ Set-ItemProperty -Path $subkey.PSPath -Name $n -Value $fallbackName -ErrorAction SilentlyContinue }}
-                        }} catch {{}}
-                    }}
-                }}
-            }} catch {{}}
-        }}
-    }}
-}}
-
-Write-Host 'RESTORE_DONE'
-"#,
-        fallback = fallback,
-        entries_json = entries_json_escaped,
-    );
-
-    log::info!("执行PowerShell脚本恢复显卡名称");
-    let output = Command::new("powershell.exe")
-        .args(&["-ExecutionPolicy", "Bypass", "-Command", &ps_script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("无法执行PowerShell: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    log::info!("PowerShell输出: {}", stdout);
-    if !stderr.is_empty() {
-        log::warn!("PowerShell错误: {}", stderr);
+    // 构建 key_path -> original_name 与 matching_id -> original_name 两个映射
+    let mut key_path_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut matching_id_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for e in entries {
+        key_path_map.insert(e.key_path.clone(), e.original_name.clone());
+        let enum_path = format!("SYSTEM\\CurrentControlSet\\Enum\\PCI\\{}", e.key_path);
+        if let Ok(k) = hklm.open_subkey(&enum_path) {
+            if let Ok(mid) = k.get_value::<String, _>("MatchingDeviceId") {
+                matching_id_map.insert(mid, e.original_name.clone());
+            }
+        }
     }
 
-    if output.status.success() && stdout.contains("RESTORE_DONE") {
-        Ok(())
-    } else {
-        Err(format!("恢复失败: {}", if stderr.is_empty() { stdout } else { stderr }))
+    // 1. 按 key_path 精确恢复 Enum\PCI 下每张显卡
+    let pci_path = r"SYSTEM\CurrentControlSet\Enum\PCI";
+    if let Ok(pci_key) = hklm.open_subkey(pci_path) {
+        for vendor in pci_key.enum_keys().filter_map(Result::ok) {
+            let vupper = vendor.to_uppercase();
+            if !(vupper.contains("VEN_10DE")
+                || vupper.contains("VEN_1002")
+                || vupper.contains("VEN_8086"))
+            {
+                continue;
+            }
+            if let Ok(vendor_key) = pci_key.open_subkey(&vendor) {
+                for device in vendor_key.enum_keys().filter_map(Result::ok) {
+                    let key_path = format!("{}\\{}", vendor, device);
+                    if let Some(orig) = key_path_map.get(&key_path) {
+                        if let Ok(device_key) =
+                            vendor_key.open_subkey_with_flags(&device, KEY_READ | KEY_WRITE)
+                        {
+                            match device_key.set_value("FriendlyName", orig) {
+                                Ok(_) => log::info!("恢复 FriendlyName: {} -> {}", key_path, orig),
+                                Err(e) => log::warn!("恢复 FriendlyName 失败: {} ({})", key_path, e),
+                            }
+                            if let Ok(desc) = device_key.get_value::<String, _>("DeviceDesc") {
+                                let parts: Vec<&str> = desc.splitn(2, ';').collect();
+                                if parts.len() > 1 {
+                                    let _ = device_key
+                                        .set_value("DeviceDesc", &format!("{};{}", parts[0], orig));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    // 2. 通过 MatchingDeviceId 精确恢复 Class 下显卡驱动键
+    let class_path =
+        r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    if let Ok(class_key) = hklm.open_subkey_with_flags(class_path, KEY_READ | KEY_WRITE) {
+        for sub in class_key.enum_keys().filter_map(Result::ok) {
+            if !sub.starts_with("00")
+                || sub.len() < 3
+                || !sub[2..].chars().all(|c| c.is_ascii_digit())
+            {
+                continue;
+            }
+            if let Ok(sub_key) = class_key.open_subkey_with_flags(&sub, KEY_READ | KEY_WRITE) {
+                if let Ok(mid) = sub_key.get_value::<String, _>("MatchingDeviceId") {
+                    if let Some(orig) = matching_id_map.get(&mid) {
+                        match sub_key.set_value("DriverDesc", orig) {
+                            Ok(_) => log::info!("恢复 Class DriverDesc: {} -> {}", sub, orig),
+                            Err(e) => log::warn!("恢复 Class DriverDesc 失败: {} ({})", sub, e),
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. 恢复 Control\Video 下显卡键（Video 下无 MatchingDeviceId，使用 fallback 恢复 GPU 类子键）
+    let video_path = r"SYSTEM\CurrentControlSet\Control\Video";
+    if let Ok(video_key) = hklm.open_subkey(video_path) {
+        for guid in video_key.enum_keys().filter_map(Result::ok) {
+            if let Ok(guid_key) = video_key.open_subkey(&guid) {
+                for sub in guid_key.enum_keys().filter_map(Result::ok) {
+                    if let Ok(sub_key) = guid_key.open_subkey_with_flags(&sub, KEY_READ | KEY_WRITE) {
+                        let d1 = sub_key.get_value::<String, _>("DriverDesc").unwrap_or_default();
+                        let d2 = sub_key.get_value::<String, _>("DeviceDesc").unwrap_or_default();
+                        let d3 = sub_key.get_value::<String, _>("Description").unwrap_or_default();
+                        let check = format!("{} {} {}", d1, d2, d3).to_lowercase();
+                        let is_gpu = [
+                            "nvidia", "geforce", "gtx", "rtx", "amd", "radeon", "intel",
+                            "uhd graphics", "iris", "hd graphics",
+                        ]
+                        .iter()
+                        .any(|kw| check.contains(kw));
+                        if is_gpu {
+                            for n in ["DriverDesc", "DeviceDesc", "Description", "FriendlyName"] {
+                                if sub_key.get_value::<String, _>(n).is_ok() {
+                                    let _ = sub_key.set_value(n, &fallback);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    log::info!("显卡名称恢复完成");
+    Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]

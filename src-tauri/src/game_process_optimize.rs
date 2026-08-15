@@ -111,6 +111,7 @@ pub struct RunningProcessInfo {
     pub name: String,
     pub pid: u32,
     pub memory_mb: f64,
+    pub exe_path: String,
 }
 
 // ─── 全局状态 ───
@@ -1032,6 +1033,7 @@ pub async fn list_running_processes() -> Result<Vec<RunningProcessInfo>, String>
             name,
             pid: proc_.pid().as_u32(),
             memory_mb: proc_.memory() as f64 / 1024.0 / 1024.0,
+            exe_path: proc_.exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
         });
     }
 

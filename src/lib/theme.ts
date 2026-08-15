@@ -50,6 +50,28 @@ const theme = extendTheme({
         },
       },
     },
+    Tooltip: {
+      baseStyle: {
+        // 由 BackgroundProvider 通过 CSS 变量驱动：跟随液态玻璃开关与深浅主题
+        bg: "var(--nexbox-tooltip-bg, #ffffff)",
+        color: "var(--nexbox-tooltip-fg, #1a1a1a)",
+        // 覆盖默认 css var，使箭头颜色与胶囊背景一致
+        "--tooltip-bg": "var(--nexbox-tooltip-bg, #ffffff)",
+        "--tooltip-fg": "var(--nexbox-tooltip-fg, #1a1a1a)",
+        "--popper-arrow-bg": "var(--nexbox-tooltip-bg, #ffffff)",
+        px: "8px",
+        py: "2px",
+        borderRadius: "full", // 胶囊全圆角
+        fontWeight: "medium",
+        fontSize: "xs",
+        backdropFilter: "var(--nexbox-tooltip-blur, none)",
+        WebkitBackdropFilter: "var(--nexbox-tooltip-blur, none)",
+        border: "1px solid",
+        borderColor: "var(--nexbox-tooltip-border, rgba(0,0,0,0.10))",
+        maxW: "xs",
+        zIndex: "tooltip",
+      } as any,
+    },
   },
 });
 

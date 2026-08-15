@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow, Window } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Box, useColorMode, useColorModeValue } from "@chakra-ui/react";
 import { Monitor, RefreshCw, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
@@ -103,12 +103,8 @@ export default function TrayMenuPage() {
   }, []);
 
   const handleShowWindow = async () => {
-    const mainWindow = await Window.getByLabel("main");
-    if (mainWindow) {
-      await mainWindow.show();
-      await mainWindow.unminimize();
-      await mainWindow.setFocus();
-    }
+    // 复用后端 show_window 统一打开主窗口（恢复任务栏、若处于离屏预热则归位到屏幕内）
+    await invoke("show_window");
     await getCurrentWindow().hide();
   };
 

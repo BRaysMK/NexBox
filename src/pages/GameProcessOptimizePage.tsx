@@ -25,6 +25,7 @@ import {
   InputLeftElement,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
+import { useProcessIcons } from "@/hooks/use-process-icons";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -73,6 +74,7 @@ interface RunningProcessInfo {
   name: string;
   pid: number;
   memory_mb: number;
+  exe_path: string;
 }
 
 interface GameExecutableInfo {
@@ -237,11 +239,13 @@ function ProcessPickerModal({
   onClose,
   processes,
   onPick,
+  icons,
 }: {
   isOpen: boolean;
   onClose: () => void;
   processes: RunningProcessInfo[];
   onPick: (p: RunningProcessInfo) => void;
+  icons: Record<string, string>;
 }) {
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
@@ -305,9 +309,33 @@ function ProcessPickerModal({
                     onClick={() => { onPick(p); onClose(); }}
                   >
                     <HStack justify="space-between">
-                      <Text fontSize="sm" color={headingColor} fontWeight="medium">
-                        {p.name}
-                      </Text>
+                      <HStack spacing={2.5} minW="0">
+                        <Box
+                          w={7}
+                          h={7}
+                          borderRadius="md"
+                          bg={icons[p.exe_path] ? "transparent" : `${getActiveColor()}15`}
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          flexShrink={0}
+                          overflow="hidden"
+                        >
+                          {icons[p.exe_path] ? (
+                            <img
+                              src={icons[p.exe_path]}
+                              alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <MonitorCog size={14} color={getActiveColor()} />
+                          )}
+                        </Box>
+                        <Text fontSize="sm" color={headingColor} fontWeight="medium" isTruncated>
+                          {p.name}
+                        </Text>
+                      </HStack>
                       <Text fontSize="2xs" color="gray.500">
                         {p.memory_mb.toFixed(0)} MB
                       </Text>
@@ -726,6 +754,7 @@ export default function GameProcessOptimizePage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("gamepad");
   const navigate = useNavigate();
+  const { icons, ensureIcons } = useProcessIcons();
 
   const { liquidGlassEnabled } = useBackground();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
@@ -947,11 +976,12 @@ export default function GameProcessOptimizePage() {
     try {
       const list = await invoke<RunningProcessInfo[]>("list_running_processes");
       setProcesses(list);
+      ensureIcons(list.map(p => p.exe_path));
       onProcOpen();
     } catch (e: any) {
       toast({ title: String(e), status: "error", duration: 2000 });
     }
-  }, [onProcOpen, toast]);
+  }, [onProcOpen, toast, ensureIcons]);
 
   const handlePickProcess = useCallback(async (p: RunningProcessInfo) => {
     if (isDuplicateGame([p.name])) {
@@ -1121,6 +1151,7 @@ export default function GameProcessOptimizePage() {
         onClose={onProcClose}
         processes={processes}
         onPick={handlePickProcess}
+        icons={icons}
       />
       <FilterPickerModal
         isOpen={isFilterOpen}

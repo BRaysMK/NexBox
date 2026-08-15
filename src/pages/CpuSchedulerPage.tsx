@@ -24,6 +24,7 @@ import {
   TabPanel,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
+import { useProcessIcons } from "@/hooks/use-process-icons";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -68,6 +69,7 @@ interface ProcessInfo {
   name: string;
   memory_mb: number;
   cpu_usage: number;
+  exe_path: string;
 }
 
 interface ProcessAffinityInfo {
@@ -93,6 +95,7 @@ export default function CpuSchedulerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const toast = useDynamicIsland("cpu");
+  const { icons, ensureIcons } = useProcessIcons();
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
 
@@ -190,12 +193,13 @@ export default function CpuSchedulerPage() {
     try {
       const data = await invoke<ProcessInfo[]>("get_process_list");
       setProcesses(data);
+      ensureIcons(data.map(p => p.exe_path));
     } catch (error) {
       toast({ title: t("optimization.cpuScheduler.error"), description: String(error), status: "error", duration: 5000, isClosable: true });
     } finally {
       setIsLoadingProcesses(false);
     }
-  }, [t, toast]);
+  }, [t, toast, ensureIcons]);
 
   const loadRules = useCallback(async () => {
     try {
@@ -214,10 +218,15 @@ export default function CpuSchedulerPage() {
   useEffect(() => {
     if (searchQuery) return;
     refreshTimerRef.current = setInterval(() => {
-      invoke<ProcessInfo[]>("get_process_list").then(setProcesses).catch(() => {});
+      invoke<ProcessInfo[]>("get_process_list")
+        .then(data => {
+          setProcesses(data);
+          ensureIcons(data.map(p => p.exe_path));
+        })
+        .catch(() => {});
     }, 3000);
     return () => { if (refreshTimerRef.current) clearInterval(refreshTimerRef.current); };
-  }, [searchQuery]);
+  }, [searchQuery, ensureIcons]);
 
   // ── Process Selection ───────────────────────────────────
 
@@ -595,6 +604,28 @@ export default function CpuSchedulerPage() {
                     bg={selectedProcess?.pid === proc.pid ? themeColorHex : "transparent"}
                     flexShrink={0}
                   />
+                  <Box
+                    w={6}
+                    h={6}
+                    borderRadius="md"
+                    bg={icons[proc.exe_path] ? "transparent" : themeColorRgba(0.1)}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    flexShrink={0}
+                    overflow="hidden"
+                  >
+                    {icons[proc.exe_path] ? (
+                      <img
+                        src={icons[proc.exe_path]}
+                        alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Cpu size={13} color={subTextColor} />
+                    )}
+                  </Box>
                   <Text color={textColor} fontSize="sm" fontWeight="500" flex={1} isTruncated>{proc.name}</Text>
                   <Text color={subTextColor} fontSize="xs" flexShrink={0}>PID: {proc.pid}</Text>
                   <Text color={subTextColor} fontSize="xs" flexShrink={0} minW="70px" textAlign="right">{proc.memory_mb.toFixed(0)} MB</Text>
@@ -899,6 +930,7 @@ export default function CpuSchedulerPage() {
               topology={topology}
               processes={processes}
               loadProcesses={loadProcesses}
+              icons={icons}
             />
           </TabPanel>
         </TabPanels>

@@ -463,9 +463,11 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
               py={1.5}
             >
               <VStack align="start" spacing={0} minW={0} flex={1}>
-                <Text fontSize="xs" color={headingColor} isTruncated w="100%" title={file.path}>
-                  {file.path}
-                </Text>
+                <Tooltip label={file.path}>
+                  <Text fontSize="xs" color={headingColor} isTruncated w="100%">
+                    {file.path}
+                  </Text>
+                </Tooltip>
                 <Text fontSize="10px" color={pathColor}>
                   {file.original_path
                     ? `原位置: ${file.original_path}`

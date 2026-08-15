@@ -8,6 +8,7 @@
 import { useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Unlock } from "lucide-react";
+import { Tooltip } from "@chakra-ui/react";
 
 export default function LyricsUnlockBtnPage() {
   // 确保窗口背景完全透明（该窗口设置了 transparent: true）
@@ -49,32 +50,33 @@ export default function LyricsUnlockBtnPage() {
         cursor: "default",
       }}
     >
-      <div
-        onClick={handleUnlock}
-        title="解锁歌词"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "36px",
-          height: "36px",
-          borderRadius: "50%",
-          cursor: "pointer",
-          opacity: 0.35,
-          transition: "opacity 0.2s ease, background 0.15s ease",
-          background: "transparent",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.opacity = "1";
-          e.currentTarget.style.background = "rgba(0,0,0,0.35)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.opacity = "0.35";
-          e.currentTarget.style.background = "transparent";
-        }}
-      >
-        <Unlock size={20} color="rgba(255,255,255,0.95)" />
-      </div>
+      <Tooltip label="解锁歌词">
+        <div
+          onClick={handleUnlock}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            cursor: "pointer",
+            opacity: 0.35,
+            transition: "opacity 0.2s ease, background 0.15s ease",
+            background: "transparent",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = "1";
+            e.currentTarget.style.background = "rgba(0,0,0,0.35)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = "0.35";
+            e.currentTarget.style.background = "transparent";
+          }}
+        >
+          <Unlock size={20} color="rgba(255,255,255,0.95)" />
+        </div>
+      </Tooltip>
     </div>
   );
 }

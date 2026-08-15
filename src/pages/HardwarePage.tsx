@@ -12,6 +12,7 @@ import {
   MenuList,
   MenuItem,
   useDisclosure,
+  Tooltip,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useAppStartup } from "@/contexts/app-startup-context";
@@ -88,16 +89,16 @@ function MarqueeText({ text, color }: { text: string; color?: string }) {
   }, [text]);
 
   return (
-    <Box
-      ref={containerRef}
-      flex={1}
-      overflow="hidden"
-      position="relative"
-      display="flex"
-      justifyContent={overflow ? "flex-start" : "flex-end"}
-      whiteSpace="nowrap"
-      title={overflow ? text : undefined}
-    >
+    <Tooltip label={text} isDisabled={!overflow}>
+      <Box
+        ref={containerRef}
+        flex={1}
+        overflow="hidden"
+        position="relative"
+        display="flex"
+        justifyContent={overflow ? "flex-start" : "flex-end"}
+        whiteSpace="nowrap"
+      >
       <style>{`
         @keyframes hw-marquee {
           0%   { transform: translateX(0); }
@@ -134,7 +135,8 @@ function MarqueeText({ text, color }: { text: string; color?: string }) {
           {text}
         </Text>
       )}
-    </Box>
+      </Box>
+    </Tooltip>
   );
 }
 
