@@ -9,6 +9,7 @@ import { GlobalSearch } from "./global-search";
 import { GameModeSwitch } from "./game-mode-switch";
 import { CloseConfirmDialog } from "../CloseConfirmDialog";
 import { store } from "@/lib/store";
+import { initVisibility, subscribeVisibility } from "@/lib/ui-visibility";
 
 export function TitleBar() {
   const iconColor = useColorModeValue("gray.600", "gray.400");
@@ -20,20 +21,12 @@ export function TitleBar() {
   const logoSrc = useColorModeValue("/logo/NexBoxW.png", "/logo/NexBoxB.png");
 
   const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const [searchBarVisible, setSearchBarVisible] = useState(true);
+  const [searchBarVisible, setSearchBarVisible] = useState(() => initVisibility("nexbox_search_bar_enabled"));
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     (async () => {
-      // nexbox_search_bar_enabled
-      let sv = await store.get<boolean>("nexbox_search_bar_enabled");
-      if (sv !== null && sv !== undefined) {
-        setSearchBarVisible(sv);
-      } else {
-        const ls = localStorage.getItem("nexbox_search_bar_enabled");
-        setSearchBarVisible(ls === null ? true : ls === "true");
-      }
       // nexbox_nav_position
       let nv = await store.get<string>("nexbox_nav_position");
       if (nv === "top" || nv === "left") {
@@ -55,15 +48,9 @@ export function TitleBar() {
     };
   }, []);
 
-  useEffect(() => {
-    const handler = (e: CustomEvent) => {
-      setSearchBarVisible(!!e.detail);
-    };
-    window.addEventListener("search-bar-setting-changed", handler as EventListener);
-    return () => {
-      window.removeEventListener("search-bar-setting-changed", handler as EventListener);
-    };
-  }, []);
+  useEffect(() =>
+    subscribeVisibility("nexbox_search_bar_enabled", "search-bar-setting-changed", (v) => setSearchBarVisible(!!v), store),
+  []);
 
   const getCloseBehavior = useCallback((): string => {
     return "ask"; // 默认值，实际值在 useEffect 中异步加载

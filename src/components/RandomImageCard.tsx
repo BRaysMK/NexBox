@@ -4,27 +4,16 @@ import { useTranslation } from "react-i18next";
 import { FaImage } from "react-icons/fa6";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { store } from "@/lib/store";
+import { initVisibility, subscribeVisibility } from "@/lib/ui-visibility";
 import RandomImageModal from "@/components/RandomImageModal";
 
 /** 主页「随机图片」卡片显示开关（store 持久化，默认开启） */
 export function useRandomImageEnabled() {
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(() => initVisibility("nexbox_random_image_enabled"));
 
-  useEffect(() => {
-    (async () => {
-      const saved = await store.get<boolean>("nexbox_random_image_enabled");
-      if (saved !== null && saved !== undefined) {
-        setEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_random_image_enabled");
-        if (ls !== null) setEnabled(ls === "true");
-      }
-    })();
-
-    const handler = (e: CustomEvent) => setEnabled(e.detail);
-    window.addEventListener("random-image-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("random-image-setting-changed", handler as EventListener);
-  }, []);
+  useEffect(() =>
+    subscribeVisibility("nexbox_random_image_enabled", "random-image-setting-changed", setEnabled, store),
+  []);
 
   return enabled;
 }

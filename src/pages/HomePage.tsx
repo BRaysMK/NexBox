@@ -11,6 +11,7 @@ import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImage
 import AiChatEntryCard, { useAiEntryEnabled } from "@/components/ai/AiChatEntryCard";
 import { FeedbackBanner, useFeedbackEnabled } from "@/components/FeedbackBanner";
 import { store } from "@/lib/store";
+import { initVisibility, subscribeVisibility } from "@/lib/ui-visibility";
 import { getGreeting, rollEasterEgg, EASTER_EGG_TEXT } from "@/lib/greetings";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -34,9 +35,9 @@ export default function HomePage() {
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const [greetingText, setGreetingText] = useState("");
   const usernameRef = useRef("");
-  const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
-  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
-  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
+  const [gameLauncherEnabled, setGameLauncherEnabled] = useState(() => initVisibility("nexbox_game_launcher_enabled"));
+  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(() => initVisibility("nexbox_home_hardware_model_enabled"));
+  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(() => initVisibility("nexbox_game_win_key_card_enabled"));
 
   const computeGreeting = () => {
     if (rollEasterEgg()) return EASTER_EGG_TEXT;
@@ -98,68 +99,17 @@ export default function HomePage() {
   const randomQuoteEnabled = useRandomQuoteEnabled();
   const randomImageEnabled = useRandomImageEnabled();
   const aiEntryEnabled = useAiEntryEnabled();
-  useEffect(() => {
-    (async () => {
-      const saved = await store.get<boolean>("nexbox_game_launcher_enabled");
-      if (saved !== null && saved !== undefined) {
-        setGameLauncherEnabled(saved);
-      } else {
-        // 兼容旧 localStorage
-        const ls = localStorage.getItem("nexbox_game_launcher_enabled");
-        if (ls !== null) {
-          setGameLauncherEnabled(ls === "true");
-        }
-      }
-    })();
+  useEffect(() =>
+    subscribeVisibility("nexbox_game_launcher_enabled", "game-launcher-setting-changed", setGameLauncherEnabled, store),
+  []);
 
-    const handleGameLauncherChange = (e: CustomEvent) => {
-      setGameLauncherEnabled(e.detail);
-    };
+  useEffect(() =>
+    subscribeVisibility("nexbox_home_hardware_model_enabled", "home-hardware-model-setting-changed", setHomeHardwareModelEnabled, store),
+  []);
 
-    window.addEventListener("game-launcher-setting-changed", handleGameLauncherChange as EventListener);
-    
-    return () => {
-      window.removeEventListener("game-launcher-setting-changed", handleGameLauncherChange as EventListener);
-    };
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      let saved = await store.get<boolean>("nexbox_home_hardware_model_enabled");
-      if (saved !== null && saved !== undefined) {
-        setHomeHardwareModelEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_home_hardware_model_enabled");
-        if (ls !== null) setHomeHardwareModelEnabled(ls === "true");
-      }
-    })();
-
-    const handler = (e: CustomEvent) => {
-      setHomeHardwareModelEnabled(e.detail);
-    };
-
-    window.addEventListener("home-hardware-model-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("home-hardware-model-setting-changed", handler as EventListener);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      let saved = await store.get<boolean>("nexbox_game_win_key_card_enabled");
-      if (saved !== null && saved !== undefined) {
-        setGameWinKeyCardEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_game_win_key_card_enabled");
-        if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
-      }
-    })();
-
-    const handler = (e: CustomEvent) => {
-      setGameWinKeyCardEnabled(e.detail);
-    };
-
-    window.addEventListener("game-win-key-card-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("game-win-key-card-setting-changed", handler as EventListener);
-  }, []);
+  useEffect(() =>
+    subscribeVisibility("nexbox_game_win_key_card_enabled", "game-win-key-card-setting-changed", setGameWinKeyCardEnabled, store),
+  []);
 
   const greeting = greetingText || t("home.title");
   const { main: greetingMain, emoji: greetingEmoji } = splitEmojiBlock(greeting);

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { store } from "@/lib/store";
+import { initVisibility, subscribeVisibility } from "@/lib/ui-visibility";
 
 const bounceKeyframes = keyframes`
   0% { transform: scale(1); }
@@ -18,26 +19,11 @@ function getTodayKey(): string {
 }
 
 export function useTodayPopularityEnabled() {
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(() => initVisibility("nexbox_today_popularity_enabled"));
 
-  useEffect(() => {
-    (async () => {
-      const saved = await store.get<boolean>("nexbox_today_popularity_enabled");
-      if (saved !== null && saved !== undefined) {
-        setEnabled(saved);
-      } else {
-        // 兼容旧 localStorage
-        const ls = localStorage.getItem("nexbox_today_popularity_enabled");
-        if (ls !== null) setEnabled(ls === "true");
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: CustomEvent) => setEnabled(e.detail);
-    window.addEventListener("today-popularity-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("today-popularity-setting-changed", handler as EventListener);
-  }, []);
+  useEffect(() =>
+    subscribeVisibility("nexbox_today_popularity_enabled", "today-popularity-setting-changed", setEnabled, store),
+  []);
 
   return enabled;
 }

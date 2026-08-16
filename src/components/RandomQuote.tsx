@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { store } from "@/lib/store";
+import { initVisibility, subscribeVisibility } from "@/lib/ui-visibility";
 
 const quotes = [
   { text: "游戏不仅仅是游戏，游戏可以走进生活，改变生活", author: "刘旭东" },
@@ -72,25 +73,11 @@ function getRandomQuote() {
 }
 
 export function useRandomQuoteEnabled() {
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(() => initVisibility("nexbox_random_quote_enabled"));
 
-  useEffect(() => {
-    (async () => {
-      const saved = await store.get<boolean>("nexbox_random_quote_enabled");
-      if (saved !== null && saved !== undefined) {
-        setEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_random_quote_enabled");
-        if (ls !== null) setEnabled(ls === "true");
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: CustomEvent) => setEnabled(e.detail);
-    window.addEventListener("random-quote-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("random-quote-setting-changed", handler as EventListener);
-  }, []);
+  useEffect(() =>
+    subscribeVisibility("nexbox_random_quote_enabled", "random-quote-setting-changed", setEnabled, store),
+  []);
 
   return enabled;
 }

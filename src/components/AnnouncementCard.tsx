@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { store } from "@/lib/store";
+import { initVisibility, subscribeVisibility } from "@/lib/ui-visibility";
 
 interface Announcement {
   title: string;
@@ -19,25 +20,12 @@ interface AnnouncementResponse {
 }
 
 export function useAnnouncementEnabled() {
-  const [enabled, setEnabled] = useState(true);
+  // 同步初始化：首次渲染即正确显隐，避免切页闪烁
+  const [enabled, setEnabled] = useState(() => initVisibility("nexbox_announcement_enabled"));
 
-  useEffect(() => {
-    (async () => {
-      const saved = await store.get<boolean>("nexbox_announcement_enabled");
-      if (saved !== null && saved !== undefined) {
-        setEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_announcement_enabled");
-        if (ls !== null) setEnabled(ls === "true");
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: CustomEvent) => setEnabled(e.detail);
-    window.addEventListener("announcement-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("announcement-setting-changed", handler as EventListener);
-  }, []);
+  useEffect(() =>
+    subscribeVisibility("nexbox_announcement_enabled", "announcement-setting-changed", setEnabled, store),
+  []);
 
   return enabled;
 }

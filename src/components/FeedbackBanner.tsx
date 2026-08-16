@@ -2,6 +2,7 @@ import { Box, Image, useColorModeValue, Flex } from "@chakra-ui/react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { store } from "@/lib/store";
+import { initVisibility, subscribeVisibility } from "@/lib/ui-visibility";
 
 interface CarouselImage {
   src: string;
@@ -23,25 +24,11 @@ const carouselImages: CarouselImage[] = [
 ];
 
 export function useFeedbackEnabled() {
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(() => initVisibility("nexbox_feedback_enabled"));
 
-  useEffect(() => {
-    (async () => {
-      const saved = await store.get<boolean>("nexbox_feedback_enabled");
-      if (saved !== null && saved !== undefined) {
-        setEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_feedback_enabled");
-        if (ls !== null) setEnabled(ls === "true");
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: CustomEvent) => setEnabled(e.detail);
-    window.addEventListener("feedback-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("feedback-setting-changed", handler as EventListener);
-  }, []);
+  useEffect(() =>
+    subscribeVisibility("nexbox_feedback_enabled", "feedback-setting-changed", setEnabled, store),
+  []);
 
   return enabled;
 }

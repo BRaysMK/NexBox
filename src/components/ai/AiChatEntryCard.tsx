@@ -6,28 +6,17 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { store } from "@/lib/store";
+import { initVisibility, subscribeVisibility } from "@/lib/ui-visibility";
 import AiChatModal from "@/components/ai/AiChatModal";
 import boxcatImg from "@/assets/boxcat.png";
 
 /** 主页「盒子喵」卡片显示开关（store 持久化，默认开启） */
 export function useAiEntryEnabled() {
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(() => initVisibility("nexbox_ai_enabled"));
 
-  useEffect(() => {
-    (async () => {
-      const saved = await store.get<boolean>("nexbox_ai_enabled");
-      if (saved !== null && saved !== undefined) {
-        setEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_ai_enabled");
-        if (ls !== null) setEnabled(ls === "true");
-      }
-    })();
-
-    const handler = (e: CustomEvent) => setEnabled(e.detail);
-    window.addEventListener("ai-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("ai-setting-changed", handler as EventListener);
-  }, []);
+  useEffect(() =>
+    subscribeVisibility("nexbox_ai_enabled", "ai-setting-changed", setEnabled, store),
+  []);
 
   return enabled;
 }
