@@ -19,6 +19,7 @@ import type {
   ArtistDetail,
 } from "@/types/music";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
+import { updateMediaSession, setMediaPlaybackState, registerMediaActions } from "@/lib/media-session";
 
 // 模块级：无版权自动跳过控制
 let isAutoSkipping = false;
@@ -1050,6 +1051,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           await audio.play();
           if (mySeq !== playSongSeq) return;
           set({ isPlaying: true, currentQuality: "本地", currentBitrate: 0 });
+          updateMediaSession(song, true);
         } catch (err) {
           if (mySeq !== playSongSeq) return;
           console.error("Play local song failed:", err);
@@ -1134,6 +1136,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (mySeq !== playSongSeq) return;
 
       set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort, currentQuality: result.quality, currentBitrate: result.br });
+      // SMTC：更新系统媒体控件（标题/封面/播放状态）
+      updateMediaSession(song, true);
       // 推送桌面歌词状态
       // 歌词数据已由 loadLyricsForSong 并行加载完成后自动 emit，此处不再重复 emitDesktopLyricsData
       // 避免 loadLyricsForSong 未完成时推送旧歌词
@@ -1153,6 +1157,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (isPlaying) {
       audioRef.pause();
       set({ isPlaying: false });
+      setMediaPlaybackState(false);
       if (get().desktopLyricsVisible) {
         emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
       }
@@ -1160,6 +1165,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       try {
         await audioRef.play();
         set({ isPlaying: true });
+        const cur = get().currentSong;
+        if (cur) updateMediaSession(cur, true);
+        else setMediaPlaybackState(true);
         if (get().desktopLyricsVisible) {
           emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
         }
@@ -2181,3 +2189,27 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 }));
+
+// ── SMTC：注册系统媒体控制按键（Windows 任务栏媒体控件） ──
+// 在模块加载时注册一次，通过 useMusicStore 调用现有播放控制
+registerMediaActions({
+  // 系统「播放」按钮：仅在暂停时恢复
+  onPlay: () => {
+    const st = useMusicStore.getState();
+    if (!st.isPlaying) st.togglePlay();
+  },
+  // 系统「暂停」按钮：仅在播放中暂停
+  onPause: () => {
+    const st = useMusicStore.getState();
+    if (st.isPlaying) st.togglePlay();
+  },
+  onNext: () => {
+    useMusicStore.getState().nextTrack();
+  },
+  onPrev: () => {
+    useMusicStore.getState().prevTrack();
+  },
+  onSeek: (time) => {
+    useMusicStore.getState().seekTo(time);
+  },
+});
