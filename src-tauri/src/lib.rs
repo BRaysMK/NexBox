@@ -357,8 +357,10 @@ pub fn run() {
             }
 
             // Tray menu: hide when losing focus (click outside), reset always-on-top
-            // 按需创建（配置里已移除，避免启动即建 WebView2 拖高内存）
-            if let Some(tray_menu) = window_manager::ensure_tray_menu(app.handle()) {
+            // 注意：这里只监听「已存在」的托盘窗口，绝不主动创建——
+            // 托盘菜单窗口改为点击托盘时才按需创建（tray.rs 中 ensure_tray_menu），
+            // 避免启动阶段创建额外 WebView2 导致启动卡顿/高内存。
+            if let Some(tray_menu) = app.get_webview_window("tray-menu") {
                 let menu_clone = tray_menu.clone();
                 tray_menu.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {

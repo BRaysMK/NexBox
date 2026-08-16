@@ -1,53 +1,52 @@
-import React, { lazy, Suspense } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { MainLayout } from "./components/ui/main-layout";
 import { AnimatedPage, type TransitionMode, readTransitionMode } from "./components/ui/animated-page";
-const HomePage = lazy(() => import("./pages/HomePage"));
-const HardwarePage = lazy(() => import("./pages/HardwarePage"));
-const ToolsPage = lazy(() => import("./pages/ToolsPage"));
-const OptimizePage = lazy(() => import("./pages/OptimizePage"));
-const MemoryLimitPage = lazy(() => import("./pages/MemoryLimitPage"));
-const MemoryCleanupPage = lazy(() => import("./pages/MemoryCleanupPage"));
-const AceOptimizePage = lazy(() => import("./pages/AntiCheatOptimizePage"));
-const DisplayFilterPage = lazy(() => import("./pages/DisplayFilterPage"));
-const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const CrosshairPage = lazy(() => import("./pages/CrosshairPage"));
-const DiskHealthPage = lazy(() => import("./pages/DiskHealthPage"));
-const OverlayPanelPage = lazy(() => import("./pages/OverlayPanelPage"));
-const DeltaForcePage = lazy(() => import("./pages/DeltaForcePage"));
-const LocalGunCodesPage = lazy(() => import("./pages/LocalGunCodesPage"));
-const OtherGunCodePlatformsPage = lazy(() => import("./pages/OtherGunCodePlatformsPage"));
-const MoodPage = lazy(() => import("./pages/MoodPage"));
-const BuiltinToolsPage = lazy(() => import("./pages/BuiltinToolsPage"));
-const GpuRenamePage = lazy(() => import("./pages/GpuRenamePage"));
-const ResolutionConverterPage = lazy(() => import("./pages/ResolutionConverterPage"));
-const ShaderCachePage = lazy(() => import("./pages/ShaderCachePage"));
-const PowerManagementPage = lazy(() => import("./pages/PowerManagementPage"));
-const StorageCleanPage = lazy(() => import("./pages/StorageCleanPage"));
-const StartupManagerPage = lazy(() => import("./pages/StartupManagerPage"));
-const SystemOptimizerPage = lazy(() => import("./pages/SystemOptimizerPage"));
-const NetworkOptimizerPage = lazy(() => import("./pages/NetworkOptimizerPage"));
-const PeripheralOptimizePage = lazy(() => import("./pages/PeripheralOptimizePage"));
-const WindowsUpdatePage = lazy(() => import("./pages/WindowsUpdatePage"));
-const DLSSPresetPage = lazy(() => import("./pages/DLSSPresetPage"));
-const NvidiaDriverPage = lazy(() => import("./pages/NvidiaDriverPage"));
-const NvidiaDriverDownloadPage = lazy(() => import("./pages/NvidiaDriverDownloadPage"));
-const EpicFreePage = lazy(() => import("./pages/EpicFreePage"));
-const SteamPage = lazy(() => import("./pages/SteamPage"));
-const TrayMenuPage = lazy(() => import("./pages/TrayMenuPage"));
-const DesktopLyricsPage = lazy(() => import("./pages/DesktopLyricsPage"));
-const LyricsUnlockBtnPage = lazy(() => import("./pages/LyricsUnlockBtnPage"));
-const VerticalOverlayPage = lazy(() => import("./pages/VerticalOverlayPage"));
-const SensorMonitorPage = lazy(() => import("./pages/SensorMonitorPage"));
-const RuntimeRepairPage = lazy(() => import("./pages/RuntimeRepairPage"));
-const VtxVirtualizationPage = lazy(() => import("./pages/VtxVirtualizationPage"));
-const AudioEqPage = lazy(() => import("./pages/AudioEqPage"));
-const AutoClickerPage = lazy(() => import("./pages/AutoClickerPage"));
-const GameProcessOptimizePage = lazy(() => import("./pages/GameProcessOptimizePage"));
-const CpuSchedulerPage = lazy(() => import("./pages/CpuSchedulerPage"));
-const SpeedTestPage = lazy(() => import("./pages/SpeedTestPage"));
-const CustomPage = lazy(() => import("./pages/CustomPage"));
+import HomePage from "./pages/HomePage";
+import HardwarePage from "./pages/HardwarePage";
+import ToolsPage from "./pages/ToolsPage";
+import OptimizePage from "./pages/OptimizePage";
+import MemoryLimitPage from "./pages/MemoryLimitPage";
+import MemoryCleanupPage from "./pages/MemoryCleanupPage";
+import AceOptimizePage from "./pages/AntiCheatOptimizePage";
+import DisplayFilterPage from "./pages/DisplayFilterPage";
+import SettingsPage from "./pages/SettingsPage";
+import CrosshairPage from "./pages/CrosshairPage";
+import DiskHealthPage from "./pages/DiskHealthPage";
+import OverlayPanelPage from "./pages/OverlayPanelPage";
+import DeltaForcePage from "./pages/DeltaForcePage";
+import LocalGunCodesPage from "./pages/LocalGunCodesPage";
+import OtherGunCodePlatformsPage from "./pages/OtherGunCodePlatformsPage";
+import MoodPage from "./pages/MoodPage";
+import BuiltinToolsPage from "./pages/BuiltinToolsPage";
+import GpuRenamePage from "./pages/GpuRenamePage";
+import ResolutionConverterPage from "./pages/ResolutionConverterPage";
+import ShaderCachePage from "./pages/ShaderCachePage";
+import PowerManagementPage from "./pages/PowerManagementPage";
+import StorageCleanPage from "./pages/StorageCleanPage";
+import StartupManagerPage from "./pages/StartupManagerPage";
+import SystemOptimizerPage from "./pages/SystemOptimizerPage";
+import NetworkOptimizerPage from "./pages/NetworkOptimizerPage";
+import PeripheralOptimizePage from "./pages/PeripheralOptimizePage";
+import WindowsUpdatePage from "./pages/WindowsUpdatePage";
+import DLSSPresetPage from "./pages/DLSSPresetPage";
+import NvidiaDriverPage from "./pages/NvidiaDriverPage";
+import NvidiaDriverDownloadPage from "./pages/NvidiaDriverDownloadPage";
+import EpicFreePage from "./pages/EpicFreePage";
+import SteamPage from "./pages/SteamPage";
+import TrayMenuPage from "./pages/TrayMenuPage";
+import DesktopLyricsPage from "./pages/DesktopLyricsPage";
+import LyricsUnlockBtnPage from "./pages/LyricsUnlockBtnPage";
+import VerticalOverlayPage from "./pages/VerticalOverlayPage";
+import SensorMonitorPage from "./pages/SensorMonitorPage";
+import RuntimeRepairPage from "./pages/RuntimeRepairPage";
+import VtxVirtualizationPage from "./pages/VtxVirtualizationPage";
+import AudioEqPage from "./pages/AudioEqPage";
+import AutoClickerPage from "./pages/AutoClickerPage";
+import GameProcessOptimizePage from "./pages/GameProcessOptimizePage";
+import CpuSchedulerPage from "./pages/CpuSchedulerPage";
+import SpeedTestPage from "./pages/SpeedTestPage";
+import CustomPage from "./pages/CustomPage";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -55,7 +54,7 @@ import { UpdateModal } from "./components/UpdateModal";
 import { SplashScreen } from "./components/SplashScreen";
 import { useAppStartup } from "./contexts/app-startup-context";
 import { MusicProvider } from "./contexts/music-context";
-const MusicPage = lazy(() => import("./pages/MusicPage"));
+import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 import { DynamicIslandHost } from "./components/ui/dynamic-island";
 
@@ -120,7 +119,6 @@ function App() {
         <MainLayout>
         {pageTransitionMode !== "off" ? (
           <AnimatePresence mode="wait" initial={false}>
-            <Suspense fallback={null}>
             <Routes location={location} key={location.pathname}>
               <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
               <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
@@ -165,10 +163,8 @@ function App() {
               <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
               <Route path="/vtx-virtualization" element={<AnimatedPage><VtxVirtualizationPage /></AnimatedPage>} />
         </Routes>
-            </Suspense>
       </AnimatePresence>
     ) : (
-      <Suspense fallback={null}>
       <Routes location={location}>
             <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
             <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
@@ -212,7 +208,6 @@ function App() {
             <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
             <Route path="/vtx-virtualization" element={<AnimatedPage><VtxVirtualizationPage /></AnimatedPage>} />
       </Routes>
-      </Suspense>
     )}
 
       </MainLayout>

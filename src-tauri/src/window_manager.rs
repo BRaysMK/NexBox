@@ -29,6 +29,7 @@ pub fn ensure_tray_menu<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<
     .maximizable(false)
     .skip_taskbar(true)
     .shadow(false)
+    .visible(false)
     .build()
     .ok()
 }
@@ -52,6 +53,7 @@ pub fn ensure_desktop_lyrics<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWi
     .maximizable(false)
     .skip_taskbar(true)
     .shadow(false)
+    .visible(false)
     .build()
     .ok()
 }
@@ -75,6 +77,7 @@ pub fn ensure_lyrics_unlock_btn<R: Runtime>(app: &AppHandle<R>) -> Option<Webvie
     .maximizable(false)
     .skip_taskbar(true)
     .shadow(false)
+    .visible(false)
     .build()
     .ok()
 }
