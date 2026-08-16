@@ -69,7 +69,13 @@ fn read_audio_metadata(
     let mut cover = String::new();
     let mut cover_source = "none".to_string();
 
-    if let Ok(tagged_file) = lofty::read_from_path(path) {
+    // lofty 对某些损坏/特殊格式音频（APE/WMA/截断 MP3 等）可能 panic，
+    // 在并行导入线程中 panic 会直接崩掉整个进程，这里用 catch_unwind 兜住。
+    let parsed = std::panic::catch_unwind(|| lofty::read_from_path(path))
+        .ok()
+        .and_then(|r| r.ok());
+
+    if let Some(tagged_file) = parsed {
         // 时长（秒 → 毫秒）
         let secs = tagged_file.properties().duration().as_secs();
         duration_ms = secs.saturating_mul(1000);
@@ -304,91 +310,119 @@ fn build_local_song_info(
 /// 导入本地音频文件，返回可直接加入播放列表的歌曲元信息。
 /// 不复制文件，仅校验扩展名与存在性，并读取文件大小。
 ///
-/// 对大量文件（如文件夹里的数百首）使用多线程并行读取元数据，显著缩短导入耗时，
-/// 避免长时间阻塞命令线程导致界面卡死。
+/// 参考 any-listen 的分批策略：每批最多 100 首串行解析（批内并行、批间顺序），
+/// 内存峰值恒定在单批量级，杜绝大文件夹（如 2000 首）一次性全量解析导致的内存
+/// 飙升/线程风暴。坏文件通过 catch_unwind 兜住，不崩进程。
 #[tauri::command]
 pub async fn import_local_music(paths: Vec<String>) -> Result<Vec<LocalSongInfo>, String> {
     if paths.is_empty() {
         return Ok(Vec::new());
     }
+    // 单次导入上限：防止超大文件夹一次性导入导致内存/线程压力过大
+    const MAX_IMPORT: usize = 2000;
+    // 单批数量：借鉴 any-listen（每批 100 首），内存峰值恒定
+    const BATCH_SIZE: usize = 100;
+    let paths: Vec<String> = paths.into_iter().take(MAX_IMPORT).collect();
+    let total = paths.len();
 
-    let results: Arc<Mutex<Vec<LocalSongInfo>>> = Arc::new(Mutex::new(Vec::with_capacity(paths.len())));
-    // 共享的同目录封面缓存：目录 → 封面 data URI
+    let mut all_results: Vec<LocalSongInfo> = Vec::with_capacity(total);
+    // 同目录封面缓存跨批次共享，避免重复扫描同一目录的通用封面
     let folder_cover_cache: Arc<Mutex<HashMap<std::path::PathBuf, String>>> =
         Arc::new(Mutex::new(HashMap::new()));
-    // 并行 worker 数量：按 CPU 核数控制，避免过度创建线程
-    let workers = std::thread::available_parallelism()
-        .map(|n| n.get().clamp(2, 8))
-        .unwrap_or(4);
-    let total = paths.len();
-    // 进度计数（仅用于日志，避免高频输出）
-    let done = std::sync::atomic::AtomicUsize::new(0);
 
-    std::thread::scope(|scope| {
-        let mut handles = Vec::new();
-        // 将路径分片分配给各 worker
-        let chunk_size = (total + workers - 1) / workers;
-        for chunk in paths.chunks(chunk_size) {
-            let chunk = chunk.to_vec();
-            let results = Arc::clone(&results);
-            let folder_cover_cache = Arc::clone(&folder_cover_cache);
-            let done = &done;
-            handles.push(scope.spawn(move || {
-                let mut local_results = Vec::with_capacity(chunk.len());
-                let mut local_cache = HashMap::new();
-                for raw_path in chunk {
-                    if let Some(info) = build_local_song_info(&raw_path, &mut local_cache) {
-                        local_results.push(info);
-                    }
-                    let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    if n % 50 == 0 || n == total {
-                        log::info!("[Music] 本地导入进度 {n}/{total}");
-                    }
-                }
-                // 合并该 worker 的同目录封面缓存
-                {
-                    let mut cache = folder_cover_cache.lock().unwrap();
-                    for (dir, cover) in local_cache {
-                        if !cover.is_empty() {
-                            cache.entry(dir).or_insert(cover);
+    for batch in paths.chunks(BATCH_SIZE) {
+        let results: Arc<Mutex<Vec<LocalSongInfo>>> = Arc::new(Mutex::new(Vec::with_capacity(batch.len())));
+        // 并行 worker 数量：按 CPU 核数控制，避免过度创建线程
+        let workers = std::thread::available_parallelism()
+            .map(|n| n.get().clamp(2, 8))
+            .unwrap_or(4);
+
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            let chunk_size = (batch.len() + workers - 1) / workers;
+            for chunk in batch.chunks(chunk_size) {
+                let chunk = chunk.to_vec();
+                let results = Arc::clone(&results);
+                let folder_cover_cache = Arc::clone(&folder_cover_cache);
+                handles.push(scope.spawn(move || {
+                    // 整个 worker 体 catch_unwind：任何意外 panic 都只丢弃该分片，不崩进程
+                    let _ = std::panic::catch_unwind(|| {
+                        let mut local_results = Vec::with_capacity(chunk.len());
+                        let mut local_cache = HashMap::new();
+                        for raw_path in chunk {
+                            if let Some(info) = build_local_song_info(&raw_path, &mut local_cache) {
+                                local_results.push(info);
+                            }
                         }
-                    }
-                }
-                results.lock().unwrap().extend(local_results);
-            }));
-        }
-        for handle in handles {
-            let _ = handle.join();
-        }
-    });
+                        // 合并该 worker 的同目录封面缓存
+                        {
+                            if let Ok(mut cache) = folder_cover_cache.lock() {
+                                for (dir, cover) in local_cache {
+                                    if !cover.is_empty() {
+                                        cache.entry(dir).or_insert(cover);
+                                    }
+                                }
+                            }
+                        }
+                        if let Ok(mut res) = results.lock() {
+                            res.extend(local_results);
+                        }
+                    });
+                }));
+            }
+            for handle in handles {
+                let _ = handle.join();
+            }
+        });
 
-    // 所有 worker 线程都已 join 并释放了各自的 Arc 引用，此处可安全取出内部数据
-    let mut results = Arc::try_unwrap(results)
-        .map(|m| m.into_inner().unwrap_or_default())
-        .unwrap_or_default();
+        // 取出本批结果并累积
+        if let Ok(mut res) = Arc::try_unwrap(results).map(|m| m.into_inner().unwrap_or_default()) {
+            all_results.append(&mut res);
+        }
+        log::info!("[Music] 本地导入批次完成，累计 {}/{}", all_results.len(), total);
+    }
 
     // 按名称排序，方便列表展示稳定
-    results.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
-    Ok(results)
+    all_results.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    Ok(all_results)
 }
 
-/// 递归收集文件夹下所有受支持的音频文件路径
+/// 迭代式收集文件夹下所有受支持的音频文件路径（非递归，避免深目录栈溢出；
+/// 跳过隐藏目录/回收站等系统目录，限制单次导入数量防止超大目录内存爆掉）。
 fn collect_audio_files(dir: &std::path::Path, out: &mut Vec<String>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_audio_files(&path, out);
-        } else if path.is_file() {
-            let ext = path
-                .extension()
-                .and_then(|value| value.to_str())
-                .map(|value| value.to_lowercase())
-                .unwrap_or_default();
-            if is_supported_extension(&ext) {
-                out.push(path.to_string_lossy().to_string());
+    const MAX_FILES: usize = 2000;
+    let mut stack = vec![dir.to_path_buf()];
+
+    while let Some(current) = stack.pop() {
+        // 达到上限直接停止收集（避免 E:\CloudMusic 这类几千首的大目录卡死）
+        if out.len() >= MAX_FILES {
+            break;
+        }
+        let Ok(entries) = std::fs::read_dir(&current) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let file_name = entry.file_name();
+            let name = file_name.to_string_lossy().to_lowercase();
+            // 跳过隐藏目录 / 回收站 / 系统目录
+            if name.starts_with(".") || name == "$recycle.bin" || name == "system volume information" {
+                continue;
+            }
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.is_file() {
+                let ext = path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .map(|value| value.to_lowercase())
+                    .unwrap_or_default();
+                if is_supported_extension(&ext) {
+                    out.push(path.to_string_lossy().to_string());
+                    if out.len() >= MAX_FILES {
+                        break;
+                    }
+                }
             }
         }
     }

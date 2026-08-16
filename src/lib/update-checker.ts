@@ -84,20 +84,44 @@ export async function fetchReleaseByTag(tag: string): Promise<ReleaseInfo | null
   }
 }
 
-export function compareVersions(current: string, latest: string): boolean {
-  const cleanCurrent = current.replace(/^v/, "");
-  const cleanLatest = latest.replace(/^v/, "");
-
-  const currentParts = cleanCurrent.split(".").map(Number);
-  const latestParts = cleanLatest.split(".").map(Number);
-
-  for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
-    const currentPart = currentParts[i] || 0;
-    const latestPart = latestParts[i] || 0;
-
-    if (latestPart > currentPart) return true;
-    if (latestPart < currentPart) return false;
+// 解析版本为数字段数组，支持 8.0.9 和 8.0.9+08161600（构建元数据月日时分后缀）两种格式。
+// 返回 [major, minor, patch, build]（build 是 + 后的数字部分，无则为 0）。
+// 也兼容旧的 - 预发布格式（8.0.9-08161600）。
+//
+// 日期后缀对齐为 8 位数字（MMDDHHMM）：0816 → 08160000，08161600 → 08161600。
+// 这样同一构建内时间递增可正确比较。注意：构建元数据在前导 0 上比预发布宽松（semver 允许），
+// 因此 08161600 这种带前导 0 的日期格式必须用 + 而非 -。
+function parseVersion(v: string): number[] {
+  const clean = v.replace(/^v/, "").trim();
+  const sep = clean.includes("+") ? "+" : "-";
+  const [core, meta] = clean.split(sep);
+  const parts = core.split(".").map((p) => {
+    const n = parseInt(p, 10);
+    return Number.isNaN(n) ? 0 : n;
+  });
+  while (parts.length < 3) parts.push(0);
+  // 日期后缀：取分隔符后第一个数字串，右补 0 到 8 位后比较
+  let metaNum = 0;
+  if (meta) {
+    const metaNumStr = meta.split(".")[0].match(/\d+/);
+    if (metaNumStr) {
+      const raw = metaNumStr[0];
+      metaNum = parseInt(raw.padEnd(8, "0"), 10);
+    }
   }
+  parts.push(metaNum);
+  return parts;
+}
 
+export function compareVersions(current: string, latest: string): boolean {
+  const c = parseVersion(current);
+  const l = parseVersion(latest);
+  const len = Math.max(c.length, l.length);
+  for (let i = 0; i < len; i++) {
+    const cv = c[i] || 0;
+    const lv = l[i] || 0;
+    if (lv > cv) return true;
+    if (lv < cv) return false;
+  }
   return false;
 }
