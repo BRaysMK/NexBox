@@ -102,6 +102,30 @@ export function colorToHex(color: string): string {
   return "#FFFFFF";
 }
 
+export function hexToRgb01(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  return [
+    parseInt(clean.slice(0, 2), 16) / 255,
+    parseInt(clean.slice(2, 4), 16) / 255,
+    parseInt(clean.slice(4, 6), 16) / 255,
+  ];
+}
+
+/** 从主色派生三个霓虹通道色：主色本体 / 更亮的高光 / 色相偏移 +45° 的点缀色 */
+export function deriveSplashColors(primaryColor: string): { c1: [number, number, number]; c2: [number, number, number]; c3: [number, number, number] } {
+  const fallback = "#98DDD0";
+  const base = /^#([0-9a-fA-F]{6})$/.test(primaryColor) ? primaryColor : fallback;
+  const { h, s, v } = hexToHsv(base);
+  const c1 = base;
+  const c2 = hsvToHex(h, Math.max(22, s * 0.62), Math.min(100, v + 30));
+  const c3 = hsvToHex((h + 45) % 360, Math.min(100, s + 22), Math.min(100, v + 10));
+  return {
+    c1: hexToRgb01(c1),
+    c2: hexToRgb01(c2),
+    c3: hexToRgb01(c3),
+  };
+}
+
 export const PRESET_COLORS = [
   { name: "cyan", value: "#98DDD0", labelKey: "settings.appearanceSettings.presetColors.cyan" },
   { name: "blue", value: "#60A5FA", labelKey: "settings.appearanceSettings.presetColors.blue" },

@@ -552,16 +552,18 @@ fn rename_gpu(new_name: &str, target_key_path: &str) -> Result<(), String> {
         Err(e) => log::warn!("修改 FriendlyName 失败: {}", e),
     }
     if let Ok(device_desc) = target_key.get_value::<String, _>("DeviceDesc") {
-        let parts: Vec<&str> = device_desc.splitn(2, ';').collect();
-        if parts.len() > 1 {
-            let new_desc = format!("{};{}", parts[0], new_name);
-            match target_key.set_value("DeviceDesc", &new_desc) {
-                Ok(_) => {
-                    log::info!("成功修改 DeviceDesc");
-                    modified = true;
-                }
-                Err(e) => log::warn!("修改 DeviceDesc 失败: {}", e),
+        // 带分号时保留硬件路径前缀，重写后半段名称；不带分号（部分机器 DeviceDesc 为纯名称）则直接整体改写
+        let new_desc = if let Some((prefix, _)) = device_desc.split_once(';') {
+            format!("{};{}", prefix, new_name)
+        } else {
+            new_name.to_string()
+        };
+        match target_key.set_value("DeviceDesc", &new_desc) {
+            Ok(_) => {
+                log::info!("成功修改 DeviceDesc");
+                modified = true;
             }
+            Err(e) => log::warn!("修改 DeviceDesc 失败: {}", e),
         }
     }
 
@@ -822,10 +824,16 @@ pub async fn apply_gpu_rename(
 
     let backup = load_backup()?;
 
-    // 首次应用时备份全部显卡的原始名称（按 key_path 区分核显/独显）
-    if backup.is_none() {
+    // 已有备份：Multi 按 key_path 复用；Legacy 旧版无法按 key_path 映射，或首次无备份，则重建
+    let mut entries: Vec<GpuBackupEntry> = match backup {
+        Some(BackupData::Multi(e)) => e,
+        Some(BackupData::Legacy(_)) | None => Vec::new(),
+    };
+
+    // 备份为空（首次应用 / 旧版格式）时，先枚举全部显卡（按 key_path 区分核显/独显）
+    if entries.is_empty() {
         let gpu_keys = find_gpu_registry_keys()?;
-        let entries: Vec<GpuBackupEntry> = gpu_keys
+        entries = gpu_keys
             .iter()
             .filter_map(|(key, key_path, is_integrated)| {
                 read_gpu_name(key).map(|name| GpuBackupEntry {
@@ -835,11 +843,29 @@ pub async fn apply_gpu_rename(
                 })
             })
             .collect();
-        if entries.is_empty() {
-            return Err("未找到可备份的显卡".to_string());
-        }
-        save_backup(&entries)?;
     }
+
+    // 确保本次要改写的显卡一定在备份中。
+    // find_gpu_registry_keys 依赖 ClassGUID/名称关键词启发式，个别机器可能漏检目标显卡
+    // （WMI 能列出但不被其识别），导致改写成功却没有该显卡的备份、无法恢复。
+    if !entries.iter().any(|e| e.key_path == target_key_path) {
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+        let enum_path = format!("SYSTEM\\CurrentControlSet\\Enum\\PCI\\{}", target_key_path);
+        if let Ok(target_key) = hklm.open_subkey(&enum_path) {
+            if let Some(name) = read_gpu_name(&target_key) {
+                entries.push(GpuBackupEntry {
+                    key_path: target_key_path.clone(),
+                    original_name: name,
+                    is_integrated: check_is_integrated(&target_key, &target_key_path),
+                });
+            }
+        }
+    }
+
+    if entries.is_empty() {
+        return Err("未找到可备份的显卡".to_string());
+    }
+    save_backup(&entries)?;
 
     rename_gpu(&new_name, &target_key_path)?;
 
@@ -909,11 +935,12 @@ fn restore_gpu_by_entries(entries: &[GpuBackupEntry]) -> Result<(), String> {
                                 Err(e) => log::warn!("恢复 FriendlyName 失败: {} ({})", key_path, e),
                             }
                             if let Ok(desc) = device_key.get_value::<String, _>("DeviceDesc") {
-                                let parts: Vec<&str> = desc.splitn(2, ';').collect();
-                                if parts.len() > 1 {
-                                    let _ = device_key
-                                        .set_value("DeviceDesc", &format!("{};{}", parts[0], orig));
-                                }
+                                let new_desc = if let Some((prefix, _)) = desc.split_once(';') {
+                                    format!("{};{}", prefix, orig)
+                                } else {
+                                    orig.to_string()
+                                };
+                                let _ = device_key.set_value("DeviceDesc", &new_desc);
                             }
                         }
                     }

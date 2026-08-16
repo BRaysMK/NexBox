@@ -140,7 +140,7 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
     { id: "delta_password", label: "三角洲密码", enabled: false },
   ],
   custom_items: [],
-  opacity: 255,
+  opacity: 200,
   style: "default",
   font: "Microsoft YaHei",
   font_size: 13,
@@ -152,6 +152,22 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   vertical_position_y: null,
   delta_password_maps: [],
 };
+
+// 悬浮框字体可选列表，与 OverlayPanelPage.tsx 的 BUILTIN_CHINESE_FONTS 保持一致。
+// 用于加载设置时归一化：持久化数据里的字体不在列表中（例如旧默认 "MiSans"）时回退为微软雅黑，
+// 避免字体下拉框显示为"未选中任何字体"。
+const KNOWN_OVERLAY_FONTS = [
+  "Microsoft YaHei",
+  "Microsoft YaHei UI",
+  "SimSun",
+  "NSimSun",
+  "SimHei",
+  "KaiTi",
+  "FangSong",
+  "DengXian",
+  "Microsoft JhengHei",
+  "YouYuan",
+];
 
 const AppStartupContext = createContext<AppStartupContextType>({
   isStartupComplete: false,
@@ -205,6 +221,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const hasStarted = useRef(false);
   // 最新的 overlay 设置（供事件监听器读取，避免闭包过期）
   const overlaySettingsRef = useRef<OverlaySettings | null>(null);
+  // 用户是否已手动修改过 overlay 设置（用于避免启动加载在用户修改后才返回时覆盖用户编辑）
+  const userEditedOverlayRef = useRef(false);
   // 最新竖排悬浮框位置（null = 尚未加载；{ x: null, y: null } = 已重置清除）
   const verticalPosRef = useRef<{ x: number | null; y: number | null } | null>(null);
 
@@ -321,23 +339,48 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
       } else {
         settingsToUse = DEFAULT_OVERLAY_SETTINGS;
       }
-      setOverlaySettings(settingsToUse);
-      overlaySettingsRef.current = settingsToUse;
-      verticalPosRef.current = {
-        x: settingsToUse.vertical_position_x ?? null,
-        y: settingsToUse.vertical_position_y ?? null,
-      };
-      
-      // 仅在存在已保存设置时同步到后端，避免在 LazyStore 未就绪时用默认值覆盖后端已正确加载的设置
+      // 字体归一化：持久化数据里的字体不在前端可选列表内（例如旧默认 "MiSans"）时回退为微软雅黑，
+      // 避免字体下拉框显示为"未选中任何字体"，且调整颜色后不再反复回到未选中状态。
+      if (settingsToUse.font && !KNOWN_OVERLAY_FONTS.includes(settingsToUse.font)) {
+        settingsToUse = { ...settingsToUse, font: "Microsoft YaHei" };
+      }
+      // 若用户在启动加载完成前已修改过设置，则不覆盖用户编辑，避免调整颜色后被默认值重置
+      if (!userEditedOverlayRef.current) {
+        setOverlaySettings(settingsToUse);
+        overlaySettingsRef.current = settingsToUse;
+        verticalPosRef.current = {
+          x: settingsToUse.vertical_position_x ?? null,
+          y: settingsToUse.vertical_position_y ?? null,
+        };
+
+        // 仅在存在已保存设置时同步到后端，避免在 LazyStore 未就绪时用默认值覆盖后端已正确加载的设置
+        if (savedSettings) {
+          await invoke("update_overlay_settings", { settings: settingsToUse });
+        }
+      }
+
+      // 启动时自动启用悬浮框（仿照辅助准心：仅当用户保存过设置时触发）
       if (savedSettings) {
-        await invoke("update_overlay_settings", { settings: settingsToUse });
+        let autoOverlay = await store.get<boolean>("nexbox_auto_overlay");
+        if (autoOverlay === null || autoOverlay === undefined) {
+          autoOverlay = localStorage.getItem("nexbox_auto_overlay") === "true";
+        }
+        if (autoOverlay) {
+          try {
+            await invoke("start_overlay_panel", { settings: settingsToUse });
+          } catch (e) {
+            console.error("Failed to auto-enable overlay on startup:", e);
+          }
+        }
       }
     } catch (error) {
       console.error("Failed to load overlay settings:", error);
-      // 加载失败时仅设置前端 UI 默认值，不覆盖后端已有的设置
-      setOverlaySettings(DEFAULT_OVERLAY_SETTINGS);
-      overlaySettingsRef.current = DEFAULT_OVERLAY_SETTINGS;
-      verticalPosRef.current = { x: null, y: null };
+      // 加载失败时仅设置前端 UI 默认值，不覆盖后端已有的设置；用户已修改过则不覆盖
+      if (!userEditedOverlayRef.current) {
+        setOverlaySettings(DEFAULT_OVERLAY_SETTINGS);
+        overlaySettingsRef.current = DEFAULT_OVERLAY_SETTINGS;
+        verticalPosRef.current = { x: null, y: null };
+      }
     }
   };
 
@@ -578,6 +621,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const pendingSettingsRef = useRef<OverlaySettings | null>(null);
 
 const saveOverlaySettings = async (settings: OverlaySettings) => {
+	// 标记用户已修改过设置，启动加载若在之后返回也不会覆盖本次编辑
+	userEditedOverlayRef.current = true;
 	setOverlaySettings(settings);
 	overlaySettingsRef.current = settings;
 	pendingSettingsRef.current = settings;

@@ -19,6 +19,7 @@ import {
   Gauge,
   Braces,
   ShieldCheck,
+  FlaskConical,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
@@ -153,6 +154,15 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.vtxVirtualization",
     descriptionKey: "builtinTools.vtxVirtualizationDesc",
     color: "#38A169",
+  },
+  {
+    id: "hidden-features",
+    path: "/hidden-features",
+    icon: FlaskConical,
+    titleKey: "sidebar.hiddenFeatures",
+    descriptionKey: "builtinTools.hiddenFeaturesDesc",
+    color: "#E67E22",
+    beta: true,
   },
 ];
 

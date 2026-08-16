@@ -1,9 +1,11 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use image::{GenericImageView, ImageEncoder};
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::tag::Accessor;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MusicFile {
@@ -86,12 +88,16 @@ fn read_audio_metadata(
         for t in tagged_file.tags() {
             for pic in t.pictures() {
                 let data = pic.data();
-                // 限制封面大小（原始数据 ≤ 1MB），避免超大封面拖慢存储与渲染
+                // 限制封面大小（原始数据 ≤ 1MB），避免超大封面拖慢存储与渲染；
+                // 超过阈值的大封面会先压缩再编码
                 if !data.is_empty() && data.len() <= 1024 * 1024 {
                     let mime = detect_image_mime(data);
-                    cover = format!("data:{mime};base64,{}", BASE64.encode(data));
-                    cover_source = "embedded".to_string();
-                    break;
+                    let (data, mime) = downscale_cover(data, mime);
+                    if !data.is_empty() {
+                        cover = format!("data:{mime};base64,{}", BASE64.encode(data));
+                        cover_source = "embedded".to_string();
+                        break;
+                    }
                 }
             }
             if !cover.is_empty() {
@@ -169,7 +175,54 @@ fn detect_image_mime(data: &[u8]) -> &'static str {
     }
 }
 
-/// 将图片文件读取为 base64 data URI
+/// 压缩封面：最大边 COVER_MAX_PX，输出 JPEG（PNG 源输出 PNG 保留透明）。
+/// 数据 ≤ COVER_MIN_BYTES、尺寸已足够小、或解码/编码失败时原样返回（仅大小阈值保护）。
+/// 返回压缩后的 (数据, mime)。
+const COVER_MAX_PX: u32 = 512;
+const COVER_MIN_BYTES: usize = 64 * 1024;
+
+fn downscale_cover(data: &[u8], mime: &str) -> (Vec<u8>, String) {
+    if data.len() <= COVER_MIN_BYTES {
+        return (data.to_vec(), mime.to_string());
+    }
+    let format = match mime {
+        "image/png" => image::ImageFormat::Png,
+        _ => image::ImageFormat::Jpeg,
+    };
+    let img = match image::load_from_memory_with_format(data, format) {
+        Ok(img) => img,
+        Err(_) => return (data.to_vec(), mime.to_string()),
+    };
+    let (w, h) = img.dimensions();
+    let max = w.max(h);
+    if max <= COVER_MAX_PX {
+        return (data.to_vec(), mime.to_string());
+    }
+    let scale = COVER_MAX_PX as f32 / max as f32;
+    let nw = ((w as f32) * scale).round().max(1.0) as u32;
+    let nh = ((h as f32) * scale).round().max(1.0) as u32;
+    let resized = img.resize(nw, nh, image::imageops::FilterType::Triangle);
+    let mut out = Vec::new();
+    let out_mime = if mime == "image/png" {
+        let mut w = std::io::Cursor::new(&mut out);
+        image::codecs::png::PngEncoder::new(&mut w)
+            .write_image(resized.as_bytes(), resized.width(), resized.height(), resized.color().into())
+            .map_err(|_| ())
+            .map(|_| "image/png")
+    } else {
+        let mut w = std::io::Cursor::new(&mut out);
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut w, 85)
+            .write_image(resized.as_bytes(), resized.width(), resized.height(), resized.color().into())
+            .map_err(|_| ())
+            .map(|_| "image/jpeg")
+    };
+    match out_mime {
+        Ok(m) if !out.is_empty() => (out, m.to_string()),
+        _ => (data.to_vec(), mime.to_string()),
+    }
+}
+
+/// 将图片文件读取为压缩后的 base64 data URI
 fn file_to_data_uri(path: &std::path::Path) -> String {
     let mime = match path
         .extension()
@@ -184,8 +237,13 @@ fn file_to_data_uri(path: &std::path::Path) -> String {
         _ => "image/jpeg",
     };
     match std::fs::read(path) {
-        Ok(data) if !data.is_empty() && data.len() <= 1024 * 1024 => {
-            format!("data:{mime};base64,{}", BASE64.encode(data))
+        Ok(data) if !data.is_empty() => {
+            let (data, mime) = downscale_cover(&data, mime);
+            if !data.is_empty() && data.len() <= 1024 * 1024 {
+                format!("data:{mime};base64,{}", BASE64.encode(data))
+            } else {
+                String::new()
+            }
         }
         _ => String::new(),
     }
@@ -301,44 +359,44 @@ fn build_local_song_info(
     })
 }
 
-/// 导入本地音频文件，返回可直接加入播放列表的歌曲元信息。
-/// 不复制文件，仅校验扩展名与存在性，并读取文件大小。
+/// 导入本地音频文件，通过 Tauri 事件 `local-music-import-chunk` 分批推送到前端。
+/// 返回实际导入数量（小整数）。不复制文件，仅校验扩展名与存在性，并读取元数据。
 ///
-/// 对大量文件（如文件夹里的数百首）使用多线程并行读取元数据，显著缩短导入耗时，
-/// 避免长时间阻塞命令线程导致界面卡死。
+/// 采用多线程并行解析，并通过 mpsc 通道 + 命令线程分批 emit 事件，
+/// 避免一次性返回超大集合阻塞 WebView 主线程，同时提供实时进度。
 #[tauri::command]
-pub async fn import_local_music(paths: Vec<String>) -> Result<Vec<LocalSongInfo>, String> {
+pub async fn import_local_music(app: AppHandle, paths: Vec<String>) -> Result<i32, String> {
     if paths.is_empty() {
-        return Ok(Vec::new());
+        return Ok(0);
     }
 
-    let results: Arc<Mutex<Vec<LocalSongInfo>>> = Arc::new(Mutex::new(Vec::with_capacity(paths.len())));
     // 共享的同目录封面缓存：目录 → 封面 data URI
     let folder_cover_cache: Arc<Mutex<HashMap<std::path::PathBuf, String>>> =
         Arc::new(Mutex::new(HashMap::new()));
-    // 并行 worker 数量：按 CPU 核数控制，避免过度创建线程
+    // 并行 worker 数量：使用 CPU 最大可用线程（含超线程），尽量缩短导入耗时
     let workers = std::thread::available_parallelism()
-        .map(|n| n.get().clamp(2, 8))
+        .map(|n| n.get())
         .unwrap_or(4);
     let total = paths.len();
     // 进度计数（仅用于日志，避免高频输出）
     let done = std::sync::atomic::AtomicUsize::new(0);
+    // 每批推送条数
+    const BATCH: usize = 20;
 
-    std::thread::scope(|scope| {
-        let mut handles = Vec::new();
-        // 将路径分片分配给各 worker
+    let imported: i32 = std::thread::scope(|scope| {
+        let (tx, rx) = std::sync::mpsc::channel::<LocalSongInfo>();
+        // 将路径分片分配给各 worker，worker 解析后通过通道发送
         let chunk_size = (total + workers - 1) / workers;
         for chunk in paths.chunks(chunk_size) {
             let chunk = chunk.to_vec();
-            let results = Arc::clone(&results);
+            let tx = tx.clone();
             let folder_cover_cache = Arc::clone(&folder_cover_cache);
             let done = &done;
-            handles.push(scope.spawn(move || {
-                let mut local_results = Vec::with_capacity(chunk.len());
+            scope.spawn(move || {
                 let mut local_cache = HashMap::new();
                 for raw_path in chunk {
                     if let Some(info) = build_local_song_info(&raw_path, &mut local_cache) {
-                        local_results.push(info);
+                        let _ = tx.send(info);
                     }
                     let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                     if n % 50 == 0 || n == total {
@@ -354,22 +412,49 @@ pub async fn import_local_music(paths: Vec<String>) -> Result<Vec<LocalSongInfo>
                         }
                     }
                 }
-                results.lock().unwrap().extend(local_results);
-            }));
+            });
         }
-        for handle in handles {
-            let _ = handle.join();
+        drop(tx); // 释放本线程的发送端，当所有 worker 结束后 rx 结束
+
+        // 命令线程：接收解析结果并分批 emit 事件
+        let mut batch: Vec<LocalSongInfo> = Vec::with_capacity(BATCH);
+        let mut imported: i32 = 0;
+        for info in rx {
+            batch.push(info);
+            imported += 1;
+            if batch.len() >= BATCH || imported as usize == total {
+                let payload = serde_json::json!({
+                    "chunk": batch,
+                    "imported": imported,
+                    "total": total,
+                    "done": imported as usize == total,
+                });
+                let _ = app.emit("local-music-import-chunk", payload);
+                batch.clear();
+            }
         }
+        // 收尾：把不足一批的剩余部分（或全部无效的空批次）连同 done:true 一起推送
+        if !batch.is_empty() {
+            let payload = serde_json::json!({
+                "chunk": batch,
+                "imported": imported,
+                "total": total,
+                "done": true,
+            });
+            let _ = app.emit("local-music-import-chunk", payload);
+        } else if imported as usize != total {
+            let payload = serde_json::json!({
+                "chunk": [],
+                "imported": imported,
+                "total": total,
+                "done": true,
+            });
+            let _ = app.emit("local-music-import-chunk", payload);
+        }
+        imported
     });
 
-    // 所有 worker 线程都已 join 并释放了各自的 Arc 引用，此处可安全取出内部数据
-    let mut results = Arc::try_unwrap(results)
-        .map(|m| m.into_inner().unwrap_or_default())
-        .unwrap_or_default();
-
-    // 按名称排序，方便列表展示稳定
-    results.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
-    Ok(results)
+    Ok(imported)
 }
 
 /// 递归收集文件夹下所有受支持的音频文件路径
@@ -396,10 +481,10 @@ fn collect_audio_files(dir: &std::path::Path, out: &mut Vec<String>) {
 
 /// 导入整个文件夹（递归）下的音频文件：收集文件后复用单文件导入逻辑
 #[tauri::command]
-pub async fn import_local_music_folder(folder: String) -> Result<Vec<LocalSongInfo>, String> {
+pub async fn import_local_music_folder(app: AppHandle, folder: String) -> Result<i32, String> {
     let mut paths = Vec::new();
     collect_audio_files(std::path::Path::new(&folder), &mut paths);
-    import_local_music(paths).await
+    import_local_music(app, paths).await
 }
 
 /// 读取本地音频文件同目录的同名 .lrc 歌词文件。

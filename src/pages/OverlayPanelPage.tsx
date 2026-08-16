@@ -42,7 +42,9 @@ import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { DraggableDisplayItems, DisplayItem } from "@/components/DraggableDisplayItems";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
+import { ThemeSwitch } from "@/components/special/theme-switch";
 import { hexToRgba } from "@/lib/color-utils";
+import { store } from "@/lib/store";
 
 interface DisplayItemConfig {
   id: string;
@@ -309,6 +311,7 @@ export default function OverlayPanelPage() {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragMode, setIsDragMode] = useState(false);
+  const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(false);
   const [isNvidia, setIsNvidia] = useState(true);
   const [availableMaps, setAvailableMaps] = useState<string[]>([]);
   const [selectedMaps, setSelectedMaps] = useState<string[]>([]);
@@ -321,9 +324,21 @@ export default function OverlayPanelPage() {
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.600", "gray.400");
+  const sliderBg = useColorModeValue("gray.200", "gray.600");
   const { getActiveColor, getHoverColor } = useThemeColor();
 
   const settings = overlaySettings || DEFAULT_SETTINGS;
+
+  useEffect(() => {
+    (async () => {
+      let v = await store.get<boolean>("nexbox_auto_overlay");
+      if (v !== null && v !== undefined) {
+        setAutoApplyOnStartup(v);
+      } else {
+        setAutoApplyOnStartup(localStorage.getItem("nexbox_auto_overlay") === "true");
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     loadStatus();
@@ -787,6 +802,30 @@ export default function OverlayPanelPage() {
               </Button>
             </HStack>
           </HStack>
+          <HStack
+            bg={autoApplyOnStartup ? hexToRgba(getActiveColor(), 0.15) : sliderBg}
+            px={4}
+            py={2}
+            borderRadius="xl"
+            border="1px solid"
+            borderColor={autoApplyOnStartup ? getActiveColor() : "transparent"}
+            w="fit-content"
+            alignSelf="flex-end"
+          >
+            <Text color={subTextColor} fontSize="xs" fontWeight="500">
+              启动新境盒时自动启用悬浮框
+            </Text>
+            <ThemeSwitch
+              isChecked={autoApplyOnStartup}
+              onChange={(e) => {
+                const val = e.target.checked;
+                setAutoApplyOnStartup(val);
+                localStorage.setItem("nexbox_auto_overlay", val ? "true" : "false");
+                store.set("nexbox_auto_overlay", val).then(() => store.save());
+              }}
+              isDisabled={isLoading}
+            />
+          </HStack>
         </SettingCard>
 
         <SettingCard title={t("overlayPanel.displayItems") || "显示项"}>
@@ -963,8 +1002,8 @@ export default function OverlayPanelPage() {
               </Box>
               <SliderControl
                 label={t("overlayPanel.opacity") || "透明度"}
-                value={Math.round(settings.opacity / 255 * 100)}
-                min={0}
+                value={Math.max(1, Math.round(settings.opacity / 255 * 100))}
+                min={1}
                 max={100}
                 onChange={(val) => updateSetting("opacity", Math.round(val / 100 * 255))}
                 suffix="%"

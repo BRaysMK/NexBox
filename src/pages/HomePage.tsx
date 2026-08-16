@@ -8,7 +8,6 @@ import { useState, useEffect, useRef } from "react";
 import HardwareModelCard from "@/components/HardwareModelCard";
 import GameWinKeyCard from "@/components/GameWinKeyCard";
 import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
-import AiChatEntryCard, { useAiEntryEnabled } from "@/components/ai/AiChatEntryCard";
 import { FeedbackBanner, useFeedbackEnabled } from "@/components/FeedbackBanner";
 import { store } from "@/lib/store";
 import { getGreeting, rollEasterEgg, EASTER_EGG_TEXT } from "@/lib/greetings";
@@ -97,7 +96,6 @@ export default function HomePage() {
   const announcementEnabled = useAnnouncementEnabled();
   const randomQuoteEnabled = useRandomQuoteEnabled();
   const randomImageEnabled = useRandomImageEnabled();
-  const aiEntryEnabled = useAiEntryEnabled();
   useEffect(() => {
     (async () => {
       const saved = await store.get<boolean>("nexbox_game_launcher_enabled");
@@ -193,20 +191,13 @@ export default function HomePage() {
         )}
       </Flex>
 
-      {(randomImageEnabled || gameWinKeyCardEnabled || homeHardwareModelEnabled || aiEntryEnabled) && (
+      {(randomImageEnabled || gameWinKeyCardEnabled || homeHardwareModelEnabled) && (
         <Box position="absolute" bottom={4} left={4}>
           <VStack spacing={2} align="stretch">
             {randomImageEnabled && <RandomImageCard />}
             {gameWinKeyCardEnabled && <GameWinKeyCard />}
             {homeHardwareModelEnabled && <HardwareModelCard />}
-            {aiEntryEnabled && !homeHardwareModelEnabled && <AiChatEntryCard />}
           </VStack>
-          {/* 盒子喵浮在硬件型号右侧，不参与文档流，避免撑宽下方卡片 */}
-          {aiEntryEnabled && homeHardwareModelEnabled && (
-            <Box position="absolute" left="100%" ml={2} bottom={0}>
-              <AiChatEntryCard />
-            </Box>
-          )}
         </Box>
       )}
 

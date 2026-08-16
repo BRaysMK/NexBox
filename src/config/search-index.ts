@@ -40,6 +40,7 @@ import {
   Rocket,
   LineChart,
   ShieldCheck,
+  FlaskConical,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -337,6 +338,14 @@ export const searchIndex: SearchItem[] = [
     icon: ShieldCheck,
     category: "builtin-tool",
     keywords: ["VT-X", "vt-x", "VTX", "虚拟化", "virtualization", "内存完整性", "内核隔离", "hypervisor", "hyper-v", "hyperv", "VBS", "HypervisorEnforcedCodeIntegrity", "弹窗", "反作弊", "安全中心"],
+  },
+  {
+    id: "hidden-features",
+    nameKey: "sidebar.hiddenFeatures",
+    path: "/hidden-features",
+    icon: FlaskConical,
+    category: "builtin-tool",
+    keywords: ["隐藏功能", "功能开关", "feature flag", "featureflags", "vivetool", "vive", "velocity", "实验功能", "A/B", "feature id", "功能配置", "hidden features"],
   },
   {
     id: "network-optimizer",

@@ -1,6 +1,5 @@
 "use client";
 
-const GITCODE_API_TOKEN = "eR61HSFsnvE_1EmKzvhosef9";
 const GITCODE_OWNER = "MuLiuSaMa";
 const GITCODE_REPO = "nexbox";
 const GITCODE_WEB = "https://gitcode.com";
@@ -18,8 +17,9 @@ export interface ReleaseInfo {
   html_url: string;
 }
 
+// GitCode 公开仓库的 release 接口可匿名读取，无需 access_token
 const releaseBaseUrl = (path: string, query = "") =>
-  `https://api.gitcode.com/api/v5/repos/${GITCODE_OWNER}/${GITCODE_REPO}${path}?access_token=${GITCODE_API_TOKEN}${query}`;
+  `https://api.gitcode.com/api/v5/repos/${GITCODE_OWNER}/${GITCODE_REPO}${path}${query}`;
 
 // GitCode 的 release 响应不含顶层 html_url，按仓库与 tag 拼接
 function releaseHtmlUrl(tagName: string): string {
@@ -45,7 +45,7 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
 
 export async function fetchAllReleases(): Promise<ReleaseInfo[]> {
   try {
-    const response = await fetch(releaseBaseUrl("/releases", "&per_page=100"), {
+    const response = await fetch(releaseBaseUrl("/releases", "?per_page=100"), {
       headers: { "Content-Type": "application/json" },
     });
 

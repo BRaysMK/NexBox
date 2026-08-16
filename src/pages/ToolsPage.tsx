@@ -506,6 +506,14 @@ function OfficialToolSection({
   // Official recommendation only shows when category is "all"
   if (activeCategory !== "all") return null;
 
+  const handleOpenTuba = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://tubawinui3.cn/");
+    }).catch(() => {
+      window.open("https://tubawinui3.cn/", "_blank");
+    });
+  };
+
   const handleOpenMCTier = () => {
     import("@tauri-apps/plugin-shell").then(({ open }) => {
       open("https://mctier.pmhs.top/");
@@ -519,6 +527,14 @@ function OfficialToolSection({
       open("https://mc.sjtu.cn/sjmcl/");
     }).catch(() => {
       window.open("https://mc.sjtu.cn/sjmcl/", "_blank");
+    });
+  };
+
+  const handleOpenAxolotl = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://axlmc.org/");
+    }).catch(() => {
+      window.open("https://axlmc.org/", "_blank");
     });
   };
 
@@ -650,6 +666,14 @@ function OfficialToolSection({
     });
   };
 
+  const handleOpenFlyingMouse = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://github.com/LaoFeng-mouse/flyingmouse-format");
+    }).catch(() => {
+      window.open("https://github.com/LaoFeng-mouse/flyingmouse-format", "_blank");
+    });
+  };
+
   return (
     <Box mb={8}>
       <HStack mb={4} spacing={3}>
@@ -701,6 +725,42 @@ function OfficialToolSection({
               </HStack>
               <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
                 Windows 灵动岛新时代 — 打造现代控制中心
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenTuba}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("tuba") || ""}
+                alt={"图吧工具箱"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  图吧工具箱WinUI3
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                WinUI 3 原生 · 完全免费 · 开源 PC 硬件检测利器
               </Text>
             </Box>
           </VStack>
@@ -773,6 +833,42 @@ function OfficialToolSection({
               </HStack>
               <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
                 {t("tools.sjmclDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenAxolotl}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("axolotl") || ""}
+                alt={"Axolotl Launcher"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  Axolotl Launcher
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                Tauri v2 · Rust · Vue 3 免费、开源、无广告的跨平台 Minecraft Java 版启动器
               </Text>
             </Box>
           </VStack>
@@ -1313,6 +1409,42 @@ function OfficialToolSection({
               </HStack>
               <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
                 {t("tools.shudaxiaDesc")}
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenFlyingMouse}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("mouse-idle") || ""}
+                alt={"鼠鼠格式"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<ExternalLink size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  鼠鼠格式
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                一款鼠鼠主题、可离线使用的 Windows 文件格式转换工具。
               </Text>
             </Box>
           </VStack>

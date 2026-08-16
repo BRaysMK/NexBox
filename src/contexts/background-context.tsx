@@ -4,7 +4,7 @@ import { createContext, useContext, useState, ReactNode, useEffect, useRef, useC
 import { useColorMode } from "@chakra-ui/react";
 import { store } from "@/lib/store";
 
-type BackgroundMode = "none" | "preset" | "image" | "dynamic";
+type BackgroundMode = "none" | "preset" | "image" | "dynamic" | "mr";
 
 interface PresetBackground {
   id: number;
@@ -21,6 +21,8 @@ const PRESET_BACKGROUNDS: PresetBackground[] = [
 
 type LiquidGlassMode = "normal" | "real";
 
+type MrColorMode = "theme" | "custom";
+
 interface BackgroundContextType {
   backgroundMode: BackgroundMode;
   customBgImages: string[];
@@ -34,6 +36,8 @@ interface BackgroundContextType {
   presetBackgrounds: PresetBackground[];
   carouselEnabled: boolean;
   jellyBounceEnabled: boolean;
+  mrColorMode: MrColorMode;
+  mrCustomColor: string;
   setBackgroundMode: (mode: BackgroundMode) => void;
   setCustomBgImages: (images: string[]) => void;
   addCustomBgImage: (image: string) => boolean;
@@ -47,6 +51,8 @@ interface BackgroundContextType {
   setActivePresetIndex: (index: number) => void;
   setCarouselEnabled: (enabled: boolean) => void;
   setJellyBounceEnabled: (enabled: boolean) => void;
+  setMrColorMode: (mode: MrColorMode) => void;
+  setMrCustomColor: (color: string) => void;
 }
 
 const BackgroundContext = createContext<BackgroundContextType>({
@@ -62,6 +68,8 @@ const BackgroundContext = createContext<BackgroundContextType>({
   presetBackgrounds: PRESET_BACKGROUNDS,
   carouselEnabled: false,
   jellyBounceEnabled: false,
+  mrColorMode: "theme",
+  mrCustomColor: "#FF214F",
   setBackgroundMode: () => {},
   setCustomBgImages: () => {},
   addCustomBgImage: () => false,
@@ -75,6 +83,8 @@ const BackgroundContext = createContext<BackgroundContextType>({
   setActivePresetIndex: () => {},
   setCarouselEnabled: () => {},
   setJellyBounceEnabled: () => {},
+  setMrColorMode: () => {},
+  setMrCustomColor: () => {},
 });
 
 export function useBackground() {
@@ -96,6 +106,8 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [activePresetIndex, setActivePresetIndex] = useState(0);
   const [carouselEnabled, setCarouselEnabled] = useState(false);
   const [jellyBounceEnabled, setJellyBounceEnabled] = useState(false);
+  const [mrColorMode, setMrColorModeState] = useState<MrColorMode>("theme");
+  const [mrCustomColor, setMrCustomColorState] = useState<string>("#FF214F");
 
   const { colorMode } = useColorMode();
 
@@ -122,7 +134,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     async function loadSettings() {
       try {
         // 批量读取所有设置，减少 store IO 调用次数
-        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedLiquidGlassMode, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, hasLaunched] =
+        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedLiquidGlassMode, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, savedMrColorMode, savedMrCustomColor, hasLaunched] =
           await Promise.all([
             store.get<string>("background-mode"),
             store.get<string[]>("custom-bg-images"),
@@ -135,6 +147,8 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
             store.get<number>("active-preset-index"),
             store.get<boolean>("carousel-enabled"),
             store.get<boolean>("jelly-bounce-enabled"),
+            store.get<string>("mr-color-mode"),
+            store.get<string>("mr-custom-color"),
             store.get<boolean>("has-launched"),
           ]);
 
@@ -162,7 +176,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
           await store.save();
         } else {
           // 非首次启动，加载保存的设置
-          if (savedMode && ["none", "preset", "image", "dynamic"].includes(savedMode)) {
+          if (savedMode && ["none", "preset", "image", "dynamic", "mr"].includes(savedMode)) {
             setBackgroundMode(savedMode as BackgroundMode);
           }
           if (savedActivePreset !== null && savedActivePreset !== undefined) {
@@ -196,6 +210,12 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         }
         if (savedJellyBounce !== null && savedJellyBounce !== undefined) {
           setJellyBounceEnabled(savedJellyBounce);
+        }
+        if (savedMrColorMode === "theme" || savedMrColorMode === "custom") {
+          setMrColorModeState(savedMrColorMode);
+        }
+        if (savedMrCustomColor && /^#([0-9a-fA-F]{6})$/.test(savedMrCustomColor)) {
+          setMrCustomColorState(savedMrCustomColor);
         }
       } catch (error) {
         console.error("Failed to load background settings:", error);
@@ -322,6 +342,16 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     persist("jelly-bounce-enabled", enabled);
   }, [persist]);
 
+  const setMrColorModePersist = useCallback((mode: MrColorMode) => {
+    setMrColorModeState(mode);
+    persist("mr-color-mode", mode);
+  }, [persist]);
+
+  const setMrCustomColorPersist = useCallback((color: string) => {
+    setMrCustomColorState(color);
+    persist("mr-custom-color", color);
+  }, [persist]);
+
   // 预设壁纸轮播定时器
   // 轮播是临时展示，用内部 setActivePresetIndex（不持久化），
   // 避免每 10 秒写一次磁盘；用户手动切换预设时才走 setActivePresetIndexPersist 持久化。
@@ -388,6 +418,8 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     presetBackgrounds: PRESET_BACKGROUNDS,
     carouselEnabled,
     jellyBounceEnabled,
+    mrColorMode,
+    mrCustomColor,
     setBackgroundMode: setBackgroundModePersist,
     setCustomBgImages: setCustomBgImagesPersist,
     addCustomBgImage,
@@ -401,7 +433,9 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     setActivePresetIndex: setActivePresetIndexPersist,
     setCarouselEnabled: setCarouselEnabledPersist,
     setJellyBounceEnabled: setJellyBounceEnabledPersist,
-  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setLiquidGlassModePersist, setBackgroundBlurPersist, setActivePresetIndexPersist, setCarouselEnabledPersist, setJellyBounceEnabledPersist]);
+    setMrColorMode: setMrColorModePersist,
+    setMrCustomColor: setMrCustomColorPersist,
+  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, mrColorMode, mrCustomColor, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setLiquidGlassModePersist, setBackgroundBlurPersist, setActivePresetIndexPersist, setCarouselEnabledPersist, setJellyBounceEnabledPersist, setMrColorModePersist, setMrCustomColorPersist]);
 
   return (
     <BackgroundContext.Provider value={value}>

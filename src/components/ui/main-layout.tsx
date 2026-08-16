@@ -5,11 +5,13 @@ import { ReactNode, useEffect, useRef, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { Sidebar } from "./sidebar";
 import { TitleBar } from "./title-bar";
+import { MRBackground } from "./MRBackground";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
+import { deriveSplashColors } from "@/lib/color-utils";
 
 function useNavPosition() {
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
@@ -44,7 +46,7 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const bgColor = useColorModeValue("#fafafa", "#0a0a0a");
-  const { backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, activePresetIndex, presetBackgrounds, backgroundBlur, jellyBounceEnabled } = useBackground();
+  const { backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, activePresetIndex, presetBackgrounds, backgroundBlur, jellyBounceEnabled, mrColorMode, mrCustomColor } = useBackground();
   const { config } = useThemeColor();
   const navPosition = useNavPosition();
   const location = useLocation();
@@ -52,11 +54,18 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [videoReady, setVideoReady] = useState(false);
   const idCounter = useRef(0);
 
+  // MR 背景配色：适配主题色（config.primaryColor）或自定义颜色，派生三通道霓虹色
+  const mrColors = useMemo(() => {
+    const baseColor = mrColorMode === "theme" ? config.primaryColor : mrCustomColor;
+    return deriveSplashColors(baseColor);
+  }, [mrColorMode, mrCustomColor, config.primaryColor]);
+
   const activeImage = customBgImages[activeBgIndex];
   const activePreset = presetBackgrounds[activePresetIndex];
   const showImageBg = backgroundMode === "image" && activeImage;
   const showDynamicBg = backgroundMode === "dynamic" && dynamicBgVideo;
   const showPresetBg = backgroundMode === "preset" && activePreset;
+  const showMrBg = backgroundMode === "mr";
   // 始终保存最新的"是否显示动态背景"，供窗口可见性监听使用（避免 effect 反复重订阅）
   const showDynamicBgRef = useRef(showDynamicBg);
   useEffect(() => {
@@ -113,7 +122,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   useEffect(() => {
     let bgColorToUse = bgColor;
 
-    if (showImageBg || showPresetBg || showDynamicBg) {
+    if (showImageBg || showPresetBg || showDynamicBg || showMrBg) {
       bgColorToUse = "transparent";
     }
 
@@ -122,7 +131,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     return () => {
       document.body.style.backgroundColor = "";
     };
-  }, [showImageBg, showDynamicBg, showPresetBg, bgColor]);
+  }, [showImageBg, showDynamicBg, showPresetBg, showMrBg, bgColor]);
 
   useEffect(() => {
     // 窗口隐藏时保持暂停，避免切回动态背景后视频在托盘状态下继续解码
@@ -289,6 +298,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           />
         </Box>
       )}
+      {showMrBg && <MRBackground blur={backgroundBlur} colors={mrColors} />}
       <TitleBar />
       <Sidebar />
       <Box 

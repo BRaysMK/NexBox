@@ -135,7 +135,7 @@ export function CustomSelect({
   }, []);
 
   const selectedOption = options.find((opt) => opt.value === value);
-  const displayLabel = selectedOption?.label || placeholder || "";
+  const displayLabel = selectedOption?.label || placeholder || value;
 
   return (
     <>

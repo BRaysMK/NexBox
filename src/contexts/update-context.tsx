@@ -13,13 +13,14 @@ import {
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useTranslation } from "react-i18next";
 import { store } from "@/lib/store";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
 
-const CURRENT_VERSION = "v8.0.9";
+const CURRENT_VERSION = "v8.2.0";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 /** 灵动岛更新下载岛的固定 id */
 const UPDATE_ISLAND_ID = "update-download";
@@ -416,6 +417,10 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   // 托盘"检查更新"事件
   useEffect(() => {
     const unlisten = listen("check-update", async () => {
+      // 仅主窗口跳转关于页；托盘菜单窗口也挂载了本 Provider，
+      // 若不拦截会导致托盘菜单被导航到设置页（下次打开变成主窗口内容）。
+      if (getCurrentWindow().label !== "main") return;
+
       navigate("/settings?section=about");
 
       setTimeout(async () => {

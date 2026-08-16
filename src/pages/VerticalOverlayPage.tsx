@@ -146,7 +146,7 @@ const DEFAULT_SETTINGS: OverlaySettings = {
   custom_items: [],
   opacity: 200,
   style: "vertical_panel",
-  font: "MiSans",
+  font: "Microsoft YaHei",
   font_size: 13,
   item_width: 220,
   font_color: "#ffffff",

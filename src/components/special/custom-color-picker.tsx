@@ -105,7 +105,9 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
     const s = x * 100;
     const v = (1 - y) * 100;
     const newHex = hsvToHex(hueValueRef.current, s, v);
-    onChange(newHex);
+    // 通过 ref 调用最新的 onChange：拖拽过程中组件会不断重渲染，直接使用闭包里的 onChange
+    // 可能拿到旧 render 的版本（例如基于旧 settings 的 updateSetting），导致保存时把透明度等其它设置覆盖回旧值
+    onChangeRef.current(newHex);
   };
 
   // Hue slider

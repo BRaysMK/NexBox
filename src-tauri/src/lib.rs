@@ -1,5 +1,3 @@
-mod ai;
-mod web_search;
 mod advanced;
 mod announcement;
 mod audio_engine;
@@ -28,6 +26,7 @@ mod gpu_rename;
 mod hardware;
 mod hardware_report;
 
+mod feature_flags;
 mod hotkey;
 mod music;
 mod network_optimize;
@@ -894,14 +893,11 @@ pub fn run() {
         uapi::get_random_image,
         uapi::save_random_image_bytes,
 
-        // === 盒子喵 AI 助手 ===
-        ai::ai_chat,
-        ai::ai_chat_stream,
-        ai::ai_get_memory,
-        ai::ai_add_memory,
-        ai::ai_delete_memory,
-        ai::ai_web_search,
-        ai::ai_cancel_stream,
+        // === Windows 隐藏功能开关（移植自 ViVe） ===
+        feature_flags::feature_flags_status,
+        feature_flags::feature_flags_query,
+        feature_flags::feature_flags_set,
+        feature_flags::feature_flags_reset,
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

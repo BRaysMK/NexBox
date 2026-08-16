@@ -178,9 +178,9 @@ impl Default for OverlaySettings {
         Self {
             display_items: default_display_items(),
             custom_items: Vec::new(),
-            opacity: 255,
+            opacity: 200,
             style: "default".to_string(),
-            font: "MiSans".to_string(),
+            font: "Microsoft YaHei".to_string(),
             font_size: 13,
             item_width: 130,
             font_color: "#ffffff".to_string(),
@@ -1499,15 +1499,19 @@ mod win32 {
         GdipSetSmoothingMode(graphics, SmoothingModeAntiAlias);
 
         let mut clear_brush: *mut GpSolidFill = ptr::null_mut();
-        GdipCreateSolidFill(0x00000000, &mut clear_brush);
+        GdipCreateSolidFill(0x00000001, &mut clear_brush);
         GdipFillRectangle(graphics, clear_brush as *mut GpBrush, 0.0, 0.0, dib_width as f32, dib_height as f32);
         GdipDeleteBrush(clear_brush as *mut GpBrush);
 
-        let bg_argb: u32 = ((settings.opacity as u32) << 24) | 0x00111111;
-        let mut bg_brush: *mut GpSolidFill = ptr::null_mut();
-        GdipCreateSolidFill(bg_argb, &mut bg_brush);
-        GdipFillRectangle(graphics, bg_brush as *mut GpBrush, 0.0, 0.0, dib_width as f32, dib_height as f32);
-        GdipDeleteBrush(bg_brush as *mut GpBrush);
+        // opacity>0 时才填充背景：opacity=0 时跳过，避免 GDI+ 预乘 alpha 把背景 rgb 归零，
+        // 与纯黑文字 rgb=0 混淆（否则背景会被误判为文字而变不透明）。
+        if settings.opacity > 0 {
+            let bg_argb: u32 = ((settings.opacity as u32) << 24) | 0x00111111;
+            let mut bg_brush: *mut GpSolidFill = ptr::null_mut();
+            GdipCreateSolidFill(bg_argb, &mut bg_brush);
+            GdipFillRectangle(graphics, bg_brush as *mut GpBrush, 0.0, 0.0, dib_width as f32, dib_height as f32);
+            GdipDeleteBrush(bg_brush as *mut GpBrush);
+        }
         GdipDeleteGraphics(graphics);
 
         let old_font = SelectObject(mem_dc, hfont as _);
@@ -1603,7 +1607,9 @@ mod win32 {
             for pixel in pixels.iter_mut() {
                 let alpha = (*pixel >> 24) & 0xFF;
                 let rgb = *pixel & 0x00FFFFFF;
-                if alpha == 0 && rgb != 0 {
+                // GDI 文字像素 alpha=0，清屏基准色为 0x000001 → rgb 为 0x000001 是空白、其余均为 GDI 文字
+                // 旧逻辑 rgb != 0 漏掉了纯黑文字（rgb=0），这里用 rgb != 0x000001 同时覆盖黑字和彩色字
+                if alpha == 0 && rgb != 0x000001 {
                     *pixel = 0xFF000000 | rgb;
                 }
             }
@@ -1713,35 +1719,38 @@ mod win32 {
 
         // Clear to fully transparent
         let mut clear_brush: *mut GpSolidFill = ptr::null_mut();
-        GdipCreateSolidFill(0x00000000, &mut clear_brush);
+        GdipCreateSolidFill(0x00000001, &mut clear_brush);
         GdipFillRectangle(graphics, clear_brush as *mut GpBrush, 0.0, 0.0, dib_width as f32, dib_height as f32);
         GdipDeleteBrush(clear_brush as *mut GpBrush);
 
-        // Draw rounded rect with GDI+ (proper per-pixel alpha anti-aliasing)
-        let bg_argb: u32 = ((settings.opacity as u32) << 24) | 0x00111111;
-        let corner_r = dib_height as f32 * 0.5;
-        let mut bg_brush: *mut GpSolidFill = ptr::null_mut();
-        GdipCreateSolidFill(bg_argb, &mut bg_brush);
+        // Draw rounded rect with GDI+ (proper per-pixel alpha anti-aliasing)。
+        // opacity>0 时才绘制背景：opacity=0 时跳过，避免 GDI+ 预乘 alpha 把背景 rgb 归零与黑字混淆。
+        if settings.opacity > 0 {
+            let bg_argb: u32 = ((settings.opacity as u32) << 24) | 0x00111111;
+            let corner_r = dib_height as f32 * 0.5;
+            let mut bg_brush: *mut GpSolidFill = ptr::null_mut();
+            GdipCreateSolidFill(bg_argb, &mut bg_brush);
 
-        let mut path: *mut GpPath = ptr::null_mut();
-        GdipCreatePath(FillModeAlternate, &mut path);
-        if !path.is_null() {
-            let w = dib_width as f32;
-            let h = dib_height as f32;
-            let r = corner_r;
-            GdipAddPathArc(path, 0.0, 0.0, r * 2.0, r * 2.0, 180.0, 90.0);
-            GdipAddPathLine(path, r, 0.0, w - r, 0.0);
-            GdipAddPathArc(path, w - r * 2.0, 0.0, r * 2.0, r * 2.0, 270.0, 90.0);
-            GdipAddPathLine(path, w, r, w, h - r);
-            GdipAddPathArc(path, w - r * 2.0, h - r * 2.0, r * 2.0, r * 2.0, 0.0, 90.0);
-            GdipAddPathLine(path, w - r, h, r, h);
-            GdipAddPathArc(path, 0.0, h - r * 2.0, r * 2.0, r * 2.0, 90.0, 90.0);
-            GdipAddPathLine(path, 0.0, h - r, 0.0, r);
-            GdipClosePathFigure(path);
-            GdipFillPath(graphics, bg_brush as *mut GpBrush, path);
-            GdipDeletePath(path);
+            let mut path: *mut GpPath = ptr::null_mut();
+            GdipCreatePath(FillModeAlternate, &mut path);
+            if !path.is_null() {
+                let w = dib_width as f32;
+                let h = dib_height as f32;
+                let r = corner_r;
+                GdipAddPathArc(path, 0.0, 0.0, r * 2.0, r * 2.0, 180.0, 90.0);
+                GdipAddPathLine(path, r, 0.0, w - r, 0.0);
+                GdipAddPathArc(path, w - r * 2.0, 0.0, r * 2.0, r * 2.0, 270.0, 90.0);
+                GdipAddPathLine(path, w, r, w, h - r);
+                GdipAddPathArc(path, w - r * 2.0, h - r * 2.0, r * 2.0, r * 2.0, 0.0, 90.0);
+                GdipAddPathLine(path, w - r, h, r, h);
+                GdipAddPathArc(path, 0.0, h - r * 2.0, r * 2.0, r * 2.0, 90.0, 90.0);
+                GdipAddPathLine(path, 0.0, h - r, 0.0, r);
+                GdipClosePathFigure(path);
+                GdipFillPath(graphics, bg_brush as *mut GpBrush, path);
+                GdipDeletePath(path);
+            }
+            GdipDeleteBrush(bg_brush as *mut GpBrush);
         }
-        GdipDeleteBrush(bg_brush as *mut GpBrush);
         GdipDeleteGraphics(graphics);
 
         // --- Draw text using GDI ---
@@ -1839,7 +1848,9 @@ mod win32 {
             for pixel in pixels.iter_mut() {
                 let alpha = (*pixel >> 24) & 0xFF;
                 let rgb = *pixel & 0x00FFFFFF;
-                if alpha == 0 && rgb != 0 {
+                // GDI 文字像素 alpha=0，清屏基准色为 0x000001 → rgb 为 0x000001 是空白、其余均为 GDI 文字
+                // 旧逻辑 rgb != 0 漏掉了纯黑文字（rgb=0），这里用 rgb != 0x000001 同时覆盖黑字和彩色字
+                if alpha == 0 && rgb != 0x000001 {
                     *pixel = 0xFF000000 | rgb;
                 }
             }
@@ -2236,6 +2247,8 @@ pub async fn get_overlay_hardware_data() -> Result<OverlayHardwareData, String> 
 #[tauri::command]
 pub async fn update_overlay_settings(app_handle: tauri::AppHandle, settings: OverlaySettings) -> Result<OverlayResult, String> {
     let mut settings = settings;
+    // 透明度下限钳制为 1：不允许保存为 0（0 会导致背景完全透明，影响文字可读性）
+    settings.opacity = settings.opacity.max(1);
     let (old_style, old_font) = {
         let lock = CURRENT_SETTINGS.lock().unwrap();
         let s = lock.as_ref();

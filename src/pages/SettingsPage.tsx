@@ -192,7 +192,6 @@ function GeneralSettings() {
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
-  const [aiEnabled, setAiEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [randomImageEnabled, setRandomImageEnabled] = useState(true);
@@ -337,15 +336,6 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_game_win_key_card_enabled");
         if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
-      }
-
-      // 盒子喵 AI 卡片显示（store 持久化，默认开启）
-      v = await store.get<boolean>("nexbox_ai_enabled");
-      if (v !== null && v !== undefined) {
-        setAiEnabled(v);
-      } else {
-        const ls = localStorage.getItem("nexbox_ai_enabled");
-        if (ls !== null) setAiEnabled(ls === "true");
       }
 
       // 反馈
@@ -583,14 +573,6 @@ function GeneralSettings() {
     store.set("nexbox_random_image_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_random_image_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("random-image-setting-changed", { detail: newValue }));
-  };
-
-  const handleAiToggle = () => {
-    const newValue = !aiEnabled;
-    setAiEnabled(newValue);
-    store.set("nexbox_ai_enabled", newValue).then(() => store.save());
-    localStorage.setItem("nexbox_ai_enabled", String(newValue));
-    window.dispatchEvent(new CustomEvent("ai-setting-changed", { detail: newValue }));
   };
 
   // 标题用户名：留空时使用系统用户名
@@ -993,22 +975,6 @@ function GeneralSettings() {
                 size="md"
                 isChecked={homeHardwareModelEnabled}
                 onChange={handleHomeHardwareModelToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.aiEntryLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.aiEntryDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={aiEnabled}
-                onChange={handleAiToggle}
               />
             </HStack>
             <Divider />
@@ -1490,6 +1456,10 @@ function AppearanceSettings() {
     setCarouselEnabled,
     jellyBounceEnabled,
     setJellyBounceEnabled,
+    mrColorMode,
+    mrCustomColor,
+    setMrColorMode,
+    setMrCustomColor,
   } = useBackground();
   const videoPreviewSrc = useMemo(() => dynamicBgVideo ? convertFileSrc(dynamicBgVideo) : null, [dynamicBgVideo]);
   const titleColor = useColorModeValue("gray.800", "#ffffff");
@@ -1947,6 +1917,22 @@ function AppearanceSettings() {
                       {t("settings.appearanceSettings.dynamicBackground")}
                     </Text>
                   </LiquidGlassCard>
+                  <LiquidGlassCard
+                    flex={1}
+                    px={3}
+                    py={2}
+                    cursor="pointer"
+                    onClick={() => setBackgroundMode("mr")}
+                  >
+                    <Text
+                      fontSize="sm"
+                      color={backgroundMode === "mr" ? "black" : labelColor}
+                      textAlign="center"
+                      fontWeight="medium"
+                    >
+                      {t("settings.appearanceSettings.mrBackground")}
+                    </Text>
+                  </LiquidGlassCard>
                 </HStack>
 
                 {backgroundMode === "preset" && (
@@ -2173,6 +2159,98 @@ function AppearanceSettings() {
                       )}
                     </Box>
                   </HStack>
+                )}
+
+                {backgroundMode === "mr" && (
+                  <VStack spacing={3} align="stretch">
+                    <LiquidGlassCard px={4} py={3}>
+                      <HStack spacing={3}>
+                        <Box
+                          w="160px"
+                          h="90px"
+                          borderRadius="lg"
+                          overflow="hidden"
+                          flexShrink={0}
+                          position="relative"
+                        >
+                          <img
+                            src="/logo/MR.png"
+                            alt="MR"
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                            }}
+                          />
+                        </Box>
+                        <Box flex={1}>
+                          <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                            {t("settings.appearanceSettings.mrBackground")}
+                          </Text>
+                          <Text fontSize="xs" color={subLabelColor} mt={1}>
+                            {t("settings.appearanceSettings.mrBackgroundDesc")}
+                          </Text>
+                        </Box>
+                      </HStack>
+                    </LiquidGlassCard>
+
+                    <LiquidGlassCard px={4} py={3}>
+                      <VStack spacing={3} align="stretch">
+                        <HStack spacing={3}>
+                          <Box
+                            as="button"
+                            flex={1}
+                            px={3}
+                            py={2}
+                            borderRadius="lg"
+                            border="2px solid"
+                            borderColor={mrColorMode === "theme" ? getActiveColor() : cardBorder}
+                            bg={mrColorMode === "theme" ? `${getActiveColor()}15` : "transparent"}
+                            onClick={() => setMrColorMode("theme")}
+                            textAlign="center"
+                            cursor="pointer"
+                            transition="all 0.2s"
+                            _hover={{ borderColor: getActiveColor() }}
+                          >
+                            <Text fontSize="sm" fontWeight="medium" color={labelColor}>
+                              {t("settings.appearanceSettings.mrColorTheme")}
+                            </Text>
+                            <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                              {t("settings.appearanceSettings.mrColorThemeDesc")}
+                            </Text>
+                          </Box>
+                          <Box
+                            as="button"
+                            flex={1}
+                            px={3}
+                            py={2}
+                            borderRadius="lg"
+                            border="2px solid"
+                            borderColor={mrColorMode === "custom" ? getActiveColor() : cardBorder}
+                            bg={mrColorMode === "custom" ? `${getActiveColor()}15` : "transparent"}
+                            onClick={() => setMrColorMode("custom")}
+                            textAlign="center"
+                            cursor="pointer"
+                            transition="all 0.2s"
+                            _hover={{ borderColor: getActiveColor() }}
+                          >
+                            <Text fontSize="sm" fontWeight="medium" color={labelColor}>
+                              {t("settings.appearanceSettings.mrColorCustom")}
+                            </Text>
+                            <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                              {t("settings.appearanceSettings.mrColorCustomDesc")}
+                            </Text>
+                          </Box>
+                        </HStack>
+                        {mrColorMode === "custom" && (
+                          <HStack justify="flex-end">
+                            <CustomColorPicker color={mrCustomColor} onChange={setMrCustomColor} />
+                          </HStack>
+                        )}
+                      </VStack>
+                    </LiquidGlassCard>
+                  </VStack>
                 )}
               </>
             )}
@@ -2865,7 +2943,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "8.0.9";
+  const currentVersion = "8.2.0";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
