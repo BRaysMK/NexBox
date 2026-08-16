@@ -1,3 +1,51 @@
+# BRaysMK/NexBox —— 个人定制版（Fork）
+
+> ⚠️ **本仓库是 Fork 的个人定制版**，非上游官方仓库。
+
+## 上游信息
+
+| 项 | 内容 |
+|---|---|
+| **上游仓库** | [MuLiuSaMa/NexBox](https://github.com/MuLiuSaMa/NexBox)（官方） |
+| **上游版本** | **v8.0.9**（对应上游提交 `35feaa0`） |
+| **上游官网** | [nexbox.top](https://nexbox.top) |
+| **上游其他镜像** | [GitCode](https://gitcode.com/MuLiuSaMa/nexbox) · [Gitee](https://gitee.com/muliuawa/nexbox) |
+| **上游协议** | GPL-3.0 |
+
+## 相比上游多了什么
+
+基于上游 v8.0.9，本 Fork 新增了 **「本地改枪码库」** 功能模块：
+
+### 🎯 新增功能：本地改枪码库
+- **入口**：三角洲行动页面 → 「本地改枪码库」卡片
+- **粘贴自动识别**：粘贴改枪码自动识别**枪名 + 配置名**（如 `RM277 + 20W青春版`），内置 350+ 条常见映射、覆盖 60+ 把枪
+- **批量导入**：从在线文档/群复制整段内容一键导入（支持表格格式 + `枪名-烽火地带-代码` 格式），自动过滤广告，导入即学习
+- **类别筛选**：按步枪/冲锋枪/射手步枪/机枪/霰弹枪/手枪/弓筛选，可叠加枪名筛选与搜索
+- **分组折叠**：按枪分组显示，点击折叠/展开
+- **JSON 备份**：一键导出/导入，按代码去重合并
+- **返回按钮**：页面顶部随时返回三角洲行动主页
+
+### 技术改动
+- `src-tauri/src/local_gun_codes.rs`（新增）：识别/学习/存储/批量导入/导出导入后端
+- `src-tauri/src/lib.rs`：注册 8 个改枪码相关命令
+- `src/pages/LocalGunCodesPage.tsx`（新增）：完整前端页面
+- `src/App.tsx` / `src/pages/DeltaForcePage.tsx`：路由与入口卡片
+- 补充了 CI 构建所需的运行资源（icc-tools / crosshair-presets / icc-presets 等）
+- 配置了 GitHub Actions 自动构建（推 `v*` tag 自动出 Release）
+
+## 与上游的差异维护
+
+- 本 Fork 的 main 分支 = 上游 v8.0.9 + 上述新增改动
+- 若要跟随上游更新：`git fetch upstream && git merge upstream/main`，改枪码相关 4 个文件可能需要手动解决冲突
+
+## 下载
+
+见本仓库 [Releases](https://github.com/BRaysMK/NexBox/releases)（`v8.0.9-guncodes` 附完整 exe）。
+
+---
+
+<!-- 以下为上游原始 README -->
+
 <p align="center">
   <img src="src-tauri/icons/128x128.png" alt="NexBox Logo" width="128" />
 </p>
