@@ -238,7 +238,9 @@ function serializeLocalSong(song: Song): Record<string, unknown> {
     artist: song.artist,
     artists: song.artists || [],
     album: song.album,
-    cover: song.cover || "",
+    // 封面 base64 可能极大（1910 首 × 几十 KB → 几十 MB），
+    // 写入 store 会卡死/崩溃。持久化时不保存封面，重启后按需从文件加载。
+    cover: "",
     duration: song.duration,
     fee: song.fee ?? 0,
     playable: song.playable ?? true,
@@ -519,7 +521,36 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
       const s = await getStore();
       const stored = await s.get<Song[]>("localSongs");
-      set({ localSongs: Array.isArray(stored) ? stored : [] });
+      const list: Song[] = Array.isArray(stored) ? stored : [];
+      set({ localSongs: list });
+      // 持久化时封面已置空（避免几十 MB JSON 写入崩溃），这里按需懒加载封面：
+      // 分批（每批 50 首）调用后端读取内嵌封面，只填充缺失的，避免一次性全部解析
+      const missing = list.filter((song) => song.provider === "local" && !song.cover && song._localPath);
+      if (missing.length > 0) {
+        (async () => {
+          const filled = new Map<string, string>();
+          for (let i = 0; i < missing.length; i += 50) {
+            const batch = missing.slice(i, i + 50);
+            await Promise.all(batch.map(async (song) => {
+              try {
+                const cover = await invoke<string>("get_local_song_cover", { path: song._localPath });
+                if (cover) filled.set(song.id, cover);
+              } catch { /* 单个失败忽略 */ }
+            }));
+            if (filled.size > 0) {
+              // 每批更新一次 state（不可变更新，React 才能感知）
+              set((state) => {
+                const st = state as { localSongs: Song[] };
+                return {
+                  localSongs: st.localSongs.map((s) =>
+                    filled.has(s.id) ? { ...s, cover: filled.get(s.id)! } : s
+                  ),
+                };
+              });
+            }
+          }
+        })();
+      }
     } catch {
       set({ localSongs: [] });
     }

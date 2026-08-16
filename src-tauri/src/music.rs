@@ -462,6 +462,19 @@ pub async fn get_local_lyric(path: String) -> Result<String, String> {
     Ok(String::new())
 }
 
+/// 按文件路径读取本地音频的内嵌封面（base64 data URI）。
+/// 用于歌曲列表按需加载封面，避免大量封面一次性写入 store 导致崩溃。
+#[tauri::command]
+pub fn get_local_song_cover(path: String) -> Result<String, String> {
+    let audio_path = std::path::Path::new(&path);
+    if !audio_path.is_file() {
+        return Ok(String::new());
+    }
+    let mut cache = HashMap::new();
+    let (_, _, _, _, cover, _) = read_audio_metadata(audio_path, &mut cache);
+    Ok(cover)
+}
+
 /// 获取远程图片并转为 base64 data URI（用于 SMTC 封面等跨域场景）。
 /// 网易云等图床有防盗链，直接前端 fetch 会被 CORS 拦截，这里走后端 reqwest 下载。
 #[tauri::command]
