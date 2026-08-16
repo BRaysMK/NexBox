@@ -1196,7 +1196,9 @@ pub async fn launch_steam_client() -> Result<(), String> {
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         let steam_path = get_steam_path().ok_or("未找到 Steam 安装路径")?;
         let steam_exe = format!("{}\\steam.exe", steam_path);
-        std::process::Command::new(&steam_exe)
+        // 通过 explorer 代理启动，避免 Steam 继承 NexBox 的管理员令牌
+        std::process::Command::new("explorer")
+            .arg(&steam_exe)
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("启动 Steam 失败: {}", e))?;
@@ -1216,8 +1218,9 @@ pub async fn launch_steam_game(app_id: u32) -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         let url = format!("steam://run/{}", app_id);
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &url])
+        // explorer 代理打开 steam:// URL，Steam 以普通权限接管
+        std::process::Command::new("explorer")
+            .arg(&url)
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("启动游戏失败: {}", e))?;
@@ -1238,8 +1241,9 @@ pub async fn open_steam_store_page(app_id: u32) -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         let url = format!("https://store.steampowered.com/app/{}", app_id);
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &url])
+        // explorer 代理打开 URL（浏览器以普通权限运行）
+        std::process::Command::new("explorer")
+            .arg(&url)
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("打开商店页面失败: {}", e))?;
@@ -1413,6 +1417,8 @@ pub async fn switch_steam_account(account_name: String) -> Result<(), String> {
             .map_err(|e| format!("写入 RememberPassword 失败: {}", e))?;
 
         // 4. 启动 Steam，附加 -login <账户名> 参数实现自动登录
+        // 注意：需要传参，无法用 explorer 代理降权；steam.exe 本体带管理员令牌，
+        // 但 Steam 启动游戏时会自行降权到普通权限，不影响游戏进程安全。
         let mut cmd = std::process::Command::new(&steam_exe);
         if !account_name.is_empty() {
             cmd.arg("-login").arg(&account_name);
@@ -1574,8 +1580,9 @@ pub async fn uninstall_steam_game(app_id: u32) -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         let url = format!("steam://uninstall/{}", app_id);
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &url])
+        // explorer 代理打开 steam:// 协议
+        std::process::Command::new("explorer")
+            .arg(&url)
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("卸载请求失败: {}", e))?;

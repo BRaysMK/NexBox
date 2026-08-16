@@ -40,7 +40,7 @@
 
 ## 下载
 
-见本仓库 [Releases](https://github.com/BRaysMK/NexBox/releases)（`v8.0.9+08161600` 附完整 exe）。
+见本仓库 [Releases](https://github.com/BRaysMK/NexBox/releases)（`v8.0.9+08162145` 附完整 exe）。
 
 > 📦 **版本号说明**：个人版版本号为 `8.0.9+月日时间` 格式（如 `8.0.9+08161600` = 8月16日16:00 构建），
 > 每次更新后缀递增（`8.0.9+0816`、`8.0.9+0817`… 或带时分），

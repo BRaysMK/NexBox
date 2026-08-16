@@ -7,6 +7,26 @@ use tauri::Emitter;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+/// 以「普通用户权限」启动外部程序（不继承 NexBox 的管理员令牌）。
+///
+/// NexBox manifest 为 requireAdministrator，自身以管理员身份运行，
+/// 直接 Command::new 启动的子进程会继承提升令牌而同样以管理员身份运行，
+/// 造成不必要的权限扩散（普通工具被静默提权）。
+/// 统一通过 explorer.exe（运行在非提升的桌面 shell）代理启动，
+/// 回到与正常双击一致的普通权限。
+fn launch_unprivileged(target: &str) -> Result<(), String> {
+    let target_path = PathBuf::from(target);
+    if !target_path.exists() {
+        return Err(format!("路径不存在: {target}"));
+    }
+    Command::new("explorer")
+        .arg(target)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("启动失败: {e}"))?;
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThirdPartyTool {
     pub id: String,
@@ -411,11 +431,7 @@ pub fn run_tool(tool_id: String) -> Result<(), String> {
             "install" => {
                 if let Some(check_exe) = &tool.check_executable {
                     if let Some(exe_path) = find_via_desktop_shortcut(check_exe) {
-                        Command::new("cmd")
-                            .args(["/c", "start", "", exe_path.to_str().unwrap()])
-                            .creation_flags(CREATE_NO_WINDOW)
-                            .spawn()
-                            .map_err(|e| e.to_string())?;
+                        launch_unprivileged(exe_path.to_str().unwrap())?;
                         return Ok(());
                     }
                     return Err("Executable not found".to_string());
@@ -425,11 +441,7 @@ pub fn run_tool(tool_id: String) -> Result<(), String> {
                 let tools_dir = get_tools_directory();
                 let tool_path = tools_dir.join(&tool.file_name);
                 if tool_path.exists() {
-                    Command::new("cmd")
-                        .args(["/c", "start", "", tool_path.to_str().unwrap()])
-                        .creation_flags(CREATE_NO_WINDOW)
-                        .spawn()
-                        .map_err(|e| e.to_string())?;
+                    launch_unprivileged(tool_path.to_str().unwrap())?;
                 } else {
                     return Err("Tool not found".to_string());
                 }
