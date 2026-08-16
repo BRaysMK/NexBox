@@ -2462,6 +2462,7 @@ export default function MusicPage() {
   const userPlaylists = useMusicStore((s) => s.userPlaylists);
   const localSongs = useMusicStore((s) => s.localSongs);
   const importingLocal = useMusicStore((s) => s.importingLocal);
+  const importProgress = useMusicStore((s) => s.importProgress);
   const leftPlaylistTracks = useMusicStore((s) => s.leftPlaylistTracks);
   const leftPlaylistMeta = useMusicStore((s) => s.leftPlaylistMeta);
   const rightPlaylistTracks = useMusicStore((s) => s.rightPlaylistTracks);
@@ -4201,7 +4202,9 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                   本地音乐
                 </Text>
                 <Text color={subTextColor} fontSize="xs" flexShrink={0}>
-                  ({localSongs.length} 首)
+                  {importingLocal && importProgress.total > 0
+                    ? "(导入中 " + importProgress.done + "/" + importProgress.total + ")"
+                    : "(" + localSongs.length + " 首)"}
                 </Text>
                 <Box flex={1} />
                 <Tooltip label="导入本地歌曲">

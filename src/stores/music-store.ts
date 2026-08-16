@@ -46,6 +46,8 @@ interface MusicState {
   localSongs: Song[];
   // 本地导入进行中（文件夹/多文件导入耗时长，用于 UI 反馈避免误以为卡死）
   importingLocal: boolean;
+  // 本地导入进度（分批事件推送）
+  importProgress: { done: number; total: number };
 
   // 登录状态 (多平台)
   loginInfo: LoginInfo | null; // 当前播放源的登录信息 (向后兼容)
@@ -440,6 +442,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   localSongs: [],
   importingLocal: false,
+  importProgress: { done: 0, total: 0 },
 
   loginInfo: null,
   loginInfos: { netease: null, kugou: null, qqmusic: null },
@@ -570,14 +573,69 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   importLocalFolder: async (folder) => {
-    set({ importingLocal: true });
+    set({ importingLocal: true, importProgress: { done: 0, total: 0 } });
+    let unlistenBatch: (() => void) | null = null;
+    let unlistenDone: (() => void) | null = null;
     try {
-      const infos = await invoke<LocalSongInfoPayload[]>("import_local_music_folder", { folder });
-      return await mergeLocalSongInfos(infos, set, get);
+      // 后端分批解析，每批通过 local-import-batch 事件推送（避免几十 MB payload 走 IPC 崩溃）
+      unlistenBatch = await listen<LocalSongInfoPayload[]>("local-import-batch", (e) => {
+        const infos = e.payload || [];
+        if (infos.length === 0) return;
+        // 增量合并（不立刻持久化，全部完成后统一保存）
+        const newSongs: Song[] = infos.map((info) => ({
+          provider: "local",
+          id: info.id,
+          name: info.title || info.name,
+          artist: info.artist || "本地音乐",
+          artists: info.artist ? [{ name: info.artist }] : [],
+          album: info.album,
+          cover: info.cover || "",
+          duration: info.duration_ms,
+          fee: 0,
+          playable: true,
+          language: 0,
+          hash: info.path,
+          _localPath: info.path,
+        }));
+        set((state) => {
+          const st = state as { localSongs: Song[]; importProgress: { done: number; total: number } };
+          const merged = new Map<string, Song>();
+          for (const song of st.localSongs) merged.set(song.id, song);
+          for (const song of newSongs) merged.set(song.id, song);
+          return {
+            localSongs: Array.from(merged.values()),
+            importProgress: { done: st.importProgress.done + infos.length, total: st.importProgress.total },
+          };
+        });
+      });
+      unlistenDone = await listen<number>("local-import-done", (e) => {
+        const total = typeof e.payload === "number" ? e.payload : 0;
+        set((state) => {
+          const st = state as { importProgress: { done: number; total: number } };
+          return { importProgress: { done: total, total } };
+        });
+      });
+
+      // 启动导入（后端完成后返回总文件数；期间靠事件增量推送）
+      const total = await invoke<number>("import_local_music_folder", { folder });
+      set((state) => {
+        const st = state as { importProgress: { done: number; total: number } };
+        return { importProgress: { done: total, total } };
+      });
+
+      // 全部批次收齐后统一持久化（cover 已被 serializeLocalSong 置空，JSON 很小）
+      const s = await getStore();
+      const finalList = get().localSongs.map(serializeLocalSong);
+      await s.set("localSongs", finalList);
+      await s.save();
+
+      return { count: get().localSongs.length, noCoverCount: 0 };
     } catch (e) {
       console.error("Import local music folder failed:", e);
       return { count: 0, noCoverCount: 0 };
     } finally {
+      if (unlistenBatch) { unlistenBatch(); unlistenBatch = null; }
+      if (unlistenDone) { unlistenDone(); unlistenDone = null; }
       set({ importingLocal: false });
     }
   },

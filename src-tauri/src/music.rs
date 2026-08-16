@@ -4,6 +4,7 @@ use lofty::tag::Accessor;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tauri::Emitter;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MusicFile {
@@ -428,12 +429,86 @@ fn collect_audio_files(dir: &std::path::Path, out: &mut Vec<String>) {
     }
 }
 
-/// 导入整个文件夹（递归）下的音频文件：收集文件后复用单文件导入逻辑
+/// 导入整个文件夹（递归）下的音频文件。
+///
+/// 关键：不能把全部歌曲（每首带 base64 封面，可能几十 MB）一次性通过 invoke 返回——
+/// WebView2 IPC 传不动这么大 payload 会卡死/崩溃。改为分批解析 + local-import-batch
+/// 事件增量推送（每批 100 首），前端监听事件边收边显示，进度实时可见。
 #[tauri::command]
-pub async fn import_local_music_folder(folder: String) -> Result<Vec<LocalSongInfo>, String> {
+pub async fn import_local_music_folder(
+    folder: String,
+    window: tauri::Window,
+) -> Result<usize, String> {
+    const BATCH_SIZE: usize = 100;
     let mut paths = Vec::new();
     collect_audio_files(std::path::Path::new(&folder), &mut paths);
-    import_local_music(paths).await
+    if paths.is_empty() {
+        return Ok(0);
+    }
+    let total = paths.len();
+
+    let folder_cover_cache: Arc<Mutex<HashMap<std::path::PathBuf, String>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    let mut done = 0usize;
+    for batch in paths.chunks(BATCH_SIZE) {
+        let infos = parse_local_batch(batch, &folder_cover_cache);
+        done += infos.len();
+        let _ = window.emit("local-import-batch", &infos);
+        log::info!("[Music] 本地导入批次推送 {done}/{total}");
+    }
+    Ok(total)
+}
+
+/// 解析一批本地音频文件（批内并行，共享封面缓存）
+fn parse_local_batch(
+    batch: &[String],
+    folder_cover_cache: &Arc<Mutex<HashMap<std::path::PathBuf, String>>>,
+) -> Vec<LocalSongInfo> {
+    let results: Arc<Mutex<Vec<LocalSongInfo>>> = Arc::new(Mutex::new(Vec::with_capacity(batch.len())));
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get().clamp(2, 8))
+        .unwrap_or(4);
+
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        let chunk_size = (batch.len() + workers - 1) / workers;
+        for chunk in batch.chunks(chunk_size) {
+            let chunk = chunk.to_vec();
+            let results = Arc::clone(&results);
+            let folder_cover_cache = Arc::clone(folder_cover_cache);
+            handles.push(scope.spawn(move || {
+                let _ = std::panic::catch_unwind(|| {
+                    let mut local_results = Vec::with_capacity(chunk.len());
+                    let mut local_cache = HashMap::new();
+                    for raw_path in chunk {
+                        if let Some(info) = build_local_song_info(&raw_path, &mut local_cache) {
+                            local_results.push(info);
+                        }
+                    }
+                    {
+                        if let Ok(mut cache) = folder_cover_cache.lock() {
+                            for (dir, cover) in local_cache {
+                                if !cover.is_empty() {
+                                    cache.entry(dir).or_insert(cover);
+                                }
+                            }
+                        }
+                    }
+                    if let Ok(mut res) = results.lock() {
+                        res.extend(local_results);
+                    }
+                });
+            }));
+        }
+        for handle in handles {
+            let _ = handle.join();
+        }
+    });
+
+    Arc::try_unwrap(results)
+        .map(|m| m.into_inner().unwrap_or_default())
+        .unwrap_or_default()
 }
 
 /// 读取本地音频文件同目录的同名 .lrc 歌词文件。
