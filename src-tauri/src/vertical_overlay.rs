@@ -119,7 +119,7 @@ pub async fn start_vertical_overlay(
 /// 前端页面渲染完成后调用，此时才 show 窗口（避免 WebView2 初次加载时闪烁空白页）
 #[tauri::command]
 pub fn vertical_overlay_ready(app_handle: tauri::AppHandle) -> Result<(), String> {
-    if let Some(win) = app_handle.get_webview_window("vertical-overlay") {
+    if let Some(win) = crate::ensure_vertical_overlay(&app_handle) {
         let _ = win.show();
         let _ = app_handle.emit("overlay-status-changed", ());
     }
@@ -141,7 +141,7 @@ pub async fn stop_vertical_overlay(
     // 关闭前以窗口实际位置为准兜底保存：拖动结束到立即关闭之间可能不足 300ms
     // （前端 onMoved 节流/鼠标事件在系统拖动中被吞掉），最后一次位置来不及保存，
     // 这里直接读取窗口当前位置保存，保证"拖完立刻关闭"不丢失。
-    if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+    if let Some(window) = crate::ensure_vertical_overlay(&app_handle) {
         if let Ok(pos) = window.outer_position() {
             let x = pos.x;
             let y = pos.y;
@@ -160,7 +160,7 @@ pub async fn stop_vertical_overlay(
 
     VERTICAL_OVERLAY_ACTIVE.store(false, Ordering::SeqCst);
 
-    if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+    if let Some(window) = crate::ensure_vertical_overlay(&app_handle) {
         let _ = window.destroy();
     }
 
@@ -256,7 +256,7 @@ pub async fn set_vertical_overlay_click_through(
     app_handle: tauri::AppHandle,
     enabled: bool,
 ) -> Result<OverlayResult, String> {
-    if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+    if let Some(window) = crate::ensure_vertical_overlay(&app_handle) {
         let _ = window.set_ignore_cursor_events(enabled);
     }
     Ok(OverlayResult {
@@ -289,7 +289,7 @@ pub async fn reset_vertical_overlay_position(
     let _ = app_handle.emit("vertical-overlay-position-reset", ());
 
     // 移动窗口到默认位置（右上角）
-    if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+    if let Some(window) = crate::ensure_vertical_overlay(&app_handle) {
         if let Ok(monitor) = window.current_monitor() {
             if let Some(monitor) = monitor {
                 let screen_size = monitor.size();
@@ -314,7 +314,7 @@ pub async fn resize_vertical_overlay(
     app_handle: tauri::AppHandle,
     height: u32,
 ) -> Result<(), String> {
-    if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+    if let Some(window) = crate::ensure_vertical_overlay(&app_handle) {
         let settings = crate::overlay_panel::get_or_init_settings();
         let logical_width = settings.item_width as f64;
         let _ = window.set_size(tauri::LogicalSize {
@@ -355,7 +355,7 @@ pub fn stop_data_thread() {
 pub fn cleanup(app_handle: &tauri::AppHandle) {
     if VERTICAL_OVERLAY_ACTIVE.load(Ordering::SeqCst) {
         // 退出前同样以窗口实际位置兜底保存
-        if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+        if let Some(window) = crate::ensure_vertical_overlay(&app_handle) {
             if let Ok(pos) = window.outer_position() {
                 let x = pos.x;
                 let y = pos.y;
@@ -371,7 +371,7 @@ pub fn cleanup(app_handle: &tauri::AppHandle) {
             }
         }
         VERTICAL_OVERLAY_ACTIVE.store(false, Ordering::SeqCst);
-        if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
+        if let Some(window) = crate::ensure_vertical_overlay(&app_handle) {
             let _ = window.destroy();
         }
     }

@@ -42,6 +42,7 @@ mod overlay_panel;
 mod power_settings;
 mod vertical_overlay;
 mod vtx_virtualization;
+mod window_manager;
 
 mod sensor;
 mod sensor_monitor;
@@ -356,7 +357,8 @@ pub fn run() {
             }
 
             // Tray menu: hide when losing focus (click outside), reset always-on-top
-            if let Some(tray_menu) = app.get_webview_window("tray-menu") {
+            // 按需创建（配置里已移除，避免启动即建 WebView2 拖高内存）
+            if let Some(tray_menu) = window_manager::ensure_tray_menu(app.handle()) {
                 let menu_clone = tray_menu.clone();
                 tray_menu.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {

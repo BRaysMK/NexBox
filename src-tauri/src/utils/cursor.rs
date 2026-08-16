@@ -165,15 +165,13 @@ unsafe extern "system" fn hook_wndproc(
 /// 保证窗口永远不越出屏幕外、不压住任务栏。
 #[cfg(windows)]
 pub fn install_lyrics_move_clamp(app_handle: &tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GetPropW, GetWindowLongPtrW, SetPropW, SetWindowLongPtrW, GWLP_WNDPROC,
     };
 
-    let window = app_handle
-        .get_webview_window("desktop-lyrics")
-        .ok_or_else(|| "desktop-lyrics window not found".to_string())?;
+    let window = crate::window_manager::ensure_desktop_lyrics(&app_handle)
+        .ok_or_else(|| "desktop-lyrics window create failed".to_string())?;
     let hwnd = window
         .hwnd()
         .map_err(|e| format!("Failed to get lyrics window HWND: {}", e))?;
@@ -248,16 +246,14 @@ pub fn set_desktop_lyrics_click_through(
     app_handle: tauri::AppHandle,
     ignore: bool,
 ) -> Result<bool, String> {
-    use tauri::Manager;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         EnumChildWindows, GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
         WS_EX_TRANSPARENT,
     };
     use windows_sys::Win32::Foundation::HWND;
 
-    let window = app_handle
-        .get_webview_window("desktop-lyrics")
-        .ok_or_else(|| "desktop-lyrics window not found".to_string())?;
+    let window = crate::window_manager::ensure_desktop_lyrics(&app_handle)
+        .ok_or_else(|| "desktop-lyrics window create failed".to_string())?;
 
     let hwnd = window
         .hwnd()
@@ -306,15 +302,13 @@ pub fn set_desktop_lyrics_click_through(
 #[cfg(windows)]
 #[tauri::command]
 pub fn clamp_lyrics_window_position(app_handle: tauri::AppHandle) -> Result<bool, String> {
-    use tauri::Manager;
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
 
-    let window = app_handle
-        .get_webview_window("desktop-lyrics")
-        .ok_or_else(|| "desktop-lyrics window not found".to_string())?;
+    let window = crate::window_manager::ensure_desktop_lyrics(&app_handle)
+        .ok_or_else(|| "desktop-lyrics window create failed".to_string())?;
 
     let pos = window
         .outer_position()
@@ -387,11 +381,9 @@ pub fn clamp_lyrics_window_position(_app_handle: tauri::AppHandle) -> Result<boo
 #[cfg(windows)]
 #[tauri::command]
 pub fn center_lyrics_window(app_handle: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
 
-    let window = app_handle
-        .get_webview_window("desktop-lyrics")
-        .ok_or_else(|| "desktop-lyrics window not found".to_string())?;
+    let window = crate::window_manager::ensure_desktop_lyrics(&app_handle)
+        .ok_or_else(|| "desktop-lyrics window create failed".to_string())?;
     window
         .center()
         .map_err(|e| format!("Failed to center lyrics window: {}", e))
