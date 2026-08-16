@@ -29,6 +29,7 @@ mod hardware;
 mod hardware_report;
 
 mod hotkey;
+mod local_gun_codes;
 mod music;
 mod network_optimize;
 #[allow(dead_code, unused_imports)]
@@ -429,6 +430,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+        local_gun_codes::get_local_gun_codes,
+        local_gun_codes::add_local_gun_code,
+        local_gun_codes::delete_local_gun_code,
+        local_gun_codes::update_local_gun_code,
+        local_gun_codes::recognize_gun_name,
+        local_gun_codes::import_gun_codes_batch,
+        local_gun_codes::export_gun_codes,
+        local_gun_codes::import_gun_codes,
         announcement::get_announcements,
         announcement::get_important_announcements,
         auto_start::set_nexbox_auto_start,
