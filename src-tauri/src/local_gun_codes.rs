@@ -744,9 +744,10 @@ pub fn import_gun_codes_batch(app: tauri::AppHandle, text: String) -> Result<Imp
                 // 枪名 = known 集合最长匹配（不区分大小写，避免 AS Val 被拆、MK47 被 MK4 误匹配）
                 let mut gun: Option<String> = None;
                 let mut best_len = 0usize;
-                let clean_upper = clean.to_uppercase();
+                // 去掉连字符再匹配（AR-57 / SCAR-H 等带 - 的枪名）
+                let clean_upper = clean.to_uppercase().replace('-', "");
                 for k in &known {
-                    let ku = k.to_uppercase();
+                    let ku = k.to_uppercase().replace('-', "");
                     if !ku.is_empty() && clean_upper.contains(&ku) && ku.chars().count() > best_len {
                         gun = Some(k.clone());
                         best_len = ku.chars().count();
@@ -776,7 +777,8 @@ pub fn import_gun_codes_batch(app: tauri::AppHandle, text: String) -> Result<Imp
 
                 let weapon = gun.clone().unwrap_or_else(|| "未知枪械".to_string());
                 let code_clean = code.to_string();
-                if !existing_codes.contains(&code_clean.to_uppercase()) {
+                let code_key = code_clean.to_uppercase();
+                if !existing_codes.contains(&code_key) {
                     let item = LocalGunCode {
                         id: format!("{:x}", uuid::Uuid::new_v4().simple()),
                         weapon_name: weapon.clone(),
@@ -786,11 +788,28 @@ pub fn import_gun_codes_batch(app: tauri::AppHandle, text: String) -> Result<Imp
                     };
                     learn_prefix(&app, &code_clean, &weapon, &note);
                     existing.push(item);
-                    existing_codes.insert(code_clean.to_uppercase());
+                    existing_codes.insert(code_key);
                     result.imported += 1;
                     added_any = true;
                 } else {
-                    result.skipped += 1;
+                    // 已存在：旧备注为空则补上
+                    let mut updated = false;
+                    if let Some(item) = existing.iter_mut().find(|i| i.code.trim().to_uppercase() == code_key) {
+                        if item.note.is_empty() && !note.is_empty() {
+                            item.note = note.clone();
+                            updated = true;
+                        }
+                        if item.weapon_name == "未知枪械" && weapon != "未知枪械" {
+                            item.weapon_name = weapon.clone();
+                            updated = true;
+                        }
+                    }
+                    if updated {
+                        result.updated += 1;
+                        added_any = true;
+                    } else {
+                        result.skipped += 1;
+                    }
                 }
                 if gun.is_some() {
                     last_gun = gun;
@@ -815,12 +834,13 @@ pub fn import_gun_codes_batch(app: tauri::AppHandle, text: String) -> Result<Imp
             let code_upper = code.to_uppercase();
             let before = line_upper.find(&code_upper).map(|i| line[..i].to_string()).unwrap_or_default();
 
-            // 枪名：行内已知枪名优先（选最长匹配，避免 MK47 被 MK4 误匹配），否则继承
+            // 枪名：行内已知枪名优先（选最长匹配，避免 MK47 被 MK4 误匹配；去掉连字符匹配 AR-57/SCAR-H），否则继承
+            let before_clean = before.to_uppercase().replace('-', "");
             let mut gun: Option<String> = None;
             let mut best_len = 0usize;
             for k in &known {
-                let ku = k.to_uppercase();
-                if !ku.is_empty() && before.contains(&ku) && ku.chars().count() > best_len {
+                let ku = k.to_uppercase().replace('-', "");
+                if !ku.is_empty() && before_clean.contains(&ku) && ku.chars().count() > best_len {
                     gun = Some(k.clone());
                     best_len = ku.chars().count();
                 }
@@ -829,18 +849,27 @@ pub fn import_gun_codes_batch(app: tauri::AppHandle, text: String) -> Result<Imp
                 gun = last_gun.clone();
             }
 
-            // 配置名：行内代码前的文本（去掉枪名部分），否则上一行描述
-            let mut note = before.trim().to_string();
-            if let Some(g) = &gun {
-                note = note.replacen(&g.to_uppercase(), "", 1).replace(&g.clone(), "").trim().to_string();
+            // 配置名：优先取「代码后」的文本（如 "M14 代码 红点" → 红点），
+            // 其次代码前去掉枪名的文本，其次上一行描述
+            let after = line_upper
+                .find(&code_upper)
+                .map(|i| line[i + code_upper.len()..].to_string())
+                .unwrap_or_default();
+            let mut note = after.trim().to_string();
+            if note.is_empty() {
+                note = before.trim().to_string();
+                if let Some(g) = &gun {
+                    note = note.replacen(&g.to_uppercase(), "", 1).replace(&g.clone(), "").trim().to_string();
+                }
             }
             if note.is_empty() {
                 note = last_desc.clone().unwrap_or_default();
             }
 
             let code_clean = code.to_string();
+            let code_key = code_clean.to_uppercase();
             let weapon = gun.as_ref().cloned().unwrap_or_else(|| "未知枪械".to_string());
-            if !existing_codes.contains(&code_clean.to_uppercase()) {
+            if !existing_codes.contains(&code_key) {
                 let item = LocalGunCode {
                     id: format!("{:x}", uuid::Uuid::new_v4().simple()),
                     weapon_name: weapon.clone(),
@@ -850,11 +879,28 @@ pub fn import_gun_codes_batch(app: tauri::AppHandle, text: String) -> Result<Imp
                 };
                 learn_prefix(&app, &code_clean, &weapon, &note);
                 existing.push(item);
-                existing_codes.insert(code_clean.to_uppercase());
+                existing_codes.insert(code_key);
                 result.imported += 1;
                 added_any = true;
             } else {
-                result.skipped += 1;
+                // 已存在：如果旧记录备注为空而本次有备注，补上（避免重复导入永远补不上备注）
+                let mut updated = false;
+                if let Some(item) = existing.iter_mut().find(|i| i.code.trim().to_uppercase() == code_key) {
+                    if item.note.is_empty() && !note.is_empty() {
+                        item.note = note.clone();
+                        updated = true;
+                    }
+                    if item.weapon_name == "未知枪械" && weapon != "未知枪械" {
+                        item.weapon_name = weapon.clone();
+                        updated = true;
+                    }
+                }
+                if updated {
+                    result.updated += 1;
+                    added_any = true;
+                } else {
+                    result.skipped += 1;
+                }
             }
             if gun.is_some() {
                 last_gun = gun;
@@ -881,6 +927,7 @@ pub fn import_gun_codes_batch(app: tauri::AppHandle, text: String) -> Result<Imp
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ImportBatchResult {
     pub imported: usize,
+    pub updated: usize,
     pub skipped: usize,
 }
 
@@ -906,18 +953,38 @@ pub fn import_gun_codes(app: tauri::AppHandle, path: String) -> Result<usize, St
         items.iter().map(|i| i.code.trim().to_uppercase()).collect();
 
     let mut added = 0usize;
+    let mut changed = false;
     for item in incoming {
         let key = item.code.trim().to_uppercase();
-        if key.is_empty() || existing_codes.contains(&key) {
+        if key.is_empty() {
             continue;
         }
-        // 学习前缀：导入的同时记住枪名+配置
-        learn_prefix(&app, &item.code, &item.weapon_name, &item.note);
-        items.push(item);
-        existing_codes.insert(key);
-        added += 1;
+        if !existing_codes.contains(&key) {
+            // 学习前缀：导入的同时记住枪名+配置
+            learn_prefix(&app, &item.code, &item.weapon_name, &item.note);
+            items.push(item);
+            existing_codes.insert(key);
+            added += 1;
+            changed = true;
+        } else {
+            // 已存在：旧备注为空则补上，枪名未知则补枪名
+            if let Some(existing_item) = items.iter_mut().find(|i| i.code.trim().to_uppercase() == key) {
+                let mut upd = false;
+                if existing_item.note.is_empty() && !item.note.is_empty() {
+                    existing_item.note = item.note.clone();
+                    upd = true;
+                }
+                if existing_item.weapon_name == "未知枪械" && item.weapon_name != "未知枪械" {
+                    existing_item.weapon_name = item.weapon_name.clone();
+                    upd = true;
+                }
+                if upd {
+                    changed = true;
+                }
+            }
+        }
     }
-    if added > 0 {
+    if changed {
         save_all(&app, &items);
     }
     Ok(added)

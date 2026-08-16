@@ -169,8 +169,8 @@ export default function LocalGunCodesPage() {
     if (!importText.trim()) { showToast("请先粘贴文档内容", "error"); return; }
     setImporting(true);
     try {
-      const res = await invoke<{ imported: number; skipped: number }>("import_gun_codes_batch", { text: importText });
-      showToast(`批量导入完成：新增 ${res.imported} 条${res.skipped ? `，跳过重复 ${res.skipped} 条` : ""}`);
+      const res = await invoke<{ imported: number; updated: number; skipped: number }>("import_gun_codes_batch", { text: importText });
+      showToast(`批量导入完成：新增 ${res.imported} 条${res.updated ? `，补上备注 ${res.updated} 条` : ""}${res.skipped ? `，跳过 ${res.skipped} 条` : ""}`);
       setShowImport(false);
       setImportText("");
       await refresh();

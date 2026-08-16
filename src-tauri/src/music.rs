@@ -427,3 +427,27 @@ pub async fn get_local_lyric(path: String) -> Result<String, String> {
 
     Ok(String::new())
 }
+
+/// 获取远程图片并转为 base64 data URI（用于 SMTC 封面等跨域场景）。
+/// 网易云等图床有防盗链，直接前端 fetch 会被 CORS 拦截，这里走后端 reqwest 下载。
+#[tauri::command]
+pub async fn fetch_remote_image(url: String) -> Result<String, String> {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("非法的 URL".to_string());
+    }
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36 NexBox")
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("下载失败: HTTP {}", resp.status()));
+    }
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    if bytes.is_empty() || bytes.len() > 5 * 1024 * 1024 {
+        return Err("图片过大或为空".to_string());
+    }
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:image/jpeg;base64,{}", b64))
+}

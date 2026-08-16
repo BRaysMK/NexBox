@@ -8,7 +8,7 @@
 // 注意：SMTC 会话只在「有声音播放」期间激活，暂停后仍保留控制但需及时
 // 调用 setPlaybackState 同步状态。
 
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { Song } from "@/types/music";
 
 // 专辑封面 URL → 临时缓存，避免重复请求
@@ -17,7 +17,9 @@ const coverCache = new Map<string, string>();
 function resolveCoverUrl(song: Song): string {
   const raw = song.cover || "";
   if (!raw) return "";
-  if (raw.startsWith("http") || raw.startsWith("data:")) return raw;
+  // 远程 URL：交给后端 fetch_remote_image 下载（绕过 CORS / 防盗链）
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  if (raw.startsWith("data:")) return raw;
   // 相对路径（本地封面），用 convertFileSrc 转换
   return convertFileSrc(raw);
 }
@@ -25,15 +27,22 @@ function resolveCoverUrl(song: Song): string {
 async function loadCoverBlob(url: string): Promise<string | undefined> {
   if (coverCache.has(url)) return coverCache.get(url);
   try {
-    const res = await fetch(url, { mode: "cors" });
-    if (!res.ok) return undefined;
-    const blob = await res.blob();
-    const dataUrl = await new Promise<string | undefined>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : undefined);
-      reader.onerror = () => resolve(undefined);
-      reader.readAsDataURL(blob);
-    });
+    let dataUrl: string | undefined;
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      // 远程图片：后端 reqwest 下载转 base64（网易云等有防盗链，前端 fetch 会被 CORS 拦截）
+      dataUrl = await invoke<string>("fetch_remote_image", { url });
+    } else {
+      // 本地封面（convertFileSrc 的 tauri:// 路径）
+      const res = await fetch(url, { mode: "cors" });
+      if (!res.ok) return undefined;
+      const blob = await res.blob();
+      dataUrl = await new Promise<string | undefined>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : undefined);
+        reader.onerror = () => resolve(undefined);
+        reader.readAsDataURL(blob);
+      });
+    }
     coverCache.set(url, dataUrl || "");
     return dataUrl;
   } catch {

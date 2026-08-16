@@ -438,6 +438,7 @@ pub fn run() {
         local_gun_codes::import_gun_codes_batch,
         local_gun_codes::export_gun_codes,
         local_gun_codes::import_gun_codes,
+        music::fetch_remote_image,
         announcement::get_announcements,
         announcement::get_important_announcements,
         auto_start::set_nexbox_auto_start,

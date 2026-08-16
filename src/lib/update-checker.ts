@@ -1,9 +1,10 @@
 "use client";
 
-const GITCODE_API_TOKEN = "eR61HSFsnvE_1EmKzvhosef9";
-const GITCODE_OWNER = "MuLiuSaMa";
-const GITCODE_REPO = "nexbox";
-const GITCODE_WEB = "https://gitcode.com";
+// 个人定制版更新源：指向本 Fork 的 GitHub Release（BRaysMK/NexBox）
+// 若需切回上游，将 OWNER/REPO 改回 MuLiuSaMa/nexbox 并换用 GitCode API。
+const GH_OWNER = "BRaysMK";
+const GH_REPO = "NexBox";
+const GH_WEB = "https://github.com";
 
 export interface ReleaseInfo {
   tag_name: string;
@@ -18,18 +19,18 @@ export interface ReleaseInfo {
   html_url: string;
 }
 
-const releaseBaseUrl = (path: string, query = "") =>
-  `https://api.gitcode.com/api/v5/repos/${GITCODE_OWNER}/${GITCODE_REPO}${path}?access_token=${GITCODE_API_TOKEN}${query}`;
+const releaseBaseUrl = (path: string) =>
+  `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}${path}`;
 
-// GitCode 的 release 响应不含顶层 html_url，按仓库与 tag 拼接
+// GitHub 的 release 响应自带 html_url；无则按仓库与 tag 拼接
 function releaseHtmlUrl(tagName: string): string {
-  return `${GITCODE_WEB}/${GITCODE_OWNER}/${GITCODE_REPO}/releases/tag/${tagName}`;
+  return `${GH_WEB}/${GH_OWNER}/${GH_REPO}/releases/tag/${tagName}`;
 }
 
 export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
   try {
     const response = await fetch(releaseBaseUrl("/releases/latest"), {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Accept": "application/vnd.github+json", "User-Agent": "NexBox" },
     });
 
     if (!response.ok) {
@@ -37,7 +38,7 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
     }
 
     const data = await response.json();
-    return { ...data, html_url: releaseHtmlUrl(data.tag_name) };
+    return { ...data, html_url: data.html_url || releaseHtmlUrl(data.tag_name) };
   } catch (error) {
     return null;
   }
@@ -45,8 +46,8 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
 
 export async function fetchAllReleases(): Promise<ReleaseInfo[]> {
   try {
-    const response = await fetch(releaseBaseUrl("/releases", "&per_page=100"), {
-      headers: { "Content-Type": "application/json" },
+    const response = await fetch(releaseBaseUrl("/releases?per_page=100"), {
+      headers: { "Accept": "application/vnd.github+json", "User-Agent": "NexBox" },
     });
 
     if (!response.ok) {
@@ -56,7 +57,7 @@ export async function fetchAllReleases(): Promise<ReleaseInfo[]> {
     const data = await response.json();
     return (data as ReleaseInfo[]).map((r) => ({
       ...r,
-      html_url: releaseHtmlUrl(r.tag_name),
+      html_url: r.html_url || releaseHtmlUrl(r.tag_name),
     }));
   } catch (error) {
     return [];
@@ -68,7 +69,7 @@ export async function fetchReleaseByTag(tag: string): Promise<ReleaseInfo | null
     const response = await fetch(
       releaseBaseUrl(`/releases/tags/${encodeURIComponent(tag)}`),
       {
-        headers: { "Content-Type": "application/json" },
+        headers: { "Accept": "application/vnd.github+json", "User-Agent": "NexBox" },
       }
     );
 
@@ -77,7 +78,7 @@ export async function fetchReleaseByTag(tag: string): Promise<ReleaseInfo | null
     }
 
     const data = await response.json();
-    return { ...data, html_url: releaseHtmlUrl(data.tag_name) };
+    return { ...data, html_url: data.html_url || releaseHtmlUrl(data.tag_name) };
   } catch (error) {
     return null;
   }
