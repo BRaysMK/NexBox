@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{
     tray::{TrayIcon, TrayIconBuilder},
-    AppHandle, Emitter, Manager, Runtime, Window,
+    AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder, Window,
 };
 
 static TRAY_INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -71,16 +71,37 @@ fn ensure_main_onscreen<R: Runtime>(app: &AppHandle<R>) -> Option<()> {
     Some(())
 }
 
-/// 从托盘打开主窗口的统一入口：恢复任务栏 → 若处于离屏预热则归位到屏幕内 → 显示 → 恢复 → 聚焦。
+/// 从托盘打开主窗口的统一入口。
+/// 若主窗口已被销毁（minimize_to_tray 时 destroy 释放 WebView2），则按原配置重建；
+/// 否则恢复任务栏 → 若处于离屏预热则归位到屏幕内 → 显示 → 恢复 → 聚焦。
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.set_skip_taskbar(false);
-        ensure_main_onscreen(app);
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-        crate::emit_main_visibility(app, true);
-    }
+    let window = match app.get_webview_window("main") {
+        Some(w) => w,
+        None => {
+            let Ok(w) = WebviewWindowBuilder::new(
+                app,
+                "main",
+                WebviewUrl::App("/".into()),
+            )
+            .title("NexBox")
+            .inner_size(1230.0, 771.0)
+            .min_inner_size(1140.0, 715.0)
+            .resizable(true)
+            .decorations(false)
+            .build()
+            else {
+                log::error!("[Tray] 重建主窗口失败");
+                return;
+            };
+            w
+        }
+    };
+    let _ = window.set_skip_taskbar(false);
+    ensure_main_onscreen(app);
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+    crate::emit_main_visibility(app, true);
 }
 
 pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn std::error::Error>> {
@@ -225,8 +246,12 @@ fn stop_tray_hover_tooltip<R: Runtime>(tray: &TrayIcon<R>) {
 
 #[tauri::command]
 pub async fn minimize_to_tray<R: Runtime>(window: Window<R>) -> Result<(), String> {
-    window.hide().map_err(|e| e.to_string())?;
-    crate::emit_main_visibility(&window.app_handle(), false);
+    let app = window.app_handle().clone();
+    // 先广播可见性变化，再销毁窗口。
+    // 销毁主窗口会释放其全部 WebView2 进程（内存从 ~800MB 降到主进程 ~200MB），
+    // 之后从托盘点击时由 show_main_window 按需重建。
+    crate::emit_main_visibility(&app, false);
+    window.destroy().map_err(|e| e.to_string())?;
     Ok(())
 }
 
