@@ -2943,7 +2943,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "8.2.0";
+  const currentVersion = "8.3.0";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

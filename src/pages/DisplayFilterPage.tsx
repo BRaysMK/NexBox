@@ -42,7 +42,8 @@ import { hexToRgba } from "@/lib/color-utils";
 import { 
   Sun, BookOpen, Monitor, Sparkles, RotateCcw, 
   Film, Heart, Palette, Gamepad2, Save, Settings2, ArrowLeft,
-  Upload, Trash2, FileImage, Download, Bookmark
+  Upload, Trash2, FileImage, Download, Bookmark,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -131,6 +132,11 @@ const ICC_TO_PRESET: Record<string, string> = {
   "builtin_NexBox_阅读": "reading",
   "builtin_NexBox_去曝光": "de-exposure",
   "builtin_NexBox_暗部增强": "shadow-boost",
+  "builtin_NexBox_大坝降低对比度": "dam-contrast",
+  "builtin_NexBox_航天推荐": "aerospace",
+  "builtin_NexBox_偏白": "whiter",
+  "builtin_NexBox_偏蓝": "bluish",
+  "builtin_NexBox_原亮 冷色调": "cool-tone",
 };
 
 const presetIcons: Record<string, React.ElementType> = {
@@ -141,6 +147,11 @@ const presetIcons: Record<string, React.ElementType> = {
   "soft": Heart,
   "gaming": Gamepad2,
   "reading": BookOpen,
+  "dam-contrast": RotateCcw,
+  "aerospace": Sparkles,
+  "whiter": Sun,
+  "bluish": Palette,
+  "cool-tone": Film,
   "custom": Settings2,
 };
 
@@ -152,6 +163,11 @@ const presetColors: Record<string, string> = {
   "soft": "#E8B4B8",
   "gaming": "#00D9FF",
   "reading": "#DEB887",
+  "dam-contrast": "#7A8B99",
+  "aerospace": "#6C8EFF",
+  "whiter": "#E8E8EC",
+  "bluish": "#5AA9FF",
+  "cool-tone": "#7EC8E3",
   "custom": "#6B7280",
 };
 
@@ -236,6 +252,10 @@ export default function DisplayFilterPage() {
   const [splitPosition, setSplitPosition] = useState(50);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
+  
+  // 预览图片切换
+  const previewImages = ["/icc-preview.png", "/lhdbsn.png", "/BKSSW.jpg", "/htjdsn.png"];
+  const [previewImageIndex, setPreviewImageIndex] = useState(0);
   
   const editValuesRef = useRef({
     temperature: 6500,
@@ -546,10 +566,9 @@ export default function DisplayFilterPage() {
     // 批量更新状态，减少重渲染
     setManualPresetChange(true);
     setActivePresetId(preset.id);
-    setActiveIccId(null);
-    setIccPreviewFilter(null);
-    setIccTintColor(null);
-    setIccTintOpacity(0);
+    // 注意：不要在这里清空 activeIccId / iccPreview* 。
+    // 否则在 invoke 返回前，滤镜侧会短暂回退到参数化 filterStyle，造成预览“闪一下”。
+    // 预览状态只在拿到后端返回后一次性更新。
     setHasChanges(false);
     setInputVersion(v => v + 1);
     
@@ -578,6 +597,16 @@ export default function DisplayFilterPage() {
           preview_tint_color_icc: s?.preview_tint_color_icc ?? null,
           preview_tint_opacity_icc: s?.preview_tint_opacity_icc ?? null,
         });
+        // ICC 内置预设：使用后端返回的 ICC 预览效果（分段预览的滤镜侧）
+        const hasIccPreview = !!result.preview_filter || !!result.preview_tint_color;
+        if (hasIccPreview) {
+          setActiveIccId(s?.active_icc_id ?? (s?.icc_active ? preset.id : null));
+          setIccPreviewFilter(result.preview_filter || null);
+          setIccTintColor(result.preview_tint_color || null);
+          setIccTintOpacity(result.preview_tint_opacity ?? 0);
+        } else {
+          setActiveIccId(null);
+        }
         toast({
           title: `${t("displayFilter.presetAppliedPrefix")}${preset.name}${t("displayFilter.presetAppliedSuffix")}`,
           description: !settings.is_active ? t("displayFilter.paramsUpdatedHint") : undefined,
@@ -587,6 +616,11 @@ export default function DisplayFilterPage() {
         });
       }
     } catch (error) {
+      // 失败时清理预览，避免残留上次滤镜的预览状态
+      setActiveIccId(null);
+      setIccPreviewFilter(null);
+      setIccTintColor(null);
+      setIccTintOpacity(0);
       toast({
         title: t("displayFilter.error"),
         description: String(error),
@@ -1805,7 +1839,6 @@ export default function DisplayFilterPage() {
                   transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
                   _hover={{
                     borderColor: accentColor,
-                    transform: "translateY(-2px)",
                   }}
                   position="relative"
                   overflow="hidden"
@@ -1817,16 +1850,7 @@ export default function DisplayFilterPage() {
                       )}
                     />
                   )}
-                  {isActive && (
-                    <Box
-                      position="absolute"
-                      top={0}
-                      left={0}
-                      right={0}
-                      h="3px"
-                      bg={accentColor}
-                    />
-                  )}
+                  
                   <Tooltip label={t("displayFilter.exportIcc")} placement="top">
                     <IconButton
                       aria-label={t("displayFilter.exportIcc")}
@@ -1877,7 +1901,6 @@ export default function DisplayFilterPage() {
               transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
               _hover={{
                 borderColor: presetColors["custom"],
-                transform: "translateY(-2px)",
               }}
               position="relative"
               overflow="hidden"
@@ -1889,16 +1912,7 @@ export default function DisplayFilterPage() {
                   )}
                 />
               )}
-              {activePresetId === "custom" && (
-                <Box
-                  position="absolute"
-                  top={0}
-                  left={0}
-                  right={0}
-                  h="3px"
-                  bg={presetColors["custom"]}
-                />
-              )}
+              
               <Tooltip label={t("displayFilter.exportIcc")} placement="top">
                 <IconButton
                   aria-label={t("displayFilter.exportIcc")}
@@ -1978,7 +1992,6 @@ export default function DisplayFilterPage() {
                   transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
                   _hover={{
                     borderColor: accentColor,
-                    transform: "translateY(-2px)",
                   }}
                   position="relative"
                   overflow="hidden"
@@ -2082,7 +2095,6 @@ export default function DisplayFilterPage() {
                   transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
                   _hover={{
                     borderColor: accentColor,
-                    transform: "translateY(-2px)",
                   }}
                   position="relative"
                   overflow="hidden"
@@ -2094,16 +2106,7 @@ export default function DisplayFilterPage() {
                       )}
                     />
                   )}
-                  {isActive && (
-                    <Box
-                      position="absolute"
-                      top={0}
-                      left={0}
-                      right={0}
-                      h="3px"
-                      bg={accentColor}
-                    />
-                  )}
+                  
                   <Tooltip label={icc.description} placement="top">
                     <IconButton
                       aria-label={t("displayFilter.deleteIcc")}
@@ -2158,6 +2161,38 @@ export default function DisplayFilterPage() {
                 {t("displayFilter.previewDisabledNote")}
               </Text>
             )}
+            <HStack spacing={1}>
+              <IconButton
+                aria-label="Previous preview image"
+                icon={<ChevronLeft size={16} />}
+                size="sm"
+                variant="outline"
+                borderColor={primaryColor}
+                color={primaryColor}
+                bg={hexToRgba(primaryColor, 0.1)}
+                isDisabled={previewImageIndex === 0}
+                onClick={() => setPreviewImageIndex((i) => (i - 1 + previewImages.length) % previewImages.length)}
+                _hover={{ bg: hexToRgba(primaryColor, 0.25), color: primaryColor }}
+                _active={{ bg: hexToRgba(primaryColor, 0.35) }}
+              />
+              <Text color={textColor} fontSize="xs" fontWeight="700">
+                {String(previewImageIndex + 1).padStart(2, "0")}/
+                {String(previewImages.length).padStart(2, "0")}
+              </Text>
+              <IconButton
+                aria-label="Next preview image"
+                icon={<ChevronRight size={16} />}
+                size="sm"
+                variant="outline"
+                borderColor={primaryColor}
+                color={primaryColor}
+                bg={hexToRgba(primaryColor, 0.1)}
+                isDisabled={previewImageIndex === previewImages.length - 1}
+                onClick={() => setPreviewImageIndex((i) => (i + 1) % previewImages.length)}
+                _hover={{ bg: hexToRgba(primaryColor, 0.25), color: primaryColor }}
+                _active={{ bg: hexToRgba(primaryColor, 0.35) }}
+              />
+            </HStack>
           </HStack>
           <Box
             ref={previewContainerRef}
@@ -2172,7 +2207,7 @@ export default function DisplayFilterPage() {
             {/* 原始图（全宽） */}
             <Box position="absolute" inset={0}>
               <img
-                src="/icc-preview.png"
+                src={previewImages[previewImageIndex]}
                 alt="Original"
                 style={{
                   width: "100%",
@@ -2191,7 +2226,7 @@ export default function DisplayFilterPage() {
               style={{ clipPath: `inset(0 0 0 ${splitPosition}%)` }}
             >
               <img
-                src="/icc-preview.png"
+                src={previewImages[previewImageIndex]}
                 alt="Filtered"
                 style={{
                   width: "100%",

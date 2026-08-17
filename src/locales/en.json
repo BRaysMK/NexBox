@@ -59,7 +59,8 @@
     "speedtest": "Speed Test",
     "runtimeRepair": "Runtime Repair",
     "vtxVirtualization": "VT-X Virtualization Fix",
-    "hiddenFeatures": "Windows Hidden Features"
+    "hiddenFeatures": "Windows Hidden Features",
+    "contextMenu": "Context Menu Manager"
   },
   "customPage": {
     "title": "Custom Dashboard",
@@ -1399,7 +1400,38 @@
     "speedtestDesc": "Test network download/upload speed, latency and jitter",
     "runtimeRepairDesc": "Detect and repair missing VC++ / .NET / DirectX runtime libraries",
     "vtxVirtualizationDesc": "Disable/restore Memory Integrity & Hyper-V to fix virtualization popups",
-    "hiddenFeaturesDesc": "Query, enable or disable hidden Windows A/B experimental feature flags"
+    "hiddenFeaturesDesc": "Query, enable or disable hidden Windows A/B experimental feature flags",
+    "contextMenuDesc": "Manage system context menu items and extra drives/cloud drives in This PC"
+  },
+  "contextMenu": {
+    "title": "Context Menu & This PC",
+    "menuTab": "Context Menu",
+    "thisPcTab": "This PC",
+    "all": "All",
+    "refresh": "Refresh",
+    "searchPlaceholder": "Search name / command / path...",
+    "totalMenu": "{{count}} context menu items",
+    "totalPc": "{{count}} This PC items",
+    "drives": "Drives",
+    "driveRestartHint": "Registry updated; takes effect after restarting Explorer or signing out",
+    "scanning": "Scanning...",
+    "noMenu": "No context menu items found",
+    "noPc": "No manageable items found in This PC",
+    "colName": "Name",
+    "colCommand": "Command / Path",
+    "colSource": "Source",
+    "colActions": "Actions",
+    "hide": "Hide",
+    "hidden": "Hidden",
+    "restore": "Restore",
+    "hideSuccess": "Hidden: {{name}}",
+    "restoreSuccess": "Restored: {{name}}",
+    "hideError": "Failed to hide",
+    "restoreError": "Failed to restore",
+    "scanError": "Failed to scan",
+    "errorDenied": "Access denied: this entry lives under a system registry hive (HKLM/HKCR) and needs administrator rights. Please run this program as administrator and retry.",
+    "tipTitle": "💡 Tip",
+    "tipDescription": "Hiding moves an entry to a backup location (restorable anytime) and never deletes registry data. Clean up extra drives, OneDrive etc. to keep This PC tidy. System-level items may trigger a UAC prompt under non-admin; if that fails, run as administrator."
   },
   "vtxVirtualization": {
     "title": "VT-X Virtualization Fix",

@@ -136,6 +136,12 @@ interface JunkDeleteResult {
   failed_files: { path: string; reason: string }[];
 }
 
+/** 删除目标:携带扫描时已知的文件大小,避免删除阶段重复 stat */
+interface DeleteJunkTarget {
+  path: string;
+  size: number;
+}
+
 interface LargeFileEntry {
   path: string;
   size: number;
@@ -664,60 +670,91 @@ export default function StorageCleanPage() {
   const [bigProgress, setBigProgress] = useState<LargeFileScanProgress | null>(null);
   const [bigResults, setBigResults] = useState<LargeFileEntry[]>([]);
 
+  // 扫描去重:进行中的请求复用同一 Promise;自动扫描仅在首次挂载时触发一次,
+  // 避免 StrictMode 双执行/依赖重建导致对后端重复发起全量扫描
+  const scanInFlight = useRef<Promise<void> | null>(null);
+  const autoScanDone = useRef(false);
+
   const doScan = useCallback(async () => {
-    setIsScanning(true);
+    if (scanInFlight.current) return scanInFlight.current;
+    const run = (async () => {
+      setIsScanning(true);
+      try {
+        const result = await invoke<QuickScanResult>("scan_storage_items");
+        setScanResult(result);
+        const defaultSelected = new Set(
+          result.items
+            .filter((item) => item.exists && item.size_bytes > 0 && !item.requires_admin)
+            .map((item) => item.id)
+        );
+        setSelectedItems(defaultSelected);
+      } catch (error) {
+        console.error("Failed to scan storage items:", error);
+        toast({
+          title: t("storageClean.scanError") || "扫描失败",
+          description: String(error),
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+      setIsScanning(false);
+    })();
+    scanInFlight.current = run;
     try {
-      const result = await invoke<QuickScanResult>("scan_storage_items");
-      setScanResult(result);
-      const defaultSelected = new Set(
-        result.items
-          .filter((item) => item.exists && item.size_bytes > 0 && !item.requires_admin)
-          .map((item) => item.id)
-      );
-      setSelectedItems(defaultSelected);
-    } catch (error) {
-      console.error("Failed to scan storage items:", error);
-      toast({
-        title: t("storageClean.scanError") || "扫描失败",
-        description: String(error),
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
+      await run;
+    } finally {
+      scanInFlight.current = null;
     }
-    setIsScanning(false);
   }, [t, toast]);
 
   useEffect(() => {
+    if (autoScanDone.current) return;
+    autoScanDone.current = true;
     doScan();
   }, [doScan]);
 
+  // 垃圾扫描同样做 in-flight 去重 + 自动只跑一次
+  const junkScanInFlight = useRef<Promise<void> | null>(null);
+  const autoJunkScanDone = useRef(false);
+
   const doJunkScan = useCallback(async () => {
-    setJunkScanning(true);
+    if (junkScanInFlight.current) return junkScanInFlight.current;
+    const run = (async () => {
+      setJunkScanning(true);
+      try {
+        const result = await invoke<JunkScanResult>("scan_junk_categories", {});
+        setJunkResult(result);
+        const defaultSelected = new Set(
+          result.categories
+            .filter((category) => category.file_count > 0)
+            .map((category) => category.display_name)
+        );
+        setSelectedCategories(defaultSelected);
+      } catch (error) {
+        console.error("Failed to scan junk files:", error);
+        toast({
+          title: t("storageClean.scanError") || "扫描失败",
+          description: String(error),
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+      setJunkScanning(false);
+    })();
+    junkScanInFlight.current = run;
     try {
-      const result = await invoke<JunkScanResult>("scan_junk_categories", {});
-      setJunkResult(result);
-      const defaultSelected = new Set(
-        result.categories
-          .filter((category) => category.file_count > 0)
-          .map((category) => category.display_name)
-      );
-      setSelectedCategories(defaultSelected);
-    } catch (error) {
-      console.error("Failed to scan junk files:", error);
-      toast({
-        title: t("storageClean.scanError") || "扫描失败",
-        description: String(error),
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
+      await run;
+    } finally {
+      junkScanInFlight.current = null;
     }
-    setJunkScanning(false);
   }, [t, toast]);
 
   // 进入页面自动扫描垃圾文件,无需手动点击
   useEffect(() => {
+    if (autoJunkScanDone.current) return;
+    autoJunkScanDone.current = true;
     doJunkScan();
   }, [doJunkScan]);
 
@@ -837,15 +874,15 @@ export default function StorageCleanPage() {
       return;
     }
 
-    const paths: string[] = [];
+    const targets: DeleteJunkTarget[] = [];
     for (const category of junkResult.categories) {
       if (selectedCategories.has(category.display_name)) {
         for (const file of category.files) {
-          paths.push(file.path);
+          targets.push({ path: file.path, size: file.size });
         }
       }
     }
-    if (paths.length === 0) {
+    if (targets.length === 0) {
       toast({
         title: t("storageClean.junkNoSelection"),
         status: "warning",
@@ -857,7 +894,7 @@ export default function StorageCleanPage() {
 
     setJunkCleaning(true);
     try {
-      const result = await invoke<JunkDeleteResult>("delete_junk_files", { paths });
+      const result = await invoke<JunkDeleteResult>("delete_junk_files", { targets });
       const parts: string[] = [];
       if (result.freed_size > 0) {
         parts.push(t("storageClean.junkCleanSuccess", { size: formatSize(result.freed_size) }));

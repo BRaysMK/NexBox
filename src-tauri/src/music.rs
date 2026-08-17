@@ -1,11 +1,11 @@
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use image::{GenericImageView, ImageEncoder};
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::tag::Accessor;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MusicFile {
@@ -29,10 +29,47 @@ pub struct LocalSongInfo {
     pub album: String,
     /// 时长（毫秒，来自音频属性）
     pub duration_ms: u64,
-    /// 封面 data URI（base64，可能为空）
-    pub cover: String,
+    /// 封面缓存文件绝对路径（可能为空）
+    pub cover_path: String,
     /// 封面来源："embedded" 内嵌 / "folder" 同目录图片 / "none" 无
     pub cover_source: String,
+}
+
+/// 封面缓存目录：应用缓存目录下的 covers 子目录
+fn cover_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("无法获取应用缓存目录: {e}"))?
+        .join("covers");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("无法创建封面缓存目录: {e}"))?;
+    Ok(dir)
+}
+
+/// 稳定的 FNV-1a 64 位哈希：保证同一输入在多次进程运行中得到相同结果。
+/// 不能用 DefaultHasher（随机种子导致跨会话 hash 变化、重启后缓存路径失效）。
+fn stable_hash(s: &str) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in s.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+/// 把压缩后的封面数据写入缓存目录，返回文件绝对路径。
+/// 文件已存在时跳过写入直接返回路径，支持重复导入去重。
+fn save_cover_file(cache_dir: &Path, id: &str, data: &[u8], mime: &str) -> String {
+    if data.is_empty() {
+        return String::new();
+    }
+    let ext = if mime == "image/png" { "png" } else { "jpg" };
+    let name = format!("{:016x}.{}", stable_hash(id), ext);
+    let file_path = cache_dir.join(&name);
+    if !file_path.exists() {
+        let _ = std::fs::write(&file_path, data);
+    }
+    file_path.to_string_lossy().to_string()
 }
 
 /// 常见的同目录专辑封面文件名（小写）
@@ -41,14 +78,15 @@ const FOLDER_COVER_NAMES: [&str; 8] = [
     "cover.png", "folder.png", "album.png", "front.png",
 ];
 
-/// 在某个目录下查找同目录封面图片，返回 (data_uri, source)
-/// 优先固定封面名（cover/folder/album/front），其次返回 None 表示无同目录通用封面。
-/// 由于每个音频都可能带独立同名封面，这里只负责「通用固定封面」的探测。
-fn find_folder_generic_cover(dir: &std::path::Path) -> String {
+/// 在某个目录下查找同目录封面图片，写入封面缓存并返回缓存文件路径。
+/// 优先固定封面名（cover/folder/album/front），其次返回空字符串表示无同目录通用封面。
+/// 缓存 key 使用目录路径，同一目录的歌曲共享同一张通用封面缓存文件。
+fn find_folder_generic_cover(dir: &Path, cache_dir: &Path) -> String {
+    let key = dir.to_string_lossy().to_string();
     for name in FOLDER_COVER_NAMES {
         let candidate = dir.join(name);
         if candidate.is_file() {
-            let cover = file_to_data_uri(&candidate);
+            let cover = save_cover_from_file(cache_dir, &key, &candidate);
             if !cover.is_empty() {
                 return cover;
             }
@@ -58,17 +96,20 @@ fn find_folder_generic_cover(dir: &std::path::Path) -> String {
 }
 
 /// 读取单个音频文件的内嵌元数据（标题/艺术家/专辑/时长/封面）
-/// 返回 (title, artist, album, duration_ms, cover_data_uri, cover_source)
+/// 返回 (title, artist, album, duration_ms, cover_path, cover_source)
 ///
-/// `folder_cover_cache`：同目录通用封面缓存（目录 → 封面 data_uri），避免对同一目录下
-/// 的每首歌重复做磁盘探测与 base64 编码，大幅减少大文件夹导入时的重复 I/O。
+/// `folder_cover_cache`：同目录通用封面缓存（目录 → 封面缓存文件路径），避免对同一目录下
+/// 的每首歌重复做磁盘探测与写入，大幅减少大文件夹导入时的重复 I/O。
+/// `cache_dir`：封面缓存目录；为 None 时降级为不提取封面（不阻塞导入主流程）。
 fn read_audio_metadata(
-    path: &std::path::Path,
-    folder_cover_cache: &mut HashMap<std::path::PathBuf, String>,
+    path: &Path,
+    folder_cover_cache: &mut HashMap<PathBuf, String>,
+    cache_dir: Option<&Path>,
+    id: &str,
 ) -> (String, String, String, u64, String, String) {
     let (mut title, mut artist, mut album) = (String::new(), String::new(), String::new());
     let mut duration_ms: u64 = 0;
-    let mut cover = String::new();
+    let mut cover_path = String::new();
     let mut cover_source = "none".to_string();
 
     if let Ok(tagged_file) = lofty::read_from_path(path) {
@@ -84,23 +125,27 @@ fn read_audio_metadata(
             album = tag.album().map(|v| v.to_string()).unwrap_or_default();
         }
 
-        // 封面：遍历所有标签中的所有内嵌图片，取第一张转 base64 data URI
+        // 封面：遍历所有标签中的所有内嵌图片，取第一张压缩后写入封面缓存
         for t in tagged_file.tags() {
             for pic in t.pictures() {
                 let data = pic.data();
-                // 限制封面大小（原始数据 ≤ 1MB），避免超大封面拖慢存储与渲染；
-                // 超过阈值的大封面会先压缩再编码
+                // 限制封面大小（原始数据 ≤ 1MB），避免超大封面拖慢解析与缓存；
+                // 超过阈值的大封面会先压缩再写入
                 if !data.is_empty() && data.len() <= 1024 * 1024 {
                     let mime = detect_image_mime(data);
                     let (data, mime) = downscale_cover(data, mime);
                     if !data.is_empty() {
-                        cover = format!("data:{mime};base64,{}", BASE64.encode(data));
-                        cover_source = "embedded".to_string();
+                        if let Some(cache_dir) = cache_dir {
+                            cover_path = save_cover_file(cache_dir, id, &data, &mime);
+                        }
+                        if !cover_path.is_empty() {
+                            cover_source = "embedded".to_string();
+                        }
                         break;
                     }
                 }
             }
-            if !cover.is_empty() {
+            if !cover_path.is_empty() {
                 break;
             }
         }
@@ -108,25 +153,25 @@ fn read_audio_metadata(
 
     // 兜底：音频没有内嵌封面时，尝试读取同目录的封面图片文件
     // 顺序：固定封面名（cover/folder/album/front）→ 与音频同名的图片
-    if cover.is_empty() {
-        if let Some(dir) = path.parent() {
+    if cover_path.is_empty() {
+        if let (Some(dir), Some(cache_dir)) = (path.parent(), cache_dir) {
             // 1. 通用固定封面：先查缓存，未命中才探测并写入缓存
             if !folder_cover_cache.contains_key(dir) {
-                let cached = find_folder_generic_cover(dir);
+                let cached = find_folder_generic_cover(dir, cache_dir);
                 folder_cover_cache.insert(dir.to_path_buf(), cached);
             }
             let generic = folder_cover_cache.get(dir).cloned().unwrap_or_default();
             if !generic.is_empty() {
-                cover = generic;
+                cover_path = generic;
                 cover_source = "folder".to_string();
             } else {
-                // 2. 与音频同名的图片（每首歌不同，无需缓存）
+                // 2. 与音频同名的图片（每首歌不同，用完整路径做缓存 key）
                 if let Some(stem) = path.file_stem().and_then(|v| v.to_str()) {
                     for ext in ["jpg", "png", "jpeg", "webp", "bmp"] {
                         let candidate = dir.join(format!("{stem}.{ext}"));
                         if candidate.is_file() {
-                            cover = file_to_data_uri(&candidate);
-                            if !cover.is_empty() {
+                            cover_path = save_cover_from_file(cache_dir, &candidate.to_string_lossy(), &candidate);
+                            if !cover_path.is_empty() {
                                 cover_source = "folder".to_string();
                                 break;
                             }
@@ -138,11 +183,10 @@ fn read_audio_metadata(
     }
 
     log::debug!(
-        "local music metadata: title={title:?} artist={artist:?} album={album:?} dur={duration_ms}ms cover_source={cover_source} cover_bytes={}",
-        cover.len()
+        "local music metadata: title={title:?} artist={artist:?} album={album:?} dur={duration_ms}ms cover_source={cover_source} cover_path={cover_path:?}",
     );
 
-    (title, artist, album, duration_ms, cover, cover_source)
+    (title, artist, album, duration_ms, cover_path, cover_source)
 }
 
 /// 支持的本地音频扩展名
@@ -178,7 +222,7 @@ fn detect_image_mime(data: &[u8]) -> &'static str {
 /// 压缩封面：最大边 COVER_MAX_PX，输出 JPEG（PNG 源输出 PNG 保留透明）。
 /// 数据 ≤ COVER_MIN_BYTES、尺寸已足够小、或解码/编码失败时原样返回（仅大小阈值保护）。
 /// 返回压缩后的 (数据, mime)。
-const COVER_MAX_PX: u32 = 512;
+const COVER_MAX_PX: u32 = 256;
 const COVER_MIN_BYTES: usize = 64 * 1024;
 
 fn downscale_cover(data: &[u8], mime: &str) -> (Vec<u8>, String) {
@@ -211,7 +255,7 @@ fn downscale_cover(data: &[u8], mime: &str) -> (Vec<u8>, String) {
             .map(|_| "image/png")
     } else {
         let mut w = std::io::Cursor::new(&mut out);
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut w, 85)
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut w, 80)
             .write_image(resized.as_bytes(), resized.width(), resized.height(), resized.color().into())
             .map_err(|_| ())
             .map(|_| "image/jpeg")
@@ -222,8 +266,9 @@ fn downscale_cover(data: &[u8], mime: &str) -> (Vec<u8>, String) {
     }
 }
 
-/// 将图片文件读取为压缩后的 base64 data URI
-fn file_to_data_uri(path: &std::path::Path) -> String {
+/// 将图片文件压缩后写入封面缓存，返回缓存文件绝对路径。
+/// 用 `cache_key` 生成缓存文件名（同一目录通用封面用目录路径，同名封面用图片完整路径）。
+fn save_cover_from_file(cache_dir: &Path, cache_key: &str, path: &Path) -> String {
     let mime = match path
         .extension()
         .and_then(|v| v.to_str())
@@ -240,7 +285,7 @@ fn file_to_data_uri(path: &std::path::Path) -> String {
         Ok(data) if !data.is_empty() => {
             let (data, mime) = downscale_cover(&data, mime);
             if !data.is_empty() && data.len() <= 1024 * 1024 {
-                format!("data:{mime};base64,{}", BASE64.encode(data))
+                save_cover_file(cache_dir, cache_key, &data, &mime)
             } else {
                 String::new()
             }
@@ -301,9 +346,10 @@ pub async fn get_music_files() -> Result<Vec<MusicFile>, String> {
 /// 读取单个音频文件的元信息并组装成 LocalSongInfo（供并行导入使用）。
 fn build_local_song_info(
     raw_path: &str,
-    folder_cover_cache: &mut HashMap<std::path::PathBuf, String>,
+    folder_cover_cache: &mut HashMap<PathBuf, String>,
+    cache_dir: Option<&Path>,
 ) -> Option<LocalSongInfo> {
-    let path = std::path::Path::new(raw_path);
+    let path = Path::new(raw_path);
     if !path.is_file() {
         return None;
     }
@@ -334,15 +380,15 @@ fn build_local_song_info(
         .map(|meta| meta.len())
         .unwrap_or(0);
 
-    // 读取内嵌元数据（标题/艺术家/专辑/时长/封面）
-    let (title, artist, album, duration_ms, cover, cover_source) =
-        read_audio_metadata(path, folder_cover_cache);
-
     // 以绝对路径作为唯一 id，确保不同位置的同名文件可区分
     let id = match std::fs::canonicalize(path) {
         Ok(canon) => canon.to_string_lossy().to_string(),
         Err(_) => raw_path.to_string(),
     };
+
+    // 读取内嵌元数据（标题/艺术家/专辑/时长/封面）
+    let (title, artist, album, duration_ms, cover_path, cover_source) =
+        read_audio_metadata(path, folder_cover_cache, cache_dir, &id);
 
     Some(LocalSongInfo {
         id,
@@ -354,24 +400,27 @@ fn build_local_song_info(
         artist,
         album,
         duration_ms,
-        cover,
+        cover_path,
         cover_source,
     })
 }
 
-/// 导入本地音频文件，通过 Tauri 事件 `local-music-import-chunk` 分批推送到前端。
-/// 返回实际导入数量（小整数）。不复制文件，仅校验扩展名与存在性，并读取元数据。
+/// 导入本地音频文件，返回所有歌曲的元信息数组。
+/// 不复制文件，仅校验扩展名与存在性、读取元数据，并把封面压缩写入应用缓存目录。
 ///
-/// 采用多线程并行解析，并通过 mpsc 通道 + 命令线程分批 emit 事件，
-/// 避免一次性返回超大集合阻塞 WebView 主线程，同时提供实时进度。
+/// 采用多线程并行解析 + mpsc 通道收集结果；封面只返回缓存文件路径（小字符串），
+/// 避免超大 base64 payload 经 IPC 传输导致前端卡顿。
 #[tauri::command]
-pub async fn import_local_music(app: AppHandle, paths: Vec<String>) -> Result<i32, String> {
+pub async fn import_local_music(app: AppHandle, paths: Vec<String>) -> Result<Vec<LocalSongInfo>, String> {
     if paths.is_empty() {
-        return Ok(0);
+        return Ok(Vec::new());
     }
 
-    // 共享的同目录封面缓存：目录 → 封面 data URI
-    let folder_cover_cache: Arc<Mutex<HashMap<std::path::PathBuf, String>>> =
+    // 封面缓存目录；获取失败时降级为不提取封面（不阻塞导入主流程）
+    let cache_dir = cover_cache_dir(&app).ok();
+
+    // 共享的同目录封面缓存：目录 → 封面缓存文件路径
+    let folder_cover_cache: Arc<Mutex<HashMap<PathBuf, String>>> =
         Arc::new(Mutex::new(HashMap::new()));
     // 并行 worker 数量：使用 CPU 最大可用线程（含超线程），尽量缩短导入耗时
     let workers = std::thread::available_parallelism()
@@ -380,10 +429,8 @@ pub async fn import_local_music(app: AppHandle, paths: Vec<String>) -> Result<i3
     let total = paths.len();
     // 进度计数（仅用于日志，避免高频输出）
     let done = std::sync::atomic::AtomicUsize::new(0);
-    // 每批推送条数
-    const BATCH: usize = 20;
 
-    let imported: i32 = std::thread::scope(|scope| {
+    let infos: Vec<LocalSongInfo> = std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel::<LocalSongInfo>();
         // 将路径分片分配给各 worker，worker 解析后通过通道发送
         let chunk_size = (total + workers - 1) / workers;
@@ -391,11 +438,12 @@ pub async fn import_local_music(app: AppHandle, paths: Vec<String>) -> Result<i3
             let chunk = chunk.to_vec();
             let tx = tx.clone();
             let folder_cover_cache = Arc::clone(&folder_cover_cache);
+            let cache_dir = cache_dir.as_deref();
             let done = &done;
             scope.spawn(move || {
                 let mut local_cache = HashMap::new();
                 for raw_path in chunk {
-                    if let Some(info) = build_local_song_info(&raw_path, &mut local_cache) {
+                    if let Some(info) = build_local_song_info(&raw_path, &mut local_cache, cache_dir) {
                         let _ = tx.send(info);
                     }
                     let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
@@ -416,45 +464,15 @@ pub async fn import_local_music(app: AppHandle, paths: Vec<String>) -> Result<i3
         }
         drop(tx); // 释放本线程的发送端，当所有 worker 结束后 rx 结束
 
-        // 命令线程：接收解析结果并分批 emit 事件
-        let mut batch: Vec<LocalSongInfo> = Vec::with_capacity(BATCH);
-        let mut imported: i32 = 0;
+        // 命令线程：收集全部解析结果
+        let mut result: Vec<LocalSongInfo> = Vec::with_capacity(total);
         for info in rx {
-            batch.push(info);
-            imported += 1;
-            if batch.len() >= BATCH || imported as usize == total {
-                let payload = serde_json::json!({
-                    "chunk": batch,
-                    "imported": imported,
-                    "total": total,
-                    "done": imported as usize == total,
-                });
-                let _ = app.emit("local-music-import-chunk", payload);
-                batch.clear();
-            }
+            result.push(info);
         }
-        // 收尾：把不足一批的剩余部分（或全部无效的空批次）连同 done:true 一起推送
-        if !batch.is_empty() {
-            let payload = serde_json::json!({
-                "chunk": batch,
-                "imported": imported,
-                "total": total,
-                "done": true,
-            });
-            let _ = app.emit("local-music-import-chunk", payload);
-        } else if imported as usize != total {
-            let payload = serde_json::json!({
-                "chunk": [],
-                "imported": imported,
-                "total": total,
-                "done": true,
-            });
-            let _ = app.emit("local-music-import-chunk", payload);
-        }
-        imported
+        result
     });
 
-    Ok(imported)
+    Ok(infos)
 }
 
 /// 递归收集文件夹下所有受支持的音频文件路径
@@ -481,9 +499,9 @@ fn collect_audio_files(dir: &std::path::Path, out: &mut Vec<String>) {
 
 /// 导入整个文件夹（递归）下的音频文件：收集文件后复用单文件导入逻辑
 #[tauri::command]
-pub async fn import_local_music_folder(app: AppHandle, folder: String) -> Result<i32, String> {
+pub async fn import_local_music_folder(app: AppHandle, folder: String) -> Result<Vec<LocalSongInfo>, String> {
     let mut paths = Vec::new();
-    collect_audio_files(std::path::Path::new(&folder), &mut paths);
+    collect_audio_files(Path::new(&folder), &mut paths);
     import_local_music(app, paths).await
 }
 

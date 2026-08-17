@@ -1224,7 +1224,7 @@ mod win32 {
     fn parse_hex_color(hex: &str) -> u32 {
         let hex = hex.trim_start_matches('#');
         if let Ok(val) = u32::from_str_radix(hex, 16) {
-            // 前端使用 #RRGGBB 格式，GDI+ 颜色格式为 0x00BBGGRR
+            // 前端使用 #RRGGBB 格式，GDI 颜色格式为 0x00BBGGRR
             let r = (val >> 16) & 0xFF;
             let g = (val >> 8) & 0xFF;
             let b = val & 0xFF;
@@ -1232,6 +1232,14 @@ mod win32 {
         } else {
             0x00FFFFFF
         }
+    }
+
+    /// 将 GDI 颜色 0x00BBGGRR 转换为不透明直线 alpha 的 ARGB（0xFFRRGGBB），供 GDI+ 文字使用。
+    fn gdi_to_argb(gdi: u32) -> u32 {
+        let r = gdi & 0xFF;
+        let g = (gdi >> 8) & 0xFF;
+        let b = (gdi >> 16) & 0xFF;
+        0xFF000000 | (r << 16) | (g << 8) | b
     }
 
     fn build_display_items(
@@ -1668,20 +1676,89 @@ mod win32 {
         }
 
         let font_color = parse_hex_color(&settings.font_color);
-        // Build a temp DC just for measurement
-        let temp_dc = GetDC(ptr::null_mut());
-        let mut items = build_display_items(settings, data);
         let padding = (16.0 * dpi_scale) as i32;
         let item_gap = (16.0 * dpi_scale) as i32;
-        let content_width = measure_and_layout_items(temp_dc, hfont, &mut items, dpi_scale);
-        ReleaseDC(ptr::null_mut(), temp_dc);
-        let sep_count = if items.len() > 1 { items.len() as i32 - 1 } else { 0 };
-        let total_content_width = content_width + sep_count * item_gap + padding * 2;
-        let logical_height = 36 + (settings.font_size.saturating_sub(13) * 2) as i32;
-        let physical_height = (logical_height as f32 * dpi_scale) as i32;
+        let text_gap = (10.0 * dpi_scale) as i32;
 
-        let dib_width = total_content_width;
-        let dib_height = physical_height;
+        // 用 GDI+ 测量文字宽度（与绘制 GdipDrawString 同一文字引擎），
+        // 避免测宽与绘制度量不一致导致文字被裁剪/换行。字体句柄复用给绘制。
+        let mut font_handle: *mut GpFont = ptr::null_mut();
+        let (dib_width, dib_height, layout_items);
+        {
+            let temp_dc = GetDC(ptr::null_mut());
+            let old_temp_font = SelectObject(temp_dc, hfont as _);
+            let mut layout_items_tmp = build_display_items(settings, data);
+
+            let mut mg: *mut GpGraphics = ptr::null_mut();
+            let gdiplus_ok = !temp_dc.is_null()
+                && GdipCreateFromHDC(temp_dc, &mut mg) == 0 && !mg.is_null()
+                && GdipCreateFontFromDC(temp_dc, &mut font_handle) == 0 && !font_handle.is_null();
+
+            let sep_count = if layout_items_tmp.len() > 1 { layout_items_tmp.len() as i32 - 1 } else { 0 };
+            let mut content_width: i32 = -1;
+            if gdiplus_ok {
+                let mut fmt: *mut GpStringFormat = ptr::null_mut();
+                if GdipCreateStringFormat(StringFormatFlagsNoWrap as i32, 0, &mut fmt) == 0 && !fmt.is_null() {
+                    let mut c = 0i32;
+                    for item in layout_items_tmp.iter_mut() {
+                        let measure_w = |s: &str| -> i32 {
+                            if s.is_empty() {
+                                return 0;
+                            }
+                            let wide: Vec<u16> = s.encode_utf16().chain(std::iter::once(0)).collect();
+                            let arect = RectF { X: 0.0, Y: 0.0, Width: 100000.0, Height: 100000.0 };
+                            let mut brect = RectF { X: 0.0, Y: 0.0, Width: 0.0, Height: 0.0 };
+                            if GdipMeasureString(
+                                mg,
+                                wide.as_ptr(),
+                                (wide.len() - 1) as i32,
+                                font_handle,
+                                &arect,
+                                fmt,
+                                &mut brect,
+                                ptr::null_mut(),
+                                ptr::null_mut(),
+                            ) != 0 {
+                                return 0;
+                            }
+                            brect.Width.ceil() as i32
+                        };
+                        item.label_width = measure_w(&item.label);
+                        item.value_width = measure_w(&item.value);
+                        item.total_width = if item.label.is_empty() {
+                            item.value_width
+                        } else {
+                            item.label_width + text_gap + item.value_width
+                        };
+                        c += item.total_width;
+                    }
+                    content_width = c;
+                    // 记录布局有效，供后续 DIB 宽度计算
+                    GdipDeleteStringFormat(fmt);
+                }
+            }
+
+            // GDI+ 测量失败时退回 GDI 测量（保持兼容）
+            let content_width = if content_width >= 0 {
+                content_width
+            } else {
+                measure_and_layout_items(temp_dc, hfont, &mut layout_items_tmp, dpi_scale)
+            };
+
+            let logical_height = 36 + (settings.font_size.saturating_sub(13) * 2) as i32;
+            let tmp_dib_width = content_width + sep_count * item_gap + padding * 2;
+            let tmp_dib_height = (logical_height as f32 * dpi_scale) as i32;
+
+            SelectObject(temp_dc, old_temp_font);
+            ReleaseDC(ptr::null_mut(), temp_dc);
+            if !mg.is_null() {
+                GdipDeleteGraphics(mg);
+            }
+
+            dib_width = tmp_dib_width.max(2);
+            dib_height = tmp_dib_height.max(2);
+            layout_items = layout_items_tmp;
+        }
 
         // --- Create 32-bit ARGB DIB section (like crosshair) ---
         let screen_dc = GetDC(ptr::null_mut());
@@ -1717,14 +1794,15 @@ mod win32 {
 
         GdipSetSmoothingMode(graphics, SmoothingModeAntiAlias);
 
-        // Clear to fully transparent
+        // Clear to fully transparent（alpha=0）。GDI+ 按预乘 alpha 写入，透明区 rgb 归零，
+        // 圆角外区域保持全透明，配合末尾逆预乘不会再出现黑边/不透明圆角。
         let mut clear_brush: *mut GpSolidFill = ptr::null_mut();
-        GdipCreateSolidFill(0x00000001, &mut clear_brush);
+        GdipCreateSolidFill(0x00000000, &mut clear_brush);
         GdipFillRectangle(graphics, clear_brush as *mut GpBrush, 0.0, 0.0, dib_width as f32, dib_height as f32);
         GdipDeleteBrush(clear_brush as *mut GpBrush);
 
         // Draw rounded rect with GDI+ (proper per-pixel alpha anti-aliasing)。
-        // opacity>0 时才绘制背景：opacity=0 时跳过，避免 GDI+ 预乘 alpha 把背景 rgb 归零与黑字混淆。
+        // 半透明胶囊背景，alpha 由 opacity 决定；最终统一逆预乘输出直线 alpha。
         if settings.opacity > 0 {
             let bg_argb: u32 = ((settings.opacity as u32) << 24) | 0x00111111;
             let corner_r = dib_height as f32 * 0.5;
@@ -1751,107 +1829,138 @@ mod win32 {
             }
             GdipDeleteBrush(bg_brush as *mut GpBrush);
         }
-        GdipDeleteGraphics(graphics);
 
-        // --- Draw text using GDI ---
+        // --- 文字使用 GDI+ 绘制（自带正确 alpha，可支持纯黑文字，不再依赖 rgb 哨兵）---
+        // 字体复用当前 DC 中已选中的兼容字体，保证字号/字体与旧实现一致。
         let old_font = SelectObject(mem_dc, hfont as _);
-        SetBkMode(mem_dc, TRANSPARENT as i32);
+        // font_handle 已在测量阶段创建，复用同一句柄保证绘制度量一致
+        if !font_handle.is_null() {
+            let mut string_format: *mut GpStringFormat = ptr::null_mut();
+            // StringFormatFlagsNoWrap：禁止自动换行，文字始终单行显示（对齐旧 GDI DT_SINGLELINE 行为）
+            if GdipCreateStringFormat(StringFormatFlagsNoWrap as i32, 0, &mut string_format) == 0 && !string_format.is_null() {
+                // 灰度反锯齿：避免 ClearType 彩色边缘在透明分层窗口产生色边
+                GdipSetTextRenderingHint(graphics, TextRenderingHintAntiAliasGridFit);
+                GdipSetStringFormatLineAlign(string_format, StringAlignmentCenter);
 
-        let gap = (10.0 * dpi_scale) as i32;
-        let mut current_x: i32 = padding;
-        let win_height_i32 = dib_height;
+                let gap = text_gap;
+                let mut current_x: i32 = padding;
 
-        for (i, item) in items.iter().enumerate() {
-            if i > 0 {
-                current_x += item_gap;
-            }
-
-            if !item.label.is_empty() {
-                let wide_label: Vec<u16> = item.label.encode_utf16().chain(std::iter::once(0)).collect();
-                let mut label_rect = RECT {
-                    left: current_x,
-                    top: 0,
-                    right: current_x + item.label_width,
-                    bottom: win_height_i32,
-                };
-                SetTextColor(mem_dc, font_color);
-                DrawTextW(
-                    mem_dc,
-                    wide_label.as_ptr(),
-                    (wide_label.len() - 1) as i32,
-                    &mut label_rect,
-                    DT_RIGHT | DT_VCENTER | DT_SINGLELINE,
-                );
-            }
-
-            let value_x = if item.label.is_empty() {
-                current_x
-            } else {
-                current_x + item.label_width + gap
-            };
-            let wide_value: Vec<u16> = item.value.encode_utf16().chain(std::iter::once(0)).collect();
-            let mut value_rect = RECT {
-                left: value_x,
-                top: 0,
-                right: value_x + item.value_width,
-                bottom: win_height_i32,
-            };
-
-            let mut color: u32 = font_color;
-            if let Some(custom_color) = item.custom_color {
-                color = custom_color;
-            } else if !item.label.is_empty() && !item.value.contains("--")
-                && (item.value.contains("°C") || item.value.contains('%') || item.value.bytes().all(|b| b.is_ascii_digit()))
-            {
-                let mut num_str = String::new();
-                for ch in item.value.chars() {
-                    if ch.is_ascii_digit() || ch == '.' {
-                        num_str.push(ch);
-                    } else if !num_str.is_empty() {
-                        break;
+                for (i, item) in layout_items.iter().enumerate() {
+                    if i > 0 {
+                        current_x += item_gap;
                     }
-                }
-                if !num_str.is_empty() {
-                    if let Ok(nf) = num_str.parse::<f32>() {
-                        let nv = nf as i32;
-                        if nv < 50 {
-                            color = 0x0000FF00;
-                        } else if nv < 80 {
-                            color = 0x0000FFFF;
-                        } else {
-                            color = 0x000000FF;
+
+                    // label：右对齐
+                    if !item.label.is_empty() {
+                        let mut brush_handle: *mut GpSolidFill = ptr::null_mut();
+                        if GdipCreateSolidFill(gdi_to_argb(font_color), &mut brush_handle) == 0 && !brush_handle.is_null() {
+                            let rect_f = RectF {
+                                X: current_x as f32,
+                                Y: 0.0,
+                                Width: item.label_width as f32,
+                                Height: dib_height as f32,
+                            };
+                            GdipSetStringFormatAlign(string_format, StringAlignmentFar);
+                            let wide: Vec<u16> = item.label.encode_utf16().chain(std::iter::once(0)).collect();
+                            GdipDrawString(
+                                graphics,
+                                wide.as_ptr(),
+                                (wide.len() - 1) as i32,
+                                font_handle,
+                                &rect_f,
+                                string_format,
+                                brush_handle as *mut GpBrush,
+                            );
+                            GdipDeleteBrush(brush_handle as *mut GpBrush);
                         }
                     }
+
+                    // value：左对齐
+                    let value_x = if item.label.is_empty() {
+                        current_x
+                    } else {
+                        current_x + item.label_width + gap
+                    };
+
+                    let mut color: u32 = font_color;
+                    if let Some(custom_color) = item.custom_color {
+                        color = custom_color;
+                    } else if !item.label.is_empty() && !item.value.contains("--")
+                        && (item.value.contains("°C") || item.value.contains('%') || item.value.bytes().all(|b| b.is_ascii_digit()))
+                    {
+                        let mut num_str = String::new();
+                        for ch in item.value.chars() {
+                            if ch.is_ascii_digit() || ch == '.' {
+                                num_str.push(ch);
+                            } else if !num_str.is_empty() {
+                                break;
+                            }
+                        }
+                        if !num_str.is_empty() {
+                            if let Ok(nf) = num_str.parse::<f32>() {
+                                let nv = nf as i32;
+                                if nv < 50 {
+                                    color = 0x0000FF00;
+                                } else if nv < 80 {
+                                    color = 0x0000FFFF;
+                                } else {
+                                    color = 0x000000FF;
+                                }
+                            }
+                        }
+                    }
+
+                    let mut brush_handle: *mut GpSolidFill = ptr::null_mut();
+                    if GdipCreateSolidFill(gdi_to_argb(color), &mut brush_handle) == 0 && !brush_handle.is_null() {
+                        let rect_f = RectF {
+                            X: value_x as f32,
+                            Y: 0.0,
+                            Width: item.value_width as f32,
+                            Height: dib_height as f32,
+                        };
+                        GdipSetStringFormatAlign(string_format, StringAlignmentNear);
+                        let wide: Vec<u16> = item.value.encode_utf16().chain(std::iter::once(0)).collect();
+                        GdipDrawString(
+                            graphics,
+                            wide.as_ptr(),
+                            (wide.len() - 1) as i32,
+                            font_handle,
+                            &rect_f,
+                            string_format,
+                            brush_handle as *mut GpBrush,
+                        );
+                        GdipDeleteBrush(brush_handle as *mut GpBrush);
+                    }
+
+                    current_x += item.total_width;
                 }
+                GdipDeleteStringFormat(string_format);
             }
-
-            SetTextColor(mem_dc, color);
-            DrawTextW(
-                mem_dc,
-                wide_value.as_ptr(),
-                (wide_value.len() - 1) as i32,
-                &mut value_rect,
-                DT_LEFT | DT_VCENTER | DT_SINGLELINE,
-            );
-
-            current_x += item.total_width;
         }
-
         SelectObject(mem_dc, old_font);
 
-        // Fix alpha for text pixels: GDI sets RGB but alpha stays 0
+        GdipDeleteGraphics(graphics);
+        if !font_handle.is_null() {
+            GdipDeleteFont(font_handle);
+        }
+
+        // 对半透明像素做 alpha 逆预乘：GDI+ 按预乘 alpha 写入，
+        // 而 UpdateLayeredWindow(AC_SRC_ALPHA) 需要直线 alpha，否则半透明边缘会偏暗、发黑。
+        // alpha==0（透明/圆角外）与 alpha==255（纯不透明）保持不动。
         if !bits.is_null() {
             let pixels = std::slice::from_raw_parts_mut(
                 bits as *mut u32,
                 (dib_width * dib_height) as usize,
             );
             for pixel in pixels.iter_mut() {
-                let alpha = (*pixel >> 24) & 0xFF;
-                let rgb = *pixel & 0x00FFFFFF;
-                // GDI 文字像素 alpha=0，清屏基准色为 0x000001 → rgb 为 0x000001 是空白、其余均为 GDI 文字
-                // 旧逻辑 rgb != 0 漏掉了纯黑文字（rgb=0），这里用 rgb != 0x000001 同时覆盖黑字和彩色字
-                if alpha == 0 && rgb != 0x000001 {
-                    *pixel = 0xFF000000 | rgb;
+                let v = *pixel;
+                let a = (v >> 24) & 0xFF;
+                if a > 0 && a < 255 {
+                    let ar = a as u32;
+                    let r = ((v >> 16) & 0xFF) as u32 * 255 / ar;
+                    let g = ((v >> 8) & 0xFF) as u32 * 255 / ar;
+                    let b = (v & 0xFF) as u32 * 255 / ar;
+                    *pixel = (a as u32) << 24 | (r.clamp(0, 255) << 16) | (g.clamp(0, 255) << 8) | b.clamp(0, 255);
                 }
             }
         }

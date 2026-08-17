@@ -49,6 +49,7 @@ mod smart;
 mod sponsor;
 mod contributor;
 mod startup_manager;
+mod context_menu;
 mod steam;
 mod speedtest;
 mod storage_clean;
@@ -621,6 +622,15 @@ pub fn run() {
         startup_manager::find_startup_key_in_registry,
         startup_manager::get_startup_item_icon,
         startup_manager::get_process_icons,
+        context_menu::scan_context_menu_items,
+        context_menu::hide_context_menu_item,
+        context_menu::restore_context_menu_item,
+        context_menu::scan_this_pc_items,
+        context_menu::hide_this_pc_item,
+        context_menu::restore_this_pc_item,
+        context_menu::scan_drives,
+        context_menu::hide_drive,
+        context_menu::restore_drive,
         display_filter::get_displays,
         display_filter::set_active_display,
         display_filter::check_gamma_support,

@@ -348,6 +348,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["隐藏功能", "功能开关", "feature flag", "featureflags", "vivetool", "vive", "velocity", "实验功能", "A/B", "feature id", "功能配置", "hidden features"],
   },
   {
+    id: "context-menu",
+    nameKey: "sidebar.contextMenu",
+    path: "/context-menu",
+    icon: MousePointer2,
+    category: "builtin-tool",
+    keywords: ["右键菜单", "右键", "context", "menu", "shell", "此电脑", "网盘", "onedrive", "命名空间", "namespace"],
+  },
+  {
     id: "network-optimizer",
     nameKey: "networkOptimize.pageTitle",
     path: "/optimize/network-optimizer",

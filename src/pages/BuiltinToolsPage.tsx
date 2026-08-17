@@ -16,6 +16,7 @@ import {
   HardDrive,
   Volume2,
   MousePointerClick,
+  MousePointer2,
   Gauge,
   Braces,
   ShieldCheck,
@@ -103,7 +104,6 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.nvidiaDriver",
     descriptionKey: "builtinTools.nvidiaDriverDesc",
     color: "#76B900",
-    beta: true,
   },
   {
     id: "audio-eq",
@@ -112,7 +112,6 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.audioEq",
     descriptionKey: "builtinTools.audioEqDesc",
     color: "#E74C3C",
-    beta: true,
   },
   {
     id: "nvidia-driver-download",
@@ -121,7 +120,6 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.nvidiaDriverDownload",
     descriptionKey: "builtinTools.nvidiaDriverDownloadDesc",
     color: "#76B900",
-    beta: true,
   },
   {
     id: "autoclicker",
@@ -163,6 +161,14 @@ const defaultTools: ViewItem[] = [
     descriptionKey: "builtinTools.hiddenFeaturesDesc",
     color: "#E67E22",
     beta: true,
+  },
+  {
+    id: "context-menu",
+    path: "/context-menu",
+    icon: MousePointer2,
+    titleKey: "sidebar.contextMenu",
+    descriptionKey: "builtinTools.contextMenuDesc",
+    color: "#3B82F6",
   },
 ];
 

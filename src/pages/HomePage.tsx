@@ -1,4 +1,5 @@
-import { Box, Text, Flex, useColorModeValue, HStack, VStack } from "@chakra-ui/react";
+import { Box, Text, Flex, HStack, VStack } from "@chakra-ui/react";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useTranslation } from "react-i18next";
 import GameLauncher from "@/components/GameLauncher";
 import { TodayPopularity, useTodayPopularityEnabled } from "@/components/TodayPopularity";
@@ -30,7 +31,7 @@ function splitEmojiBlock(text: string): { main: string; emoji: string } {
 
 export default function HomePage() {
   const { t } = useTranslation();
-  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const adaptiveTextColor = useAdaptiveTextColor();
   const [greetingText, setGreetingText] = useState("");
   const usernameRef = useRef("");
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
@@ -166,7 +167,7 @@ export default function HomePage() {
     <Box pt={8} pr={4} pb={4} pl={4} h="calc(100vh - 120px)" position="relative" overflowX="hidden">
       <Flex gap={6} h="100%" align="flex-start">
         <Box flex={1}>
-          <Text fontSize="3xl" fontWeight="bold" color={textColor} lineHeight="1.4">
+          <Text fontSize="3xl" fontWeight="bold" color={adaptiveTextColor.text} textShadow={adaptiveTextColor.shadow} lineHeight="1.4">
             {greetingEmoji ? (
               <>
                 {greetingMain}

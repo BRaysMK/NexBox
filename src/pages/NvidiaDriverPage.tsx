@@ -689,15 +689,6 @@ export default function NvidiaDriverPage() {
             <Heading size="lg" color={headingColor}>
               显卡设置（仅 NVIDIA）
             </Heading>
-            <Badge
-              fontSize="xs" px={2}
-              color={getActiveColor()}
-              bg={hexToRgba(config.primaryColor, isDark ? 0.18 : 0.1)}
-              borderRadius="full"
-              fontWeight="700"
-            >
-              BETA
-            </Badge>
           </HStack>
         </HStack>
 

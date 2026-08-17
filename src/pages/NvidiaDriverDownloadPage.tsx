@@ -196,16 +196,6 @@ export default function NvidiaDriverDownloadPage() {
             <Heading size="lg" color={headingColor}>
               {t("nvidiaDriverDownload.title")}
             </Heading>
-            <Badge
-              fontSize="xs"
-              px={2}
-              color={getActiveColor()}
-              bg={hexToRgba(config.primaryColor, isDark ? 0.18 : 0.1)}
-              borderRadius="full"
-              fontWeight="700"
-            >
-              BETA
-            </Badge>
           </HStack>
         </HStack>
 

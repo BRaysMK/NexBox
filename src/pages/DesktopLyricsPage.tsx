@@ -35,7 +35,9 @@ export default function DesktopLyricsPage() {
     playMode,
     settings,
     isLocked,
+    volume,
     sendControl,
+    setVolume,
     lock,
     unlock,
   } = useDesktopLyricsSync();
@@ -179,16 +181,18 @@ export default function DesktopLyricsPage() {
 
   // 控制指令
   const handleControl = useCallback(
-    (action: ControlAction) => {
+    (action: ControlAction, value?: number) => {
       if (action === "lock") {
         lock();
       } else if (action === "unlock") {
         unlock();
+      } else if (action === "volume") {
+        setVolume(value ?? 0.7);
       } else {
         sendControl(action);
       }
     },
-    [sendControl, lock, unlock]
+    [sendControl, lock, unlock, setVolume]
   );
 
   // 窗口样式
@@ -240,6 +244,7 @@ export default function DesktopLyricsPage() {
           <LyricsControlBar
             isPlaying={isPlaying}
             playMode={playMode}
+            volume={volume}
             onControl={handleControl}
           />
         )}
@@ -281,6 +286,7 @@ export default function DesktopLyricsPage() {
         <LyricsControlBar
           isPlaying={isPlaying}
           playMode={playMode}
+          volume={volume}
           onControl={handleControl}
         />
       )}

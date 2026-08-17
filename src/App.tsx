@@ -24,6 +24,7 @@ import ShaderCachePage from "./pages/ShaderCachePage";
 import PowerManagementPage from "./pages/PowerManagementPage";
 import StorageCleanPage from "./pages/StorageCleanPage";
 import StartupManagerPage from "./pages/StartupManagerPage";
+import ContextMenuManagerPage from "./pages/ContextMenuManagerPage";
 import SystemOptimizerPage from "./pages/SystemOptimizerPage";
 import NetworkOptimizerPage from "./pages/NetworkOptimizerPage";
 import PeripheralOptimizePage from "./pages/PeripheralOptimizePage";
@@ -162,6 +163,7 @@ function App() {
               <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
               <Route path="/vtx-virtualization" element={<AnimatedPage><VtxVirtualizationPage /></AnimatedPage>} />
               <Route path="/hidden-features" element={<AnimatedPage><HiddenFeaturesPage /></AnimatedPage>} />
+              <Route path="/context-menu" element={<AnimatedPage><ContextMenuManagerPage /></AnimatedPage>} />
         </Routes>
       </AnimatePresence>
     ) : (
@@ -208,7 +210,8 @@ function App() {
             <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
             <Route path="/vtx-virtualization" element={<AnimatedPage><VtxVirtualizationPage /></AnimatedPage>} />
             <Route path="/hidden-features" element={<AnimatedPage><HiddenFeaturesPage /></AnimatedPage>} />
-      </Routes>
+            <Route path="/context-menu" element={<AnimatedPage><ContextMenuManagerPage /></AnimatedPage>} />
+        </Routes>
     )}
 
       </MainLayout>

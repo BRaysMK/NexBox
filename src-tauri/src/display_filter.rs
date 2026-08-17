@@ -1676,6 +1676,11 @@ pub async fn get_filter_presets() -> Result<Vec<FilterPreset>, String> {
         FilterPreset { id: "reading".to_string(), name: "阅读".to_string(), mode: 6, temperature: 4800, brightness: 95, contrast: 100, saturation: 92, description: "暖色调，保护眼睛".to_string() },
         FilterPreset { id: "de-exposure".to_string(), name: "去曝光".to_string(), mode: 7, temperature: 6500, brightness: 92, contrast: 103, saturation: 98, description: "压暗高光，降低过度曝光，恢复高光细节".to_string() },
         FilterPreset { id: "shadow-boost".to_string(), name: "暗部增强".to_string(), mode: 8, temperature: 6500, brightness: 106, contrast: 94, saturation: 104, description: "提亮暗部阴影，让黑暗角落的敌人无处遁形".to_string() },
+        FilterPreset { id: "dam-contrast".to_string(), name: "大坝降低对比度".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "降低对比度，保护高光细节，画面更柔和".to_string() },
+        FilterPreset { id: "aerospace".to_string(), name: "航天推荐".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "航天基地专属色彩调教".to_string() },
+        FilterPreset { id: "whiter".to_string(), name: "偏白".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "整体偏白调，亮部更通透".to_string() },
+        FilterPreset { id: "bluish".to_string(), name: "偏蓝".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冷色偏蓝调，画面更清爽".to_string() },
+        FilterPreset { id: "cool-tone".to_string(), name: "原亮 冷色调".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "保持原亮度，冷色调呈现".to_string() },
     ])
 }
 
@@ -1691,6 +1696,11 @@ fn preset_id_to_builtin_icc(preset_id: &str) -> Option<String> {
         "reading" => Some("NexBox_阅读.icc".to_string()),
         "de-exposure" => Some("NexBox_去曝光.icc".to_string()),
         "shadow-boost" => Some("NexBox_暗部增强.icc".to_string()),
+        "dam-contrast" => Some("NexBox_大坝降低对比度.icc".to_string()),
+        "aerospace" => Some("NexBox_航天推荐.icc".to_string()),
+        "whiter" => Some("NexBox_偏白.icc".to_string()),
+        "bluish" => Some("NexBox_偏蓝.icc".to_string()),
+        "cool-tone" => Some("NexBox_原亮 冷色调.icc".to_string()),
         _ => None,
     }
 }
@@ -1764,8 +1774,13 @@ pub async fn apply_preset(
             if actually_active {
                 let icc_path_clone = icc_path.clone();
                 let idx_move = idx;
-                tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone, idx_move))
-                    .await.map_err(|e| format!("xcalib apply error: {}", e))??;
+                // 不阻塞返回：在后台线程应用 ICC，避免切换预设时因等待 xcalib
+                // 应用 gamma（显示器会短暂刷新）而导致 UI“卡一下”。
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone, idx_move)).await {
+                        log::error!("apply_preset[{}]: 后台应用 ICC 失败: {}", idx_move, e);
+                    }
+                });
             }
 
             let (preview_filter, preview_tint_color, preview_tint_opacity) = compute_icc_preview(&ramp_array);
@@ -2077,8 +2092,12 @@ pub async fn apply_icc_preset(
         if actually_active {
             let icc_path_clone = icc_path.clone();
             let idx_move = idx;
-            tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone, idx_move))
-                .await.map_err(|e| format!("xcalib apply error: {}", e))??;
+            // 不阻塞返回：后台应用 ICC，避免切换 ICC 预设时 UI 卡顿
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone, idx_move)).await {
+                    log::error!("apply_icc_preset[{}]: 后台应用 ICC 失败: {}", idx_move, e);
+                }
+            });
         }
 
         let (preview_filter, preview_tint_color, preview_tint_opacity) = compute_icc_preview(&ramp_array);

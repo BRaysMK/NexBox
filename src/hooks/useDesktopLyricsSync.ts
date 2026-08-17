@@ -39,13 +39,15 @@ export type ControlAction =
   | "toggle-shuffle"
   | "lock"
   | "unlock"
-  | "close";
+  | "close"
+  | "volume";
 
 export function useDesktopLyricsSync() {
   const [song, setSong] = useState<Song | null>(null);
   const [karaokeLines, setKaraokeLines] = useState<KaraokeLine[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playMode, setPlayMode] = useState<PlayMode>("list");
+  const [volume, setVolumeState] = useState(0.7);
   const [settings, setSettings] = useState<DesktopLyricsSettings>(DEFAULT_SETTINGS);
   const [isLocked, setIsLocked] = useState(false);
   const [estimatedTime, setEstimatedTime] = useState(0);
@@ -130,6 +132,7 @@ export function useDesktopLyricsSync() {
         }>("desktop-lyrics:state", (e) => {
           setIsPlaying(e.payload.isPlaying);
           setPlayMode(e.payload.playMode);
+          setVolumeState(e.payload.volume ?? 0.7);
           isPlayingRef.current = e.payload.isPlaying;
           if (e.payload.isPlaying) {
             lastSyncRef.current = performance.now();
@@ -187,13 +190,22 @@ export function useDesktopLyricsSync() {
   }, [isPlaying]);
 
   // 发送控制指令
-  const sendControl = useCallback(async (action: ControlAction) => {
+  const sendControl = useCallback(async (action: ControlAction, value?: number) => {
     try {
-      await emit("desktop-lyrics:control", { action });
+      await emit("desktop-lyrics:control", { action, value });
     } catch (e) {
       console.error("[DesktopLyrics] sendControl emit failed:", action, e);
     }
   }, []);
+
+  // 调节音量（通过主窗口控制 audioRef）
+  const setVolume = useCallback(
+    (v: number) => {
+      setVolumeState(v);
+      sendControl("volume", v);
+    },
+    [sendControl]
+  );
 
   // 锁定/解锁（需要同步设置窗口的 ignoreCursorEvents）
   const lock = useCallback(() => {
@@ -212,9 +224,11 @@ export function useDesktopLyricsSync() {
     estimatedTime,
     isPlaying,
     playMode,
+    volume,
     settings,
     isLocked,
     sendControl,
+    setVolume,
     lock,
     unlock,
   };

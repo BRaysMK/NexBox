@@ -167,6 +167,15 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
+/// 删除目标:携带扫描阶段已获取的文件大小,避免删除阶段对每个文件重复 stat
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteTarget {
+    pub path: String,
+    /// 已知的文件大小(字节);为 None 时删除引擎会自行查询
+    #[serde(default)]
+    pub size: Option<u64>,
+}
+
 /// 删除操作结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteResult {

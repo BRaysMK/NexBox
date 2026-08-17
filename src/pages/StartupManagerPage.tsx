@@ -66,9 +66,8 @@ export default function StartupManagerPage() {
   const tableBorder = liquidGlassEnabled
     ? "rgba(255,255,255,0.3)"
     : useColorModeValue("gray.200", "#333333");
-  const headerBg = useColorModeValue("gray.50", "#1e2024");
   const pathColor = useColorModeValue("gray.500", "#888888");
-  const hoverBg = useColorModeValue("gray.50", "#252525");
+  const hoverBg = `${themeConfig.primaryColor}1F`;
   const deleteColor = useColorModeValue("red.500", "red.400");
   const enableColor = useColorModeValue("teal.600", "teal.300");
 
@@ -263,15 +262,11 @@ export default function StartupManagerPage() {
           <Text color={subTextColor}>{t("optimization.startupManager.noItems")}</Text>
         </VStack>
       ) : (
-        <Box
-          bg={tableBg}
-          borderRadius="xl"
-          border="1px solid"
-          borderColor={tableBorder}
+        <LiquidGlassCard
           overflow="hidden"
         >
           <Table variant="unstyled" size="sm" layout="fixed">
-            <Thead bg={headerBg}>
+            <Thead borderBottom="1px solid" borderColor={tableBorder}>
               <Tr>
                 <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="30%">
                   {t("optimization.startupManager.columnName")}
@@ -416,7 +411,7 @@ export default function StartupManagerPage() {
               })}
             </Tbody>
           </Table>
-        </Box>
+        </LiquidGlassCard>
       )}
 
       <Box

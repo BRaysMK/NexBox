@@ -154,8 +154,10 @@ impl ScanEngine {
 
         // 如果是文件,直接处理
         if path.is_file() {
-            if let Some(file_info) = self.get_file_info(path, category) {
-                result.add_file(file_info);
+            if let Ok(metadata) = fs::metadata(path) {
+                if let Some(file_info) = self.get_file_info(path, &metadata, category) {
+                    result.add_file(file_info);
+                }
             }
             return;
         }
@@ -193,23 +195,33 @@ impl ScanEngine {
                 continue;
             }
 
+            // 复用 DirEntry 自带元数据,避免对每个文件再做一次 fs::metadata 系统调用
+            // (walkdir 在 Windows 上直接使用 FindFirstFile/FindNextFile 的目录项数据)
+            let entry_metadata = match entry.metadata() {
+                Ok(m) => m,
+                Err(e) => {
+                    debug!("无法获取文件元数据 {:?}: {}", entry_path, e);
+                    continue;
+                }
+            };
+
             // 获取文件信息
-            if let Some(file_info) = self.get_file_info(entry_path, category) {
+            if let Some(file_info) = self.get_file_info(entry_path, &entry_metadata, category) {
                 result.add_file(file_info);
             }
         }
     }
 
     /// 获取文件信息(仅处理文件,目录已在 scan_path 中跳过)
-    fn get_file_info(&self, path: &Path, category: &JunkCategory) -> Option<FileInfo> {
-        let metadata = match fs::metadata(path) {
-            Ok(m) => m,
-            Err(e) => {
-                debug!("无法获取文件元数据 {:?}: {}", path, e);
-                return None;
-            }
-        };
-
+    ///
+    /// metadata 由调用方提供:遍历目录时复用 DirEntry::metadata(),
+    /// 避免对每个文件额外发起一次 fs::metadata 系统调用。
+    fn get_file_info(
+        &self,
+        path: &Path,
+        metadata: &fs::Metadata,
+        category: &JunkCategory,
+    ) -> Option<FileInfo> {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())

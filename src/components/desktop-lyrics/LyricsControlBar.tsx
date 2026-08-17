@@ -7,7 +7,7 @@
  * [上一句] [播放/暂停] [下一句] [播放顺序] | [锁定] | [关闭]
  */
 
-import { memo } from "react";
+import { memo, useState, useCallback } from "react";
 import {
   SkipBack,
   SkipForward,
@@ -19,15 +19,20 @@ import {
   Pause,
   Lock,
   X,
+  Volume2,
+  VolumeX,
+  Volume1,
 } from "lucide-react";
 import { Tooltip } from "@chakra-ui/react";
 import type { PlayMode } from "@/types/music";
 import type { ControlAction } from "@/hooks/useDesktopLyricsSync";
+import { useThemeColor } from "@/contexts/theme-color-context";
 
 interface LyricsControlBarProps {
   isPlaying: boolean;
   playMode: PlayMode;
-  onControl: (action: ControlAction) => void;
+  volume: number;
+  onControl: (action: ControlAction, value?: number) => void;
 }
 
 const btnBase: React.CSSProperties = {
@@ -46,8 +51,35 @@ const btnBase: React.CSSProperties = {
 function LyricsControlBarInner({
   isPlaying,
   playMode,
+  volume,
   onControl,
 }: LyricsControlBarProps) {
+  const { config } = useThemeColor();
+  const primary = config.primaryColor;
+  const [volOpen, setVolOpen] = useState(false);
+  // 拖动过程中的本地预览值：避免受控 value 走异步往返被拉回旧值导致“乱跳”
+  const [volPreview, setVolPreview] = useState<number | null>(null);
+  const displayVol = volPreview ?? volume;
+
+  // 音量图标：静音 / 低 / 中 / 高
+  const VolIcon = volume <= 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+  const volColor = volume > 0 ? primary : "rgba(255,255,255,0.6)";
+
+  // 拖动时即时更新本地预览（UI 不抖），同时把目标值发给主窗口
+  const handleVolumeChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = Number(e.target.value);
+      setVolPreview(v);
+      onControl("volume", v);
+    },
+    [onControl]
+  );
+
+  // 松开滑块 / 收起调节条时回到权威音量值（门店已按最后值回传一致）
+  const handleVolPointerUp = useCallback(() => {
+    setVolPreview(null);
+  }, []);
+
   return (
     <div
       style={{
@@ -127,6 +159,61 @@ function LyricsControlBarInner({
           )}
         </button>
       </Tooltip>
+
+      {/* 音量：图标 + 悬浮展开调节条（主题色） */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          borderRadius: "999px",
+          overflow: "hidden",
+        }}
+        onMouseEnter={() => setVolOpen(true)}
+        onMouseLeave={() => {
+          setVolOpen(false);
+          setVolPreview(null);
+        }}
+      >
+        <Tooltip label="音量">
+          <button
+            style={{ ...btnBase, color: volColor }}
+            onClick={() => onControl("volume", volume > 0 ? 0 : 0.7)}
+          >
+            <VolIcon size={16} />
+          </button>
+        </Tooltip>
+        <div
+          style={{
+            width: volOpen ? 76 : 0,
+            opacity: volOpen ? 1 : 0,
+            transition: "width 0.25s ease, opacity 0.2s ease",
+            display: "flex",
+            alignItems: "center",
+            paddingRight: volOpen ? 6 : 0,
+          }}
+        >
+          <input
+            type="range"
+            className="lyrics-vol-slider"
+            min={0}
+            max={1}
+            step={0.01}
+            value={displayVol}
+            onChange={handleVolumeChange}
+            onPointerUp={handleVolPointerUp}
+            aria-label="音量"
+            style={
+              {
+                width: 76,
+                margin: 0,
+                cursor: "pointer",
+                "--vol-color": primary,
+                "--vol-fill": `${Math.round(displayVol * 100)}%`,
+              } as React.CSSProperties
+            }
+          />
+        </div>
+      </div>
 
       {/* 分隔线 */}
       <div

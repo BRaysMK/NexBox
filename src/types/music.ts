@@ -24,6 +24,7 @@ export interface Song {
   qq_song_id?: number;
   // === 本地导入扩展字段 ===
   _localPath?: string;
+  _localCoverPath?: string;
 }
 
 export interface Artist {

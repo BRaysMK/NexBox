@@ -13,6 +13,7 @@ use super::safety_constants::{
     PROTECTED_PATH_PREFIXES,
 };
 use super::DeleteResult;
+use super::DeleteTarget;
 
 // ============================================================================
 // Windows API 绑定(使用 extern 声明,避免引入额外 winapi feature)
@@ -149,41 +150,42 @@ impl DeleteEngine {
     }
 
     /// 删除指定路径列表
-    pub fn delete_paths(&self, paths: &[String]) -> DeleteResult {
+    pub fn delete_paths(&self, targets: &[DeleteTarget]) -> DeleteResult {
         let mut result = DeleteResult::new();
-        if paths.is_empty() {
+        if targets.is_empty() {
             return result;
         }
 
-        info!("开始删除 {} 个路径", paths.len());
+        info!("开始删除 {} 个路径", targets.len());
 
         // 分离回收站路径:回收站文件应通过 Shell API 清空,而非逐文件删除
         // 直接删除 $Recycle.Bin 下的文件需要 SYSTEM 权限,SHEmptyRecycleBinW 是标准方式
-        let (recycle_paths, normal_paths): (Vec<&String>, Vec<&String>) = paths
+        let (recycle_paths, normal_paths): (Vec<&DeleteTarget>, Vec<&DeleteTarget>) = targets
             .iter()
-            .partition(|p| p.to_lowercase().contains("\\$recycle.bin"));
+            .partition(|t| t.path.to_lowercase().contains("\\$recycle.bin"));
 
         if !recycle_paths.is_empty() {
             self.delete_recycle_paths(&recycle_paths, &mut result);
         }
 
-        for path in normal_paths {
-            let file_path = Path::new(path);
-            let size = self.get_path_size(file_path);
+        for target in normal_paths {
+            let file_path = Path::new(&target.path);
+            // 优先复用扫描阶段已知的大小,避免删除阶段对每个文件再 stat 一次
+            let size = target.size.unwrap_or_else(|| self.get_path_size(file_path));
 
             match self.delete_single_path(file_path, size) {
                 Ok((freed, marked_for_reboot)) => {
                     if marked_for_reboot {
                         result.add_reboot_pending(freed);
-                        debug!("已标记重启删除: {}", path);
+                        debug!("已标记重启删除: {}", target.path);
                     } else {
                         result.add_success(freed);
-                        debug!("成功删除: {}", path);
+                        debug!("成功删除: {}", target.path);
                     }
                 }
                 Err(e) => {
-                    result.add_failure(path.clone(), e);
-                    warn!("删除失败: {}", path);
+                    result.add_failure(target.path.clone(), e);
+                    warn!("删除失败: {}", target.path);
                 }
             }
         }
@@ -200,24 +202,24 @@ impl DeleteEngine {
     }
 
     /// 回收站路径按盘符调用 Shell API 清空
-    fn delete_recycle_paths(&self, paths: &[&String], result: &mut DeleteResult) {
+    fn delete_recycle_paths(&self, targets: &[&DeleteTarget], result: &mut DeleteResult) {
         #[cfg(windows)]
         {
-            info!("检测到 {} 个回收站条目，按盘符调用 Shell API 清空", paths.len());
+            info!("检测到 {} 个回收站条目，按盘符调用 Shell API 清空", targets.len());
 
             // 必须在 Shell API 运行前读取大小,否则成功清空后路径已不存在,只能得到 0 字节。
             let mut recycle_by_drive: BTreeMap<String, Vec<(String, u64)>> = BTreeMap::new();
-            for path in paths {
-                let file_path = Path::new(path);
-                let logical_size = self.get_path_size(file_path);
-                let Some(drive_root) = recycle_drive_root(path) else {
-                    result.add_failure((*path).clone(), "回收站路径缺少有效盘符".to_string());
+            for target in targets {
+                let file_path = Path::new(&target.path);
+                let logical_size = target.size.unwrap_or_else(|| self.get_path_size(file_path));
+                let Some(drive_root) = recycle_drive_root(&target.path) else {
+                    result.add_failure(target.path.clone(), "回收站路径缺少有效盘符".to_string());
                     continue;
                 };
                 recycle_by_drive
                     .entry(drive_root)
                     .or_default()
-                    .push(((*path).clone(), logical_size));
+                    .push((target.path.clone(), logical_size));
             }
 
             for (drive_root, entries) in recycle_by_drive {

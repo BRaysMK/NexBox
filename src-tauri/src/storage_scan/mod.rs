@@ -18,7 +18,7 @@ mod scan_engine;
 pub use big_files::LargeFileEntry;
 pub use categories::JunkCategory;
 pub use delete_engine::DeleteEngine;
-pub use file_info::{CategoryScanResult, DeleteResult, FileInfo, JunkScanResult};
+pub use file_info::{CategoryScanResult, DeleteResult, DeleteTarget, FileInfo, JunkScanResult};
 pub use scan_engine::ScanEngine;
 
 use log::info;
@@ -112,12 +112,12 @@ pub fn get_junk_categories() -> Vec<CategoryInfo> {
 
 /// 删除指定的垃圾文件
 #[tauri::command]
-pub async fn delete_junk_files(paths: Vec<String>) -> Result<DeleteResult, String> {
-    info!("开始删除 {} 个文件", paths.len());
+pub async fn delete_junk_files(targets: Vec<DeleteTarget>) -> Result<DeleteResult, String> {
+    info!("开始删除 {} 个文件", targets.len());
 
     let result = tokio::task::spawn_blocking(move || {
         let engine = DeleteEngine::new();
-        engine.delete_paths(&paths)
+        engine.delete_paths(&targets)
     })
     .await
     .map_err(|e| format!("删除任务异常: {}", e))?;
@@ -195,9 +195,15 @@ pub fn reveal_large_file(path: String) -> Result<(), String> {
 pub async fn delete_large_file(paths: Vec<String>) -> Result<DeleteResult, String> {
     info!("大文件强制删除: 开始删除 {} 个文件", paths.len());
 
+    // 大文件删除未携带已知大小(size 置 None),删除引擎会自行查询
+    let targets: Vec<DeleteTarget> = paths
+        .into_iter()
+        .map(|path| DeleteTarget { path, size: None })
+        .collect();
+
     let result = tokio::task::spawn_blocking(move || {
         let engine = DeleteEngine::new();
-        engine.delete_paths(&paths)
+        engine.delete_paths(&targets)
     })
     .await
     .map_err(|e| format!("删除任务异常: {}", e))?;

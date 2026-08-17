@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "8.2.0"
+version = "8.3.0"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -111,6 +111,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_NetworkManagement_IpHelper",
     "Win32_Networking_WinSock",
     "Win32_System_Services",
+    "Win32_System_Registry",
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_Media_Multimedia",

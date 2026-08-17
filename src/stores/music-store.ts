@@ -244,6 +244,7 @@ function serializeLocalSong(song: Song): Record<string, unknown> {
     language: song.language ?? 0,
     hash: song.hash,
     _localPath: song._localPath,
+    _localCoverPath: song._localCoverPath,
   };
 }
 
@@ -258,7 +259,7 @@ interface LocalSongInfoPayload {
   artist: string;
   album: string;
   duration_ms: number;
-  cover: string;
+  cover_path: string;
   cover_source: string;
 }
 
@@ -278,8 +279,8 @@ async function mergeLocalSongInfos(
     artist: info.artist || "本地音乐",
     artists: info.artist ? [{ name: info.artist }] : [],
     album: info.album,
-    // 内嵌封面（data URI 或空字符串）
-    cover: info.cover || "",
+    // 封面：后端返回缓存文件路径，转换为 asset 协议 URL 供 <img> 加载
+    cover: info.cover_path ? convertFileSrc(info.cover_path) : "",
     duration: info.duration_ms,
     fee: 0,
     playable: true,
@@ -288,6 +289,8 @@ async function mergeLocalSongInfos(
     // 复用 hash 字段存放绝对路径，避免修改 Song 结构
     hash: info.path,
     _localPath: info.path,
+    // 封面缓存文件绝对路径，用于持久化与重启后恢复封面
+    _localCoverPath: info.cover_path || undefined,
   }));
 
   set((state) => {
@@ -309,7 +312,7 @@ async function mergeLocalSongInfos(
   await s.set("localSongs", finalList);
   await s.save();
 
-  return { count: newSongs.length, noCoverCount: infos.filter((info) => !info.cover).length };
+  return { count: newSongs.length, noCoverCount: infos.filter((info) => !info.cover_path).length };
 }
 
 // 桌面歌词时间同步定时器
@@ -356,6 +359,9 @@ async function getProxyAudioUrl(rawUrl: string, proxyPort: number): Promise<stri
 export function coverProxyUrl(url: string, proxyPort: number): string {
   if (!url) return "";
   if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+  // asset 协议 URL（convertFileSrc 生成的本地文件直链）仅在 WebView 内可访问，
+  // 无法被后端代理解析，原样返回即可
+  if (url.startsWith("http://asset.localhost/") || url.startsWith("https://asset.localhost/")) return url;
   if (!proxyPort) return url;
   return `http://127.0.0.1:${proxyPort}/cover?url=${encodeURIComponent(url)}`;
 }
@@ -518,7 +524,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
       const s = await getStore();
       const stored = await s.get<Song[]>("localSongs");
-      set({ localSongs: Array.isArray(stored) ? stored : [] });
+      // 恢复封面：有缓存文件路径时用 asset 协议 URL，否则保留原 cover（兼容历史 data URI）
+      const restored = (Array.isArray(stored) ? stored : []).map((song) =>
+        song._localCoverPath
+          ? { ...song, cover: convertFileSrc(song._localCoverPath) }
+          : song
+      );
+      set({ localSongs: restored });
     } catch {
       set({ localSongs: [] });
     }
@@ -655,8 +667,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
     // 桌面歌词控制事件监听
     unlistenFns.push(
-      await listen<{ action: string }>("desktop-lyrics:control", (event) => {
-        const { action } = event.payload;
+      await listen<{ action: string; value?: number }>("desktop-lyrics:control", (event) => {
+        const { action, value } = event.payload;
         switch (action) {
           case "play-pause":
             get().togglePlay();
@@ -669,6 +681,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             break;
           case "toggle-shuffle":
             get().togglePlayMode();
+            break;
+          case "volume":
+            if (typeof value === "number") {
+              get().setVolume(value);
+            }
             break;
           case "lock":
             get().setDesktopLyricsLocked(true);
@@ -1301,6 +1318,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (audioRef) audioRef.volume = v;
     set({ volume: v, prevVolume: v > 0 ? v : prevVolume });
     getStore().then((s) => s.set("volume", v).then(() => s.save()));
+    // 桌面歌词可见时回推音量，保持调节条状态同步
+    if (get().desktopLyricsVisible) {
+      emit("desktop-lyrics:state", { isPlaying: get().isPlaying, playMode: get().playMode, volume: v });
+    }
   },
 
   // 心动模式：根据基准歌曲拉取相似歌曲并追加到心动队列（自动去重已播放/已排队歌曲）

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+use libloading::Library;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
@@ -35,48 +36,133 @@ const BSD_STATE_BOOT_PENDING: i32 = 1;
 
 const STATUS_UNSUCCESSFUL: u32 = 0xC000_0001;
 const STATUS_OBJECT_NAME_NOT_FOUND: u32 = 0xC000_0034;
+/// 缓冲不足（调用方缓冲装不下全部配置，按 count 返回值扩容重试）
+const STATUS_BUFFER_OVERFLOW: u32 = 0x8000_0005;
+const STATUS_BUFFER_TOO_SMALL: u32 = 0xC000_0023;
 
 /// Velocity 功能配置 API 需要的最低系统版本（Win10 18963）
 const MIN_SUPPORTED_BUILD: u32 = 18963;
 
 // ============ ntdll FFI（对照 ViVe NativeMethods.Ntdll.cs） ============
+//
+// 重要：功能配置（Velocity）API 是 Windows 10 1903（build 18362）才引入 ntdll 的。
+// 若用 #[link(name = "ntdll")] 静态导入，exe 在 Win10 1809 等旧系统上加载时，会因
+// 找不到 RtlQueryFeatureConfigurationChangeStamp 等导出点而直接无法启动
+// （Entry Point Not Found）。因此这里全部改为运行时 GetProcAddress 动态解析：
+// 系统不支持时仅让“功能开关”模块降级为不可用，不再拖垮整个程序启动。
 
-#[link(name = "ntdll")]
-extern "system" {
-    fn RtlQueryAllFeatureConfigurations(
-        featureConfigurationType: u32,
-        changeStamp: *mut u64,
-        featureConfigurations: *mut RtlFeatureConfiguration,
-        featureConfigurationCount: *mut i32,
-    ) -> i32;
-    /// 单功能查询（当前命令未使用，保留供后续按 ID 即时查询）
+type PQueryAllFeatureConfigurations = unsafe extern "system" fn(
+    feature_configuration_type: u32,
+    change_stamp: *mut u64,
+    feature_configurations: *mut RtlFeatureConfiguration,
+    feature_configuration_count: *mut u64,
+) -> i32;
+/// 单功能查询（当前命令未使用，保留供后续按 ID 即时查询）
+type PQueryFeatureConfiguration = unsafe extern "system" fn(
+    feature_id: u32,
+    feature_configuration_type: u32,
+    change_stamp: *mut u64,
+    feature_configuration: *mut RtlFeatureConfiguration,
+) -> i32;
+type PQueryFeatureConfigurationChangeStamp = unsafe extern "system" fn() -> u64;
+type PSetFeatureConfigurations = unsafe extern "system" fn(
+    previous_change_stamp: *mut u64,
+    feature_configuration_type: u32,
+    feature_configurations: *const RtlFeatureConfigurationUpdate,
+    feature_configuration_count: i32,
+) -> i32;
+type PSetSystemBootStatus = unsafe extern "system" fn(
+    bsd_item_type: i32,
+    data: *mut i32,
+    data_length: i32,
+    return_length: *mut i32,
+) -> i32;
+type PGetSystemBootStatus = unsafe extern "system" fn(
+    bsd_item_type: i32,
+    data: *mut i32,
+    data_length: i32,
+    return_length: *mut i32,
+) -> i32;
+type PCreateBootStatusDataFile = unsafe extern "system" fn(boot_status_path: *const u16) -> i32;
+
+/// ntdll 功能配置相关 API 的函数指针集合（全部经 GetProcAddress 动态解析，进程内只加载一次）
+struct NtdllApi {
+    /// 持有 ntdll 句柄（ntdll 常驻系统，这里仅为确保符号来源稳定）
     #[allow(dead_code)]
-    fn RtlQueryFeatureConfiguration(
-        featureId: u32,
-        featureConfigurationType: u32,
-        changeStamp: *mut u64,
-        featureConfiguration: *mut RtlFeatureConfiguration,
-    ) -> i32;
-    fn RtlQueryFeatureConfigurationChangeStamp() -> u64;
-    fn RtlSetFeatureConfigurations(
-        previousChangeStamp: *mut u64,
-        featureConfigurationType: u32,
-        featureConfigurations: *const RtlFeatureConfigurationUpdate,
-        featureConfigurationCount: i32,
-    ) -> i32;
-    fn RtlSetSystemBootStatus(
-        bsdItemType: i32,
-        data: *mut i32,
-        dataLength: i32,
-        returnLength: *mut i32,
-    ) -> i32;
-    fn RtlGetSystemBootStatus(
-        bsdItemType: i32,
-        data: *mut i32,
-        dataLength: i32,
-        returnLength: *mut i32,
-    ) -> i32;
-    fn RtlCreateBootStatusDataFile(bootStatusPath: *const u16) -> i32;
+    _lib: Library,
+    query_all: Option<PQueryAllFeatureConfigurations>,
+    #[allow(dead_code)]
+    query_one: Option<PQueryFeatureConfiguration>,
+    change_stamp: Option<PQueryFeatureConfigurationChangeStamp>,
+    set_configs: Option<PSetFeatureConfigurations>,
+    set_boot_status: Option<PSetSystemBootStatus>,
+    get_boot_status: Option<PGetSystemBootStatus>,
+    create_boot_status_file: Option<PCreateBootStatusDataFile>,
+}
+
+impl NtdllApi {
+    /// 核心功能配置 API 是否齐备（决定“功能开关”模块是否可用）
+    fn feature_config_supported(&self) -> bool {
+        self.query_all.is_some() && self.set_configs.is_some() && self.change_stamp.is_some()
+    }
+}
+
+static NT_API: OnceLock<Option<NtdllApi>> = OnceLock::new();
+
+/// 解析 ntdll 中的功能配置符号；缺失（旧系统）时对应字段为 None。
+fn get_api() -> Option<&'static NtdllApi> {
+    NT_API
+        .get_or_init(|| {
+            let lib = unsafe { Library::new("ntdll.dll") }.ok()?;
+            unsafe {
+                let query_all = lib
+                    .get::<PQueryAllFeatureConfigurations>(b"RtlQueryAllFeatureConfigurations")
+                    .ok()
+                    .map(|s| *s);
+                let query_one = lib
+                    .get::<PQueryFeatureConfiguration>(b"RtlQueryFeatureConfiguration")
+                    .ok()
+                    .map(|s| *s);
+                let change_stamp = lib
+                    .get::<PQueryFeatureConfigurationChangeStamp>(
+                        b"RtlQueryFeatureConfigurationChangeStamp",
+                    )
+                    .ok()
+                    .map(|s| *s);
+                let set_configs = lib
+                    .get::<PSetFeatureConfigurations>(b"RtlSetFeatureConfigurations")
+                    .ok()
+                    .map(|s| *s);
+                let set_boot_status = lib
+                    .get::<PSetSystemBootStatus>(b"RtlSetSystemBootStatus")
+                    .ok()
+                    .map(|s| *s);
+                let get_boot_status = lib
+                    .get::<PGetSystemBootStatus>(b"RtlGetSystemBootStatus")
+                    .ok()
+                    .map(|s| *s);
+                let create_boot_status_file = lib
+                    .get::<PCreateBootStatusDataFile>(b"RtlCreateBootStatusDataFile")
+                    .ok()
+                    .map(|s| *s);
+                Some(NtdllApi {
+                    _lib: lib,
+                    query_all,
+                    query_one,
+                    change_stamp,
+                    set_configs,
+                    set_boot_status,
+                    get_boot_status,
+                    create_boot_status_file,
+                })
+            }
+        })
+        .as_ref()
+}
+
+/// 系统不支持功能配置 API 时的错误提示
+fn api_unavailable() -> String {
+    "当前系统不支持功能配置 API（需要 Windows 10 1903 或更高版本）".to_string()
 }
 
 // ============ 结构体（对照 ViVe NativeStructs.cs，布局必须完全一致） ============
@@ -164,33 +250,47 @@ fn deobfuscate_feature_id(id: u32) -> u32 {
 
 // ============ 核心操作（对照 ViVe FeatureManager.cs） ============
 
-/// 查询整个功能存储。实测（Win11 24H2 / build 26100）传 null 缓冲取数量会
-/// 触发内核访问违例，因此改用一次性大缓冲直取，装不下时扩容重试。
+/// 查询整个功能存储。
+/// 关键点（实测 Windows 11 24H2 / build 26100）：ntdll 会把配置数量按 64 位写出，
+/// 若用 i32 承接会越界写坏相邻栈变量（release 下 capacity 被清零 → 访问违例 / 死循环），
+/// 因此这里必须用 u64 承接 count。同时该版本传 null 缓冲取数量也会触发访问违例，
+/// 故采用一次性大缓冲直取，装不下时按内核返回的数量扩容重试。
 fn query_all_configurations(
     cfg_type: u32,
-) -> Result<(Vec<RtlFeatureConfiguration>, u64), i32> {
+) -> Result<(Vec<RtlFeatureConfiguration>, u64), String> {
+    let api = get_api().ok_or_else(api_unavailable)?;
+    let query_all = api.query_all.ok_or_else(api_unavailable)?;
     unsafe {
         let mut capacity: usize = 8192;
         loop {
             let mut configs = vec![RtlFeatureConfiguration::default(); capacity];
-            let mut count = capacity as i32;
+            let mut count = capacity as u64;
             let mut change_stamp = 0u64;
-            let hres = RtlQueryAllFeatureConfigurations(
+            let hres = query_all(
                 cfg_type,
                 &mut change_stamp,
                 configs.as_mut_ptr(),
                 &mut count,
             );
             if hres != 0 {
-                return Err(hres);
+                // 缓冲不足（0x80000005 / 0xC0000023）：按内核返回的数量扩容重试
+                let status = hres as u32;
+                if status == STATUS_BUFFER_OVERFLOW || status == STATUS_BUFFER_TOO_SMALL {
+                    let need = (count as usize).max(capacity.saturating_mul(2));
+                    if need > capacity {
+                        capacity = need;
+                        continue;
+                    }
+                }
+                return Err(ntstatus_to_message(hres));
             }
-            let count = count.max(0) as usize;
-            if count < capacity {
-                configs.truncate(count);
+            let written = count as usize;
+            if written < capacity {
+                configs.truncate(written);
                 return Ok((configs, change_stamp));
             }
             // 恰好装满可能被截断，扩容一倍重试
-            capacity *= 2;
+            capacity = capacity.saturating_mul(2);
         }
     }
 }
@@ -208,15 +308,22 @@ fn validate_priority(priority: u32) -> Result<(), String> {
 }
 
 /// 写 Runtime 存储。previous_change_stamp 传 0 跳过并发检查（与 ViVeTool 默认行为一致）。
-fn set_runtime_configurations(updates: &[RtlFeatureConfigurationUpdate]) -> i32 {
+fn set_runtime_configurations(updates: &[RtlFeatureConfigurationUpdate]) -> Result<(), String> {
+    let api = get_api().ok_or_else(api_unavailable)?;
+    let set_configs = api.set_configs.ok_or_else(api_unavailable)?;
     let mut prev_stamp = 0u64;
-    unsafe {
-        RtlSetFeatureConfigurations(
+    let hres = unsafe {
+        set_configs(
             &mut prev_stamp,
             CFG_TYPE_RUNTIME,
             updates.as_ptr(),
             updates.len() as i32,
         )
+    };
+    if hres != 0 {
+        Err(ntstatus_to_message(hres))
+    } else {
+        Ok(())
     }
 }
 
@@ -266,9 +373,15 @@ fn set_boot_configurations_in_registry(
 /// Boot 存储写入后更新 LKG 状态为 BootPending（对照 ViVeTool UpdateLKGStatus）。
 /// 尽力而为：BSD 文件缺失时先创建；失败只记录日志，不让主操作报错。
 fn update_lkg_status() {
+    let Some(api) = get_api() else { return };
+    let (Some(get_boot_status), Some(set_boot_status), Some(create_boot_status_file)) =
+        (api.get_boot_status, api.set_boot_status, api.create_boot_status_file)
+    else {
+        return;
+    };
     unsafe {
         let mut current = BSD_STATE_UNINITIALIZED;
-        let mut result = RtlGetSystemBootStatus(
+        let mut result = get_boot_status(
             BSD_ITEM_FEATURE_CONFIGURATION_STATE,
             &mut current,
             4,
@@ -276,7 +389,7 @@ fn update_lkg_status() {
         );
         if result != 0 {
             if result as u32 == STATUS_OBJECT_NAME_NOT_FOUND {
-                result = RtlCreateBootStatusDataFile(std::ptr::null());
+                result = create_boot_status_file(std::ptr::null());
                 if result != 0 {
                     log::warn!("初始化 Boot 状态数据文件失败: 0x{:08X}", result as u32);
                     return;
@@ -289,7 +402,7 @@ fn update_lkg_status() {
         }
         if current != BSD_STATE_BOOT_PENDING {
             let mut new_state = BSD_STATE_BOOT_PENDING;
-            let result = RtlSetSystemBootStatus(
+            let result = set_boot_status(
                 BSD_ITEM_FEATURE_CONFIGURATION_STATE,
                 &mut new_state,
                 4,
@@ -435,22 +548,33 @@ pub struct FeatureFlagsStatus {
 #[tauri::command]
 pub async fn feature_flags_status(app: AppHandle) -> Result<FeatureFlagsStatus, String> {
     let os_build = get_os_build();
+    let api = get_api();
+    // 需要 Win10 1903+ 的 ntdll 且核心功能配置 API 全部解析成功才算可用
+    let supported = os_build >= MIN_SUPPORTED_BUILD
+        && api.map(|a| a.feature_config_supported()).unwrap_or(false);
     let mut boot_pending = false;
-    unsafe {
-        let mut current = BSD_STATE_UNINITIALIZED;
-        let result = RtlGetSystemBootStatus(
-            BSD_ITEM_FEATURE_CONFIGURATION_STATE,
-            &mut current,
-            4,
-            std::ptr::null_mut(),
-        );
-        if result == 0 {
-            boot_pending = current == BSD_STATE_BOOT_PENDING;
+    if let Some(api) = api {
+        if let Some(get_boot_status) = api.get_boot_status {
+            unsafe {
+                let mut current = BSD_STATE_UNINITIALIZED;
+                let result = get_boot_status(
+                    BSD_ITEM_FEATURE_CONFIGURATION_STATE,
+                    &mut current,
+                    4,
+                    std::ptr::null_mut(),
+                );
+                if result == 0 {
+                    boot_pending = current == BSD_STATE_BOOT_PENDING;
+                }
+            }
         }
     }
-    let change_stamp = unsafe { RtlQueryFeatureConfigurationChangeStamp() };
+    let change_stamp = api
+        .and_then(|a| a.change_stamp)
+        .map(|f| unsafe { f() })
+        .unwrap_or(0);
     Ok(FeatureFlagsStatus {
-        supported: os_build >= MIN_SUPPORTED_BUILD,
+        supported,
         os_build,
         is_admin: crate::optimization::is_admin(),
         boot_pending,
@@ -490,7 +614,7 @@ pub async fn feature_flags_query(
         CFG_TYPE_RUNTIME
     };
     let dictionary = load_dictionary(&app);
-    let (configs, _) = query_all_configurations(cfg_type).map_err(ntstatus_to_message)?;
+    let (configs, _) = query_all_configurations(cfg_type)?;
 
     let search = search.trim().to_lowercase();
     let mut entries: Vec<FeatureFlagEntry> = configs
@@ -582,10 +706,7 @@ pub async fn feature_flags_set(
         operation: OP_FEATURE_STATE,
     };
 
-    let hres = set_runtime_configurations(&[update]);
-    if hres != 0 {
-        return Err(ntstatus_to_message(hres));
-    }
+    set_runtime_configurations(&[update])?;
 
     if persist_boot {
         set_boot_configurations_in_registry(&[update])?;
@@ -618,12 +739,7 @@ pub async fn feature_flags_reset(
     };
 
     if do_runtime {
-        let hres = set_runtime_configurations(&[RtlFeatureConfigurationUpdate::new_reset(
-            id, priority,
-        )]);
-        if hres != 0 {
-            return Err(ntstatus_to_message(hres));
-        }
+        set_runtime_configurations(&[RtlFeatureConfigurationUpdate::new_reset(id, priority)])?;
     }
     if do_boot {
         set_boot_configurations_in_registry(&[RtlFeatureConfigurationUpdate::new_reset(

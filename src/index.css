@@ -348,3 +348,31 @@ body.jelly-bounce-enabled .jelly-bounce-sidebar-top.jelly-bouncing {
   }
 }
 
+/* 桌面歌词 - 细条主题色音量滑块 */
+input.lyrics-vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--vol-color) 0%,
+    var(--vol-color) var(--vol-fill, 50%),
+    rgba(255, 255, 255, 0.22) var(--vol-fill, 50%),
+    rgba(255, 255, 255, 0.22) 100%
+  );
+  outline: none;
+  cursor: pointer;
+}
+input.lyrics-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--vol-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
