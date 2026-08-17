@@ -42,7 +42,6 @@ mod overlay_panel;
 mod power_settings;
 mod vertical_overlay;
 mod vtx_virtualization;
-mod window_manager;
 
 mod sensor;
 mod sensor_monitor;
@@ -357,9 +356,6 @@ pub fn run() {
             }
 
             // Tray menu: hide when losing focus (click outside), reset always-on-top
-            // 注意：这里只监听「已存在」的托盘窗口，绝不主动创建——
-            // 托盘菜单窗口改为点击托盘时才按需创建（tray.rs 中 ensure_tray_menu），
-            // 避免启动阶段创建额外 WebView2 导致启动卡顿/高内存。
             if let Some(tray_menu) = app.get_webview_window("tray-menu") {
                 let menu_clone = tray_menu.clone();
                 tray_menu.on_window_event(move |event| {

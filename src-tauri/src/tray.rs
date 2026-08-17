@@ -104,8 +104,7 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                     rect,
                     ..
                 } => {
-                    // 按需创建托盘菜单窗口（配置已移除，避免启动即建 WebView2）
-                    if let Some(menu_window) = crate::window_manager::ensure_tray_menu(app) {
+                    if let Some(menu_window) = app.get_webview_window("tray-menu") {
                         let (px, py) = match rect.position {
                             tauri::Position::Physical(p) => (p.x, p.y),
                             tauri::Position::Logical(p) => (p.x as i32, p.y as i32),

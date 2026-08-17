@@ -3,17 +3,19 @@
 //! 创建一个永不穿透的小窗口，固定叠在歌词窗口顶部中央。
 //! 从根本上解决 WebView2 穿透状态下 mousemove 不可靠的问题。
 
+use tauri::Manager;
 use tauri::Emitter;
 
 /// 显示解锁按钮窗口，定位到歌词窗口顶部中央，并强制置于最顶层
 #[tauri::command]
 pub fn show_lyrics_unlock_btn(app_handle: tauri::AppHandle) -> Result<(), String> {
-    // 按需创建（配置已移除，避免启动即建 WebView2 拖高内存）
-    let lyrics_win = crate::window_manager::ensure_desktop_lyrics(&app_handle)
-        .ok_or_else(|| "desktop-lyrics window create failed".to_string())?;
+    let lyrics_win = app_handle
+        .get_webview_window("desktop-lyrics")
+        .ok_or_else(|| "desktop-lyrics window not found".to_string())?;
 
-    let btn_win = crate::window_manager::ensure_lyrics_unlock_btn(&app_handle)
-        .ok_or_else(|| "lyrics-unlock-btn window create failed".to_string())?;
+    let btn_win = app_handle
+        .get_webview_window("lyrics-unlock-btn")
+        .ok_or_else(|| "lyrics-unlock-btn window not found".to_string())?;
 
     // 获取歌词窗口位置和大小
     let pos = lyrics_win
@@ -69,7 +71,7 @@ fn force_topmost(btn_win: &tauri::WebviewWindow) {
 /// 隐藏解锁按钮窗口
 #[tauri::command]
 pub fn hide_lyrics_unlock_btn(app_handle: tauri::AppHandle) -> Result<(), String> {
-    if let Some(btn_win) = crate::window_manager::ensure_lyrics_unlock_btn(&app_handle) {
+    if let Some(btn_win) = app_handle.get_webview_window("lyrics-unlock-btn") {
         btn_win
             .hide()
             .map_err(|e| format!("Failed to hide button: {}", e))?;
@@ -81,12 +83,12 @@ pub fn hide_lyrics_unlock_btn(app_handle: tauri::AppHandle) -> Result<(), String
 #[tauri::command]
 pub fn unlock_lyrics(app_handle: tauri::AppHandle) -> Result<(), String> {
     // 1. 隐藏按钮窗口
-    if let Some(btn_win) = crate::window_manager::ensure_lyrics_unlock_btn(&app_handle) {
+    if let Some(btn_win) = app_handle.get_webview_window("lyrics-unlock-btn") {
         let _ = btn_win.hide();
     }
 
     // 2. 关闭歌词窗口穿透
-    if let Some(lyrics_win) = crate::window_manager::ensure_desktop_lyrics(&app_handle) {
+    if let Some(lyrics_win) = app_handle.get_webview_window("desktop-lyrics") {
         let _ = lyrics_win.set_ignore_cursor_events(false);
     }
 
