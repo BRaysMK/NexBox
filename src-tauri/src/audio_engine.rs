@@ -695,6 +695,17 @@ fn audio_thread(
         }
     };
 
+    // 激活 FxSound 虚拟设备的端点音量控制。EQ 引擎运行期间默认设备已被切换为
+    // FxSound，系统音量滑块/音量键控制的正是该端点音量；而 WASAPI loopback
+    // 捕获的是端点音量施加前的混音信号，因此必须在渲染时手动应用该音量，
+    // 否则系统音量调节对实际输出不生效。
+    let system_volume: Option<wa::Endpoints::IAudioEndpointVolume> = unsafe {
+        fxsound_dev.Activate(CLSCTX_ALL, None)
+    }.ok();
+    if system_volume.is_none() {
+        warn!("[audio_engine] Failed to activate endpoint volume on FxSound device; system volume control may not work");
+    }
+
     let (capture_client_obj, capture_client, capture_fmt) = match init_capture(&fxsound_dev) {
         Ok(c) => c,
         Err(e) => {
@@ -758,6 +769,9 @@ fn audio_thread(
     info!("[audio_engine] Pipeline started: Loopback(FxSound) -> EQ -> Render");
 
     let mut sample_buffer: Vec<f64> = Vec::with_capacity(8192);
+
+    // 系统音量（FxSound 端点音量）对应的软件增益，跟随系统滑块/静音变化
+    let mut volume_gain: f64 = 1.0;
 
     // Stats for diagnostics
     let mut total_captured: u64 = 0;
@@ -914,6 +928,22 @@ fn audio_thread(
                 for s in &mut process_buf {
                     *s = fx_proc.process(*s, &fx);
                 }
+            }
+        }
+
+        // 应用系统音量：读取 FxSound 端点音量（系统滑块控制的目标）及静音状态，
+        // 在软件层面施加到 EQ/音效处理后的输出信号，使系统音量/静音在 EQ 引擎
+        // 运行期间依然生效。
+        if let Some(ev) = &system_volume {
+            let level = unsafe { ev.GetMasterVolumeLevelScalar().unwrap_or(1.0) };
+            let muted = unsafe { ev.GetMute().unwrap_or(windows::Win32::Foundation::BOOL(0)) };
+            let target = if muted.0 != 0 { 0.0 } else { level.clamp(0.0, 1.0) as f64 };
+            if (target - volume_gain).abs() > 0.0005 {
+                volume_gain = target;
+                info!("[audio_engine] System volume -> {:.3}", volume_gain);
+            }
+            if volume_gain < 0.9995 {
+                for s in &mut process_buf { *s *= volume_gain; }
             }
         }
 

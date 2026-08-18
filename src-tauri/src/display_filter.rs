@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::path::{Path, PathBuf};
 use std::fs;
@@ -20,6 +20,12 @@ pub struct DisplayInfo {
 }
 
 static DISPLAY_DEVICES: Mutex<Option<Vec<String>>> = Mutex::new(None);
+
+/// 系统关机/注销标志：当 Windows 广播 WM_QUERYENDSESSION / WM_ENDSESSION 时置位，
+/// 用于在退出清理阶段跳过 xcalib 这类外部子进程调用（关机时系统运行库正在被拆除，子进程会初始化失败 0xc0000142）。
+static SYSTEM_SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+/// 会话监控隐藏窗口句柄（保存为裸指针），防止窗口句柄被回收。
+static SESSION_WATCH_HWND: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
 
 #[cfg(target_os = "windows")]
 fn enumerate_displays_via_ccd() -> Option<Vec<DisplayInfo>> {
@@ -1803,9 +1809,109 @@ pub async fn apply_preset(
     set_filter_settings(display_index, preset.temperature, preset.brightness, preset.contrast, preset.saturation, preset.mode, is_active, None, None, None).await
 }
 
+// ─── System session watch (shutdown/logoff detection) ───
+
+/// 读取系统关机/注销标志。返回 true 表示 Windows 正在结束会话（关机/注销）。
+pub(crate) fn is_system_shutting_down() -> bool {
+    SYSTEM_SHUTTING_DOWN.load(Ordering::SeqCst)
+}
+
+/// 初始化会话监控隐藏窗口，用于捕获系统关机/注销广播（WM_QUERYENDSESSION / WM_ENDSESSION），
+/// 提前置位 SYSTEM_SHUTTING_DOWN。必须在主线程（Tauri setup）调用，主消息循环才能派发广播到该窗口。
+#[cfg(target_os = "windows")]
+pub fn init_session_watch() {
+    use windows_sys::core::w;
+    use windows_sys::Win32::Foundation::{GetLastError, HWND};
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, RegisterClassW, WNDCLASSW, WS_POPUP,
+    };
+
+    unsafe {
+        let h_instance = GetModuleHandleW(std::ptr::null());
+        if h_instance.is_null() {
+            log::warn!("init_session_watch: 获取模块句柄失败");
+            return;
+        }
+
+        let class_name = w!("NexBoxSessionWatch");
+        let wnd_class = WNDCLASSW {
+            style: 0,
+            lpfnWndProc: Some(session_watch_proc),
+            cbClsExtra: 0,
+            cbWndExtra: 0,
+            hInstance: h_instance,
+            hIcon: std::ptr::null_mut(),
+            hCursor: std::ptr::null_mut(),
+            hbrBackground: std::ptr::null_mut(),
+            lpszMenuName: std::ptr::null(),
+            lpszClassName: class_name,
+        };
+
+        if RegisterClassW(&wnd_class) == 0 && GetLastError() != 1410 {
+            log::warn!("init_session_watch: 注册窗口类失败: {}", GetLastError());
+            return;
+        }
+
+        let hwnd: HWND = CreateWindowExW(
+            0,
+            class_name,
+            w!("NexBox Session Watch"),
+            WS_POPUP,
+            0,
+            0,
+            0,
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            h_instance,
+            std::ptr::null_mut(),
+        );
+
+        if hwnd.is_null() {
+            log::warn!("init_session_watch: 创建窗口失败: {}", GetLastError());
+            return;
+        }
+
+        SESSION_WATCH_HWND.store(hwnd, Ordering::SeqCst);
+        log::info!("init_session_watch: 会话监控窗口已就绪, hwnd={:?}", hwnd);
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn session_watch_proc(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    msg: u32,
+    wparam: windows_sys::Win32::Foundation::WPARAM,
+    lparam: windows_sys::Win32::Foundation::LPARAM,
+) -> windows_sys::Win32::Foundation::LRESULT {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DefWindowProcW, WM_ENDSESSION, WM_QUERYENDSESSION,
+    };
+
+    match msg {
+        WM_QUERYENDSESSION | WM_ENDSESSION => {
+            if !SYSTEM_SHUTTING_DOWN.load(Ordering::SeqCst) {
+                SYSTEM_SHUTTING_DOWN.store(true, Ordering::SeqCst);
+                log::info!("会话结束消息(0x{:X})：标记系统关机/注销，跳过退出时的 xcalib 恢复", msg);
+            }
+            // WM_QUERYENDSESSION 返回 TRUE(1) 允许结束会话；WM_ENDSESSION 走默认处理
+            if msg == WM_QUERYENDSESSION {
+                return 1;
+            }
+            DefWindowProcW(hwnd, msg, wparam, lparam)
+        }
+        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+    }
+}
+
 pub fn cleanup() {
     #[cfg(target_os = "windows")]
     {
+        if is_system_shutting_down() {
+            log::info!("cleanup: 检测到系统关机/注销，跳过 xcalib 恢复 Gamma");
+            return;
+        }
         ensure_display_states();
         let num_displays = {
             let lock = DISPLAY_STATES.lock().unwrap();

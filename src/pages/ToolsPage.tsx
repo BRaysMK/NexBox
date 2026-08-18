@@ -7,6 +7,7 @@ import {
   Icon,
   useColorModeValue,
   Badge,
+  Button,
   VStack,
   HStack,
   Divider,
@@ -15,6 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassToolCard } from "@/components/special/liquid-glass-tool-card";
+import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import {
   Cpu,
@@ -55,6 +57,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { Image } from "@chakra-ui/react";
 import { store } from "@/lib/store";
+import { CommunityToolSection } from "@/components/community-tools/community-tool-section";
 const CUSTOM_TOOLS_KEY = "custom-added-tools";
 
 const toolIcons = import.meta.glob<{ default: string }>(
@@ -1567,8 +1570,30 @@ export default function ToolsPage() {
 
   const builtinTools = tools.filter((tool) => tool.type === "builtin");
 
+  const [activeSection, setActiveSection] = useState<"community" | "official" | "thirdparty">("community");
+
+  const menuItems = [
+    { key: "community" as const, label: t("tools.community.title"), icon: Boxes },
+    { key: "official" as const, label: t("tools.officialTools"), icon: Rocket },
+    { key: "thirdparty" as const, label: t("tools.thirdpartyTools"), icon: Wrench },
+  ];
+
   return (
     <Flex gap={6} pt={8}>
+      <Box w="180px" flexShrink={0} position="sticky" top={8} alignSelf="flex-start">
+        <VStack spacing={0.5} align="stretch">
+          {menuItems.map((item) => (
+            <LiquidGlassMenuItem
+              key={item.key}
+              isActive={activeSection === item.key}
+              onClick={() => setActiveSection(item.key)}
+              icon={item.icon}
+            >
+              {item.label}
+            </LiquidGlassMenuItem>
+          ))}
+        </VStack>
+      </Box>
       <Box
         flex={1}
         overflowY="auto"
@@ -1597,16 +1622,22 @@ export default function ToolsPage() {
           {t("tools.title")}
         </Heading>
 
-        <OfficialToolSection activeCategory="all" />
+        {activeSection === "official" && <OfficialToolSection activeCategory="all" />}
 
+        {activeSection === "community" && <CommunityToolSection />}
+
+        {activeSection === "thirdparty" && (
+          <ThirdPartyToolSection
+            title={t("tools.thirdpartyTools")}
+            activeCategory="all"
+            categoryLabels={categoryLabels}
+          />
+        )}
+
+        {/* 内置工具（目前为空数据，渲染为隐藏占位） */}
         <ToolSection
           title={t("tools.builtinTools")}
           tools={builtinTools}
-          activeCategory="all"
-          categoryLabels={categoryLabels}
-        />
-        <ThirdPartyToolSection
-          title={t("tools.thirdpartyTools")}
           activeCategory="all"
           categoryLabels={categoryLabels}
         />

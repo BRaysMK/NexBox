@@ -534,14 +534,44 @@ fn collect_all_gpu_sensors(
         });
     }
 
-    // 排序：独显（NVIDIA/AMD）优先，Intel 核显放在最后
+    // 排序：独显（NVIDIA）优先 > 其它独显 > 核显，同优先级按名称字典序稳定
     gpus.sort_by(|a, b| {
-        let a_priority = if a.hardware_type.eq_ignore_ascii_case("GpuIntel") { 1 } else { 0 };
-        let b_priority = if b.hardware_type.eq_ignore_ascii_case("GpuIntel") { 1 } else { 0 };
-        a_priority.cmp(&b_priority)
+        let ap = gpu_priority(&a.hardware_type, &a.name);
+        let bp = gpu_priority(&b.hardware_type, &b.name);
+        ap.cmp(&bp).then_with(|| a.name.cmp(&b.name))
     });
 
     gpus
+}
+
+/// 判断是否为集成显卡（核显）：
+/// - NVIDIA 一律为独显
+/// - Intel 默认视为核显（Intel Arc 独立显卡除外）
+/// - AMD 依据名称特征判断（核显通常为 "AMD Radeon(TM) Graphics" / "Vega 3/8/11 Graphics"）
+fn is_integrated_gpu(hw_type: &str, name: &str) -> bool {
+    let t = hw_type.to_lowercase();
+    let n = name.to_lowercase();
+    if t.contains("nvidia") {
+        false
+    } else if t.contains("intel") {
+        // Intel Arc 为独立显卡
+        !(n.contains("arc") || n.contains("a3") || n.contains("a5") || n.contains("a7"))
+    } else if t.contains("amd") {
+        n.contains("graphics") || n.contains("vega 3") || n.contains("vega 8") || n.contains("vega 11")
+    } else {
+        true
+    }
+}
+
+/// GPU 展示优先级，越小越靠前：NVIDIA 独显 > 其它独显 > 核显
+fn gpu_priority(hw_type: &str, name: &str) -> u8 {
+    if hw_type.eq_ignore_ascii_case("GpuNvidia") {
+        0
+    } else if is_integrated_gpu(hw_type, name) {
+        2
+    } else {
+        1
+    }
 }
 
 pub fn collect_hardware_data() -> OverlayHardwareData {

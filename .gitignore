@@ -131,3 +131,6 @@ Pavise-Game-main/
 src-tauri/reg_test.pdb
 src-tauri/reg_test.rs
 
+# 社区工具插件独立仓库（单独推送到 gitcode.com/MuLiuSaMa/NexBox-Tools，不随主程序提交）
+NexBox-Tools/
+

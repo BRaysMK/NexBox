@@ -1339,6 +1339,8 @@
       "feedbackDesc": "Bilderkarussell auf der Startseite anzeigen",
       "gameWinKeyLabel": "Win-Taste-Deaktivierungskarte",
       "gameWinKeyDesc": "Karte zur Deaktivierung der Win-Taste beim Spielen auf der Startseite anzeigen",
+      "gameModeLabel": "Spielmodus",
+      "gameModeDesc": "Den Spielmodus-Schalter in der Titelleiste anzeigen, um per Klick zwischen Standard/Normal/Wettbewerb umzuschalten",
       "randomImageLabel": "Zufallsbild",
       "randomImageDesc": "Zufallsbild-Karte auf der Startseite anzeigen",
       "splash": "Animation",

@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "8.3.0"
+version = "8.3.8"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -140,6 +140,7 @@ windows = { version = "0.58", features = [
     "Media_Control",
     "Storage_Streams",
     "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
     "Win32_Media",
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_Devices_Properties",

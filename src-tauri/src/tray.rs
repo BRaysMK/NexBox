@@ -66,7 +66,20 @@ fn ensure_main_onscreen<R: Runtime>(app: &AppHandle<R>) -> Option<()> {
                 && y + 10 >= r.y && y - 10 <= r.y + s.height as i32
         });
     if !on_screen {
-        let _ = win.center(); // 居中到当前/最近显示器（通常为主显示器）
+        // 明确居中到主显示器：离屏预热位置(-30000,-30000)会导致
+        // MonitorFromWindow(MONITOR_DEFAULTTONEAREST) 返回副显示器，
+        // 若改用 win.center() 会让窗口错误地出现在副显示器上。
+        if let Some(primary) = app.primary_monitor().ok().flatten() {
+            let p = primary.position();
+            let s = primary.size();
+            if let Ok(ws) = win.outer_size() {
+                let x = p.x + (s.width as i32 - ws.width as i32) / 2;
+                let y = p.y + (s.height as i32 - ws.height as i32) / 2;
+                let _ = win.set_position(tauri::Position::Physical(
+                    tauri::PhysicalPosition { x, y },
+                ));
+            }
+        }
     }
     Some(())
 }

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { motion, useAnimationControls } from "framer-motion";
-import { useColorModeValue } from "@chakra-ui/react";
+import { useColorModeValue, Tooltip } from "@chakra-ui/react";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import {
   Zap,
@@ -32,6 +32,7 @@ import {
   Gauge,
   Settings,
 } from "lucide-react";
+import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
 
 export type IslandStatus = "success" | "error" | "info" | "warning" | "loading" | "blue";
 
@@ -84,6 +85,8 @@ export interface IslandOptions {
   progress?: number;
   /** 覆盖默认点击行为（如完成态点击重启安装） */
   onClick?: () => void;
+  /** 音乐播放灵动岛：渲染专辑封面 + 音量波动，悬停展开更高的播放控制布局 */
+  kind?: "music";
 }
 
 interface IslandItem {
@@ -99,6 +102,7 @@ interface IslandItem {
   persistent?: boolean;
   progress?: number;
   onClick?: () => void;
+  kind?: "music";
   timer?: ReturnType<typeof setTimeout>;
 }
 
@@ -250,6 +254,7 @@ function buildItem(options: IslandOptions): IslandItem {
     persistent: options.persistent,
     progress: options.progress,
     onClick: options.onClick,
+    kind: options.kind,
   };
 }
 
@@ -544,6 +549,376 @@ function SemanticIcon({ iconKey }: { iconKey: IconKey }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 音乐灵动岛音量波动：【不触碰正在播放的 <audio>】                    */
+/* createMediaElementSource 会接管音频元素输出，且 WebView 的          */
+/* AudioContext 未激活时会导致静音，严重破坏播放。因此改为纯前端       */
+/* 驱动的平滑波动动画：播放期间跳动，暂停时归零（仅作视觉「音量波动」）。 */
+/* ------------------------------------------------------------------ */
+function useSongLevels(playing: boolean): number[] {
+  const BAR_COUNT = 5;
+  const rafRef = useRef<number>(0);
+  const [levels, setLevels] = useState<number[]>(() => Array(BAR_COUNT).fill(0));
+
+  useEffect(() => {
+    if (!playing) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+      setLevels(Array(BAR_COUNT).fill(0));
+      return;
+    }
+    let t = 0;
+    const tick = () => {
+      // 多正弦叠加+轻微噪声，得到连续、起伏不乱的「音量波动」
+      t += 0.06;
+      const next: number[] = [];
+      for (let i = 0; i < BAR_COUNT; i++) {
+        const envelope = 0.5 + 0.5 * Math.sin(t * 1.7 + i * 1.1) * Math.sin(t * 0.9 + i * 0.7);
+        const ripple = 0.4 * Math.sin(t * 3.1 + i * 2.3);
+        next.push(Math.max(0.06, Math.min(1, envelope * 0.7 + ripple * 0.5)));
+      }
+      setLevels(next);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    };
+  }, [playing]);
+
+  return levels;
+}
+
+function formatMusicTime(sec: number): string {
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const s = Math.floor(sec % 60);
+  const m = Math.floor(sec / 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/** 音乐播放灵动岛内容：折叠为「封面 + 音量波动」，展开为更高的播放控制布局。 */
+function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expanded: boolean; expandedVisible: boolean; foldVisible: boolean }) {
+  const currentSong = useMusicStore((s) => s.currentSong);
+  const isPlaying = useMusicStore((s) => s.isPlaying);
+  const proxyPort = useMusicStore((s) => s.proxyPort);
+  const audioRef = useMusicStore((s) => s.audioRef);
+  const actionsRef = useRef(useMusicStore.getState());
+  const levels = useSongLevels(isPlaying);
+
+  const [time, setTime] = useState(0);
+  useEffect(() => {
+    const a = audioRef;
+    if (!a) return;
+    const upd = () => setTime(a.currentTime || 0);
+    upd();
+    a.addEventListener("timeupdate", upd);
+    a.addEventListener("play", upd);
+    return () => {
+      a.removeEventListener("timeupdate", upd);
+      a.removeEventListener("play", upd);
+    };
+  }, [audioRef]);
+
+  const [coverFailed, setCoverFailed] = useState(false);
+  useEffect(() => setCoverFailed(false), [currentSong?.cover]);
+  const cover = currentSong ? (currentSong.cover.startsWith("data:") ? currentSong.cover : coverProxyUrl(currentSong.cover, proxyPort)) : "";
+
+  const titleColor = useColorModeValue("#1a1a1a", "#ffffff");
+  const descColor = useColorModeValue("rgba(0,0,0,0.62)", "rgba(255,255,255,0.66)");
+  const { config } = useThemeColor();
+  const primaryColor = config.primaryColor;
+  const barTrack = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.14)");
+
+  // 进度条拖动跟随：用 window 级 mousemove，拖出元素也按鼠标真实位置计算
+  const [dragFrac, setDragFrac] = useState<number | null>(null);
+  const dragRef = useRef(false);
+  const dragFracRef = useRef<number | null>(null);
+  const dragElRef = useRef<HTMLElement | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const durationRef = useRef(0);
+  const applyDrag = useCallback((ev: MouseEvent) => {
+    const el = dragElRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const f = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+    dragFracRef.current = f;
+    setDragFrac(f);
+  }, []);
+  const startDrag = useCallback((el: HTMLElement, ev: React.MouseEvent) => {
+    dragRef.current = true;
+    dragElRef.current = el;
+    applyDrag(ev.nativeEvent);
+  }, [applyDrag]);
+  const endDrag = useCallback(() => {
+    if (!dragRef.current) return;
+    dragRef.current = false;
+    const f = dragFracRef.current;
+    dragFracRef.current = null;
+    dragElRef.current = null;
+    setDragFrac(null);
+    if (f != null) actionsRef.current.seekTo(f * (durationRef.current || 0));
+  }, []);
+  useEffect(() => {
+    const move = (ev: MouseEvent) => { if (dragRef.current) applyDrag(ev); };
+    const up = () => endDrag();
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("mouseleave", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("mouseleave", up);
+    };
+  }, [applyDrag, endDrag]);
+
+  if (!currentSong) return null;
+
+  const duration = useMusicStore.getState().duration || audioRef?.duration || currentSong.duration || 0;
+  durationRef.current = duration;
+  const progress = duration > 0 ? time / duration : 0;
+  const fillPct = Math.max(0, Math.min(100, (dragFrac != null ? dragFrac : progress) * 100));
+  // 单一共享封面元素 + 单一共享歌名元素：opacity 恒为 1，位置/大小都由 framer motion
+  // 数值插值(x/y/scale)直接放大缩小到展开/折叠位置，不再用淡入淡出切换位置。
+  const coverPos = expanded
+    ? { x: 16, y: 12, scale: 1 }  // 展开：左上、与歌名齐顶，放大到 48
+    : { x: 10, y: 3, scale: 0.5 }; // 折叠：左侧垂直居中缩到 24
+  const namePos = expanded
+    ? { x: 74, y: 12, scale: 1 }   // 展开：封面右侧、与封面下移对齐，放大到 15px
+    : { x: 44, y: 8, scale: 0.73 }; // 折叠：封面右侧、垂直居中，缩小到 ≈11px
+
+  return (
+    <div style={{ flex: 1, minWidth: 0, position: "relative", alignSelf: "stretch" }}>
+      {/* 共享封面（唯一，不淡化） */}
+      <motion.div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: 48,
+          height: 48,
+          zIndex: 1,
+          opacity: 1,
+          pointerEvents: "none",
+          transformOrigin: "left top",
+        }}
+        animate={{ x: coverPos.x, y: coverPos.y, scale: coverPos.scale }}
+        transition={{ duration: 0.3, ease: [0.22, 0.61, 0.36, 1] }}
+      >
+        <CoverThumb cover={cover} failed={coverFailed} onError={() => setCoverFailed(true)} size={48} primaryColor={primaryColor} />
+      </motion.div>
+
+      {/* 共享歌名（唯一，不淡化）：直接放大缩小到展开/折叠位置 */}
+      <motion.div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          zIndex: 1,
+          pointerEvents: "none",
+          transformOrigin: "left top",
+          fontSize: 15,
+          lineHeight: 1.2,
+          fontWeight: 700,
+          color: titleColor,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          maxWidth: expanded ? 224 : 118,
+        }}
+        animate={{ x: namePos.x, y: namePos.y, scale: namePos.scale }}
+        transition={{ duration: 0.3, ease: [0.22, 0.61, 0.36, 1] }}
+      >
+        {currentSong.name}
+      </motion.div>
+
+      {/* 波形：仅折叠态显示，透明淡入淡出 */}
+      <div
+        style={{
+          position: "absolute",
+          right: 10,
+          top: 7,
+          zIndex: 1,
+          display: "flex",
+          alignItems: "center",
+          gap: 2.5,
+          height: 16,
+          opacity: foldVisible ? 1 : 0,
+          transition: "opacity 0.18s",
+          pointerEvents: "none",
+        }}
+      >
+        {levels.map((v, i) => (
+          <div
+            key={i}
+            style={{
+              width: 2.5,
+              height: Math.max(3, Math.round(v * 13)),
+              borderRadius: 999,
+              background: titleColor,
+              opacity: 0.85,
+              transition: "height 90ms linear",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* 展开内容：歌手 + 进度条 + 控制按钮（歌名由共享元素提供） */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          padding: "32px 16px 10px",
+          opacity: expanded && expandedVisible ? 1 : 0,
+          transition: "opacity 0.18s",
+          pointerEvents: expanded && expandedVisible ? "auto" : "none",
+        }}
+      >
+        {/* 行1：歌手（在共享歌名下方，封面右侧） */}
+        <div style={{ marginLeft: 60, fontSize: 12, fontWeight: 500, color: descColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {currentSong.artist || currentSong.artists?.map((a) => a.name).join(" / ") || "未知歌手"}
+        </div>
+        {/* 行2：进度条 —— 左当前时间 + 全宽进度 + 右总时长（支持拖拽跟随） */}
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            startDrag(barRef.current as HTMLElement, e); // 用进度条本身的 rect，避免左右空白
+          }}
+          onClick={(e) => e.stopPropagation()} // 阻断冒泡，避免点击/拖动触发灵动岛收起
+          style={{ position: "relative", height: 14, display: "flex", alignItems: "center", cursor: "pointer", minWidth: 0, gap: 8, marginTop: 14 }}
+        >
+          <div style={{ fontSize: 10, fontWeight: 600, color: descColor, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", minWidth: 26 }}>
+            {formatMusicTime(time)}
+          </div>
+          <div ref={barRef} style={{ flex: 1, height: 4, borderRadius: 999, background: barTrack, overflow: "hidden" }}>
+            <div style={{ height: "100%", borderRadius: 999, background: primaryColor, width: `${fillPct}%` }} />
+          </div>
+          <div style={{ fontSize: 10, fontWeight: 600, color: descColor, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", minWidth: 26, textAlign: "right" }}>
+            {formatMusicTime(duration)}
+          </div>
+        </div>
+        {/* 行3：控制按钮 —— 整宽居中、纯图标（音乐页同套） */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 26 }}>
+          <ControlButton label="上一曲" onClick={(e) => { e.stopPropagation(); actionsRef.current.prevTrack(); }}>
+            <MSkipBackIcon size={20} color={titleColor} />
+          </ControlButton>
+          <ControlButton label={isPlaying ? "暂停" : "播放"} onClick={(e) => { e.stopPropagation(); actionsRef.current.togglePlay(); }}>
+            {isPlaying ? <MPauseIcon size={22} color={titleColor} /> : <MPlayIcon size={22} color={titleColor} />}
+          </ControlButton>
+          <ControlButton label="下一曲" onClick={(e) => { e.stopPropagation(); actionsRef.current.nextTrack(); }}>
+            <MSkipForwardIcon size={20} color={titleColor} />
+          </ControlButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* 与音乐页底部播放器一致的圆角控制图标 */
+const MPlayIcon = ({ size = 22, color }: { size?: number; color: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ color }}>
+    <path d="M 8 5 Q 7 4 6 5 L 6 19 Q 7 20 8 19 L 19 13 Q 20 12 19 11 Z" />
+  </svg>
+);
+const MPauseIcon = ({ size = 22, color }: { size?: number; color: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ color }}>
+    <rect x="6" y="4" width="4" height="16" rx="2" />
+    <rect x="14" y="4" width="4" height="16" rx="2" />
+  </svg>
+);
+const MSkipBackIcon = ({ size = 22, color }: { size?: number; color: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ color }}>
+    <rect x="4" y="5" width="3" height="14" rx="1.5" />
+    <polygon points="16,6 8,12 16,18" stroke="currentColor" strokeWidth={2.5} strokeLinejoin="round" />
+  </svg>
+);
+const MSkipForwardIcon = ({ size = 22, color }: { size?: number; color: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ color }}>
+    <polygon points="8,6 16,12 8,18" stroke="currentColor" strokeWidth={2.5} strokeLinejoin="round" />
+    <rect x="17" y="5" width="3" height="14" rx="1.5" />
+  </svg>
+);
+
+/** 播放控制按钮：纯图标、无圆形底、悬停无变化（与音乐页播放器一致） */
+function ControlButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip label={label} placement="top" hasArrow aria-label={label}>
+      <button
+        aria-label={label}
+        onClick={onClick}
+        style={{
+          width: 30,
+          height: 30,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          padding: 0,
+        }}
+      >
+        {children}
+      </button>
+    </Tooltip>
+  );
+}
+
+/** 专辑封面缩略图：失败时回退为主题色音乐占位块 */
+function CoverThumb({
+  cover,
+  failed,
+  onError,
+  size,
+  primaryColor,
+}: {
+  cover: string;
+  failed: boolean;
+  onError: () => void;
+  size: number;
+  primaryColor: string;
+}) {
+  const { getContrastTextColor } = useThemeColor();
+  if (!cover || failed) {
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: Math.max(4, size * 0.18),
+          background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}88)`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Music size={size * 0.5} color={getContrastTextColor()} strokeWidth={2.4} />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={cover}
+      alt=""
+      onError={onError}
+      style={{ width: size, height: size, borderRadius: Math.max(4, size * 0.18), objectFit: "cover", flexShrink: 0, background: "rgba(0,0,0,0.12)" }}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Host：单个灵动岛，置于顶部标题栏拖拽区内。                           */
 /* 动画：淡化出圆形 → 向两侧扩散成胶囊 → 缩回圆形 → 淡出；             */
 /*       多条触发时先缩成圆形、换内容、再扩散成胶囊。                    */
@@ -553,18 +928,23 @@ function SemanticIcon({ iconKey }: { iconKey: IconKey }) {
 /* ------------------------------------------------------------------ */
 const EXPANDED_WIDTH = 320;
 const COLLAPSED_HEIGHT = 30;
+const MUSIC_COLLAPSED_HEIGHT = 30;
+const MUSIC_COLLAPSED_WIDTH = 200;
+const MUSIC_EXPANDED_HEIGHT = 150;
 
 export function DynamicIslandHost() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
   const { item, revision } = snapshot;
   const { config } = useThemeColor();
   const primaryColor = config.primaryColor;
+  const currentSong = useMusicStore((s) => s.currentSong);
 
   const controls = useAnimationControls();
   const [displayed, setDisplayed] = useState<IslandItem | null>(null);
   const [textVisible, setTextVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [expandedTextVisible, setExpandedTextVisible] = useState(false);
+  const [foldVisible, setFoldVisible] = useState(true); // 音乐岛折叠文字是否可见（初始=true）
   const textRef = useRef<HTMLDivElement>(null);
   const [textOverflowing, setTextOverflowing] = useState(false);
 
@@ -577,6 +957,16 @@ export function DynamicIslandHost() {
   useEffect(() => {
     itemRef.current = item;
   }, [item]);
+
+  // 音乐播放灵动岛：有歌时设为持久基线（无自动关闭），无歌时才关闭。切换歌曲触发 replace 动画，
+  // 播放中的标题/进度/音量波动由 MusicIslandContent 实时响应，不走 item 高频推送。
+  useEffect(() => {
+    if (currentSong) {
+      showPersistent({ id: "music", kind: "music", duration: null, iconKey: "music", title: currentSong.name });
+    } else {
+      closePersistent("music");
+    }
+  }, [currentSong]);
 
   // 静默实时更新（如下载进度）：同 id 时同步 displayed 内容，不触发动画
   useEffect(() => {
@@ -610,12 +1000,16 @@ export function DynamicIslandHost() {
     setExpandedTextVisible(false);
     setDisplayed(next);
     setTextVisible(false);
+    if (next.kind === "music") setFoldVisible(false); // 圆形阶段隐藏波形
     // 1. 淡化出圆形（图标已直接显示在圆形上）
-    await controls.start({ opacity: 1, width: 30, height: COLLAPSED_HEIGHT });
+    const baseHeight = itemRef.current?.kind === "music" ? MUSIC_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT;
+    await controls.start({ opacity: 1, width: 30, height: baseHeight });
     if (!visibleRef.current || !itemRef.current) return;
     // 2. 文字浮现，向两侧扩散成胶囊
     setTextVisible(true);
-    await controls.start({ width: "auto" });
+    const targetWidth = itemRef.current?.kind === "music" ? MUSIC_COLLAPSED_WIDTH : "auto";
+    await controls.start({ width: targetWidth });
+    if (targetWidth === MUSIC_COLLAPSED_WIDTH) setFoldVisible(true); // 扩散到折叠宽后显示波形
   }, [controls]);
 
   const playReplace = useCallback(async () => {
@@ -628,12 +1022,15 @@ export function DynamicIslandHost() {
     }
     // 1. 缩成圆形（隐藏文字，图标保留在圆形上）
     setTextVisible(false);
+    setFoldVisible(false); // 收窄为圆圈前隐藏波形（无论是否被普通提示替换）
     await controls.start({ width: 30 });
     if (!visibleRef.current || !itemRef.current) return;
     // 2. 换上新内容，再扩散成胶囊
     setDisplayed(next);
     setTextVisible(true);
-    await controls.start({ width: "auto" });
+    const targetWidth = next.kind === "music" ? MUSIC_COLLAPSED_WIDTH : "auto";
+    await controls.start({ width: targetWidth });
+    if (targetWidth === MUSIC_COLLAPSED_WIDTH) setFoldVisible(true); // 扩散到折叠宽后显示波形
   }, [controls]);
 
   const playDismiss = useCallback(async () => {
@@ -642,6 +1039,7 @@ export function DynamicIslandHost() {
     setExpanded(false);
     setExpandedTextVisible(false);
     setTextVisible(false);
+    setFoldVisible(false); // 圆形阶段隐藏波形
     await controls.start({ width: 30 });
     // 2. 淡出
     await controls.start({ opacity: 0 });
@@ -652,13 +1050,28 @@ export function DynamicIslandHost() {
   const playExpand = useCallback(async () => {
     const next = itemRef.current;
     if (!next || expandedRef.current) return;
+
+    // 音乐岛：折叠文字固定在顶部、不随胶囊高度移动，可即时同步展开/淡出/放大
+    if (next.kind === "music") {
+      expandedRef.current = true;
+      setFoldVisible(false); // 折叠文字原位透明淡出（位置固定，无位移）
+      setExpanded(true); // 触发封面放大（与胶囊同帧）
+      await controls.start({ width: EXPANDED_WIDTH, height: MUSIC_EXPANDED_HEIGHT }); // 胶囊同步放大
+      if (!expandedRef.current) return;
+      setExpandedTextVisible(true); // 展开文字在最终位淡入
+      setTextVisible(false);
+      return;
+    }
+
     expandedRef.current = true;
     setExpanded(true);
     // 横向扩散成圆角长矩形（折叠短文案保持可见，稍后交叉淡出）
-    // 持久更新岛为单行长条（30px 高），普通提示按内容行数决定高度
+    // 持久更新岛为单行长条（30px 高）；普通提示按内容行数决定高度
+    const expandHeight =
+      next.persistent ? COLLAPSED_HEIGHT : next.description ? 62 : 34;
     await controls.start({
       width: EXPANDED_WIDTH,
-      height: next.persistent ? COLLAPSED_HEIGHT : next.description ? 62 : 34,
+      height: expandHeight,
     });
     if (!expandedRef.current) return;
     // 详细内容淡入，短文案淡出
@@ -668,6 +1081,20 @@ export function DynamicIslandHost() {
 
   const playCollapse = useCallback(async () => {
     if (!expandedRef.current) return;
+
+    // 音乐岛：折叠文字固定在顶部、位置不变，可即时同步淡入/收缩
+    if (itemRef.current?.kind === "music") {
+      expandedRef.current = false;
+      setExpandedTextVisible(false); // 展开文字淡出
+      setFoldVisible(true); // 折叠文字原位透明淡入（位置固定，无位移）
+      setExpanded(false); // 触发：封面 framer 回缩
+      await new Promise<void>((r) => requestAnimationFrame(() => r())); // 与封面动画同帧
+      if (expandedRef.current) return; // 期间被重新展开则中止
+      await controls.start({ width: MUSIC_COLLAPSED_WIDTH, height: MUSIC_COLLAPSED_HEIGHT }); // 胶囊收缩
+      setTextVisible(true);
+      return;
+    }
+
     expandedRef.current = false;
     // 1. 详情淡出（折叠短文案暂不显示，避免缩小过程中文字移动）
     setExpandedTextVisible(false);
@@ -677,7 +1104,9 @@ export function DynamicIslandHost() {
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     if (expandedRef.current) return; // 若期间被重新展开则中止
     // 4. 直接收缩回小灵动岛（胶囊），不再经过圆形
-    await controls.start({ width: "auto", height: COLLAPSED_HEIGHT });
+    const baseHeight = itemRef.current?.kind === "music" ? MUSIC_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT;
+    const targetWidth = itemRef.current?.kind === "music" ? MUSIC_COLLAPSED_WIDTH : "auto";
+    await controls.start({ width: targetWidth, height: baseHeight });
     // 5. 收缩完成后，短文案淡化浮现（纯透明度变化，无位置移动）
     setTextVisible(true);
   }, [controls]);
@@ -767,7 +1196,7 @@ export function DynamicIslandHost() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         style={{
-          borderRadius: expanded ? 20 : 999,
+          borderRadius: displayed?.kind === "music" ? 22 : (expanded ? 20 : 999),
           background: pillBg,
           border: `1px solid ${pillBorder}`,
           backdropFilter: "blur(20px)",
@@ -792,6 +1221,10 @@ export function DynamicIslandHost() {
             opacity: 0.5,
           }}
         />
+        {displayed?.kind === "music" ? (
+          <MusicIslandContent expanded={expanded} expandedVisible={expandedTextVisible} foldVisible={foldVisible} />
+        ) : (
+        <>
         {/* 图标始终显示（圆形阶段即图标），扩散/收缩时文字淡入淡出 */}
         <div style={{ padding: "0 0 0 4px", flexShrink: 0, display: "flex" }}>
           {displayed?.icon ??
@@ -1026,6 +1459,8 @@ export function DynamicIslandHost() {
               )}
             </motion.div>
           </div>
+        </>
+        )}
       </motion.div>
     </div>
   );

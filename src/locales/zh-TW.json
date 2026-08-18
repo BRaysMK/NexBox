@@ -1323,6 +1323,8 @@
       "feedbackDesc": "在首頁顯示圖片輪播",
       "gameWinKeyLabel": "Win 鍵停用卡片",
       "gameWinKeyDesc": "在首頁顯示遊戲時停用 Win 鍵卡片",
+      "gameModeLabel": "遊戲模式",
+      "gameModeDesc": "在頂欄顯示遊戲模式切換條，一鍵切換預設/一般/競技壓制",
       "randomImageLabel": "隨機圖片",
       "randomImageDesc": "在首頁顯示隨機圖片卡片",
       "splash": "動畫",

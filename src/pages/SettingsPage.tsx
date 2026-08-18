@@ -192,6 +192,7 @@ function GeneralSettings() {
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
+  const [gameModeEnabled, setGameModeEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [randomImageEnabled, setRandomImageEnabled] = useState(true);
@@ -336,6 +337,15 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_game_win_key_card_enabled");
         if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
+      }
+
+      // 游戏模式（顶栏切换条）显示开关（store 持久化，默认显示）
+      v = await store.get<boolean>("nexbox_game_mode_enabled");
+      if (v !== null && v !== undefined) {
+        setGameModeEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_game_mode_enabled");
+        if (ls !== null) setGameModeEnabled(ls === "true");
       }
 
       // 反馈
@@ -548,6 +558,20 @@ function GeneralSettings() {
       } catch {
         // ignore
       }
+    }
+  };
+
+  const handleGameModeToggle = () => {
+    const newValue = !gameModeEnabled;
+    setGameModeEnabled(newValue);
+    store.set("nexbox_game_mode_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_game_mode_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("game-mode-setting-changed", { detail: newValue }));
+    // 关闭时停用当前生效的游戏模式压制（切回默认档并释放进程），与隐藏保持一致
+    if (!newValue) {
+      invoke("game_mode_set_preset", { preset: "default" }).catch((e) => {
+        console.error("停用游戏模式失败:", e);
+      });
     }
   };
 
@@ -991,6 +1015,22 @@ function GeneralSettings() {
                 size="md"
                 isChecked={gameWinKeyCardEnabled}
                 onChange={handleGameWinKeyCardToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.gameModeLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.gameModeDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={gameModeEnabled}
+                onChange={handleGameModeToggle}
               />
             </HStack>
             <Divider />
@@ -2943,7 +2983,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "8.3.0";
+  const currentVersion = "8.3.8";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

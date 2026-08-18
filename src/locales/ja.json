@@ -1690,6 +1690,8 @@
       "feedbackDesc": "ホームページに画像カルーセルを表示",
       "gameWinKeyLabel": "Winキー無効化カード",
       "gameWinKeyDesc": "ホームページにゲーム中にWinキーを無効化するカードを表示",
+      "gameModeLabel": "ゲームモード",
+      "gameModeDesc": "タイトルバーにゲームモード切替を表示し、デフォルト/通常/競技モードをワンクリックで切替",
       "randomImageLabel": "ランダム画像",
       "randomImageDesc": "ホームページにランダム画像カードを表示",
       "splash": "アニメーション",

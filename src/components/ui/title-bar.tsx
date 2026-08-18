@@ -21,6 +21,7 @@ export function TitleBar() {
 
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [searchBarVisible, setSearchBarVisible] = useState(true);
+  const [gameModeVisible, setGameModeVisible] = useState(true);
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const [isMaximized, setIsMaximized] = useState(false);
 
@@ -34,6 +35,14 @@ export function TitleBar() {
         const ls = localStorage.getItem("nexbox_search_bar_enabled");
         setSearchBarVisible(ls === null ? true : ls === "true");
       }
+      // nexbox_game_mode_enabled（顶栏游戏模式切换条显示）
+      let gm = await store.get<boolean>("nexbox_game_mode_enabled");
+      if (gm !== null && gm !== undefined) {
+        setGameModeVisible(gm);
+      } else {
+        const ls = localStorage.getItem("nexbox_game_mode_enabled");
+        setGameModeVisible(ls === null ? true : ls === "true");
+      }
       // nexbox_nav_position
       let nv = await store.get<string>("nexbox_nav_position");
       if (nv === "top" || nv === "left") {
@@ -43,6 +52,16 @@ export function TitleBar() {
         setNavPosition(ls === "top" ? "top" : "left");
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      setGameModeVisible(!!e.detail);
+    };
+    window.addEventListener("game-mode-setting-changed", handler as EventListener);
+    return () => {
+      window.removeEventListener("game-mode-setting-changed", handler as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -205,7 +224,9 @@ export function TitleBar() {
             {searchBarVisible && <GlobalSearch />}
           </Flex>
           <HStack id="window-controls" spacing={1} h="40px" align="center">
-            <Box transform="translateX(-12px)"><GameModeSwitch /></Box>
+            {gameModeVisible && (
+              <Box transform="translateX(-12px)"><GameModeSwitch /></Box>
+            )}
             <IconButton
               icon={<LuMinus size={18} />}
               aria-label="最小化"

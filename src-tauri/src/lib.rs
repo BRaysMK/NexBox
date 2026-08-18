@@ -55,6 +55,7 @@ mod speedtest;
 mod storage_clean;
 mod storage_scan;
 mod thirdparty_tools;
+mod community_tools;
 mod tray;
 mod uapi;
 mod utils;
@@ -233,6 +234,8 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // 初始化显示滤镜的会话监控窗口（捕获系统关机/注销广播，避免退出时 xcalib 报错）
+            display_filter::init_session_watch();
             // 初始化音乐 API 和音频代理
             let app_handle_for_music = app.handle().clone();
             music_api::audio_proxy::set_app_handle(app_handle_for_music.clone());
@@ -712,6 +715,23 @@ pub fn run() {
         thirdparty_tools::run_tool,
         thirdparty_tools::download_tool,
         thirdparty_tools::open_tool_installer,
+        // === 社区工具（GitCode PR） ===
+        community_tools::get_community_tools,
+        community_tools::get_community_categories,
+        community_tools::search_community_tools,
+        community_tools::get_community_install_status,
+        community_tools::invalidate_community_cache,
+        community_tools::gitcode_login_start,
+        community_tools::get_gitcode_login_status,
+        community_tools::get_gitcode_avatar_data,
+        community_tools::gitcode_logout,
+        community_tools::submit_community_tool,
+        community_tools::delete_community_tool,
+        community_tools::install_community_tool,
+        community_tools::run_community_tool,
+        community_tools::pick_community_package,
+        community_tools::list_zip_entry_exes,
+        community_tools::pick_community_icon,
         overlay_panel::start_overlay_panel,
         overlay_panel::stop_overlay_panel,
         overlay_panel::get_overlay_panel_status,

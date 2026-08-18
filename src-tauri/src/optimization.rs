@@ -3862,9 +3862,15 @@ fn apply_reg_content(content: &str) -> Result<(), String> {
         }
 
         // [HKEY_LOCAL_MACHINE\SYSTEM\...] — 注册表键路径
+        // [-HKEY_LOCAL_MACHINE\...] — 删除整个注册表键
         if line.starts_with('[') && line.ends_with(']') {
             let path = &line[1..line.len() - 1];
-            current_key = Some(open_or_create_reg_key(path)?);
+            if let Some(delete_path) = path.strip_prefix('-') {
+                delete_reg_key(delete_path)?;
+                current_key = None;
+            } else {
+                current_key = Some(open_or_create_reg_key(path)?);
+            }
             continue;
         }
 
@@ -3905,22 +3911,26 @@ fn apply_reg_content(content: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 解析 .reg 键路径为（根键，子路径）
+fn parse_reg_hive(path: &str) -> Result<(RegKey, String), String> {
+    if let Some(sub) = path.strip_prefix("HKEY_LOCAL_MACHINE\\") {
+        Ok((RegKey::predef(HKEY_LOCAL_MACHINE), sub.to_string()))
+    } else if let Some(sub) = path.strip_prefix("HKEY_CURRENT_USER\\") {
+        Ok((RegKey::predef(HKEY_CURRENT_USER), sub.to_string()))
+    } else if let Some(sub) = path.strip_prefix("HKEY_CLASSES_ROOT\\") {
+        Ok((RegKey::predef(HKEY_CLASSES_ROOT), sub.to_string()))
+    } else if let Some(sub) = path.strip_prefix("HKEY_USERS\\") {
+        Ok((RegKey::predef(HKEY_USERS), sub.to_string()))
+    } else {
+        Err(format!("不支持的注册表根键: {}", path))
+    }
+}
+
 /// 根据 .reg 文件中的路径打开或创建注册表键
 fn open_or_create_reg_key(path: &str) -> Result<RegKey, String> {
-    let (root, subpath) = if let Some(sub) = path.strip_prefix("HKEY_LOCAL_MACHINE\\") {
-        (RegKey::predef(HKEY_LOCAL_MACHINE), sub)
-    } else if let Some(sub) = path.strip_prefix("HKEY_CURRENT_USER\\") {
-        (RegKey::predef(HKEY_CURRENT_USER), sub)
-    } else if let Some(sub) = path.strip_prefix("HKEY_CLASSES_ROOT\\") {
-        (RegKey::predef(HKEY_CLASSES_ROOT), sub)
-    } else if let Some(sub) = path.strip_prefix("HKEY_USERS\\") {
-        (RegKey::predef(HKEY_USERS), sub)
-    } else {
-        return Err(format!("不支持的注册表根键: {}", path));
-    };
-
+    let (root, subpath) = parse_reg_hive(path)?;
     let (key, _) = root
-        .create_subkey(subpath)
+        .create_subkey(&subpath)
         .map_err(|e| format!("创建注册表键失败: {} - {}", path, e))?;
 
     Ok(key)
@@ -3928,20 +3938,34 @@ fn open_or_create_reg_key(path: &str) -> Result<RegKey, String> {
 
 /// 只读打开注册表键（不存在时返回 Err），用于扫描优化项状态
 fn open_reg_key_readonly(path: &str) -> Result<RegKey, String> {
-    let (root, subpath) = if let Some(sub) = path.strip_prefix("HKEY_LOCAL_MACHINE\\") {
-        (RegKey::predef(HKEY_LOCAL_MACHINE), sub)
-    } else if let Some(sub) = path.strip_prefix("HKEY_CURRENT_USER\\") {
-        (RegKey::predef(HKEY_CURRENT_USER), sub)
-    } else if let Some(sub) = path.strip_prefix("HKEY_CLASSES_ROOT\\") {
-        (RegKey::predef(HKEY_CLASSES_ROOT), sub)
-    } else if let Some(sub) = path.strip_prefix("HKEY_USERS\\") {
-        (RegKey::predef(HKEY_USERS), sub)
-    } else {
-        return Err(format!("不支持的注册表根键: {}", path));
+    let (root, subpath) = parse_reg_hive(path)?;
+    root.open_subkey_with_flags(&subpath, KEY_READ)
+        .map_err(|e| format!("打开注册表键失败: {} - {}", path, e))
+}
+
+/// 删除整个注册表键（含子键），支持 .reg 中的 [-HKEY_...] 语法
+fn delete_reg_key(path: &str) -> Result<(), String> {
+    let (root, subpath) = parse_reg_hive(path)?;
+
+    // 拆分父路径与叶子键名
+    let (parent_path, leaf) = match subpath.rfind('\\') {
+        Some(pos) => (subpath[..pos].to_string(), subpath[pos + 1..].to_string()),
+        None => (String::new(), subpath),
     };
 
-    root.open_subkey_with_flags(subpath, KEY_READ)
-        .map_err(|e| format!("打开注册表键失败: {} - {}", path, e))
+    let parent = if parent_path.is_empty() {
+        root
+    } else {
+        root.open_subkey_with_flags(&parent_path, KEY_ALL_ACCESS)
+            .map_err(|e| format!("打开注册表父键失败: {} - {}", parent_path, e))?
+    };
+
+    match parent.delete_subkey_all(&leaf) {
+        Ok(_) => Ok(()),
+        // 键不存在（ERROR_FILE_NOT_FOUND）视为已达成删除目标
+        Err(e) if e.raw_os_error() == Some(2) => Ok(()),
+        Err(e) => Err(format!("删除注册表键失败: {} - {}", path, e)),
+    }
 }
 
 /// 检查单个注册表值是否与 .reg 目标一致（dword / 字符串 / 删除值）
@@ -3983,9 +4007,18 @@ fn scan_reg_content(content: &str) -> Result<bool, String> {
         }
 
         // [HKEY_LOCAL_MACHINE\SYSTEM\...] — 注册表键路径
+        // [-HKEY_LOCAL_MACHINE\...] — 删除键目标：键不存在才视为已达成
         if line.starts_with('[') && line.ends_with(']') {
             let path = &line[1..line.len() - 1];
-            current_key = open_reg_key_readonly(path).ok();
+            if let Some(delete_path) = path.strip_prefix('-') {
+                current_key = open_reg_key_readonly(delete_path).ok();
+                // 键仍存在则说明删除目标未达成
+                if current_key.is_some() {
+                    all_match = false;
+                }
+            } else {
+                current_key = open_reg_key_readonly(path).ok();
+            }
             continue;
         }
 

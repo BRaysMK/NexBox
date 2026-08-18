@@ -1339,6 +1339,8 @@
       "feedbackDesc": "Afficher le carrousel d'images sur la page d'accueil",
       "gameWinKeyLabel": "Carte désactivation touche Win",
       "gameWinKeyDesc": "Afficher la carte de désactivation de la touche Win en jeu sur la page d'accueil",
+      "gameModeLabel": "Mode jeu",
+      "gameModeDesc": "Afficher le sélecteur de mode jeu dans la barre de titre pour basculer en un clic entre les modes par défaut/régulier/compétitif",
       "randomImageLabel": "Image aléatoire",
       "randomImageDesc": "Afficher la carte d'image aléatoire sur la page d'accueil",
       "splash": "Animation",
