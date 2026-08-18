@@ -1633,7 +1633,8 @@
     "network": "ネットワーク",
     "sponsor": "スポンサー",
     "navigation": "ナビゲーション",
-    "about": "について",
+        "usage": "使用統計",
+"about": "について",
     "generalSettings": {
       "title": "一般設定",
       "language": "言語",

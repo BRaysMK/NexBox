@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "8.0.9+08162145"
+version = "8.0.9+08182045"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -21,7 +21,8 @@ tauri-build = { version = "2.5", features = [] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.10", features = ["protocol-asset", "tray-icon", "devtools"] }
+# custom-protocol：生产构建必须启用，否则 tauri 视为 dev 模式、不嵌入前端资源（generate_context 按该 feature 判定）
+tauri = { version = "2.10", features = ["custom-protocol", "protocol-asset", "tray-icon", "devtools"] }
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
@@ -80,6 +81,19 @@ encoding_rs = "0.8"
 
 # 本地音频元数据解析（封面/标题/艺术家/时长）
 lofty = "0.21"
+
+# 后台音乐播放引擎（rodio + symphonia 解码，支持 mp3/flac/wav/m4a/ogg 等）
+rodio = { version = "0.20", features = ["symphonia-all"] }
+
+# SMTC（任务栏媒体控件）专用：与 tauri 依赖的 windows 0.58 共存，仅 smtc.rs 使用
+windows62 = { package = "windows", version = "0.62", features = [
+    "Foundation",
+    "Media",
+    "Storage",
+    "Storage_Streams",
+    "Win32_Foundation",
+    "Win32_System_WinRT",
+] }
 
 # 存储清理/垃圾清理/大文件扫描
 walkdir = "2"

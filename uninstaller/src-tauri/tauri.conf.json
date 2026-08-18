@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "UninstNexBox",
-  "version": "8.0.9+08162145",
+  "version": "8.0.9+08182045",
   "identifier": "com.nexbox.uninstaller",
   "build": {
     "frontendDist": "../dist",

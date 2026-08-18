@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState, memo } from "react";
 import { Box, Text } from "@chakra-ui/react";
 import type { KaraokeLine } from "@/types/music";
+import type { PlaybackAudio } from "@/lib/rust-audio";
 import { getLineProgress, calculateScrollOffset } from "@/lib/karaoke-lyrics";
 
 interface KaraokeLyricLineProps {
@@ -28,7 +29,7 @@ interface KaraokeLyricLineProps {
   highlightColor: string;
   textColor: string;
   subTextColor: string;
-  audioRef?: HTMLAudioElement | null;
+  audioRef?: PlaybackAudio | null;
 }
 
 function KaraokeLyricLineInner({

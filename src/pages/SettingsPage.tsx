@@ -51,6 +51,8 @@ import {
   LuUsers,
   LuRotateCcw,
   LuSlidersHorizontal,
+  LuChartColumn,
+  LuCopy,
 } from "react-icons/lu";
 import { RiBilibiliFill, RiTiktokFill } from "react-icons/ri";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
@@ -60,6 +62,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { useFont } from "@/contexts/font-context";
 import { PRESET_COLORS, hexToRgba } from "@/lib/color-utils";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
+import { getUsageStats, getUsageTotal, resetUsageStats, exportUsageStats, type UsageStat } from "@/lib/usage-tracker";
 import { fetchReleaseByTag, type ReleaseInfo } from "@/lib/update-checker";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
@@ -102,6 +105,7 @@ const restrictToVerticalAxis: Modifier = ({ transform }) => ({
 
 const settingItems = [
   { id: "general", labelKey: "settings.general", icon: LuSettings },
+  { id: "usage", labelKey: "settings.usage", icon: LuChartColumn },
   { id: "appearance", labelKey: "settings.appearance", icon: LuMonitor },
   { id: "advanced", labelKey: "settings.advanced.label", icon: LuSlidersHorizontal },
   { id: "hotkeys", labelKey: "settings.hotkeys", icon: LuKeyboard },
@@ -2852,6 +2856,192 @@ function SponsorSettings() {
   );
 }
 
+/** 页面路径 → 友好名称（用于使用统计展示） */
+const PAGE_LABELS: Record<string, string> = {
+  "/": "首页",
+  "/hardware": "硬件信息",
+  "/tools": "工具箱",
+  "/builtin-tools": "内置工具",
+  "/optimize": "优化中心",
+  "/optimize/memory-cleanup": "内存清理",
+  "/optimize/memory-limit": "内存限制",
+  "/optimize/ace-optimize": "ACE 优化",
+  "/optimize/game-process-optimize": "游戏进程优化",
+  "/optimize/shader-cache": "着色器缓存",
+  "/optimize/power-management": "电源管理",
+  "/optimize/storage-clean": "存储清理",
+  "/optimize/startup-manager": "启动项管理",
+  "/optimize/system-optimizer": "系统优化",
+  "/optimize/network-optimizer": "网络优化",
+  "/optimize/peripheral-optimize": "外设优化",
+  "/optimize/windows-update": "系统更新",
+  "/optimize/cpu-scheduler": "CPU 调度",
+  "/display-filter": "显示滤镜",
+  "/settings": "设置",
+  "/crosshair": "准星",
+  "/autoclicker": "连点器",
+  "/disk-health": "磁盘健康",
+  "/overlay-panel": "悬浮面板",
+  "/delta-force": "三角洲行动",
+  "/delta-force/other-platforms": "改枪码平台",
+  "/delta-force/local-gun-codes": "本地改枪码",
+  "/mood": "状态",
+  "/gpu-rename": "显卡改名",
+  "/resolution-converter": "分辨率转换",
+  "/dlss-preset": "DLSS 预设",
+  "/audio-eq": "EQ 调音",
+  "/nvidia-driver": "NVIDIA 驱动",
+  "/nvidia-driver-download": "驱动下载",
+  "/steam": "Steam",
+  "/epic-free": "Epic 喜加一",
+  "/music": "音乐播放器",
+  "/custom": "自定义",
+  "/speedtest": "网速测试",
+  "/runtime-repair": "运行库修复",
+  "/vtx-virtualization": "VT-X 虚拟化",
+  "/vertical-overlay": "垂直悬浮",
+  "/sensor-monitor": "传感器监控",
+};
+
+function UsageStats() {
+  const { t } = useTranslation();
+  const toast = useDynamicIsland("settings");
+  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
+  const dividerColor = useColorModeValue("gray.200", "#333333");
+  const activeColor = useThemeColor().getActiveColor();
+
+  const [stats, setStats] = useState<UsageStat[]>([]);
+  const [total, setTotal] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    // 延迟一帧让按钮状态先更新，避免统计读取阻塞渲染
+    requestAnimationFrame(() => {
+      setStats(getUsageStats());
+      setTotal(getUsageTotal());
+      setRefreshing(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const handleReset = useCallback(() => {
+    resetUsageStats();
+    setStats([]);
+    setTotal(0);
+    toast({ title: t("settings.usageStats.resetDone", "使用统计已清空"), status: "success", duration: 2000, isClosable: true });
+  }, [toast, t]);
+
+  const handleExport = useCallback(() => {
+    try {
+      const json = exportUsageStats();
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "nexbox-usage-stats-" + new Date().toISOString().slice(0, 10) + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: t("settings.usageStats.exportDone", "已导出统计 JSON"), status: "success", duration: 2000, isClosable: true });
+    } catch {
+      toast({ title: t("settings.usageStats.exportFailed", "导出失败"), status: "warning", duration: 2000, isClosable: true });
+    }
+  }, [toast, t]);
+
+  // 统计条目 → 展示名
+  const displayName = (key: string): string => {
+    if (key.startsWith("page:")) {
+      const path = key.slice(5);
+      return PAGE_LABELS[path] || path;
+    }
+    if (key.startsWith("click:")) {
+      return key.slice(6);
+    }
+    return key;
+  };
+
+  const categoryOf = (key: string): "page" | "click" | "action" =>
+    key.startsWith("page:") ? "page" : key.startsWith("click:") ? "click" : "action";
+
+  const categoryLabel = (cat: "page" | "click" | "action") =>
+    cat === "page"
+      ? t("settings.usageStats.categoryPage", "页面访问")
+      : cat === "click"
+      ? t("settings.usageStats.categoryClick", "功能点击")
+      : t("settings.usageStats.categoryAction", "操作");
+
+  const maxCount = stats.length > 0 ? stats[0].count : 1;
+
+  return (
+    <Box>
+      <Text fontSize="lg" fontWeight="bold" mb={2} color={titleColor}>
+        {t("settings.usage", "使用统计")}
+      </Text>
+      <Text fontSize="sm" color={subLabelColor} mb={6}>
+        {t("settings.usageStats.desc", "记录各功能的使用次数，帮助了解最常使用的功能，为后续简化界面提供参考。数据仅保存在本机。")}
+      </Text>
+
+      <HStack spacing={4} mb={4}>
+        <Badge colorScheme="blue" px={3} py={1} fontSize="sm">
+          {t("settings.usageStats.total", "累计记录")}: {total}
+        </Badge>
+        <Button size="sm" variant="outline" leftIcon={<LuRotateCcw />} onClick={refresh} isLoading={refreshing}>
+          {t("settings.usageStats.refresh", "刷新")}
+        </Button>
+        <Button size="sm" variant="outline" leftIcon={<LuDownload />} onClick={handleExport}>
+          {t("settings.usageStats.export", "导出 JSON")}
+        </Button>
+        <Button size="sm" variant="ghost" colorScheme="red" leftIcon={<LuTrash2 />} onClick={handleReset}>
+          {t("settings.usageStats.reset", "清空统计")}
+        </Button>
+      </HStack>
+
+      <LiquidGlassCard px={4} py={3} boxShadow="sm">
+        {stats.length === 0 ? (
+          <Text color={subLabelColor} py={4} textAlign="center">
+            {t("settings.usageStats.empty", "暂无数据 — 使用任意功能后会自动记录")}
+          </Text>
+        ) : (
+          <VStack spacing={1} align="stretch" divider={<Divider borderColor={dividerColor} />} maxH="560px" overflowY="auto">
+            {stats.map((item, idx) => {
+              const cat = categoryOf(item.key);
+              const pct = Math.round((item.count / maxCount) * 100);
+              return (
+                <HStack key={item.key} spacing={3} py={1.5} px={1}>
+                  <Text w="28px" color={idx < 3 ? activeColor : subLabelColor} fontWeight={idx < 3 ? "bold" : "normal"} textAlign="center">
+                    {idx + 1}
+                  </Text>
+                  <Badge colorScheme={cat === "page" ? "green" : cat === "click" ? "purple" : "gray"} variant="subtle" flexShrink={0}>
+                    {categoryLabel(cat)}
+                  </Badge>
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} noOfLines={1}>
+                      {displayName(item.key)}
+                    </Text>
+                    <Box h="4px" bg="blackAlpha.200" borderRadius="full" mt={1} overflow="hidden">
+                      <Box h="100%" bg={activeColor} borderRadius="full" width={`${pct}%`} />
+                    </Box>
+                  </Box>
+                  <Text fontSize="sm" fontWeight="bold" color={titleColor} w="48px" textAlign="right">
+                    {item.count}
+                  </Text>
+                </HStack>
+              );
+            })}
+          </VStack>
+        )}
+      </LiquidGlassCard>
+    </Box>
+  );
+}
+
 function AboutSettings() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("settings");
@@ -2865,7 +3055,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "8.0.9+08162145";
+  const currentVersion = "8.0.9+08182045";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
@@ -3555,6 +3745,7 @@ export default function SettingsPage() {
             导致液态玻璃卡片在切换时先透明、动画结束后瞬间出现模糊 */}
         <div key={activeItem} style={{ position: 'relative', zIndex: 1 }}>
           {activeItem === "general" && <GeneralSettings />}
+          {activeItem === "usage" && <UsageStats />}
           {activeItem === "appearance" && <AppearanceSettings />}
           {activeItem === "advanced" && <AdvancedPage />}
           {activeItem === "hotkeys" && <HotkeySettings />}

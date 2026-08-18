@@ -30,6 +30,7 @@ mod hardware_report;
 
 mod hotkey;
 mod local_gun_codes;
+mod media_keys;
 mod music;
 mod network_optimize;
 #[allow(dead_code, unused_imports)]
@@ -39,6 +40,8 @@ mod nvidia_driver_download;
 mod runtime_repair;
 mod optimization;
 mod overlay_panel;
+mod player;
+mod smtc;
 mod power_settings;
 mod vertical_overlay;
 mod vtx_virtualization;
@@ -234,6 +237,15 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // 后台音乐播放引擎（rodio）：主窗口销毁(托盘)后音乐仍可播放
+            player::init(app.handle().clone());
+            player::register_control_listener(app.handle());
+            // 任务栏媒体控件（SMTC）：注册自己的播放会话
+            smtc::init(app.handle());
+            // 系统媒体键（键盘播放/暂停/上下曲）：SMTC 会话绑定隐藏宿主窗口收不到
+            // 前台 WM_APPCOMMAND，需全局钩子捕获并转发给音乐引擎
+            media_keys::init(app.handle());
+
             // 初始化音乐 API 和音频代理
             let app_handle_for_music = app.handle().clone();
             music_api::audio_proxy::set_app_handle(app_handle_for_music.clone());
@@ -343,8 +355,10 @@ pub fn run() {
                     match event {
                         tauri::WindowEvent::CloseRequested { api, .. } => {
                             api.prevent_close();
-                            let _ = main_clone.hide();
+                            // 关闭按钮 = 最小化到托盘：destroy 释放全部 WebView2 进程
+                            // （hide 只隐藏窗口，WebView2 常驻导致后台内存 ~2GB）
                             emit_main_visibility(&main_clone.app_handle(), false);
+                            let _ = main_clone.destroy();
                         }
                         tauri::WindowEvent::Resized(_) => {
                             let minimized = main_clone.is_minimized().unwrap_or(false);
@@ -456,6 +470,18 @@ pub fn run() {
         music::import_local_music,
         music::import_local_music_folder,
         music::get_local_lyric,
+        // === 后台播放引擎（rodio）===
+        player::player_play,
+        player::player_pause,
+        player::player_resume,
+        player::player_toggle,
+        player::player_seek,
+        player::player_set_volume,
+        player::player_stop,
+        player::player_get_state,
+        player::player_set_queue,
+        player::player_set_now_playing,
+        smtc::smtc_update_metadata,
         // === 音乐播放器 API ===
         music_api::music_search,
         music_api::music_song_url,
@@ -951,6 +977,7 @@ pub fn run() {
                 autoclicker::cleanup();
                 audio_eq::cleanup();
                 tray::cleanup();
+                media_keys::cleanup();
                 hotkey::cleanup(app_handle);
                 nvapi::cleanup();
                 hardware_report::stop_recording();

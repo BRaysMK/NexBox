@@ -19,6 +19,7 @@ import { useEffect, useRef, useState, memo } from "react";
 import { Box, VStack, Spinner, Text } from "@chakra-ui/react";
 import { Music as MusicIcon } from "lucide-react";
 import type { KaraokeLine } from "@/types/music";
+import type { PlaybackAudio } from "@/lib/rust-audio";
 import { KaraokeLyricLine } from "./KaraokeLyricLine";
 
 interface KaraokeLyricsViewProps {
@@ -30,7 +31,7 @@ interface KaraokeLyricsViewProps {
   textColor: string;
   subTextColor: string;
   scrollbarSx: Record<string, unknown>;
-  audioRef?: HTMLAudioElement | null;
+  audioRef?: PlaybackAudio | null;
   isPlaying: boolean;
 }
 

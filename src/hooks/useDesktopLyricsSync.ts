@@ -144,6 +144,25 @@ export function useDesktopLyricsSync() {
         })
       );
 
+      // 主窗口可能被销毁（最小化到托盘），此时 desktop-lyrics:time 事件源消失；
+      // 直接监听 Rust 播放引擎的 player-tick 保证歌词进度继续推进
+      unlistenFns.push(
+        await listen<{ position: number; duration: number; isPlaying: boolean }>(
+          "player-tick",
+          (e) => {
+            const p: { position: number; duration: number; isPlaying: boolean } = e.payload ?? { position: audioTimeRef.current, duration: 0, isPlaying: false };
+            const pos = typeof p.position === "number" ? p.position : audioTimeRef.current;
+            const playing = !!p.isPlaying;
+            audioTimeRef.current = pos;
+            lastSyncRef.current = performance.now();
+            isPlayingRef.current = playing;
+            if (!playing) {
+              setEstimatedTime(pos);
+            }
+          }
+        )
+      );
+
       if (cancelled) {
         unlistenFns.forEach((fn) => fn());
         return;

@@ -1335,7 +1335,8 @@
     "network": "Netzwerk",
     "sponsor": "Unterstützen",
     "navigation": "Navigation",
-    "about": "Über",
+        "usage": "Nutzungsstatistik",
+"about": "Über",
     "generalSettings": {
       "title": "Allgemeine Einstellungen",
       "language": "Sprache",

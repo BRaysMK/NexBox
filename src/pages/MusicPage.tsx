@@ -72,6 +72,7 @@ import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
+import { RustAudio, type PlaybackAudio } from "@/lib/rust-audio";
 import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { VirtualList } from "@/components/VirtualList";
@@ -321,7 +322,7 @@ const ProgressSection = memo(function ProgressSection({
   activeColor: string;
   subTextColor: string;
   sliderTrackBg: string;
-  audioRef: HTMLAudioElement | null;
+  audioRef: PlaybackAudio | null;
   currentSongId?: string | number;
 }) {
   const [localCurrentTime, setLocalCurrentTime] = useState(0);
@@ -2524,7 +2525,7 @@ export default function MusicPage() {
   const storeActionsRef = useRef(useMusicStore.getState());
   const storeActions = storeActionsRef.current;
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<PlaybackAudio | null>(null);
   const [viewMode, setViewMode] = useState<"main" | "unifiedSearch" | "fullArtistList" | "artistDetail">("main");
   const [searchInput, setSearchInput] = useState("");
   const [searchTab, setSearchTab] = useState<"songs" | "playlists" | "artists">("songs");
@@ -2631,7 +2632,7 @@ export default function MusicPage() {
 
   useEffect(() => {
     const storeState = useMusicStore.getState();
-    const audio = storeState.audioRef ?? new Audio();
+    const audio = storeState.audioRef ?? new RustAudio();
     const isExisting = !!storeState.audioRef;
 
     audioRef.current = audio;
@@ -2659,11 +2660,10 @@ export default function MusicPage() {
     }
 
     const initAndResume = async () => {
+      // init 内部完成：恢复引擎真实播放状态（歌曲/进度）、SMTC 元数据重推，
+      // 以及引擎空闲时按上次保存状态自动续播队列。这里不再重复 playSong，
+      // 避免引擎仍在播放/暂停时被重新 playSong 重置进度或重复请求 URL。
       await storeActions.init();
-      const state = useMusicStore.getState();
-      if (state.currentSong && !isExisting) {
-        state.playSong(state.currentSong);
-      }
     };
     initAndResume();
 

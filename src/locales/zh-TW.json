@@ -1319,7 +1319,8 @@
     "network": "網路",
     "sponsor": "贊助",
     "navigation": "導航欄",
-    "about": "關於",
+        "usage": "使用統計",
+"about": "關於",
     "generalSettings": {
       "title": "一般設定",
       "language": "語言",

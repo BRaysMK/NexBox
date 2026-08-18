@@ -102,6 +102,8 @@ pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     let _ = window.unminimize();
     let _ = window.set_focus();
     crate::emit_main_visibility(app, true);
+    // SMTC 会话绑定进程级持久隐藏窗口，不随主窗口销毁；此处 init 为幂等 no-op，仅作保险
+    crate::smtc::init(app);
 }
 
 pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn std::error::Error>> {

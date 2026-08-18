@@ -117,6 +117,7 @@ MCTier技术介绍.md
 debug.log
 .temp_old_filter.rs
 monitor/build.log
+build-release.log
 
 # Third-party reference project (downloaded Mineradio source, not part of repo)
 Mineradio-main/

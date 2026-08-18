@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
+import type { PlaybackAudio } from "@/lib/rust-audio";
 import { Store } from "@tauri-apps/plugin-store";
 import type {
   Song,
@@ -134,12 +135,12 @@ interface MusicState {
   // Toast 通知
   musicToast: { type: "warning"; message: string } | null;
 
-  // 音频元素引用
-  audioRef: HTMLAudioElement | null;
+  // 音频元素引用（RustAudio 适配器，模拟 HTMLAudioElement 接口）
+  audioRef: PlaybackAudio | null;
 
   // Actions
   init: () => Promise<void>;
-  setAudioRef: (audio: HTMLAudioElement | null) => void;
+  setAudioRef: (audio: PlaybackAudio | null) => void;
 
   // 本地导入歌曲 Actions
   loadLocalSongs: () => Promise<void>;
@@ -358,6 +359,152 @@ async function getProxyAudioUrl(rawUrl: string, proxyPort: number): Promise<stri
   return `http://127.0.0.1:${proxyPort}/audio?url=${encodeURIComponent(rawUrl)}`;
 }
 
+
+// ── 播放状态持久化：主窗口销毁(托盘)重建后恢复播放 UI ──
+// 原理：Rust 播放引擎(rodio)不随窗口销毁，音乐继续；前端状态丢失后
+// 从 localStorage 恢复 currentSong/队列，再通过 player_get_state 恢复进度。
+const PLAYBACK_STATE_KEY = "nexbox.music.playbackState.v1";
+
+interface PersistedPlayback {
+  song: Song | null;
+  queue: Song[];
+  index: number;
+  at: number;
+  playing: boolean;
+}
+
+/// 当前实际交给 Rust 引擎的播放源（在线=原始音频 URL，本地=文件路径）。
+/// 同步给引擎队列快照时，当前曲目用这个值标记已解析源。
+let currentEngineSrc = "";
+
+function savePlaybackState() {
+  try {
+    const s = useMusicStore.getState();
+    const data: PersistedPlayback = {
+      song: s.currentSong,
+      queue: s.playQueue,
+      index: s.currentIndex,
+      at: s.currentTime,
+      playing: s.isPlaying,
+    };
+    localStorage.setItem(PLAYBACK_STATE_KEY, JSON.stringify(data));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function loadPlaybackState(): PersistedPlayback | null {
+  try {
+    const raw = localStorage.getItem(PLAYBACK_STATE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PersistedPlayback;
+  } catch {
+    return null;
+  }
+}
+
+/// 供窗口重建后调用：恢复 UI 状态（不重复播放，由 Rust 引擎继续）。
+///
+/// 关键点：
+/// 1. 歌曲信息以「引擎实际播放的歌曲」为准（current_song），而不是 localStorage 快照，
+///    避免最小化期间引擎已自动切歌/被 SMTC 控制切歌后，前端恢复出旧歌名。
+/// 2. 进度一律用引擎的 position（暂停时引擎也知道真实位置），避免显示 0:00。
+/// 3. 返回 { playing, hasSource } 供 initAndResume 判断：引擎还有源（播放中/暂停）
+///    时不重新 playSong，避免重取 URL 变慢、进度归零。
+async function restorePlaybackFromBackend(): Promise<{ playing: boolean; hasSource: boolean; engineSong: boolean }> {
+  const result = { playing: false, hasSource: false, engineSong: false };
+  try {
+    const saved = loadPlaybackState();
+    const state = await invoke<{
+      is_playing: boolean;
+      position: number;
+      duration: number;
+      current_src: string;
+      current_song: Song | null;
+    }>("player_get_state");
+    const hasSource = !!state.current_src;
+    result.hasSource = hasSource;
+    const playing = !!state.is_playing && hasSource;
+    result.playing = playing;
+    // 引擎是否记录过“本会话播放过歌曲”（用于区分冷启动与隐藏期间歌曲播完）
+    result.engineSong = !!state.current_song;
+
+    // 引擎真实歌曲优先；引擎空闲时回退到本地快照
+    const engineSong = state.current_song as Song | null;
+    const song = engineSong ?? saved?.song ?? null;
+    if (song) {
+      const queue = saved?.queue ?? [];
+      const idx = queue.findIndex((s) => s.id === song.id);
+      useMusicStore.setState({
+        currentSong: song,
+        playQueue: queue,
+        currentIndex: idx >= 0 ? idx : (saved?.index ?? 0),
+        // 引擎有源时用引擎位置（播放中/暂停都准确）；空闲时用快照时间
+        currentTime: hasSource ? (state.position ?? saved?.at ?? 0) : (saved?.at ?? 0),
+        duration: state.duration ?? 0,
+        isPlaying: playing,
+      });
+      // 同步 RustAudio 镜像，暂停状态下没有 player-tick 也能显示正确进度
+      const audio = useMusicStore.getState().audioRef;
+      audio?.syncState?.(
+        hasSource ? (state.position ?? saved?.at ?? 0) : (saved?.at ?? 0),
+        state.duration ?? 0,
+        playing
+      );
+      // SMTC：窗口重建后重新推送元数据与封面（会话常驻，需恢复展示）。
+      // 暂停状态也重推，避免引擎侧切歌后飞控面板停留在旧曲的元数据/封面
+      if (hasSource) {
+        if (playing) useMusicStore.getState().loadLyricsForSong(song);
+        invoke("smtc_update_metadata", {
+          title: song.name || "未知歌曲",
+          artist: song.artist || "未知歌手",
+          album: song.album || "",
+          cover: song.cover || "",
+        }).catch(() => {});
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return result;
+}
+
+/// 把 Song 转换为引擎队列快照条目（player_set_queue 的参数）
+function buildQueueEntry(song: Song, currentSrc: string) {
+  const isLocal = song.provider === "local";
+  const isCurrent = song.id === useMusicStore.getState().currentSong?.id;
+  return {
+    id: song.id || "",
+    name: song.name || "",
+    artist: song.artist || "",
+    album: song.album || "",
+    // 封面随队列快照同步给引擎：主窗口销毁后引擎侧切歌时能恢复/更新 SMTC 封面
+    cover: song.cover || "",
+    provider: song.provider || "",
+    kind: isLocal ? "local" : "url",
+    // 仅本地歌曲与当前歌曲带已解析的 src；在线队列其余曲目由引擎按 provider 字段在线解析
+    src: isLocal ? (song._localPath || song.hash || "") : isCurrent ? currentSrc : "",
+    duration: song.duration ? song.duration / 1000 : 0,
+    quality: useMusicStore.getState().playbackQuality || "standard",
+    hash: song.hash || "",
+    album_id: song.album_id || "",
+    album_audio_id: song.album_audio_id || "",
+    hq_hash: song.hq_hash || "",
+    sq_hash: song.sq_hash || "",
+    res_hash: song.res_hash || "",
+    mid: song.mid || "",
+    media_mid: song.media_mid || "",
+  };
+}
+
+/// 把当前播放队列快照同步给 Rust 引擎（主窗口销毁后上下曲/自动续播依赖它）
+function syncEngineQueue() {
+  const st = useMusicStore.getState();
+  if (st.playQueue.length === 0) return;
+  const entries = st.playQueue.map((s) => buildQueueEntry(s, currentEngineSrc));
+  invoke("player_set_queue", { queue: entries }).catch(() => {});
+}
+
 export function coverProxyUrl(url: string, proxyPort: number): string {
   if (!url) return "";
   if (url.startsWith("data:") || url.startsWith("blob:")) return url;
@@ -420,6 +567,8 @@ async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalC
     const toAdd = unique.slice(0, Math.max(0, remaining));
     if (toAdd.length > 0) {
       useMusicStore.setState({ playQueue: [...state.playQueue, ...toAdd] });
+      // 队列追加后同步引擎快照（最小化期间上下曲/自动续播能看到新曲目）
+      syncEngineQueue();
     }
   }
 }
@@ -743,6 +892,22 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (listenersRegistered) return;
     listenersRegistered = true;
 
+    // 恢复上次播放状态（主窗口销毁重建后：音乐仍在 Rust 引擎播放，恢复 UI 展示）
+    const restore = await restorePlaybackFromBackend();
+    // 引擎完全空闲（无播放源）但保存状态为“正在播放”：
+    // - 引擎记录过本会话歌曲（隐藏期间播完）→ 自动续播队列，保持后台音乐继续的预期
+    // - 冷启动（引擎无记录）→ 恢复上次播放的歌曲
+    if (!restore.hasSource) {
+      const saved = loadPlaybackState();
+      if (saved?.playing && saved.song) {
+        if (restore.engineSong && saved.queue.length > 1) {
+          get().nextTrack();
+        } else {
+          get().playSong(saved.song);
+        }
+      }
+    }
+
     // 桌面歌词控制事件监听
     unlistenFns.push(
       await listen<{ action: string }>("desktop-lyrics:control", (event) => {
@@ -786,6 +951,27 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             break;
           case "next":
             get().nextTrack();
+            break;
+        }
+      })
+    );
+
+    // 任务栏媒体控件（SMTC）按钮事件：play/pause/next/prev
+    unlistenFns.push(
+      await listen<{ action: string }>("smtc-control", (event) => {
+        const { action } = event.payload;
+        switch (action) {
+          case "play":
+            if (!get().isPlaying) get().togglePlay();
+            break;
+          case "pause":
+            if (get().isPlaying) get().togglePlay();
+            break;
+          case "next":
+            get().nextTrack();
+            break;
+          case "prev":
+            get().prevTrack();
             break;
         }
       })
@@ -1097,7 +1283,17 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       unplayableSkipCount = 0;
     }
     set({ currentSong: song, currentTime: 0, duration: 0, isPlaying: false });
+    savePlaybackState();
+    // 引擎同步：当前歌曲完整信息（窗口重建后恢复 UI 用，保证与引擎实际播放一致）
+    invoke("player_set_now_playing", { song }).catch(() => {});
     get().loadLyricsForSong(song);
+    // SMTC：更新任务栏媒体控件元数据（标题/歌手/专辑/封面）
+    invoke("smtc_update_metadata", {
+      title: song.name || "未知歌曲",
+      artist: song.artist || "未知歌手",
+      album: song.album || "",
+      cover: song.cover || "",
+    }).catch(() => {});
     // 心动模式：仅对"我喜欢"歌单生效。
     // 用户手动播放（传入 queue）且队列非"我喜欢"歌单时自动降级为随机播放；
     // 心动模式自动续播（不传 queue）不触发降级，保证相似歌曲连续播放
@@ -1133,9 +1329,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           return;
         }
         if (mySeq !== playSongSeq) return;
-        const audioUrl = convertFileSrc(localPath);
-        audio.src = audioUrl;
+        // RustAudio 适配器：直接传本地路径（不再 convertFileSrc，后端 rodio 直接读文件）
+        currentEngineSrc = localPath;
+        audio.src = localPath;
         audio.volume = state.volume;
+        syncEngineQueue();
         try {
           await audio.play();
           if (mySeq !== playSongSeq) return;
@@ -1218,8 +1416,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
       if (mySeq !== playSongSeq) return;
 
+      currentEngineSrc = result.url;
       audio.src = audioUrl;
       audio.volume = state.volume;
+      syncEngineQueue();
       await audio.play();
 
       if (mySeq !== playSongSeq) return;
@@ -1270,7 +1470,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           if (song.provider === "local") {
             const localPath = song._localPath || song.hash;
             if (localPath) {
-              audioRef.src = convertFileSrc(localPath);
+              audioRef.src = localPath;
               audioRef.currentTime = savedTime;
               try {
                 await audioRef.play();
