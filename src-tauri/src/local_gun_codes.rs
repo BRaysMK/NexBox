@@ -563,15 +563,77 @@ fn learn_prefix(app: &tauri::AppHandle, code: &str, weapon_name: &str, note: &st
     log::info!("[LocalGunCode] 已学习前缀 {prefix} → {weapon_name} / {note}");
 }
 
+/// 收集全部已知枪名（内置 + 学习），用于行内识别
+fn known_gun_names(app: &tauri::AppHandle) -> std::collections::HashSet<String> {
+    let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for v in builtin_prefix_map().values() {
+        known.insert(v.0.clone());
+    }
+    for v in load_prefix_map(app).values() {
+        known.insert(v.0.clone());
+    }
+    known
+}
+
+/// 行内识别（与批量导入同款逻辑）：一行文本中找 20~32 位代码，
+/// 用「代码前」文本做已知枪名最长匹配（去连字符），配置名取代码后文本，
+/// 其次取代码前去掉枪名后的文本。
+fn recognize_from_line(app: &tauri::AppHandle, line: &str) -> Option<(String, String)> {
+    let clean_all: String = line.chars().filter(|c| c.is_ascii_alphanumeric() || c.is_whitespace()).collect();
+    let mut code: Option<String> = None;
+    for tok in clean_all.split_whitespace() {
+        if tok.chars().all(|c| c.is_ascii_alphanumeric()) && tok.len() >= 20 && tok.len() <= 32 {
+            code = Some(tok.to_string());
+            break;
+        }
+    }
+
+    let line_upper = line.to_uppercase();
+    let (before, after) = match code.as_ref() {
+        Some(c) => {
+            let cu = c.to_uppercase();
+            match line_upper.find(&cu) {
+                Some(i) => (line[..i].to_string(), line[i + c.len()..].to_string()),
+                None => (line.to_string(), String::new()),
+            }
+        }
+        None => (line.to_string(), String::new()),
+    };
+
+    let before_clean = before.to_uppercase().replace('-', "");
+    let mut gun: Option<String> = None;
+    let mut best_len = 0usize;
+    for k in known_gun_names(app) {
+        let ku = k.to_uppercase().replace('-', "");
+        if !ku.is_empty() && before_clean.contains(&ku) && ku.chars().count() > best_len {
+            gun = Some(k.clone());
+            best_len = ku.chars().count();
+        }
+    }
+    let g = gun?;
+
+    let mut note = after.trim().to_string();
+    if note.is_empty() {
+        let mut b = before.trim().to_string();
+        b = b.replacen(&g.to_uppercase(), "", 1).replace(&g.clone(), "").trim().to_string();
+        note = b;
+    }
+    Some((g, note))
+}
+
 /// 从代码中识别枪名 + 配置名
 pub fn recognize_weapon(app: &tauri::AppHandle, code: &str) -> Option<(String, String)> {
     // 0. 前缀映射识别（学习式，最优先，含配置名）
     if let Some(result) = recognize_by_prefix(app, code) {
         return Some(result);
     }
+    // 1. 行内识别（与批量导入一致：已知枪名最长匹配 + 配置名提取）
+    if let Some(result) = recognize_from_line(app, code) {
+        return Some(result);
+    }
     let upper = code.to_uppercase();
 
-    // 1. 尝试提取 DELTA- 前缀格式的枪名（如 "DELTA-M4A1-001"）
+    // 2. 尝试提取 DELTA- 前缀格式的枪名（如 "DELTA-M4A1-001"）
     if let Some(start) = upper.find("DELTA-") {
         let rest = &upper[start + 6..];
         if let Some(end) = rest.find('-') {
@@ -582,7 +644,7 @@ pub fn recognize_weapon(app: &tauri::AppHandle, code: &str) -> Option<(String, S
         }
     }
 
-    // 2. 尝试提取 "-XXX-001" 模式（改枪码常见格式）
+    // 3. 尝试提取 "-XXX-001" 模式（改枪码常见格式）
     let parts: Vec<&str> = upper.split('-').collect();
     for (i, part) in parts.iter().enumerate() {
         if part.len() >= 2 && part.len() <= 10 && i > 0 && parts.get(i + 1).map_or(false, |n| n.chars().all(|c| c.is_ascii_digit())) {
@@ -702,13 +764,7 @@ pub fn import_gun_codes_batch(app: tauri::AppHandle, text: String) -> Result<Imp
     let mut added_any = false;
 
     // 收集全部已知枪名（内置 + 学习），用于行内识别
-    let mut known: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for v in builtin_prefix_map().values() {
-        known.insert(v.0.clone());
-    }
-    for v in load_prefix_map(&app).values() {
-        known.insert(v.0.clone());
-    }
+    let known = known_gun_names(&app);
 
     let mut last_gun: Option<String> = None;
     let mut last_desc: Option<String> = None;
