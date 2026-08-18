@@ -9,6 +9,7 @@ mod cpu_scheduler;
 mod crosshair;
 mod dattorro;
 mod delta_force;
+mod local_gun_codes;
 mod disk_optimize;
 mod spectrum;
 mod display_cache;
@@ -808,6 +809,14 @@ pub fn run() {
         delta_force::toggle_dlss_lock,
         delta_force::get_dlss_settings_status,
         delta_force::open_platform_window,
+        local_gun_codes::get_local_gun_codes,
+        local_gun_codes::add_local_gun_code,
+        local_gun_codes::delete_local_gun_code,
+        local_gun_codes::update_local_gun_code,
+        local_gun_codes::recognize_gun_name,
+        local_gun_codes::import_gun_codes_batch,
+        local_gun_codes::export_gun_codes,
+        local_gun_codes::import_gun_codes,
         game_launcher::launch_game,
         game_launcher::search_delta_force_launcher,
         game_launcher::get_default_delta_force_game,

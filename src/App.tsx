@@ -15,6 +15,7 @@ import CrosshairPage from "./pages/CrosshairPage";
 import DiskHealthPage from "./pages/DiskHealthPage";
 import OverlayPanelPage from "./pages/OverlayPanelPage";
 import DeltaForcePage from "./pages/DeltaForcePage";
+import LocalGunCodesPage from "./pages/LocalGunCodesPage";
 import OtherGunCodePlatformsPage from "./pages/OtherGunCodePlatformsPage";
 import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
@@ -139,6 +140,7 @@ function App() {
               <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
               <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
               <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
+              <Route path="/delta-force/local-gun-codes" element={<AnimatedPage><LocalGunCodesPage /></AnimatedPage>} />
               <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
               <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
               <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
@@ -185,6 +187,7 @@ function App() {
             <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
             <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
             <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
+            <Route path="/delta-force/local-gun-codes" element={<AnimatedPage><LocalGunCodesPage /></AnimatedPage>} />
             <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
             <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
             <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />

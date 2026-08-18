@@ -31,7 +31,7 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { Search, Heart, Copy, Check, MapPin, Plus, ChevronLeft, ChevronRight, Globe, Flag, Map, Image } from "lucide-react";
+import { Search, Heart, Copy, Check, MapPin, Plus, ChevronLeft, ChevronRight, Globe, Flag, Map, Image, Database } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
@@ -275,6 +275,60 @@ function MoreGunCodesCard() {
       transition="background-color 0.2s"
       as={Link}
       to="/delta-force/other-platforms"
+      style={{ textDecoration: "none" }}
+    >
+      {content}
+    </Box>
+  );
+}
+
+// ── LocalGunCodesCard ──
+function LocalGunCodesCard() {
+  const { t } = useTranslation();
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
+  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardHoverBg = useColorModeValue("gray.100", "#222222");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const { liquidGlassEnabled } = useBackground();
+  const textColor = useColorModeValue("#000000", "#ffffff");
+
+  const content = (
+    <VStack align="center" spacing={3} py={2} justify="center" h="100%">
+      <Database size={28} color={primaryColor} />
+      <Text fontWeight="semibold" fontSize="sm" color={textColor} textAlign="center">
+        {t("deltaForce.localGunCodes", "本地改枪码库")}
+      </Text>
+      <Text color={subTextColor} fontSize="xs" textAlign="center">
+        {t("deltaForce.localGunCodesDesc", "粘贴自动识别枪名配置，支持批量导入")}
+      </Text>
+    </VStack>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <Box flex={1} as={Link} to="/delta-force/local-gun-codes" style={{ textDecoration: "none" }}>
+        <LiquidGlassCard p={4} h="100%" cursor="pointer">
+          {content}
+        </LiquidGlassCard>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      flex={1}
+      bg={cardBg}
+      borderRadius="xl"
+      p={4}
+      border="1px solid"
+      borderColor={borderColor}
+      cursor="pointer"
+      _hover={{ bg: cardHoverBg }}
+      transition="background-color 0.2s"
+      as={Link}
+      to="/delta-force/local-gun-codes"
       style={{ textDecoration: "none" }}
     >
       {content}
@@ -1053,6 +1107,7 @@ export default function DeltaForcePage() {
       {/* 更多改枪码 / 官方地图 / 官方壁纸 */}
       <HStack align="stretch" spacing={6} mb={6}>
         <MoreGunCodesCard />
+        <LocalGunCodesCard />
         <OfficialMapCard />
         <OfficialWallpaperCard />
       </HStack>
