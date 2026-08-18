@@ -28,6 +28,7 @@ mod hardware_report;
 
 mod feature_flags;
 mod hotkey;
+mod media_keys;
 mod music;
 mod network_optimize;
 #[allow(dead_code, unused_imports)]
@@ -424,6 +425,9 @@ pub fn run() {
             let _ = hotkey::init_music_playpause(app.handle(), &music_playpause_hotkey);
             let _ = hotkey::init_lyrics_btn_toggle(app.handle(), &lyrics_btn_hotkey);
 
+            // 系统媒体键（键盘 播放/暂停/上一首/下一首）全局钩子
+            media_keys::init(app.handle());
+
             // 若保存的总开关为“关闭”，上面已注册的热键需立即注销以释放按键
             if !hotkey::is_hotkeys_enabled() {
                 hotkey::apply_hotkeys_enabled(app.handle(), false);
@@ -448,6 +452,7 @@ pub fn run() {
         music::import_local_music,
         music::import_local_music_folder,
         music::get_local_lyric,
+        media_keys::set_music_session_active,
         // === 音乐播放器 API ===
         music_api::music_search,
         music_api::music_song_url,
@@ -967,6 +972,7 @@ pub fn run() {
                 audio_eq::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);
+                media_keys::cleanup();
                 nvapi::cleanup();
                 hardware_report::stop_recording();
             }

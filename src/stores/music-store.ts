@@ -708,6 +708,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           case "play-pause":
             get().togglePlay();
             break;
+          case "play":
+            if (!get().isPlaying) get().togglePlay();
+            break;
+          case "pause":
+            if (get().isPlaying) get().togglePlay();
+            break;
           case "prev":
             get().prevTrack();
             break;

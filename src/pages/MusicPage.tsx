@@ -72,6 +72,7 @@ import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
+import { setupMediaSessionSync } from "@/lib/media-session";
 import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { VirtualList } from "@/components/VirtualList";
@@ -722,6 +723,22 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
     };
   }, []);
 
+  // 音量滚轮调节：悬停音量控件上滚动滚轮，一格 ±5%（非被动监听，同时阻止页面滚动）
+  const volumeWheelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = volumeWheelRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const s = useMusicStore.getState();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const next = Math.min(1, Math.max(0, Math.round((s.volume + dir * 0.05) * 100) / 100));
+      s.setVolume(next);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [currentSong]);
+
   if (!currentSong) return null;
 
   const isLiked = likedSongIds.has(currentSong.id);
@@ -1209,6 +1226,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           {/* 音量控制：悬停向右展开滑块 */}
           <Box
             role="group"
+            ref={volumeWheelRef}
             position="relative"
             sx={{
               "&:hover .volume-slider": {
@@ -1599,6 +1617,23 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
   const desktopLyricsVisible = useMusicStore((s) => s.desktopLyricsVisible);
   const [dlSettingsOpen, setDlSettingsOpen] = useState(false);
 
+  // 音量滚轮调节：悬停音量控件上滚动滚轮，一格 ±5%（非被动监听，同时阻止页面滚动）
+  // 依赖 currentSong：PlayerBar 常驻挂载，无歌时不渲染音量控件，有歌后需重挂监听
+  const volumeWheelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = volumeWheelRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const s = useMusicStore.getState();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const next = Math.min(1, Math.max(0, Math.round((s.volume + dir * 0.05) * 100) / 100));
+      s.setVolume(next);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [currentSong]);
+
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
 
   const activeColor = getActiveColor();
@@ -1753,6 +1788,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
                 </MenuList>
               </Portal>
             </Menu>
+            <Box ref={volumeWheelRef} display="inline-flex" alignItems="center" gap="4px">
             <Tooltip label="静音">
               <IconButton
                 aria-label="Mute"
@@ -1796,6 +1832,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
               },
             }}
           />
+            </Box>
           </HStack>
 
           {/* 桌面歌词开关 + 设置 */}
@@ -2635,6 +2672,9 @@ export default function MusicPage() {
 
     audioRef.current = audio;
     storeActions.setAudioRef(audio);
+
+    // 注册 Windows 任务栏媒体控件（SMTC）：元数据/播放状态/进度同步 + 系统按钮事件
+    setupMediaSessionSync();
 
     if (!isExisting) {
       audio.addEventListener("ended", () => {
