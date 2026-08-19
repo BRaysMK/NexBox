@@ -24,6 +24,7 @@ import {
   InputGroup,
   InputLeftElement,
 } from "@chakra-ui/react";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useProcessIcons } from "@/hooks/use-process-icons";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -761,6 +762,7 @@ export default function GameProcessOptimizePage() {
   const cardBg = useColorModeValue("white", "#111111");
   const borderColorVal = useColorModeValue("gray.200", "#333333");
   const { getActiveColor } = useThemeColor();
+  const adaptiveTitle = useAdaptiveTextColor();
 
   const [configs, setConfigs] = useState<GameOptimizeConfig[]>([]);
   const [autoStatuses, setAutoStatuses] = useState<Record<string, GameAutoStatus>>({});
@@ -1060,7 +1062,7 @@ export default function GameProcessOptimizePage() {
             onClick={() => navigate("/optimize")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor}>
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             {t("gameProcessOptimize.title")}
           </Heading>
         </HStack>

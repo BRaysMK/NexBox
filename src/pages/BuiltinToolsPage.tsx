@@ -36,6 +36,7 @@ import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggl
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { store } from "@/lib/store";
 import type { ViewItem } from "@/components/special/view-types";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 const STORE_KEY = "nexbox_builtin_tools_order";
 const LS_KEY = "nexbox_builtin_tools_order";
@@ -223,11 +224,12 @@ export default function BuiltinToolsPage() {
   }, []);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
 
   const content = (
     <VStack align="start" spacing={6}>
       <Flex w="full" justify="space-between" align="center">
-        <Heading size="lg" color={headingColor}>
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t("builtinTools.title")}
         </Heading>
         <LiquidGlassCard display="inline-flex" p={1} boxShadow="sm">

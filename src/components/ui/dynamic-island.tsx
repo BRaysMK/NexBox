@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { motion, useAnimationControls } from "framer-motion";
 import { useColorModeValue, Tooltip } from "@chakra-ui/react";
+import { useNavigate } from "react-router-dom";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import {
   Zap,
@@ -33,6 +34,9 @@ import {
   Settings,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import type { ExternalPlayback, Song } from "@/types/music";
 
 export type IslandStatus = "success" | "error" | "info" | "warning" | "loading" | "blue";
 
@@ -596,32 +600,86 @@ function formatMusicTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** 音乐播放灵动岛内容：折叠为「封面 + 音量波动」，展开为更高的播放控制布局。 */
+/** 音乐播放灵动岛内容：折叠为「封面 + 音量波动」，展开为更高的播放控制布局。
+ *  支持两种来源：NexBox 内部播放器（currentSong/audioRef）或外部客户端（SMTC 接管，
+ *  优先显示外部客户端）。 */
 function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expanded: boolean; expandedVisible: boolean; foldVisible: boolean }) {
+  const navigate = useNavigate();
   const currentSong = useMusicStore((s) => s.currentSong);
   const isPlaying = useMusicStore((s) => s.isPlaying);
+  // 外部客户端播放（SMTC 接管），非空时优先级高于内部播放器
+  const externalTrack = useMusicStore((s) => s.externalTrack);
+  const externalPlaying = useMusicStore((s) => s.externalPlaying);
+  const externalPositionMs = useMusicStore((s) => s.externalPositionMs);
+  const externalDurationMs = useMusicStore((s) => s.externalDurationMs);
+  const isExternal = Boolean(externalTrack?.title) && !(currentSong && (isPlaying || !externalPlaying));
   const proxyPort = useMusicStore((s) => s.proxyPort);
   const audioRef = useMusicStore((s) => s.audioRef);
   const actionsRef = useRef(useMusicStore.getState());
-  const levels = useSongLevels(isPlaying);
+  const playing = isExternal ? externalPlaying : isPlaying;
+  const levels = useSongLevels(playing);
 
   const [time, setTime] = useState(0);
   useEffect(() => {
     const a = audioRef;
     if (!a) return;
-    const upd = () => setTime(a.currentTime || 0);
+    const upd = () => {
+      const cur = a.currentTime || 0;
+      setTime(cur);
+      // 拖动 seek 后：音频实际到达目标附近才放开「钉住」的位置
+      const target = pendingSeekTargetRef.current;
+      if (target != null && Math.abs(cur - target) < 1.5) {
+        pendingSeekTargetRef.current = null;
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        pendingTimerRef.current = null;
+        setDragFrac(null);
+      }
+    };
     upd();
     a.addEventListener("timeupdate", upd);
     a.addEventListener("play", upd);
     return () => {
       a.removeEventListener("timeupdate", upd);
       a.removeEventListener("play", upd);
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
     };
   }, [audioRef]);
 
   const [coverFailed, setCoverFailed] = useState(false);
-  useEffect(() => setCoverFailed(false), [currentSong?.cover]);
-  const cover = currentSong ? (currentSong.cover.startsWith("data:") ? currentSong.cover : coverProxyUrl(currentSong.cover, proxyPort)) : "";
+  useEffect(() => setCoverFailed(false), [currentSong?.cover, externalTrack?.cover]);
+  const cover = isExternal
+    ? (externalTrack?.cover ?? "")
+    : currentSong ? (currentSong.cover.startsWith("data:") ? currentSong.cover : coverProxyUrl(currentSong.cover, proxyPort)) : "";
+
+  // 时长兜底：部分客户端（如网易云）经系统媒体会话不给 EndTime（duration_ms=0），
+  // 导致无法渲染进度条。此时用网易云搜索按「歌名+歌手」查一次补总时长（每曲只查一次）。
+  const [extDurationLookup, setExtDurationLookup] = useState(0);
+  const queriedKeyRef = useRef("");
+  useEffect(() => {
+    const trackKey = `${externalTrack?.title ?? ""}|${externalTrack?.artist ?? ""}`;
+    if (trackKey !== queriedKeyRef.current) {
+      queriedKeyRef.current = trackKey;
+      setExtDurationLookup(0);
+      if (isExternal && externalTrack?.title && externalDurationMs <= 0 && trackKey !== "|") {
+        let cancelled = false;
+        (async () => {
+          try {
+            const res = await invoke<Song[]>("music_search", {
+              keywords: `${externalTrack.title} ${externalTrack.artist}`.trim(),
+              limit: 1,
+            });
+            const hit = (res || [])[0];
+            if (!cancelled && hit?.duration) setExtDurationLookup(hit.duration);
+          } catch {
+            // 忽略：查不到时长时进度条暂以不显示处理
+          }
+        })();
+        return () => {
+          cancelled = true;
+        };
+      }
+    }
+  }, [isExternal, externalTrack?.title, externalTrack?.artist, externalDurationMs]);
 
   const titleColor = useColorModeValue("#1a1a1a", "#ffffff");
   const descColor = useColorModeValue("rgba(0,0,0,0.62)", "rgba(255,255,255,0.66)");
@@ -649,15 +707,41 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
     dragElRef.current = el;
     applyDrag(ev.nativeEvent);
   }, [applyDrag]);
+  // 内部拖动 seek 后的「钉住」逻辑：松手先停在拖到的位置，音频跳到目标附近再放开，避免回弹闪烁
+  const pendingSeekTargetRef = useRef<number | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearPendingSeek = useCallback(() => {
+    pendingSeekTargetRef.current = null;
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current);
+      pendingTimerRef.current = null;
+    }
+    setDragFrac(null);
+  }, []);
   const endDrag = useCallback(() => {
     if (!dragRef.current) return;
     dragRef.current = false;
     const f = dragFracRef.current;
     dragFracRef.current = null;
     dragElRef.current = null;
-    setDragFrac(null);
-    if (f != null) actionsRef.current.seekTo(f * (durationRef.current || 0));
-  }, []);
+    if (f != null) {
+      if (isExternal) {
+        // 外部进度条目前只读，正常不会走到这里；兜底放开并照常发送 seek
+        setDragFrac(null);
+        actionsRef.current.externalControl("seek", Math.round(f * externalDurationMs));
+      } else {
+        // 内部：松手后先钉在拖到的位置，等音频 timeupdate 真正跳到目标附近再放开，
+        // 避免松手瞬间进度条回弹一下再跳到目标。
+        const target = f * (durationRef.current || 0);
+        actionsRef.current.seekTo(target);
+        pendingSeekTargetRef.current = target;
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        pendingTimerRef.current = setTimeout(clearPendingSeek, 2000);
+      }
+    } else {
+      setDragFrac(null);
+    }
+  }, [isExternal, externalDurationMs, clearPendingSeek]);
   useEffect(() => {
     const move = (ev: MouseEvent) => { if (dragRef.current) applyDrag(ev); };
     const up = () => endDrag();
@@ -671,11 +755,15 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
     };
   }, [applyDrag, endDrag]);
 
-  if (!currentSong) return null;
+  if (!currentSong && !externalTrack?.title) return null;
 
-  const duration = useMusicStore.getState().duration || audioRef?.duration || currentSong.duration || 0;
-  durationRef.current = duration;
-  const progress = duration > 0 ? time / duration : 0;
+  // 进度/时长：内部走 audioRef、外部走 SMTC 轮询的毫秒值
+  const displayTimeSec = isExternal ? externalPositionMs / 1000 : time;
+  const durationSec = isExternal
+    ? (externalDurationMs || extDurationLookup) / 1000
+    : (useMusicStore.getState().duration || audioRef?.duration || currentSong.duration || 0);
+  durationRef.current = durationSec;
+  const progress = durationSec > 0 ? displayTimeSec / durationSec : 0;
   const fillPct = Math.max(0, Math.min(100, (dragFrac != null ? dragFrac : progress) * 100));
   // 单一共享封面元素 + 单一共享歌名元素：opacity 恒为 1，位置/大小都由 framer motion
   // 数值插值(x/y/scale)直接放大缩小到展开/折叠位置，不再用淡入淡出切换位置。
@@ -728,7 +816,7 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
         animate={{ x: namePos.x, y: namePos.y, scale: namePos.scale }}
         transition={{ duration: 0.3, ease: [0.22, 0.61, 0.36, 1] }}
       >
-        {currentSong.name}
+        {isExternal ? externalTrack?.title : currentSong?.name}
       </motion.div>
 
       {/* 波形：仅折叠态显示，透明淡入淡出 */}
@@ -778,39 +866,86 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
       >
         {/* 行1：歌手（在共享歌名下方，封面右侧） */}
         <div style={{ marginLeft: 60, fontSize: 12, fontWeight: 500, color: descColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {currentSong.artist || currentSong.artists?.map((a) => a.name).join(" / ") || "未知歌手"}
+          {isExternal ? (externalTrack?.artist || "未知歌手") : (currentSong?.artist || currentSong?.artists?.map((a) => a.name).join(" / ") || "未知歌手")}
         </div>
-        {/* 行2：进度条 —— 左当前时间 + 全宽进度 + 右总时长（支持拖拽跟随） */}
-        <div
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            startDrag(barRef.current as HTMLElement, e); // 用进度条本身的 rect，避免左右空白
-          }}
-          onClick={(e) => e.stopPropagation()} // 阻断冒泡，避免点击/拖动触发灵动岛收起
-          style={{ position: "relative", height: 14, display: "flex", alignItems: "center", cursor: "pointer", minWidth: 0, gap: 8, marginTop: 14 }}
-        >
-          <div style={{ fontSize: 10, fontWeight: 600, color: descColor, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", minWidth: 26 }}>
-            {formatMusicTime(time)}
+        {/* 行2：有可用的总时长 → 进度条（左时间+进度+右总长，支持拖拽）；
+          外部播放拿不到时长（如网易云不给 EndTime）→ 用音量波动条代替 */}
+        {isExternal && durationSec <= 0 ? (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: "relative", height: 22, display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, marginLeft: 12, marginRight: 12, minWidth: 0 }}
+          >
+            {Array.from({ length: 24 }).map((_, i) => {
+              const v = levels[i % levels.length];
+              return (
+                <div
+                  key={i}
+                  style={{
+                    width: 3,
+                    height: Math.max(4, Math.round(v * 20)),
+                    borderRadius: 999,
+                    background: primaryColor,
+                    opacity: 0.9,
+                    transition: "height 90ms linear",
+                  }}
+                />
+              );
+            })}
           </div>
-          <div ref={barRef} style={{ flex: 1, height: 4, borderRadius: 999, background: barTrack, overflow: "hidden" }}>
-            <div style={{ height: "100%", borderRadius: 999, background: primaryColor, width: `${fillPct}%` }} />
+        ) : isExternal ? (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: "relative", height: 14, display: "flex", alignItems: "center", minWidth: 0, gap: 8, marginTop: 14 }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 600, color: descColor, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", minWidth: 26 }}>
+              {formatMusicTime(displayTimeSec)}
+            </div>
+            <div style={{ flex: 1, height: 4, borderRadius: 999, background: barTrack, overflow: "hidden" }}>
+              <div style={{ height: "100%", borderRadius: 999, background: primaryColor, width: `${fillPct}%` }} />
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: descColor, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", minWidth: 26, textAlign: "right" }}>
+              {formatMusicTime(durationSec)}
+            </div>
           </div>
-          <div style={{ fontSize: 10, fontWeight: 600, color: descColor, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", minWidth: 26, textAlign: "right" }}>
-            {formatMusicTime(duration)}
+        ) : (
+          <div
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              startDrag(barRef.current as HTMLElement, e); // 用进度条本身的 rect，避免左右空白
+            }}
+            onClick={(e) => e.stopPropagation()} // 阻断冒泡，避免点击/拖动触发灵动岛收起
+            style={{ position: "relative", height: 14, display: "flex", alignItems: "center", cursor: "pointer", minWidth: 0, gap: 8, marginTop: 14 }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 600, color: descColor, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", minWidth: 26 }}>
+              {formatMusicTime(displayTimeSec)}
+            </div>
+            <div ref={barRef} style={{ flex: 1, height: 4, borderRadius: 999, background: barTrack, overflow: "hidden" }}>
+              <div style={{ height: "100%", borderRadius: 999, background: primaryColor, width: `${fillPct}%` }} />
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: descColor, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", minWidth: 26, textAlign: "right" }}>
+              {formatMusicTime(durationSec)}
+            </div>
           </div>
-        </div>
-        {/* 行3：控制按钮 —— 整宽居中、纯图标（音乐页同套） */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 26 }}>
-          <ControlButton label="上一曲" onClick={(e) => { e.stopPropagation(); actionsRef.current.prevTrack(); }}>
+        )}
+        {/* 行3：控制按钮 —— 整宽居中、纯图标（音乐页同套）；右下角另加「打开播放器」跳转按钮 */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 26, position: "relative" }}>
+          <ControlButton label="上一曲" onClick={(e) => { e.stopPropagation(); isExternal ? actionsRef.current.externalControl("prev") : actionsRef.current.prevTrack(); }}>
             <MSkipBackIcon size={20} color={titleColor} />
           </ControlButton>
-          <ControlButton label={isPlaying ? "暂停" : "播放"} onClick={(e) => { e.stopPropagation(); actionsRef.current.togglePlay(); }}>
-            {isPlaying ? <MPauseIcon size={22} color={titleColor} /> : <MPlayIcon size={22} color={titleColor} />}
+          <ControlButton label={playing ? "暂停" : "播放"} onClick={(e) => { e.stopPropagation(); isExternal ? actionsRef.current.externalControl("play-pause") : actionsRef.current.togglePlay(); }}>
+            {playing ? <MPauseIcon size={22} color={titleColor} /> : <MPlayIcon size={22} color={titleColor} />}
           </ControlButton>
-          <ControlButton label="下一曲" onClick={(e) => { e.stopPropagation(); actionsRef.current.nextTrack(); }}>
+          <ControlButton label="下一曲" onClick={(e) => { e.stopPropagation(); isExternal ? actionsRef.current.externalControl("next") : actionsRef.current.nextTrack(); }}>
             <MSkipForwardIcon size={20} color={titleColor} />
           </ControlButton>
+          {!isExternal && (
+            <div style={{ position: "absolute", right: 12 }}>
+              <ControlButton label="打开播放器" onClick={(e) => { e.stopPropagation(); navigate("/music", { state: { expandPlayer: true } }); }}>
+                <MOpenPlayerIcon size={16} color={titleColor} />
+              </ControlButton>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -839,6 +974,15 @@ const MSkipForwardIcon = ({ size = 22, color }: { size?: number; color: string }
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ color }}>
     <polygon points="8,6 16,12 8,18" stroke="currentColor" strokeWidth={2.5} strokeLinejoin="round" />
     <rect x="17" y="5" width="3" height="14" rx="1.5" />
+  </svg>
+);
+/** 打开全屏播放器：细线四角外扩箭头（与 MSkip 系列同风格），呼应「展开到完整播放器页」 */
+const MOpenPlayerIcon = ({ size = 16, color }: { size?: number; color: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color }}>
+    <path d="M9 4H4v5" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M15 4h5v5" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M9 20H4v-5" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M15 20h5v-5" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -938,6 +1082,41 @@ export function DynamicIslandHost() {
   const { config } = useThemeColor();
   const primaryColor = config.primaryColor;
   const currentSong = useMusicStore((s) => s.currentSong);
+  const externalTrack = useMusicStore((s) => s.externalTrack);
+  const isPlaying = useMusicStore((s) => s.isPlaying);
+  const externalPlaying = useMusicStore((s) => s.externalPlaying);
+
+  // 全局注册「外部客户端播放状态」监听（灵动岛常驻，不依赖音乐页是否打开）。
+  // 后端 SMTC 每 1s 推送一次；有外部音乐播放则写入 store，供播放动岛接管显示。
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    (async () => {
+      unlisten = await listen<ExternalPlayback | null>("external-player:state", (event) => {
+        const p = event.payload;
+        if (disposed) return;
+        if (p && p.track) {
+          useMusicStore.setState({
+            externalTrack: p.track,
+            externalPlaying: p.isPlaying,
+            externalPositionMs: p.positionMs ?? 0,
+            externalDurationMs: p.durationMs ?? 0,
+          });
+        } else {
+          useMusicStore.setState({
+            externalTrack: null,
+            externalPlaying: false,
+            externalPositionMs: 0,
+            externalDurationMs: 0,
+          });
+        }
+      });
+    })();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   const controls = useAnimationControls();
   const [displayed, setDisplayed] = useState<IslandItem | null>(null);
@@ -953,20 +1132,27 @@ export function DynamicIslandHost() {
   const expandedRef = useRef(false);
   const lastRevisionRef = useRef(revision);
   const chainRef = useRef<Promise<void>>(Promise.resolve());
+  const islandRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     itemRef.current = item;
   }, [item]);
 
-  // 音乐播放灵动岛：有歌时设为持久基线（无自动关闭），无歌时才关闭。切换歌曲触发 replace 动画，
-  // 播放中的标题/进度/音量波动由 MusicIslandContent 实时响应，不走 item 高频推送。
+  // 音乐播放灵动岛：有歌时设为持久基线（无自动关闭），无歌时才关闭。
+  // 优先级：内部正在播放 > 外部正在播放 > 内部(暂停) > 外部(暂停)；即内部在播时优先显示内部，
+  // 否则「正在播放」优先。切歌/切换来源触发 replace 动画。
+  // 注意：仅以「歌名 + 播放态」为依赖，避免每 1s 的外部队列进度刷新反复触发替换动画。
   useEffect(() => {
-    if (currentSong) {
+    const internalActive = Boolean(currentSong) && (isPlaying || !externalPlaying);
+    const useExternal = Boolean(externalTrack?.title) && !internalActive;
+    if (useExternal) {
+      showPersistent({ id: "music", kind: "music", duration: null, iconKey: "music", title: externalTrack!.title });
+    } else if (currentSong) {
       showPersistent({ id: "music", kind: "music", duration: null, iconKey: "music", title: currentSong.name });
     } else {
       closePersistent("music");
     }
-  }, [currentSong]);
+  }, [currentSong, isPlaying, externalPlaying, externalTrack?.title]);
 
   // 静默实时更新（如下载进度）：同 id 时同步 displayed 内容，不触发动画
   useEffect(() => {
@@ -1125,6 +1311,34 @@ export function DynamicIslandHost() {
     extend(id); // 移开后恢复自动关闭
   }, [run, playCollapse]);
 
+  // 兜底：展开期间监听全局鼠标移动，光标确实离开灵动岛区域（含一定边距）则自动收起。
+  // 解决个别情况下 onMouseLeave/onPointerLeave 未触发导致「移走光标仍保持展开」。
+  const pendingLeaveRef = useRef(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const onMove = (e: MouseEvent) => {
+      if (!expandedRef.current) return;
+      const el = islandRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const m = 24; // 容错边距，避免在边缘来回时误收
+      const out =
+        e.clientX < r.left - m ||
+        e.clientX > r.right + m ||
+        e.clientY < r.top - m ||
+        e.clientY > r.bottom + m;
+      if (out && !pendingLeaveRef.current) {
+        pendingLeaveRef.current = true;
+        requestAnimationFrame(() => {
+          pendingLeaveRef.current = false;
+          handleMouseLeave();
+        });
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [expanded, handleMouseLeave]);
+
   // 点击：有自定义 onClick 直接触发（如完成态重启安装）；
   // 展开态收起为小灵动岛；持久岛折叠态点击展开（查看版本+进度）；普通提示折叠态点击关闭
   const handleClick = useCallback(() => {
@@ -1188,6 +1402,7 @@ export function DynamicIslandHost() {
       }}
     >
       <motion.div
+        ref={islandRef}
         animate={controls}
         initial={{ opacity: 0, width: 30, height: COLLAPSED_HEIGHT }}
         role="status"
@@ -1195,6 +1410,7 @@ export function DynamicIslandHost() {
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onPointerLeave={handleMouseLeave}
         style={{
           borderRadius: displayed?.kind === "music" ? 22 : (expanded ? 20 : 999),
           background: pillBg,

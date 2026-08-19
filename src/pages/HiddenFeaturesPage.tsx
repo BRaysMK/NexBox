@@ -34,6 +34,7 @@ import {
   VStack,
   useColorModeValue,
 } from "@chakra-ui/react";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -220,6 +221,8 @@ export default function HiddenFeaturesPage() {
   const contrastText = getContrastTextColor();
   const toast = useDynamicIsland();
 
+  const adaptiveTitle = useAdaptiveTextColor();
+
   const [status, setStatus] = useState<FeatureFlagsStatus | null>(null);
   const [store, setStore] = useState<StoreKind>("runtime");
   const [searchInput, setSearchInput] = useState("");
@@ -363,7 +366,7 @@ export default function HiddenFeaturesPage() {
               flexShrink={0}
             />
             <Box minW={0}>
-              <Heading size="lg" color={headingColor} noOfLines={1}>
+              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} noOfLines={1}>
                 {t("hiddenFeatures.title")}
               </Heading>
               <Text mt={1} fontSize="sm" color={subLabelColor} noOfLines={2}>

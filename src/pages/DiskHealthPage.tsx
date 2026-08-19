@@ -23,6 +23,7 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface PartitionInfo {
   drive_letter: string;
@@ -255,6 +256,7 @@ export default function DiskHealthPage() {
   const [error, setError] = useState<string | null>(null);
 
   const headingColor = useColorModeValue("black", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
@@ -285,7 +287,7 @@ export default function DiskHealthPage() {
             onClick={() => navigate("/builtin-tools")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor}>
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             <HStack spacing={2}>
               <HardDrive size={24} />
               <Text>{t("diskHealth.title")}</Text>

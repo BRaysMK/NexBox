@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "8.3.8",
+  "version": "8.5.2",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "NexBox",
+        "title": "新境盒",
         "width": 1230,
         "height": 771,
         "minWidth": 1140,
@@ -21,7 +21,8 @@
         "fullscreen": false,
         "decorations": false,
         "devtools": true,
-        "visible": false
+        "visible": false,
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling"
       },
       {
         "title": "NexBox Tray Menu",
@@ -35,7 +36,8 @@
         "skipTaskbar": true,
         "shadow": false,
         "label": "tray-menu",
-        "url": "/tray-menu"
+        "url": "/tray-menu",
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling"
       },
       {
         "title": "NexBox Desktop Lyrics",
@@ -50,7 +52,8 @@
         "skipTaskbar": true,
         "shadow": false,
         "label": "desktop-lyrics",
-        "url": "/desktop-lyrics"
+        "url": "/desktop-lyrics",
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling"
       },
       {
         "title": "Lyrics Unlock",
@@ -65,7 +68,8 @@
         "skipTaskbar": true,
         "shadow": false,
         "label": "lyrics-unlock-btn",
-        "url": "/lyrics-unlock-btn"
+        "url": "/lyrics-unlock-btn",
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling"
       }
     ],
     "security": {

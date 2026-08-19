@@ -71,6 +71,12 @@ const theme = extendTheme({
         maxW: "xs",
         zIndex: "tooltip",
       } as any,
+      // 全局兜底：点一下提示框即关闭、关闭零延迟，避免部分情况下悬浮提示常驻不消失
+      defaultProps: {
+        closeOnMouseDown: true,
+        closeDelay: 0,
+        openDelay: 150,
+      } as any,
     },
   },
 });

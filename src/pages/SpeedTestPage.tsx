@@ -30,6 +30,7 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface SpeedTestProgress {
   stage: string; // ping / download / upload / done
@@ -412,6 +413,7 @@ export default function SpeedTestPage() {
     }
   }, []);
 
+  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("#000000", "#ffffff");
   const subColor = useColorModeValue("gray.500", "#888888");
   const dividerColor = useColorModeValue("gray.200", "#333333");
@@ -431,7 +433,7 @@ export default function SpeedTestPage() {
             />
             <HStack spacing={2}>
               <Gauge color={activeColor} />
-              <Heading size="lg" color={headingColor}>
+              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
                 {t("speedtest.title")}
               </Heading>
             </HStack>

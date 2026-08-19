@@ -38,6 +38,7 @@ import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 
 // ── Types ──
@@ -1038,10 +1039,11 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
 export default function DeltaForcePage() {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
 
   return (
     <Box pt={8} pb={8}>
-      <Heading size="lg" color={headingColor} mb={6}>
+      <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} mb={6}>
         {t("deltaForce.title")}
       </Heading>
 

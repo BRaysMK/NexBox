@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useBackground } from "@/contexts/background-context";
 import { useNavigate } from "react-router-dom";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface ShaderCacheDir {
   name: string;
@@ -246,6 +247,7 @@ export default function ShaderCachePage() {
   const { liquidGlassEnabled } = useBackground();
   const navigate = useNavigate();
 
+  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tipBg = useColorModeValue(
@@ -377,7 +379,7 @@ export default function ShaderCachePage() {
         >
                         返回
         </Button>
-        <Heading size="lg" color={headingColor} fontWeight="700">
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
           {t("shaderCache.title")}
         </Heading>
         <Box w="100px" />

@@ -42,6 +42,7 @@ import {
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface ContextMenuItem {
   name: string;
@@ -132,6 +133,7 @@ export default function ContextMenuManagerPage() {
   }, []);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tableBg = liquidGlassEnabled
     ? "rgba(255,255,255,0.7)"
@@ -403,7 +405,7 @@ export default function ContextMenuManagerPage() {
         >
           {t("builtinTools.back")}
         </Button>
-        <Heading size="lg" color={headingColor} fontWeight="700">
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
           {t("contextMenu.title")}
         </Heading>
         <LiquidGlassButton

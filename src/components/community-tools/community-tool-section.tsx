@@ -201,7 +201,7 @@ function CommunityToolCard({
           )}
           <HStack spacing={1} mt={2} color={installed ? "green.500" : "blue.400"}>
             <Icon as={installed ? Play : Download} boxSize={3} />
-            <Text fontSize="xs">{installed ? "已下载 · 点击运行" : "未安装 · 点击下载"}</Text>
+            <Text fontSize="xs">{installed ? "已下载" : "未下载"}</Text>
           </HStack>
         </Box>
       </VStack>
@@ -230,8 +230,10 @@ export function CommunityToolSection() {
     login,
     logout,
     isAuthor,
-    run,
     install,
+    openZip,
+    downloadDir,
+    pickDownloadDir,
     submit,
     remove,
   } = useCommunityTools();
@@ -376,6 +378,18 @@ export function CommunityToolSection() {
         </Button>
       </HStack>
       <Divider borderColor={dividerColor} mb={4} />
+
+      <HStack spacing={3} mb={4} alignItems="center">
+        <Text fontSize="sm" fontWeight="medium" color={sectionTitleColor} whiteSpace="nowrap">
+          {t("tools.community.downloadDir")}
+        </Text>
+        <Text fontSize="xs" color={useColorModeValue("gray.500", "#999999")} isTruncated maxW="340px">
+          {downloadDir}
+        </Text>
+        <Button size="xs" variant="outline" color={getActiveColor()} borderColor={getActiveColor()} onClick={pickDownloadDir}>
+          {t("tools.community.changeDir")}
+        </Button>
+      </HStack>
 
       <HStack spacing={3} mb={4}>
         <CustomSelect
@@ -551,9 +565,9 @@ export function CommunityToolSection() {
                     leftIcon={<Play size={15} />}
                     onClick={async () => {
                       try {
-                        await run(detailLive);
+                        await openZip(detailLive);
                       } catch (e) {
-                        toast({ title: "启动失败", description: String(e), status: "error", duration: 3000 });
+                        toast({ title: "打开失败", description: String(e), status: "error", duration: 3000 });
                       }
                     }}
                   >

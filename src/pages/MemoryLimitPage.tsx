@@ -17,6 +17,7 @@ import {
   TabPanel,
   Input,
 } from "@chakra-ui/react";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
@@ -62,6 +63,7 @@ export default function MemoryLimitPage() {
   const { liquidGlassEnabled } = useBackground();
   const navigate = useNavigate();
   const toast = useDynamicIsland("memory");
+  const adaptiveTitle = useAdaptiveTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
@@ -263,7 +265,7 @@ export default function MemoryLimitPage() {
         >
                         返回
         </Button>
-        <Heading size="lg" color={headingColor} fontWeight="700">
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
           {t("optimization.memoryLimit.title")}
         </Heading>
         <Box w="100px" />

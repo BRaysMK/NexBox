@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Cpu, Settings2, AlertTriangle, RefreshCw, Monitor, Eye } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { CustomSelect } from "@/components/special/custom-select";
 import nvidiaLogo from "@/assets/nvidia.png";
 import { useBackground } from "@/contexts/background-context";
@@ -141,6 +142,7 @@ export default function NvidiaDriverPage() {
   const { liquidGlassEnabled } = useBackground();
   const { config, getActiveColor, getContrastTextColor } = useThemeColor();
   const isDark = useColorModeValue(false, true);
+  const adaptiveTitle = useAdaptiveTextColor();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isNvidiaAvailable, setIsNvidiaAvailable] = useState<boolean | null>(null);
@@ -388,7 +390,7 @@ export default function NvidiaDriverPage() {
               _hover={{ bg: useColorModeValue("gray.100", "gray.700") }}>
               <ArrowLeft size={20} />
             </Box>
-            <Heading size="lg" color={headingColor}>
+            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
               显卡设置（仅 NVIDIA）
             </Heading>
           </HStack>
@@ -418,7 +420,7 @@ export default function NvidiaDriverPage() {
               _hover={{ bg: useColorModeValue("gray.100", "gray.700") }}>
               <ArrowLeft size={20} />
             </Box>
-            <Heading size="lg" color={headingColor}>
+            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
               显卡设置（仅 NVIDIA）
             </Heading>
           </HStack>
@@ -686,7 +688,7 @@ export default function NvidiaDriverPage() {
               _hover={{ bg: useColorModeValue("gray.100", "gray.700") }}>
               <ArrowLeft size={20} />
             </Box>
-            <Heading size="lg" color={headingColor}>
+            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
               显卡设置（仅 NVIDIA）
             </Heading>
           </HStack>

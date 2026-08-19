@@ -18,6 +18,7 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassToolCard } from "@/components/special/liquid-glass-tool-card";
 import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import {
   Cpu,
   Zap,
@@ -1563,6 +1564,7 @@ function ThirdPartyToolSection({
 export default function ToolsPage() {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const { config } = useThemeColor();
 
   const tools = getTools(t);
@@ -1618,7 +1620,7 @@ export default function ToolsPage() {
           },
         }}
       >
-        <Heading size="lg" color={headingColor} mb={6}>
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} mb={6}>
           {t("tools.title")}
         </Heading>
 

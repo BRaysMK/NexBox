@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import dotnetLogo from "@/assets/dotnet-framework.png";
 import directxLogo from "@/assets/directx.png";
 import visualStudioLogo from "@/assets/visual-studio.png";
@@ -89,6 +90,7 @@ export default function RuntimeRepairPage() {
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
   const toast = useDynamicIsland("wrench");
+  const adaptiveTitle = useAdaptiveTextColor();
   const [activeId, setActiveId] = useState<RuntimeId | null>(null);
   const [progress, setProgress] = useState<RepairProgress | null>(null);
   const [statuses, setStatuses] = useState<Record<string, RuntimeStatus>>({});
@@ -156,7 +158,7 @@ export default function RuntimeRepairPage() {
               flexShrink={0}
             />
             <Box minW={0}>
-              <Heading size="lg" color={headingColor}>运行库修复</Heading>
+              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>运行库修复</Heading>
               <Text mt={1} fontSize="sm" color={subLabelColor}>先检测系统运行库与游戏常用 DLL，仅修复缺失或不完整的项目。</Text>
             </Box>
           </HStack>

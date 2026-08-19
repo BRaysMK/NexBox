@@ -22,6 +22,7 @@ import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { store } from "@/lib/store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import {
@@ -266,6 +267,7 @@ export default function NetworkOptimizerPage() {
   const { liquidGlassEnabled } = useBackground();
   const toast = useDynamicIsland("network");
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
+  const adaptiveTitle = useAdaptiveTextColor();
 
   const [scannedStates, setScannedStates] = useState<Record<string, boolean>>({});
   const [savedStates, setSavedStates] = useState<Record<string, boolean>>({});
@@ -780,7 +782,7 @@ export default function NetworkOptimizerPage() {
             onClick={() => navigate("/optimize")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor}>
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             {t("networkOptimize.pageTitle")}
           </Heading>
         </HStack>

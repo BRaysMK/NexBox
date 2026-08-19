@@ -54,6 +54,7 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { store } from "@/lib/store";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 // ===== 类型定义 =====
 interface DriverStatus {
@@ -439,6 +440,7 @@ export default function AudioEqPage() {
   const toast = useDynamicIsland("audio");
 
   const headingColor = useColorModeValue("#1A202C", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const descColor = useColorModeValue("gray.500", "#ffffff");
   const presetIconColor = useColorModeValue("#4A5568", "#aaaaaa");
@@ -1030,7 +1032,7 @@ ${bandsStr}`;
           color={headingColor}
         />
         <Volume2 size={24} color={headingColor} />
-        <Heading size="lg" color={headingColor}>
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t("audioEq.title")}
         </Heading>
       </HStack>

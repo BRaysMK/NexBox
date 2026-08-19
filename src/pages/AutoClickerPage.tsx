@@ -27,6 +27,7 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
 import { MouseHotkeyRecorder } from "@/components/mouse-hotkey-recorder";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface AutoClickerStatus {
   running: boolean;
@@ -95,6 +96,7 @@ export default function AutoClickerPage() {
 
   const isDark = useColorModeValue(false, true);
   const headingColor = useColorModeValue("black", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const themeColor = getActiveColor();
@@ -203,7 +205,7 @@ export default function AutoClickerPage() {
             onClick={() => navigate("/builtin-tools")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor}>
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             <HStack spacing={2}>
               <MousePointerClick size={24} color={themeColor} />
               <Text>{t("autoclicker.title")}</Text>

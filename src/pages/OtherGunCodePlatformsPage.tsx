@@ -13,6 +13,7 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
@@ -33,6 +34,7 @@ export default function OtherGunCodePlatformsPage() {
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
+  const adaptiveTitle = useAdaptiveTextColor();
 
   const platforms: PlatformInfo[] = [
     {
@@ -87,7 +89,7 @@ export default function OtherGunCodePlatformsPage() {
             {t("deltaForce.back", "返回")}
           </Button>
         </Link>
-        <Heading size="lg" color={headingColor}>
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t("deltaForce.otherPlatforms.title", "其他改枪码平台")}
         </Heading>
       </HStack>

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useLocation } from "react-router-dom";
 import { useAppStartup } from "@/contexts/app-startup-context";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import {
   Box,
   VStack,
@@ -2621,6 +2623,7 @@ export default function MusicPage() {
 
   const borderColor = useColorModeValue("gray.200", "#333333");
   const textColor = useColorModeValue("gray.800", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const itemHoverBg = useColorModeValue("gray.50", "rgba(255,255,255,0.05)");
   const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
@@ -2709,6 +2712,13 @@ export default function MusicPage() {
     setExpandedPlayer(false);
   }, []);
 
+  // 灵动岛「打开播放器」按钮：携带 expandPlayer 标记跳转到此页，自动展开全屏播放器
+  const location = useLocation();
+  useEffect(() => {
+    const shouldExpand = (location.state as { expandPlayer?: boolean } | null)?.expandPlayer;
+    if (shouldExpand) handleExpandPlayer();
+  }, [location.state, handleExpandPlayer]);
+
   // 统一搜索：进入综合搜索结果页
   const handleUnifiedSearch = useCallback((input: string) => {
     setSearchInput(input);
@@ -2741,11 +2751,22 @@ export default function MusicPage() {
       storeActions.loadArtistAlbums(artistId);
       storeActions.loadArtistMvs(artistId);
     }
-    // 歌手可能没有头像（从歌曲卡片进入时），异步搜索补齐
+    // 歌手可能没有头像（从歌曲卡片进入时），按来源异步搜索补齐
     if (!patched.pic_url && patched.name) {
-      const cmd = playbackSource === "kugou" ? "kugou_artist_search" : "music_artist_search";
+      const cmd =
+        playbackSource === "kugou" ? "kugou_artist_search"
+          : playbackSource === "qqmusic" ? "qq_artist_search"
+          : "music_artist_search";
       invoke<Artist[]>(cmd, { keywords: patched.name, limit: 10 }).then((results) => {
-        const match = results.find((a) => a.id === artist.id || a.name === artist.name);
+        if (!results?.length) return;
+        // 各来源候选项命中方式不同：netease/kugou 用 id，qq 搜索项不带 id 需用 mid；名称精确匹配为辅
+        const match =
+          results.find((a) =>
+            (a.id != null && a.id === patched.id) ||
+            (a.mid != null && a.mid === patched.mid) ||
+            (patched.name && a.name === patched.name)) ??
+          results.find((a) => a.pic_url) ?? // 兜底：取首个带头像的结果
+          results[0];
         if (match?.pic_url) {
           useMusicStore.setState({ selectedArtist: { ...patched, pic_url: match.pic_url } });
         }
@@ -2888,7 +2909,9 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
     setSearchExpandedTracks([]);
     setSearchLoadingExpanded(true);
     try {
-      const cmd = pl.provider === "kugou" ? "kugou_playlist_tracks" : "music_playlist_tracks";
+      const cmd = pl.provider === "kugou" ? "kugou_playlist_tracks"
+        : pl.provider === "qqmusic" ? "qq_playlist_tracks"
+        : "music_playlist_tracks";
       const result = await invoke<[Playlist, Song[]]>(cmd, { id: pl.id });
       setSearchExpandedTracks(result[1]);
     } catch {
@@ -4125,7 +4148,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
       <HStack justify="space-between" w="100%" flexShrink={0}>
         <HStack spacing={3}>
           <MusicIcon size={24} color={activeColor} />
-          <Heading size="md" color={textColor}>
+          <Heading size="md" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             音乐播放器
           </Heading>
           <Box

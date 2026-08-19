@@ -2,6 +2,7 @@ import { Box, Text, SimpleGrid, Spinner, VStack, useColorModeValue, Image, Butto
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import epicGamesIcon from "@/assets/epic-games.png";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface EpicGame {
   id: string;
@@ -137,6 +138,7 @@ export default function EpicFreePage() {
   const [error, setError] = useState<string | null>(null);
 
   const textColor = useColorModeValue("gray.800", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const bgColor = useColorModeValue("gray.50", "#0a0a0a");
 
@@ -186,7 +188,7 @@ export default function EpicFreePage() {
           h="32px"
           objectFit="contain"
         />
-        <Text fontSize="3xl" fontWeight="bold" color={textColor}>
+        <Text fontSize="3xl" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t('epic.title')}
         </Text>
       </HStack>

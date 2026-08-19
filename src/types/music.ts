@@ -159,6 +159,34 @@ export type PlaybackQuality = "jymaster" | "hires" | "lossless" | "exhigh" | "st
 /// 音乐平台类型
 export type MusicProvider = "netease" | "kugou" | "qqmusic";
 
+/// 外部客户端播放状态（SMTC 接管，非登录平台）
+export interface ExternalTrack {
+  title: string;
+  artist: string;
+  album: string;
+  cover: string | null;
+  sourceAppId: string;
+}
+
+export interface ExternalPlayback {
+  track: ExternalTrack | null;
+  isPlaying: boolean;
+  positionMs: number;
+  durationMs: number;
+}
+
+/// 内部播放器推送给系统 SMTC 的状态（音量浮层/锁屏显示）
+export interface SmtcState {
+  title: string;
+  artist: string;
+  album: string;
+  /** 封面来源：base64 data URI / http(s) URL / file:// 本地路径；空 = 不更新封面 */
+  cover?: string | null;
+  playing: boolean;
+  positionMs: number;
+  durationMs: number;
+}
+
 /// 平台显示信息
 export interface ProviderInfo {
   id: MusicProvider;

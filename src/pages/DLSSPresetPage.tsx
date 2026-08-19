@@ -37,6 +37,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { useNavigate } from "react-router-dom";
 import { getHardwareInfo, GpuInfo, GpuVendor } from "@/lib/hardware";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface DLSSModelPreset {
   id: string;
@@ -580,6 +581,7 @@ export default function DLSSPresetPage() {
   const { config: themeConfig } = useThemeColor();
   const navigate = useNavigate();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
 
   return (
     <Box pt={8} pb={8}>
@@ -592,7 +594,7 @@ export default function DLSSPresetPage() {
           color={headingColor}
         />
         <Zap size={28} color={themeConfig.primaryColor} />
-        <Heading size="lg" color={headingColor} fontWeight="700">
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
           {t("dlssPreset.title")}
         </Heading>
       </HStack>

@@ -24,6 +24,7 @@ import { useTransitionMode, getVariants, getTransitionConfig } from "@/component
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import PowerAdvancedSettingsPanel from "@/components/power/power-advanced-settings-panel";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -295,6 +296,7 @@ export default function PowerManagementPage() {
 
   const navigate = useNavigate();
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const adaptiveTitle = useAdaptiveTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -565,7 +567,7 @@ export default function PowerManagementPage() {
         >
                         返回
         </Button>
-        <Heading size="lg" color={headingColor} fontWeight="700">
+        <Heading size="lg" color={adaptiveTitle.text} fontWeight="700" textShadow={adaptiveTitle.shadow}>
           {t("optimization.powerManagement.title")}
         </Heading>
         <Box w="100px" />

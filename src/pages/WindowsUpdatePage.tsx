@@ -21,6 +21,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeft, Wrench, FileText, BarChart3, ShieldBan, PauseCircle, PlayCircle, Ban, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface UpdateState {
   services_disabled: boolean;
@@ -35,6 +36,7 @@ export default function WindowsUpdatePage() {
   const toast = useDynamicIsland("download");
   const navigate = useNavigate();
 
+  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const descColor = useColorModeValue("gray.600", "#ffffff");
@@ -315,7 +317,7 @@ export default function WindowsUpdatePage() {
         >
                     返回
         </Button>
-        <Heading size="lg" color={headingColor} fontWeight="700">
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
           {t("windowsUpdate.pageTitle")}
         </Heading>
         <Box w="100px" />

@@ -283,7 +283,7 @@ fn get_tools_list() -> Vec<ThirdPartyTool> {
             tool_type: "install".to_string(),
             download_url: String::new(),
             file_name: String::new(),
-            website_url: Some("https://www.guru3d.com/files-details/rtss-rivatuner-statistics-server.html".to_string()),
+            website_url: Some("https://www.guru3d.com/download/rtss-rivatuner-statistics-server-download/".to_string()),
             check_executable: Some("RTSS.exe".to_string()),
         },
         ThirdPartyTool {

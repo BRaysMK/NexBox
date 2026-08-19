@@ -36,6 +36,7 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import {
   LuSearch,
   LuRefreshCw,
@@ -669,6 +670,7 @@ export default function SteamPage() {
   const activeColor = getActiveColor();
   const borderColorTheme = getBorderColor();
   const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
+  const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
@@ -953,7 +955,7 @@ export default function SteamPage() {
       <HStack justify="space-between" mb={6} flexShrink={0}>
         <HStack spacing={3}>
           <Image src={steamIcon} alt="Steam" w="64px" h="64px" objectFit="contain" />
-          <Text fontSize="3xl" fontWeight="bold" color={headerColor}>
+          <Text fontSize="3xl" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             Steam
           </Text>
           {data && <StatusBadge running={data.install_info.is_running} activeColor={activeColor} t={t} />}
@@ -1030,7 +1032,7 @@ export default function SteamPage() {
           >
             <HStack spacing={2}>
               <Box color={activeColor}><LuUsers size={18} /></Box>
-              <Text fontSize="lg" fontWeight="bold" color={headerColor}>
+              <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
                 {t("steam.accounts")}
               </Text>
               <Badge colorScheme="teal" variant="subtle" borderRadius="full">
@@ -1083,7 +1085,7 @@ export default function SteamPage() {
           >
             <HStack spacing={2}>
               <Box color={activeColor}><LuHardDrive size={18} /></Box>
-              <Text fontSize="lg" fontWeight="bold" color={headerColor}>
+              <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
                 {t("steam.libraries")}
               </Text>
               <Badge colorScheme="teal" variant="subtle" borderRadius="full">
@@ -1136,7 +1138,7 @@ export default function SteamPage() {
       {/* 已安装游戏列表 */}
       <HStack spacing={2} mb={4}>
         <Box color={activeColor}><LuGamepad2 size={18} /></Box>
-        <Text fontSize="lg" fontWeight="bold" color={headerColor}>
+        <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t("steam.installedGames")}
         </Text>
         <Badge colorScheme="teal" variant="subtle" borderRadius="full">
@@ -1161,7 +1163,7 @@ export default function SteamPage() {
                 <Box color={activeColor}>
                   <LuHardDrive size={16} />
                 </Box>
-                <Text fontSize="md" fontWeight="bold" color={headerColor} noOfLines={1}>
+                <Text fontSize="md" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} noOfLines={1}>
                   {group.driveLabel}
                 </Text>
                 {group.path && (

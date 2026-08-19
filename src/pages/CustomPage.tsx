@@ -35,6 +35,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { searchIndex, type SearchItem } from "@/config/search-index";
 import { store } from "@/lib/store";
@@ -458,6 +459,7 @@ export default function CustomPage() {
   }, []);
 
   const headerColor = useColorModeValue("gray.800", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const descColor = useColorModeValue("gray.500", "#ffffff");
   const emptyIconColor = useColorModeValue("gray.300", "gray.600");
   const scrollbarColor = useColorModeValue("rgba(0,0,0,0.15)", "rgba(255,255,255,0.1)");
@@ -611,7 +613,7 @@ export default function CustomPage() {
       <Flex justify="space-between" align="center" mb={3} flexShrink={0} px={1}>
         <Flex align="center" gap={2}>
           <Icon as={LayoutGrid} boxSize={5} color={headerColor} />
-          <Text fontSize="lg" fontWeight="bold" color={headerColor}>
+          <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             {t("customPage.title")}
           </Text>
         </Flex>

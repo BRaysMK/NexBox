@@ -10,6 +10,7 @@ import {
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
@@ -49,6 +50,7 @@ export default function PeripheralOptimizePage() {
   const contrastText = getContrastTextColor();
   const themeColorHex = primaryColor || "#98DDD0";
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
+  const adaptiveTitle = useAdaptiveTextColor();
   const optionBg = useColorModeValue(themeColorRgba(0.1), themeColorRgba(0.15));
 
   useEffect(() => {
@@ -216,7 +218,7 @@ export default function PeripheralOptimizePage() {
         >
           <ArrowLeft size={20} />
         </Box>
-        <Heading size="lg" color={headingColor}>
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t("peripheralOptimize.pageTitle")}
         </Heading>
       </HStack>

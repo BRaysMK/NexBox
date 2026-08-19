@@ -789,11 +789,12 @@ async fn smartbox_search(keywords: &str, limit: u32) -> Result<Vec<Song>, String
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let name = item.get("name")
-                .or_else(|| item.get("title"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
+            let name = strip_html_tags(
+                &item.get("name")
+                    .or_else(|| item.get("title"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            );
             let singer = item.get("singer")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
@@ -889,7 +890,9 @@ async fn full_song_search(keywords: &str, limit: u32, offset: u32) -> Result<Vec
                 .or_else(|| item.get("songinfo"))
                 .or_else(|| item.get("song"))
                 .unwrap_or(item);
-            map_qq_track(track, &Song::default())
+            let mut song = map_qq_track(track, &Song::default());
+            song.name = strip_html_tags(&song.name);
+            song
         }).filter(|s| !s.name.is_empty() && (s.mid.is_some() || !s.id.is_empty()))
         .collect()
     }).unwrap_or_default();
@@ -1258,6 +1261,17 @@ fn decode_html_entities(text: &str) -> String {
         .map(|re| re.replace_all(&result, "").to_string())
         .unwrap_or(result);
     result
+}
+
+/// 去除搜索结果名称中的 HTML 高亮标签 (如 <em>2026</em>), 避免把原始标签文本显示出来
+fn strip_html_tags(text: &str) -> String {
+    if text.contains('<') || text.contains('>') {
+        regex::Regex::new(r"<[^>]*>")
+            .map(|re| re.replace_all(text, "").to_string())
+            .unwrap_or_else(|_| text.to_string())
+    } else {
+        text.to_string()
+    }
 }
 
 /// 解码 QQ 歌词文本 (对照 decodeQQLyricText)
@@ -2291,11 +2305,10 @@ pub async fn user_playlists(cookie: &str) -> Result<Vec<Playlist>, String> {
 }
 
 /// 获取歌单曲目 (对照 handleQQPlaylistTracks)
+///
+/// 使用旧版 CGI 拉取。部分"快闪/爆火"歌单会被 QQ 隐私保护拒绝
+/// (subcode=4000 check privacy error), 属于平台限制, 无法绕过。
 pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<Song>), String> {
-    let auth = extract_qq_auth(cookie);
-    if !auth.logged_in || auth.uin.is_empty() {
-        return Ok((Playlist::default(), vec![]));
-    }
     let pid = id.trim();
     if pid.is_empty() {
         return Ok((Playlist::default(), vec![]));
@@ -2306,13 +2319,21 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
         return liked_playlist_tracks(cookie, 0, 100).await;
     }
 
+    // 旧版 CGI 歌单曲目接口 (无需登录也能抓取公开歌单)
+    playlist_tracks_legacy(pid, cookie).await
+}
+
+/// 旧版 CGI 歌单曲目接口 (兜底, 无需登录可抓取公开歌单)
+async fn playlist_tracks_legacy(pid: &str, cookie: &str) -> Result<(Playlist, Vec<Song>), String> {
+    let auth = extract_qq_auth(cookie);
+    let uin = if auth.uin.is_empty() { "0".to_string() } else { auth.uin.clone() };
     let params: Vec<(&str, &str)> = vec![
         ("type", "1"),
         ("utf8", "1"),
         ("disstid", pid),
         ("song_begin", "0"),
         ("song_num", "100"),
-        ("loginUin", &auth.uin),
+        ("loginUin", &uin),
         ("format", "json"),
         ("inCharset", "utf8"),
         ("outCharset", "utf-8"),
@@ -2378,10 +2399,6 @@ pub async fn playlist_tracks(id: &str, cookie: &str) -> Result<(Playlist, Vec<So
 
 /// 获取歌单曲目（分页）
 pub async fn playlist_tracks_range(id: &str, start: usize, count: usize, cookie: &str) -> Result<Vec<Song>, String> {
-    let auth = extract_qq_auth(cookie);
-    if !auth.logged_in || auth.uin.is_empty() {
-        return Ok(vec![]);
-    }
     let pid = id.trim();
     if pid.is_empty() {
         return Ok(vec![]);
@@ -2393,16 +2410,23 @@ pub async fn playlist_tracks_range(id: &str, start: usize, count: usize, cookie:
         return Ok(tracks);
     }
 
-    let page_limit = count;
+    // 旧版 CGI 歌单曲目接口（分页）
+    playlist_tracks_legacy_range(pid, start, count, cookie).await
+}
+
+/// 旧版 CGI 歌单曲目接口（分页）
+async fn playlist_tracks_legacy_range(pid: &str, start: usize, count: usize, cookie: &str) -> Result<Vec<Song>, String> {
+    let auth = extract_qq_auth(cookie);
+    let uin = if auth.uin.is_empty() { "0".to_string() } else { auth.uin.clone() };
     let start_str = start.to_string();
-    let limit_str = page_limit.to_string();
+    let limit_str = count.to_string();
     let params: Vec<(&str, &str)> = vec![
         ("type", "1"),
         ("utf8", "1"),
         ("disstid", pid),
         ("song_begin", &start_str),
         ("song_num", &limit_str),
-        ("loginUin", &auth.uin),
+        ("loginUin", &uin),
         ("format", "json"),
         ("inCharset", "utf8"),
         ("outCharset", "utf-8"),
@@ -3195,11 +3219,12 @@ pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result
                     if id.is_empty() {
                         return None;
                     }
-                    let name = item.get("dissname")
-                        .or_else(|| item.get("name"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = strip_html_tags(
+                        &item.get("dissname")
+                            .or_else(|| item.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                    );
                     if name.is_empty() {
                         return None;
                     }
@@ -3279,11 +3304,12 @@ pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result
                     if id.is_empty() {
                         return None;
                     }
-                    let name = item.get("dissname")
-                        .or_else(|| item.get("name"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = strip_html_tags(
+                        &item.get("dissname")
+                            .or_else(|| item.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                    );
                     if name.is_empty() {
                         return None;
                     }

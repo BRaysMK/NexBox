@@ -14,6 +14,7 @@ import {
   useDisclosure,
   Tooltip,
 } from "@chakra-ui/react";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useBackground } from "@/contexts/background-context";
@@ -374,6 +375,7 @@ export default function HardwarePage() {
   const { hardwareInfo } = useAppStartup();
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
+  const adaptiveTitle = useAdaptiveTextColor();
   const { exportReport, isExporting } = useHardwareReportExport();
   const { isOpen: isPawnioModalOpen, onOpen: onPawnioModalOpen, onClose: onPawnioModalClose } = useDisclosure();
   
@@ -795,7 +797,7 @@ export default function HardwarePage() {
   return (
     <Box pt={8}>
       <HStack justify="space-between" mb={6}>
-        <Heading size="lg" color={headingColor}>
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t("hardware.title")}
         </Heading>
         <HStack gap={2}>

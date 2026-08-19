@@ -10,10 +10,12 @@ mod crosshair;
 mod dattorro;
 mod delta_force;
 mod disk_optimize;
+mod external_player;
 mod spectrum;
 mod display_cache;
 mod display_filter;
 mod downloader;
+mod smtc;
 mod anticheat;
 mod game_fps;
 mod game_filter;
@@ -49,6 +51,7 @@ mod smart;
 mod sponsor;
 mod contributor;
 mod startup_manager;
+mod service_manager;
 mod context_menu;
 mod steam;
 mod speedtest;
@@ -84,6 +87,9 @@ pub fn ensure_vertical_overlay<R: tauri::Runtime>(
 
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(label.into()))
         .title("NexBox Vertical Overlay")
+        // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
+        // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling")
         .inner_size(220.0, 400.0)
         .resizable(false)
         .decorations(false)
@@ -236,6 +242,8 @@ pub fn run() {
         .setup(|app| {
             // 初始化显示滤镜的会话监控窗口（捕获系统关机/注销广播，避免退出时 xcalib 报错）
             display_filter::init_session_watch();
+            // 载入用户配置的社区工具下载位置
+            community_tools::init_community_download_dir(app.handle());
             // 初始化音乐 API 和音频代理
             let app_handle_for_music = app.handle().clone();
             music_api::audio_proxy::set_app_handle(app_handle_for_music.clone());
@@ -429,6 +437,12 @@ pub fn run() {
                 hotkey::apply_hotkeys_enabled(app.handle(), false);
             }
 
+            // 启动外部客户端播放的后台系统媒体会话轮询
+            external_player::start(app.handle().clone());
+
+            // 注册本应用内置播放器的 SMTC 媒体会话（音量浮层/锁屏显示「新境盒」并支持媒体键控制）
+            smtc::start(app.handle().clone());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -465,6 +479,10 @@ pub fn run() {
         music_api::music_likelist,
         music_api::music_like,
         music_api::music_playlist_subscribe,
+        external_player::external_player_state,
+        external_player::external_control,
+        smtc::smtc_update_state,
+        smtc::smtc_clear,
         music_api::music_lyric,
         music_api::music_song_comments,
         music_api::music_send_comment,
@@ -625,6 +643,9 @@ pub fn run() {
         startup_manager::find_startup_key_in_registry,
         startup_manager::get_startup_item_icon,
         startup_manager::get_process_icons,
+        service_manager::scan_services,
+        service_manager::set_service_start_type,
+        service_manager::is_app_admin,
         context_menu::scan_context_menu_items,
         context_menu::hide_context_menu_item,
         context_menu::restore_context_menu_item,
@@ -727,7 +748,11 @@ pub fn run() {
         community_tools::gitcode_logout,
         community_tools::submit_community_tool,
         community_tools::delete_community_tool,
+        community_tools::get_community_download_dir,
+        community_tools::set_community_download_dir,
+        community_tools::pick_community_download_dir,
         community_tools::install_community_tool,
+        community_tools::open_community_zip,
         community_tools::run_community_tool,
         community_tools::pick_community_package,
         community_tools::list_zip_entry_exes,

@@ -18,6 +18,7 @@ import {
   InputGroup,
   InputLeftElement,
 } from "@chakra-ui/react";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -68,6 +69,7 @@ export default function NvidiaDriverDownloadPage() {
   const navigate = useNavigate();
   const toast = useDynamicIsland("download");
   const { liquidGlassEnabled } = useBackground();
+  const adaptiveTitle = useAdaptiveTextColor();
   const { config, getActiveColor, getContrastTextColor } = useThemeColor();
   const isDark = useColorModeValue(false, true);
 
@@ -193,7 +195,7 @@ export default function NvidiaDriverDownloadPage() {
               style={{ objectFit: "contain" }}
               alt="NVIDIA"
             />
-            <Heading size="lg" color={headingColor}>
+            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
               {t("nvidiaDriverDownload.title")}
             </Heading>
           </HStack>

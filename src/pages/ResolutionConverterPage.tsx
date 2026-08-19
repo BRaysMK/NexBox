@@ -25,6 +25,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { CustomSelect } from "@/components/special/custom-select";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 type ResolutionType = "1K" | "1.5K" | "2K" | "2.5K" | "3K" | "4K" | "custom";
 
@@ -374,6 +375,7 @@ export default function ResolutionConverterPage() {
 
 
 
+  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const textColor = useColorModeValue("gray.700", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -546,7 +548,7 @@ export default function ResolutionConverterPage() {
             color={headingColor}
           />
           <Monitor size={28} color={headingColor} />
-          <Heading size="lg" color={headingColor} fontWeight="700">
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
             {t("resolutionConverter.title")}
           </Heading>
         </HStack>

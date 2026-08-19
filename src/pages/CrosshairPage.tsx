@@ -39,6 +39,7 @@ import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { hexToRgba } from "@/lib/color-utils";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface CrosshairSettings {
   enabled: boolean;
@@ -189,6 +190,7 @@ export default function CrosshairPage() {
   const lastProceduralStyle = useRef<string>("Cross");
 
   const headingColor = useColorModeValue("black", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
@@ -376,7 +378,7 @@ export default function CrosshairPage() {
             onClick={() => navigate("/builtin-tools")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor}>
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             {t("crosshair.title")}
           </Heading>
         </HStack>

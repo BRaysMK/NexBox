@@ -77,7 +77,14 @@ export function useCommunityTools() {
   const [installing, setInstalling] = useState(false);
   const [installPercent, setInstallPercent] = useState<number | null>(null);
   const [installMessage, setInstallMessage] = useState<string | null>(null);
+  const [downloadDir, setDownloadDirState] = useState<string>("");
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    invoke<string>("get_community_download_dir")
+      .then((dir) => setDownloadDirState(dir))
+      .catch(() => {});
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -182,16 +189,26 @@ export function useCommunityTools() {
     [loginStatus]
   );
 
-  const run = useCallback(
+  const openZip = useCallback(
     async (tool: CommunityTool) => {
-      await invoke("run_community_tool", {
+      await invoke("open_community_zip", {
         category: tool.category,
         id: tool.id,
-        launchTarget: tool.launch_target,
+        file: tool.file,
       });
     },
     []
   );
+
+  const setDownloadDir = useCallback(async (dir: string) => {
+    await invoke<string>("set_community_download_dir", { dir });
+    setDownloadDirState(dir);
+  }, []);
+
+  const pickDownloadDir = useCallback(async () => {
+    const dir = await invoke<string | null>("pick_community_download_dir");
+    if (dir) await setDownloadDir(dir);
+  }, [setDownloadDir]);
 
   const install = useCallback(async (tool: CommunityTool) => {
     setInstalling(true);
@@ -301,8 +318,11 @@ export function useCommunityTools() {
     login,
     logout,
     isAuthor,
-    run,
     install,
+    openZip,
+    downloadDir,
+    setDownloadDir,
+    pickDownloadDir,
     submit,
     remove,
   };

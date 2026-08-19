@@ -21,6 +21,7 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useNavigate } from "react-router-dom";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface AcGroup {
   key: string;
@@ -157,6 +158,7 @@ export default function AntiCheatOptimizePage() {
   const toast = useDynamicIsland("shield");
   const navigate = useNavigate();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const adaptiveTitle = useAdaptiveTextColor();
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
@@ -359,7 +361,7 @@ export default function AntiCheatOptimizePage() {
             onClick={() => navigate("/optimize")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor}>
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             {t("optimization.aceOptimize.title")}
           </Heading>
         </HStack>

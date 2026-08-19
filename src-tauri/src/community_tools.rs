@@ -110,15 +110,26 @@ pub fn invalidate_community_cache() {
 // ============================== 工具函数 ==============================
 
 fn tools_root() -> Option<PathBuf> {
-    let mut path = dirs::download_dir()?;
-    path.push("NexBox");
-    path.push("社区工具");
-    let _ = std::fs::create_dir_all(&path);
-    Some(path)
+    download_tools_dir()
 }
 
-fn tool_install_dir(category: &str, id: &str) -> Option<PathBuf> {
-    tools_root().map(|r| r.join(category).join(id))
+/// 检查「下载位置」根目录是否存在该工具的压缩包（文件名 {分类}-{id}.{ext}）
+fn tool_archive_path(category: &str, id: &str) -> Option<PathBuf> {
+    let prefix = format!("{}-{}", safe_segment(category), safe_segment(id));
+    tools_root().and_then(|root| {
+        std::fs::read_dir(&root)
+            .ok()
+            .and_then(|rd| {
+                rd.flatten().find(|e| {
+                    e.file_type().map(|t| t.is_file()).unwrap_or(false)
+                        && e.file_name()
+                            .to_string_lossy()
+                            .to_lowercase()
+                            .starts_with(&format!("{prefix}."))
+                })
+            })
+            .map(|e| e.path())
+    })
 }
 
 /// 对仓库相对路径的每一段做 URL 编码（支持中文目录名/文件名）
@@ -432,10 +443,7 @@ fn parse_plugin_json(
         }
     });
 
-    let install_status = if tool_install_dir(&cat, &id).map(|d| {
-        d.exists() && std::fs::read_dir(&d).map(|mut r| r.next().is_some()).unwrap_or(false)
-    }) == Some(true)
-    {
+    let install_status = if tool_archive_path(&cat, &id).is_some() {
         "installed".to_string()
     } else {
         "not_installed".to_string()
@@ -503,18 +511,7 @@ pub async fn search_community_tools(query: String) -> Result<Vec<CommunityTool>,
 
 #[tauri::command]
 pub fn get_community_install_status(category: String, id: String) -> bool {
-    tool_install_dir(&category, &id)
-        .map(|d| {
-            if !d.exists() {
-                return false;
-            }
-            if let Ok(mut rd) = std::fs::read_dir(&d) {
-                rd.next().is_some()
-            } else {
-                false
-            }
-        })
-        .unwrap_or(false)
+    tool_archive_path(&category, &id).is_some()
 }
 
 // ============================== GitCode OAuth 授权码登录（localhost 回调） ==============================
@@ -1276,16 +1273,119 @@ async fn delete_file(
 
 // ============================== 下载 / 安装 / 启动 ==============================
 
-fn download_tools_dir() -> Option<PathBuf> {
+/// 社区工具下载根目录（可在设置/页面上修改，默认「下载 / NexBox / 社区工具」）
+static DOWNLOAD_DIR: OnceLock<StdMutex<Option<PathBuf>>> = OnceLock::new();
+
+fn download_dir_lock() -> &'static StdMutex<Option<PathBuf>> {
+    DOWNLOAD_DIR.get_or_init(|| StdMutex::new(None))
+}
+
+fn default_download_dir() -> Option<PathBuf> {
     let mut path = dirs::download_dir()?;
     path.push("NexBox");
     path.push("社区工具");
     Some(path)
 }
 
-/// 从 raw 下载文件（中文路径按段编码），并按需上报下载进度
+/// 应用启动时从 settings 载入用户配置的下载位置（无则不覆盖默认）
+pub fn init_community_download_dir(app: &tauri::AppHandle) {
+    if let Some(serde_json::Value::String(s)) = read_settings_value(app, "community_download_dir") {
+        if !s.trim().is_empty() && PathBuf::from(&s).is_absolute() {
+            *download_dir_lock().lock().unwrap() = Some(PathBuf::from(s));
+        }
+    }
+}
+
+fn download_tools_dir() -> Option<PathBuf> {
+    let root = match download_dir_lock().lock().unwrap().clone() {
+        Some(r) if r.is_absolute() => r,
+        _ => default_download_dir()?,
+    };
+    let _ = std::fs::create_dir_all(&root);
+    Some(root)
+}
+
+#[tauri::command]
+pub fn get_community_download_dir(app: tauri::AppHandle) -> String {
+    if let Some(r) = download_dir_lock().lock().unwrap().clone() {
+        if r.is_absolute() {
+            return r.to_string_lossy().into_owned();
+        }
+    }
+    if let Some(serde_json::Value::String(s)) = read_settings_value(&app, "community_download_dir") {
+        if !s.trim().is_empty() {
+            return s;
+        }
+    }
+    default_download_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn set_community_download_dir(app: tauri::AppHandle, dir: String) -> Result<String, String> {
+    let dir = dir.trim().to_string();
+    if dir.is_empty() {
+        return Err("目录不能为空".to_string());
+    }
+    let p = PathBuf::from(&dir);
+    if !p.is_absolute() {
+        return Err("下载位置必须是绝对路径".to_string());
+    }
+    std::fs::create_dir_all(&p).map_err(|e| format!("创建目录失败：{e}"))?;
+    save_settings_value(&app, "community_download_dir", serde_json::json!(dir));
+    *download_dir_lock().lock().unwrap() = Some(p);
+    Ok(dir)
+}
+
+#[tauri::command]
+pub fn pick_community_download_dir() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("选择社区工具下载位置")
+        .pick_folder()
+        .map(|f| f.to_string_lossy().into_owned())
+}
+
+/// 在资源管理器中定位某个文件
+fn reveal_in_explorer(path: &std::path::Path) {
+    let p = path.to_path_buf();
+    let _ = std::thread::spawn(move || {
+        let _ = std::process::Command::new("explorer").arg("/select,").arg(&p).spawn();
+    });
+}
+
+/// 对仓库内相对路径，优先通过 contents 单文件接口拿到 blob sha，返回 blob 直链
+/// （https://raw.gitcode.com/{owner}/{repo}/blobs/{sha}/{filename}）。
+/// git pull 等工具官方使用 blob 直链下载，可绕过分支 raw 对二进制返回 HTML/404 的问题。
+/// 查不到 sha 时回退到 API v5 raw 端点。
+async fn resolve_gitcode_file_url(token: &str, relative_path: &str) -> String {
+    let encoded = encode_path_segments(relative_path);
+    let fname = relative_path.rsplit('/').next().unwrap_or("download");
+    // 1) 单文件 contents 接口拿 sha
+    if let Ok(v) = api_get(token, &format!("repos/{OWNER}/{REPO}/contents/{encoded}"), &[]).await {
+        if let Some(sha) = v.get("sha").and_then(|x| x.as_str()) {
+            if !sha.trim().is_empty() {
+                return format!(
+                    "https://raw.gitcode.com/{OWNER}/{REPO}/blobs/{}/{}",
+                    sha,
+                    urlencoding::encode(fname)
+                );
+            }
+        }
+    }
+    // 2) 回退：API v5 raw 端点
+    format!(
+        "{}repos/{}/{}/raw/{}?ref=main",
+        API_BASE,
+        OWNER,
+        REPO,
+        encode_path_segments(relative_path)
+    )
+}
+
+/// 用可下载直链（blob 优先）下载仓库文件，并按需上报下载进度
 async fn download_from_raw(app: &tauri::AppHandle, relative_path: &str, dest: &PathBuf) -> Result<(), String> {
-    let url = format!("{RAW_BASE}/{}", encode_path_segments(relative_path));
+    let url = resolve_gitcode_file_url("", relative_path).await;
     let client = reqwest::Client::new();
     let resp = client
         .get(&url)
@@ -1313,39 +1413,19 @@ async fn download_from_raw(app: &tauri::AppHandle, relative_path: &str, dest: &P
     Ok(())
 }
 
-fn sanitize_entry_name(name: &str) -> String {
-    let mut cleaned = name.replace('\\', "/");
-    while cleaned.starts_with('/') {
-        cleaned.remove(0);
-    }
-    cleaned
-        .split('/')
-        .filter(|seg| !seg.is_empty() && *seg != ".." && *seg != ".")
-        .collect::<Vec<_>>()
-        .join("/")
+/// 清理路径片段中的非法字符，避免拼进文件名导致失败
+fn safe_segment(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            c => c,
+        })
+        .collect()
 }
 
-fn extract_zip(zip_path: &PathBuf, dest: &PathBuf) -> Result<(), String> {
-    let file = std::fs::File::open(zip_path).map_err(|e| format!("打开压缩包失败：{e}"))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("解析压缩包失败：{e}"))?;
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|e| format!("读取压缩包条目失败：{e}"))?;
-        let name = sanitize_entry_name(entry.name());
-        if name.is_empty() {
-            continue;
-        }
-        let out = dest.join(&name);
-        if entry.is_dir() {
-            let _ = std::fs::create_dir_all(&out);
-            continue;
-        }
-        if let Some(parent) = out.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let mut out_file = std::fs::File::create(&out).map_err(|e| format!("创建文件失败：{e}"))?;
-        std::io::copy(&mut entry, &mut out_file).map_err(|e| format!("解压失败：{e}"))?;
-    }
-    Ok(())
+/// 下载到「下载位置」根目录，命名 {分类}-{id}.{ext}，保证显示位置与实际文件位置一致
+fn archive_path(root: &PathBuf, category: &str, id: &str, ext: &str) -> PathBuf {
+    root.join(format!("{}-{}.{}", safe_segment(category), safe_segment(id), ext))
 }
 
 fn find_launch_exe(dir: &PathBuf, launch_target: Option<&str>) -> Option<PathBuf> {
@@ -1396,43 +1476,44 @@ pub async fn install_community_tool(
     download_url: Option<String>,
 ) -> Result<String, String> {
     let Some(root) = download_tools_dir() else { return Err("无法定位安装目录".to_string()) };
-    let tool_dir = root.join(&category).join(&id);
-    if tool_dir.exists() {
-        let _ = std::fs::remove_dir_all(&tool_dir);
-    }
-    std::fs::create_dir_all(&tool_dir).map_err(|e| format!("创建目录失败：{e}"))?;
 
     let rel_dir = format!("{PLUGINS_PATH}/{category}/{id}");
 
-    // 1) 若有仓库内文件 -> 从 raw 下载
+    // 1) 若有仓库内文件 -> 从 raw 下载到「下载位置」根目录
     if let Some(f) = file.filter(|s| !s.trim().is_empty()) {
-        let dest = tool_dir.join(&f);
+        let ext = std::path::Path::new(&f)
+            .extension()
+            .map(|e| e.to_string_lossy().into_owned())
+            .filter(|e| !e.is_empty())
+            .unwrap_or_else(|| "zip".to_string());
+        let dest = archive_path(&root, &category, &id, &ext);
         download_from_raw(&app, &format!("{rel_dir}/{f}"), &dest).await?;
-        if dest.extension().map(|e| e.eq_ignore_ascii_case("zip")).unwrap_or(false) {
-            emit_install_progress(&app, "正在解压...", None);
-            extract_zip(&dest, &tool_dir)?;
-            let _ = std::fs::remove_file(&dest);
-        }
         emit_install_progress(&app, "下载完成", Some(100));
         invalidate_community_cache();
-        return Ok(tool_dir.to_string_lossy().into_owned());
+        reveal_in_explorer(&dest);
+        return Ok(dest.to_string_lossy().into_owned());
     }
 
     // 2) 外部下载链接
-    if let Some(url) = download_url.filter(|s| !s.trim().is_empty()) {
-        let url = if let Some(rest) = url.strip_prefix("gh:") {
+    if let Some(orig) = download_url.filter(|s| !s.trim().is_empty()) {
+        // 指向本项目仓库的网页 raw 链接 -> 解析相对路径，走 blob 直链下载
+        let url = if let Some(rel) = parse_own_gitcode_raw(&orig) {
+            resolve_gitcode_file_url("", &rel).await
+        } else if let Some(rest) = orig.strip_prefix("gh:") {
             // gh:owner/repo 简化为 release 下载（此处最小实现：直接用该路径作为相对说明，实际解析留给前端或直接提示）
             format!("https://github.com/{rest}/releases/latest/download/tool.zip")
         } else {
-            url.to_string()
+            orig.to_string()
         };
-        let fname = url
+        let ext = orig
             .split('/')
             .last()
             .filter(|s| !s.is_empty())
-            .unwrap_or("download.zip")
-            .to_string();
-        let dest = tool_dir.join(&fname);
+            .and_then(|s| std::path::Path::new(s).extension())
+            .map(|e| e.to_string_lossy().into_owned())
+            .filter(|e| !e.is_empty())
+            .unwrap_or_else(|| "zip".to_string());
+        let dest = archive_path(&root, &category, &id, &ext);
         // 普通 http 直链下载
         let client = reqwest::Client::new();
         let resp = client
@@ -1459,19 +1540,50 @@ pub async fn install_community_tool(
             };
             emit_install_progress(&app, "下载中...", percent);
         }
-        if dest.extension().map(|e| e.eq_ignore_ascii_case("zip")).unwrap_or(false) {
-            emit_install_progress(&app, "正在解压...", None);
-            extract_zip(&dest, &tool_dir)?;
-            let _ = std::fs::remove_file(&dest);
-        }
         emit_install_progress(&app, "下载完成", Some(100));
         invalidate_community_cache();
-        return Ok(tool_dir.to_string_lossy().into_owned());
+        reveal_in_explorer(&dest);
+        return Ok(dest.to_string_lossy().into_owned());
     }
 
     Err("该工具没有提供下载源".to_string())
 }
 
+/// 将 GitCode 网页版 raw 链接（https://gitcode.com/{owner}/{repo}/-/raw/{branch}/{path}）解析为仓库相对路径。
+/// 仅对指向本项目 OWNER/REPO 的链接生效；非本项目 raw 链接返回 None。
+fn parse_own_gitcode_raw(url: &str) -> Option<String> {
+    let prefix = format!("https://gitcode.com/{OWNER}/{REPO}/-/raw/");
+    let path = url.strip_prefix(&prefix)?.split_once('/')?.1;
+    Some(path.to_string())
+}
+
+/// 在「下载位置」根目录定位某工具的压缩包（文件名 {分类}-{id}.{ext}），未找到则报未下载
+#[tauri::command]
+pub fn open_community_zip(
+    category: String,
+    id: String,
+    _file: Option<String>,
+) -> Result<(), String> {
+    let Some(root) = download_tools_dir() else { return Err("无法定位下载目录".to_string()) };
+    let prefix = format!("{}-{}", safe_segment(&category), safe_segment(&id));
+    let zip_path = std::fs::read_dir(&root)
+        .ok()
+        .and_then(|rd| {
+            rd.flatten().find(|e| {
+                e.file_type().map(|t| t.is_file()).unwrap_or(false)
+                    && e.file_name()
+                        .to_string_lossy()
+                        .to_lowercase()
+                        .starts_with(&format!("{prefix}."))
+            })
+        })
+        .map(|e| e.path())
+        .ok_or_else(|| "未找到已下载的压缩包".to_string())?;
+    reveal_in_explorer(&zip_path);
+    Ok(())
+}
+
+// 已弃用：社区工具改为「下载 ZIP + 资源管理器定位」由用户自行解压运行，前端不再调用本命令。
 #[tauri::command]
 pub async fn run_community_tool(
     category: String,

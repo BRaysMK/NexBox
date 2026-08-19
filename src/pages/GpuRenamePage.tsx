@@ -16,6 +16,7 @@ import {
   TabPanels,
   TabPanel,
 } from "@chakra-ui/react";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useEffect, useState } from "react";
@@ -55,6 +56,7 @@ export default function GpuRenamePage() {
   const navigate = useNavigate();
 
   const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const adaptiveTitle = useAdaptiveTextColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
 
@@ -273,7 +275,7 @@ export default function GpuRenamePage() {
           color={headingColor}
         />
         <Monitor size={28} color={headingColor} />
-        <Heading size="lg" color={headingColor} fontWeight="700">
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
           {t("gpuRename.title")}
         </Heading>
       </HStack>

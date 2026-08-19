@@ -17,6 +17,11 @@ import {
   IconButton,
   Tooltip,
   Badge,
+  Tabs,
+  TabList,
+  TabPanels,
+  TabPanel,
+  Tab,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { AnimatePresence, motion } from "framer-motion";
@@ -38,6 +43,7 @@ import {
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface StartupItem {
   name: string;
@@ -51,6 +57,15 @@ interface StartupItem {
   is_disabled: boolean;
 }
 
+interface ServiceItem {
+  name: string;
+  display_name: string;
+  description: string | null;
+  is_disabled: boolean;
+  is_running: boolean;
+  binary_path: string | null;
+}
+
 export default function StartupManagerPage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("rocket");
@@ -58,6 +73,7 @@ export default function StartupManagerPage() {
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const navigate = useNavigate();
 
+  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tableBg = liquidGlassEnabled
@@ -70,12 +86,18 @@ export default function StartupManagerPage() {
   const hoverBg = `${themeConfig.primaryColor}1F`;
   const deleteColor = useColorModeValue("red.500", "red.400");
   const enableColor = useColorModeValue("teal.600", "teal.300");
+  const tabTextColor = getContrastTextColor();
 
   const [items, setItems] = useState<StartupItem[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [disablingItems, setDisablingItems] = useState<Set<string>>(new Set());
   // 启动项软件图标（file_location -> data URI），空字符串表示未取到
   const [icons, setIcons] = useState<Record<string, string>>({});
+  // Windows 系统服务（自启动 + 已禁用）
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [servicesScanning, setServicesScanning] = useState(false);
+  const [togglingServices, setTogglingServices] = useState<Set<string>>(new Set());
+  const [isAppAdmin, setIsAppAdmin] = useState(false);
 
   // 扫描完成后异步获取每个启动项的软件图标（不阻塞列表渲染）
   useEffect(() => {
@@ -102,6 +124,61 @@ export default function StartupManagerPage() {
     };
   }, [items]);
 
+  const loadServices = useCallback(
+    async (showSpinner = true) => {
+      if (showSpinner) setServicesScanning(true);
+      try {
+        const [svcResult, adminResult] = await Promise.all([
+          invoke<ServiceItem[]>("scan_services"),
+          invoke<boolean>("is_app_admin"),
+        ]);
+        setServices(svcResult);
+        setIsAppAdmin(adminResult);
+      } catch (error) {
+        console.error("Failed to scan services:", error);
+        toast({
+          title: t("optimization.startupManager.scanServicesError"),
+          description: String(error),
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+      if (showSpinner) setServicesScanning(false);
+    },
+    [t, toast]
+  );
+
+  const handleToggleService = async (svc: ServiceItem, enable: boolean) => {
+    setTogglingServices((prev) => new Set(prev).add(svc.name));
+    try {
+      await invoke("set_service_start_type", { name: svc.name, enable });
+      toast({
+        title: enable
+          ? t("optimization.startupManager.enableServiceSuccess", { name: svc.name })
+          : t("optimization.startupManager.disableServiceSuccess", { name: svc.name }),
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+      await loadServices(false);
+    } catch (error) {
+      console.error("Failed to change service start type:", error);
+      toast({
+        title: t("optimization.startupManager.serviceActionError"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+    setTogglingServices((prev) => {
+      const next = new Set(prev);
+      next.delete(svc.name);
+      return next;
+    });
+  };
+
   const doScan = useCallback(
     async (showSpinner = true) => {
       if (showSpinner) setIsScanning(true);
@@ -119,8 +196,9 @@ export default function StartupManagerPage() {
         });
       }
       if (showSpinner) setIsScanning(false);
+      await loadServices(false);
     },
-    [t, toast]
+    [t, toast, loadServices]
   );
 
   useEffect(() => {
@@ -228,29 +306,53 @@ export default function StartupManagerPage() {
         >
                         返回
         </Button>
-        <Heading size="lg" color={headingColor} fontWeight="700">
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
           {t("optimization.startupManager.title")}
         </Heading>
         <Box w="100px" />
       </HStack>
 
-      <HStack spacing={3} justify="space-between">
-        <HStack spacing={2}>
-          <Text color={subTextColor} fontSize="sm">
-            {t("optimization.startupManager.totalItems", { count: items.length })}
-          </Text>
-        </HStack>
-        <LiquidGlassButton
-          leftIcon={<RefreshCw size={16} />}
-          onClick={doScan}
-          isLoading={isScanning}
-          size="sm"
-          variant="outline"
-          colorScheme="gray"
-        >
-          {t("optimization.startupManager.refresh")}
-        </LiquidGlassButton>
-      </HStack>
+      <Tabs variant="soft-rounded" isLazy>
+        <TabList>
+          <Tab
+            fontSize="sm"
+            _selected={{
+              bg: themeConfig.primaryColor,
+              color: tabTextColor,
+              boxShadow: `0 2px 14px -3px ${themeConfig.primaryColor}66`,
+            }}
+          >
+            {t("optimization.startupManager.tabStartupItems")}
+          </Tab>
+          <Tab
+            fontSize="sm"
+            _selected={{
+              bg: themeConfig.primaryColor,
+              color: tabTextColor,
+              boxShadow: `0 2px 14px -3px ${themeConfig.primaryColor}66`,
+            }}
+          >
+            {t("optimization.startupManager.tabServices")}
+          </Tab>
+        </TabList>
+
+        <TabPanels pt={4}>
+          <TabPanel px={0}>
+            <HStack spacing={3} justify="space-between" mb={3}>
+              <Text color={subTextColor} fontSize="sm">
+                {t("optimization.startupManager.totalItems", { count: items.length })}
+              </Text>
+              <LiquidGlassButton
+                leftIcon={<RefreshCw size={16} />}
+                onClick={doScan}
+                isLoading={isScanning}
+                size="sm"
+                variant="outline"
+                colorScheme="gray"
+              >
+                {t("optimization.startupManager.refresh")}
+              </LiquidGlassButton>
+            </HStack>
 
       {isScanning ? (
         <VStack py={12}>
@@ -414,30 +516,135 @@ export default function StartupManagerPage() {
         </LiquidGlassCard>
       )}
 
-      <Box
-        p={5}
-        borderRadius="xl"
-        border="1px solid"
-        borderColor={useColorModeValue("blue.200", "rgba(66,153,225,0.2)")}
-        bg={useColorModeValue("#ebf8ff", "rgba(26,54,93,0.5)")}
-      >
-        <VStack align="start" spacing={2}>
-          <Text
-            fontSize="sm"
-            fontWeight="bold"
-            color={themeConfig.primaryColor}
-          >
-            {t("optimization.startupManager.tipTitle")}
-          </Text>
-          <Text
-            fontSize="xs"
-            color={useColorModeValue("gray.600", "rgba(200,200,200,0.85)")}
-            lineHeight="tall"
-          >
-            {t("optimization.startupManager.tipDescription")}
-          </Text>
+      </TabPanel>
+          <TabPanel px={0}>
+            <HStack spacing={2} mb={3}>
+              <Text color={subTextColor} fontSize="sm">
+                {t("optimization.startupManager.servicesCount", { count: services.length })}
+              </Text>
+            </HStack>
+
+            {!isAppAdmin && (
+              <Text color={useColorModeValue("orange.600", "orange.300")} fontSize="xs">
+                {t("optimization.startupManager.serviceAdminRequired")}
+              </Text>
+            )}
+
+      {services.length === 0 ? (
+        <VStack py={6}>
+          <Text color={subTextColor}>{t("optimization.startupManager.noServices")}</Text>
         </VStack>
-      </Box>
+      ) : (
+        <LiquidGlassCard overflow="hidden">
+          <Table variant="unstyled" size="sm" layout="fixed">
+            <Thead borderBottom="1px solid" borderColor={tableBorder}>
+              <Tr>
+                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="20%">
+                  {t("optimization.startupManager.columnServiceName")}
+                </Th>
+                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="20%">
+                  {t("optimization.startupManager.columnDisplayName")}
+                </Th>
+                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="38%">
+                  {t("optimization.startupManager.columnDescription")}
+                </Th>
+                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="12%">
+                  {t("optimization.startupManager.columnState")}
+                </Th>
+                <Th px={4} py={3} color={subTextColor} fontSize="xs" textTransform="uppercase" letterSpacing="wider" w="110px">
+                  {t("optimization.startupManager.columnActions")}
+                </Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {services.map((svc, index) => {
+                const toggling = togglingServices.has(svc.name);
+                return (
+                  <Tr
+                    key={`${svc.name}-${index}`}
+                    _hover={{ bg: hoverBg }}
+                    transition="background 0.15s"
+                    opacity={toggling ? 0.5 : svc.is_disabled ? 0.6 : 1}
+                  >
+                    <Td px={4} py={3}>
+                      <Text
+                        color={svc.is_disabled ? pathColor : headingColor}
+                        fontWeight="medium"
+                        fontSize="sm"
+                        noOfLines={1}
+                        textDecoration={svc.is_disabled ? "line-through" : "none"}
+                      >
+                        {svc.name}
+                      </Text>
+                    </Td>
+                    <Td px={4} py={3}>
+                      <Text color={pathColor} fontSize="xs" noOfLines={1}>
+                        {svc.display_name || "-"}
+                      </Text>
+                    </Td>
+                    <Td px={4} py={3}>
+                      {svc.description ? (
+                        <Tooltip label={svc.description} placement="top">
+                          <Text color={pathColor} fontSize="xs" noOfLines={1}>
+                            {svc.description}
+                          </Text>
+                        </Tooltip>
+                      ) : (
+                        <Text color={pathColor} fontSize="xs">-</Text>
+                      )}
+                    </Td>
+                    <Td px={4} py={3}>
+                      {svc.is_running ? (
+                        <Badge colorScheme="teal" variant="subtle" borderRadius="full" px={2} fontSize="xs">
+                          {t("optimization.startupManager.stateRunning")}
+                        </Badge>
+                      ) : (
+                        <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2} fontSize="xs">
+                          {t("optimization.startupManager.stateStopped")}
+                        </Badge>
+                      )}
+                    </Td>
+                    <Td px={4} py={3}>
+                      <HStack spacing={1}>
+                        {svc.is_disabled ? (
+                          <Tooltip label={t("optimization.startupManager.enable")} placement="top">
+                            <IconButton
+                              aria-label={t("optimization.startupManager.enable")}
+                              icon={<RotateCcw size={14} />}
+                              size="sm"
+                              variant="ghost"
+                              colorScheme="teal"
+                              color={enableColor}
+                              onClick={() => handleToggleService(svc, true)}
+                              isLoading={toggling}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Tooltip label={t("optimization.startupManager.disable")} placement="top">
+                            <IconButton
+                              aria-label={t("optimization.startupManager.disable")}
+                              icon={<Ban size={14} />}
+                              size="sm"
+                              variant="ghost"
+                              colorScheme="red"
+                              color={deleteColor}
+                              onClick={() => handleToggleService(svc, false)}
+                              isLoading={toggling}
+                            />
+                          </Tooltip>
+                        )}
+                      </HStack>
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </Tbody>
+          </Table>
+        </LiquidGlassCard>
+      )}
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
     </VStack>
   );
 

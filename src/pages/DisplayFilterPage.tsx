@@ -31,6 +31,7 @@ import {
   ModalBody,
   ModalCloseButton,
 } from "@chakra-ui/react";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
@@ -184,6 +185,7 @@ const modeParams: Record<number, { gamma: number; sCurve: number; rBoost: number
 export default function DisplayFilterPage() {
   const navigate = useNavigate();
   const { filterHotkey, saveFilterHotkey } = useAppStartup();
+  const adaptiveTitle = useAdaptiveTextColor();
   const [settings, setSettings] = useState<FilterSettings>({
     temperature: 6500,
     brightness: 100,
@@ -1678,7 +1680,7 @@ export default function DisplayFilterPage() {
             onClick={() => navigate("/builtin-tools")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor} fontWeight="700">
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
             {t("displayFilter.title")}
           </Heading>
         </HStack>

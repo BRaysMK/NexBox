@@ -33,6 +33,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, ArrowLeft, Trash2, Plus, Move, RotateCcw, Download, Settings } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
@@ -283,6 +284,7 @@ export default function OverlayPanelPage() {
   const { overlaySettings, saveOverlaySettings, overlayHotkey, saveOverlayHotkey } = useAppStartup();
   const { exportReport, isExporting } = useHardwareReportExport();
   const navigate = useNavigate();
+  const adaptiveTitle = useAdaptiveTextColor();
 
   const [hardwareData, setHardwareData] = useState<HardwareData>({
     fps: null,
@@ -693,7 +695,7 @@ export default function OverlayPanelPage() {
             onClick={() => navigate("/builtin-tools")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor}>
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             {t("overlayPanel.title") || "悬浮框"}
           </Heading>
         </HStack>

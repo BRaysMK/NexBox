@@ -17,6 +17,8 @@ import type {
   Album,
   Mv,
   ArtistDetail,
+  ExternalPlayback,
+  SmtcState,
 } from "@/types/music";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 
@@ -50,6 +52,12 @@ interface MusicState {
   loginInfo: LoginInfo | null; // 当前播放源的登录信息 (向后兼容)
   loginInfos: Record<MusicProvider, LoginInfo | null>; // 所有平台登录信息
   playbackSource: MusicProvider; // 当前播放源
+
+  // 外部客户端播放（SMTC 接管系统媒体会话，供灵动岛显示）
+  externalTrack: ExternalPlayback["track"];
+  externalPlaying: boolean;
+  externalPositionMs: number;
+  externalDurationMs: number;
 
   // 数据
   searchResults: Song[];
@@ -162,6 +170,8 @@ interface MusicState {
   seekTo: (time: number) => void;
   setVolume: (v: number) => void;
   togglePlayMode: () => void;
+  /** 外部客户端控制命令（SMTC）：play-pause | prev | next | seek */
+  externalControl: (action: "play-pause" | "prev" | "next" | "seek", valueMs?: number) => void;
   loadHeartbeatSongs: (baseSong: Song | null) => Promise<void>;
   setPlaybackQuality: (quality: PlaybackQuality) => Promise<void>;
   setLyricsFontSize: (size: number) => Promise<void>;
@@ -366,6 +376,59 @@ export function coverProxyUrl(url: string, proxyPort: number): string {
   return `http://127.0.0.1:${proxyPort}/cover?url=${encodeURIComponent(url)}`;
 }
 
+// ── 内部播放器 SMTC（系统媒体传输控制）推送 ──────────────────────────
+// 把当前播放状态推给后端注册的「新境盒」媒体会话，供音量浮层/锁屏显示、
+// 系统媒体键（播放/暂停/上一曲/下一曲）与浮层拖动进度控制内部播放器。
+let lastSmtcPush = 0;
+let smtcCleared = true;
+
+/**
+ * 计算 SMTC 封面来源，交给后端下载（后端 reqwest 带防盗链 Referer，无 CORS 限制）：
+ * - data URI：后端直接解码
+ * - 本地歌曲：传封面缓存文件绝对路径（file:// 前缀，后端读文件）
+ * - 在线歌曲：传原始封面 URL，后端带 Referer 下载（绕过防盗链）
+ */
+function smtcCoverSource(song: Song): string {
+  if (!song.cover) return "";
+  if (song.cover.startsWith("data:")) return song.cover;
+  if (song._localCoverPath) return `file://${song._localCoverPath}`;
+  return song.cover;
+}
+
+/**
+ * 推送一次 SMTC 状态。
+ * force=true 忽略 1s 节流（元数据/播放状态变化时使用）；无歌时调 smtc_clear 让会话从浮层消失。
+ */
+async function pushSmtc(force = false) {
+  const s = useMusicStore.getState();
+  if (!s.currentSong || !s.audioRef) {
+    if (!smtcCleared) {
+      smtcCleared = true;
+      invoke("smtc_clear").catch(() => {});
+    }
+    return;
+  }
+  smtcCleared = false;
+
+  const now = Date.now();
+  if (!force && now - lastSmtcPush < 1000) return; // 进度节流 1s
+  lastSmtcPush = now;
+
+  const posMs = Math.round((s.audioRef.currentTime || 0) * 1000);
+  const durMs = Math.round((s.duration || s.audioRef.duration || s.currentSong.duration || 0) * 1000);
+  const artist = s.currentSong.artist || s.currentSong.artists?.map((a) => a.name).join(" / ") || "";
+  const payload: SmtcState = {
+    title: s.currentSong.name,
+    artist,
+    album: s.currentSong.album || "",
+    cover: smtcCoverSource(s.currentSong),
+    playing: s.isPlaying,
+    positionMs: posMs,
+    durationMs: durMs,
+  };
+  invoke("smtc_update_state", { state: payload }).catch(() => {});
+}
+
 /// 后台批量加载歌单剩余曲目到播放队列（不加入歌单列表）
 /// 优化：先在本地累积所有批次，最后做一次去重 setState，避免重复歌曲和频繁 re-render
 /// 限制：播放队列最大 2000 首，超出部分不再追加，防止内存无限增长
@@ -447,6 +510,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   loginInfo: null,
   loginInfos: { netease: null, kugou: null, qqmusic: null },
   playbackSource: "netease",
+
+  externalTrack: null,
+  externalPlaying: false,
+  externalPositionMs: 0,
+  externalDurationMs: 0,
 
   searchResults: [],
   userPlaylists: [],
@@ -718,6 +786,35 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       })
     );
 
+    // 系统媒体键 / 音量浮层控制事件（后端 SMTC 转发）→ 控制内部播放器
+    unlistenFns.push(
+      await listen<{ action: string; positionMs?: number }>("smtc:control", (event) => {
+        const { action, positionMs } = event.payload;
+        switch (action) {
+          case "play-pause":
+            get().togglePlay();
+            break;
+          case "prev":
+            get().prevTrack();
+            break;
+          case "next":
+            get().nextTrack();
+            break;
+          case "stop":
+            get().audioRef?.pause();
+            break;
+          case "seek":
+            if (typeof positionMs === "number") {
+              get().seekTo(positionMs / 1000);
+            }
+            break;
+        }
+      })
+    );
+
+    // 外部客户端播放状态监听已移至 DynamicIslandHost（全局常驻组件）注册，
+    // 避免仅在音乐页打开时才生效导致灵动岛不显示。
+
     // 桌面歌词窗口就绪后请求数据
     // 解决窗口首次打开时 emit 早于 listen 注册的时序问题
     unlistenFns.push(
@@ -852,7 +949,25 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
-  setAudioRef: (audio) => set({ audioRef: audio }),
+  setAudioRef: (audio) => {
+    set({ audioRef: audio });
+    // 绑定 SMTC 推送与播放状态同步：无论音频被前端/系统媒体键/外部路径暂停或恢复，
+    // isPlaying 都跟随 <audio> 真实状态，保证灵动岛/播放器按钮图标始终同步。
+    if (audio && !(audio as HTMLAudioElement & { _smtcBound?: boolean })._smtcBound) {
+      (audio as HTMLAudioElement & { _smtcBound?: boolean })._smtcBound = true;
+      audio.addEventListener("timeupdate", () => pushSmtc());
+      audio.addEventListener("play", () => {
+        useMusicStore.setState({ isPlaying: true });
+        pushSmtc(true);
+      });
+      audio.addEventListener("pause", () => {
+        useMusicStore.setState({ isPlaying: false });
+        pushSmtc(true);
+      });
+      audio.addEventListener("loadedmetadata", () => pushSmtc(true));
+      audio.addEventListener("ended", () => pushSmtc(true));
+    }
+  },
 
   search: async (keywords) => {
     if (!keywords.trim()) return;
@@ -1067,6 +1182,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           await audio.play();
           if (mySeq !== playSongSeq) return;
           set({ isPlaying: true, currentQuality: "本地", currentBitrate: 0 });
+          pushSmtc(true);
         } catch (err) {
           if (mySeq !== playSongSeq) return;
           console.error("Play local song failed:", err);
@@ -1151,6 +1267,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (mySeq !== playSongSeq) return;
 
       set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort, currentQuality: result.quality, currentBitrate: result.br });
+      pushSmtc(true);
       // 推送桌面歌词状态
       // 歌词数据已由 loadLyricsForSong 并行加载完成后自动 emit，此处不再重复 emitDesktopLyricsData
       // 避免 loadLyricsForSong 未完成时推送旧歌词
@@ -1170,6 +1287,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (isPlaying) {
       audioRef.pause();
       set({ isPlaying: false });
+      pushSmtc(true);
       if (get().desktopLyricsVisible) {
         emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
       }
@@ -1177,6 +1295,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       try {
         await audioRef.play();
         set({ isPlaying: true });
+        pushSmtc(true);
         if (get().desktopLyricsVisible) {
           emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
         }
@@ -1305,12 +1424,26 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (audioRef) {
       audioRef.currentTime = time;
       set({ currentTime: time });
+      pushSmtc(true);
       // 在线音频 seek 后需要重新缓冲，浏览器可能自动暂停
       // 如果之前是在播放状态，确保 seek 后继续播放
       if (isPlaying) {
         audioRef.play().catch(() => {});
       }
     }
+  },
+
+  // 外部客户端控制（SMTC 会话，供灵动岛在接管外部播放时使用）
+  externalControl: (action, valueMs) => {
+    // 播放/暂停：先本地乐观翻转图标（外部平台有淡出/缓动，状态回调慢），
+    // 避免按钮反馈延迟；后续每秒 SMTC 轮询会自动校正为平台真实状态。
+    if (action === "play-pause") {
+      set((s) => ({ externalPlaying: !s.externalPlaying }));
+    }
+    invoke("external_control", {
+      action,
+      valueMs: action === "seek" ? valueMs ?? 0 : undefined,
+    }).catch(() => {});
   },
 
   setVolume: (v) => {
@@ -1666,7 +1799,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
-  openLoginWindow: async (provider) => {
+  openLoginWindow: async (provider?) => {
     const target = provider || get().playbackSource;
     // 如果已登录该平台，先退出
     if (get().loginInfos[target]?.logged_in) {

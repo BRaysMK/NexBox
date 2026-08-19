@@ -25,6 +25,7 @@ import { ViewGrid } from "@/components/special/view-grid";
 import { ViewList } from "@/components/special/view-list";
 import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { store } from "@/lib/store";
 import type { ViewItem } from "@/components/special/view-types";
 
@@ -175,6 +176,7 @@ function applyOrder(allTools: ViewItem[], orderIds: string[]): ViewItem[] {
 
 export default function OptimizePage() {
   const { t } = useTranslation();
+  const adaptiveTitle = useAdaptiveTextColor();
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("grid");
 
   const [tools, setTools] = useState<ViewItem[]>(() => {
@@ -193,7 +195,7 @@ export default function OptimizePage() {
   const content = (
     <VStack align="start" spacing={6}>
       <Flex w="full" justify="space-between" align="center">
-        <Heading size="lg" color={headingColor}>
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t("optimization.pageTitle")}
         </Heading>
         <LiquidGlassCard display="inline-flex" p={1} boxShadow="sm">

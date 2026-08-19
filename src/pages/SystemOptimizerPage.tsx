@@ -39,6 +39,7 @@ import {
   type OptimizerItem,
   type OptimizerCategory,
 } from "@/config/system-optimizer";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 const STORE_KEY = "system_optimizer_states";
 const NOTICE_KEY = "system_optimizer_notice_agreed";
@@ -292,6 +293,7 @@ export default function SystemOptimizerPage() {
     setSavedStatesState(next);
   }, []);
 
+  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
@@ -641,7 +643,7 @@ export default function SystemOptimizerPage() {
             onClick={() => navigate("/optimize")}
             color={headingColor}
           />
-          <Heading size="lg" color={headingColor}>
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             {t("systemOptimizer.pageTitle")}
           </Heading>
         </HStack>

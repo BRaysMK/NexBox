@@ -24,6 +24,7 @@ import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface VtxStatus {
   hvci_enabled: boolean;
@@ -48,6 +49,7 @@ export default function VtxVirtualizationPage() {
   const [isChecking, setIsChecking] = useState(true);
   const [actionKind, setActionKind] = useState<ActionKind | null>(null);
 
+  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#969696");
@@ -184,7 +186,7 @@ export default function VtxVirtualizationPage() {
               flexShrink={0}
             />
             <Box minW={0}>
-              <Heading size="lg" color={headingColor} noOfLines={1}>
+              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} noOfLines={1}>
                 {t("vtxVirtualization.title")}
               </Heading>
               <Text mt={1} fontSize="sm" color={subLabelColor} noOfLines={2}>
