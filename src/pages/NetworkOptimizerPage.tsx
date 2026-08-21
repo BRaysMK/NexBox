@@ -284,6 +284,7 @@ export default function NetworkOptimizerPage() {
   const [isRestoringDns, setIsRestoringDns] = useState(false);
   const [isClearingDns, setIsClearingDns] = useState(false);
   const [isResettingNetwork, setIsResettingNetwork] = useState(false);
+  const [isFixingDhcp, setIsFixingDhcp] = useState(false);
   const [customPrimary, setCustomPrimary] = useState("");
   const [customSecondary, setCustomSecondary] = useState("");
   const [isApplyingCustomDns, setIsApplyingCustomDns] = useState(false);
@@ -715,6 +716,30 @@ export default function NetworkOptimizerPage() {
       });
     } finally {
       setIsResettingNetwork(false);
+    }
+  }, [toast, t]);
+
+  // 修复 DHCP：将启用网卡 IP/DNS 恢复为自动获取并重新获取 IP
+  const handleFixDhcp = useCallback(async () => {
+    setIsFixingDhcp(true);
+    try {
+      await invoke("fix_dhcp");
+      toast({
+        title: t("networkOptimize.fixDhcp.done"),
+        status: "success",
+        duration: 4000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: t("networkOptimize.fixDhcp.error"),
+        description: String(err),
+        status: "error",
+        duration: 4000,
+        isClosable: true,
+      });
+    } finally {
+      setIsFixingDhcp(false);
     }
   }, [toast, t]);
 
@@ -1203,6 +1228,43 @@ export default function NetworkOptimizerPage() {
           return (
             <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4}>
               {resetContent}
+            </Box>
+          );
+        })()}
+
+        {/* 修复 DHCP */}
+        {(() => {
+          const fixDhcpContent = (
+            <HStack justify="space-between" align="center" gap={3} flexWrap="wrap">
+              <VStack align="start" spacing={1} flex={1} minW={0}>
+                <Text fontSize="sm" fontWeight="bold" color={headingColor}>
+                  {t("networkOptimize.fixDhcp.title")}
+                </Text>
+                <Text fontSize="xs" color={subTextColor}>
+                  {t("networkOptimize.fixDhcp.description")}
+                </Text>
+              </VStack>
+              <Button
+                size="sm"
+                onClick={handleFixDhcp}
+                isLoading={isFixingDhcp}
+                loadingText={t("networkOptimize.fixDhcp.fixing")}
+                bg={activeColor}
+                color={contrastText}
+                _hover={{ opacity: 0.9 }}
+                _active={{ transform: "scale(0.97)" }}
+                flexShrink={0}
+              >
+                {t("networkOptimize.fixDhcp.fix")}
+              </Button>
+            </HStack>
+          );
+          if (liquidGlassEnabled) {
+            return <LiquidGlassCard w="full" p={4} mt={3}>{fixDhcpContent}</LiquidGlassCard>;
+          }
+          return (
+            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4} mt={3}>
+              {fixDhcpContent}
             </Box>
           );
         })()}

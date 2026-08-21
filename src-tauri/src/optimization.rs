@@ -3722,51 +3722,93 @@ pub async fn delete_power_plan(guid: String) -> Result<PowerPlanOperationResult,
 pub struct PeripheralStatus {
     pub mouse_value: Option<i32>,
     pub keyboard_value: Option<i32>,
+    pub mouse_queue_value: Option<i32>,
 }
 
 #[tauri::command]
 pub async fn get_peripheral_status() -> Result<PeripheralStatus, String> {
-    let script = r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$mouse = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' -Name 'Win32PrioritySeparation' -ErrorAction SilentlyContinue
-$keyboard = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters' -Name 'KeyboardDataQueueSize' -ErrorAction SilentlyContinue
-if ($mouse -ne $null) { Write-Output "MOUSE:$($mouse.Win32PrioritySeparation)" } else { Write-Output "MOUSE:null" }
-if ($keyboard -ne $null) { Write-Output "KEYBOARD:$($keyboard.KeyboardDataQueueSize)" } else { Write-Output "KEYBOARD:null" }
-"#;
-    let result = run_ps_script(script)?;
-    let stdout = String::from_utf8_lossy(&result.stdout).to_string();
-    let mut mouse_value: Option<i32> = None;
-    let mut keyboard_value: Option<i32> = None;
-    for line in stdout.lines() {
-        let line = line.trim();
-        if let Some(val) = line.strip_prefix("MOUSE:") {
-            mouse_value = if val == "null" { None } else { val.trim().parse().ok() };
-        } else if let Some(val) = line.strip_prefix("KEYBOARD:") {
-            keyboard_value = if val == "null" { None } else { val.trim().parse().ok() };
-        }
-    }
-    Ok(PeripheralStatus { mouse_value, keyboard_value })
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let read_dword = |path: &str, name: &str| -> Option<i32> {
+        hklm.open_subkey_with_flags(path, KEY_READ)
+            .ok()
+            .and_then(|k| k.get_value::<u32, _>(name).ok())
+            .map(|v| v as i32)
+    };
+    Ok(PeripheralStatus {
+        mouse_value: read_dword(
+            r"SYSTEM\CurrentControlSet\Control\PriorityControl",
+            "Win32PrioritySeparation",
+        ),
+        keyboard_value: read_dword(
+            r"SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters",
+            "KeyboardDataQueueSize",
+        ),
+        mouse_queue_value: read_dword(
+            r"SYSTEM\CurrentControlSet\Services\mouclass\Parameters",
+            "MouseDataQueueSize",
+        ),
+    })
 }
 
 #[tauri::command]
-pub async fn set_peripheral_settings(mouse_value: u32, keyboard_value: u32) -> Result<PerfTweakResult, String> {
-    let script = format!(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' -Name 'Win32PrioritySeparation' -Value {mouse} -Type DWord -Force -ErrorAction SilentlyContinue
-Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters' -Name 'KeyboardDataQueueSize' -Value {keyboard} -Type DWord -Force -ErrorAction SilentlyContinue
-Write-Output 'OK'
-"#, mouse = mouse_value, keyboard = keyboard_value);
-    run_simple_feature(&script)
+pub async fn set_peripheral_settings(
+    mouse_value: u32,
+    keyboard_value: u32,
+    mouse_queue_value: u32,
+) -> Result<PerfTweakResult, String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let write_dword = |path: &str, name: &str, value: u32| -> Result<(), String> {
+        let (key, _) = hklm
+            .create_subkey(path)
+            .map_err(|e| format!("打开注册表键失败: {e}"))?;
+        key.set_value(name, &value)
+            .map_err(|e| format!("写入 {name} 失败: {e}"))
+    };
+    write_dword(
+        r"SYSTEM\CurrentControlSet\Control\PriorityControl",
+        "Win32PrioritySeparation",
+        mouse_value,
+    )?;
+    write_dword(
+        r"SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters",
+        "KeyboardDataQueueSize",
+        keyboard_value,
+    )?;
+    write_dword(
+        r"SYSTEM\CurrentControlSet\Services\mouclass\Parameters",
+        "MouseDataQueueSize",
+        mouse_queue_value,
+    )?;
+    Ok(PerfTweakResult {
+        success: true,
+        message: "操作成功".to_string(),
+    })
 }
 
 #[tauri::command]
 pub async fn reset_peripheral_settings() -> Result<PerfTweakResult, String> {
-    run_simple_feature(r#"
-$ErrorActionPreference = 'SilentlyContinue'
-Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' -Name 'Win32PrioritySeparation' -ErrorAction SilentlyContinue
-Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters' -Name 'KeyboardDataQueueSize' -ErrorAction SilentlyContinue
-Write-Output 'OK'
-"#)
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let delete_if_exists = |path: &str, name: &str| {
+        if let Ok(key) = hklm.open_subkey_with_flags(path, KEY_SET_VALUE) {
+            let _ = key.delete_value(name);
+        }
+    };
+    delete_if_exists(
+        r"SYSTEM\CurrentControlSet\Control\PriorityControl",
+        "Win32PrioritySeparation",
+    );
+    delete_if_exists(
+        r"SYSTEM\CurrentControlSet\Services\Kbdclass\Parameters",
+        "KeyboardDataQueueSize",
+    );
+    delete_if_exists(
+        r"SYSTEM\CurrentControlSet\Services\mouclass\Parameters",
+        "MouseDataQueueSize",
+    );
+    Ok(PerfTweakResult {
+        success: true,
+        message: "操作成功".to_string(),
+    })
 }
 
 // ========== AQ_REGISTRY 模块 - 纯 Rust 注册表操作（零外部进程） ==========

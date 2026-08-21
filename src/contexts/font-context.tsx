@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo, useRef } from "react";
 import { store } from "@/lib/store";
+import { registerFontFace } from "@/lib/fonts";
 
 /** 可选字体项 */
 export interface FontOption {
@@ -83,17 +84,6 @@ function getFontFormat(fileName: string): string {
     case "woff": return "woff";
     case "woff2": return "woff2";
     default: return "truetype";
-  }
-}
-
-/** 用 FontFace API 注册一个字体 */
-async function registerFontFace(name: string, base64Data: string, format: string) {
-  try {
-    const fontFace = new FontFace(name, `url(data:font/${format === "opentype" ? "opentype" : format};base64,${base64Data})`);
-    await fontFace.load();
-    document.fonts.add(fontFace);
-  } catch (error) {
-    console.error(`Failed to register font "${name}":`, error);
   }
 }
 

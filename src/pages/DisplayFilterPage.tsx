@@ -256,7 +256,7 @@ export default function DisplayFilterPage() {
   const isDraggingRef = useRef(false);
   
   // 预览图片切换
-  const previewImages = ["/icc-preview.png", "/lhdbsn.png", "/BKSSW.jpg", "/htjdsn.png"];
+  const previewImages = ["/icc-preview.jpg", "/lhdbsn.jpg", "/BKSSW.jpg", "/htjdsn.jpg"];
   const [previewImageIndex, setPreviewImageIndex] = useState(0);
   
   const editValuesRef = useRef({

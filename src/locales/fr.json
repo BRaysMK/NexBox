@@ -1613,6 +1613,7 @@
     "musicPlayPause": "Lecture / Pause",
     "musicPlayPauseDesc": "Utiliser un raccourci pour lire ou mettre en pause la musique",
     "saved": "Raccourci enregistré",
+    "saveFailed": "Échec de l'enregistrement du raccourci",
     "masterToggle": "Interrupteur global des raccourcis",
     "masterToggleDesc": "Une fois désactivé, aucun raccourci global ne fonctionnera"
   },

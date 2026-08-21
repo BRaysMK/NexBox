@@ -25,8 +25,10 @@ import {
   Timer,
   RefreshCw,
   Network,
+  Server,
 } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
@@ -318,7 +320,10 @@ export default function SpeedTestPage() {
   const [loss, setLoss] = useState(0);
   const [download, setDownload] = useState(0);
   const [upload, setUpload] = useState(0);
-  const [message, setMessage] = useState("");
+
+  // 可切换的测速服务器列表
+  const [servers, setServers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedServer, setSelectedServer] = useState("nuaa");
 
   // 折线图数据点
   const [dlPoints, setDlPoints] = useState<number[]>([]);
@@ -344,7 +349,6 @@ export default function SpeedTestPage() {
         setLoss(d.packetLossPct);
         setDownload(d.downloadMbps);
         setUpload(d.uploadMbps);
-        setMessage(d.message);
         const s = d.stage as Stage;
         setStage(s);
 
@@ -383,6 +387,21 @@ export default function SpeedTestPage() {
     };
   }, []);
 
+  // 加载可切换的测速服务器列表
+  useEffect(() => {
+    let cancelled = false;
+    invoke<{ id: string; name: string }[]>("get_speedtest_servers")
+      .then((list) => {
+        if (cancelled || !list || list.length === 0) return;
+        setServers(list);
+        setSelectedServer((prev) => (list.some((s) => s.id === prev) ? prev : list[0].id));
+      })
+      .catch((err) => console.error("load speedtest servers failed:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleStart = useCallback(async () => {
     try {
       setStage("ping");
@@ -396,14 +415,17 @@ export default function SpeedTestPage() {
       dlRef.current = [];
       ulRef.current = [];
       prevStageRef.current = "ping";
-      const config = { threads: DEFAULT_THREADS, durationSecs: DEFAULT_DURATION };
+      const config = {
+        threads: DEFAULT_THREADS,
+        durationSecs: DEFAULT_DURATION,
+        server: selectedServer,
+      };
       await invoke("start_speedtest", { config });
     } catch (err) {
       console.error("start speedtest failed:", err);
       setStage("idle");
-      setMessage(String(err));
     }
-  }, []);
+  }, [selectedServer]);
 
   const handleStop = useCallback(async () => {
     try {
@@ -500,15 +522,22 @@ export default function SpeedTestPage() {
           />
         </SimpleGrid>
 
-        {/* 消息提示 */}
-        {message && (
-          <Text fontSize="sm" color={subColor} textAlign="center">
-            {message}
-          </Text>
-        )}
-
         {/* 开始/停止 */}
-        <VStack spacing={2}>
+        <VStack spacing={3}>
+          {/* 测速服务器切换 */}
+          <HStack spacing={2.5}>
+            <HStack spacing={1.5}>
+              <Server size={15} color={subColor} />
+              <Text fontSize="sm" color={subColor}>{t("speedtest.server")}</Text>
+            </HStack>
+            <CustomSelect
+              value={selectedServer}
+              onChange={setSelectedServer}
+              options={servers.map((s) => ({ value: s.id, label: s.name }))}
+              width="200px"
+              placeholder={t("speedtest.server")}
+            />
+          </HStack>
           <Tooltip label={t("speedtest.startHint")} isDisabled={!running}>
             <Button
               size="lg"

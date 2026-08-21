@@ -8,8 +8,9 @@ import { RandomQuote, useRandomQuoteEnabled } from "@/components/RandomQuote";
 import { useState, useEffect, useRef } from "react";
 import HardwareModelCard from "@/components/HardwareModelCard";
 import GameWinKeyCard from "@/components/GameWinKeyCard";
+import GameImeLockCard from "@/components/GameImeLockCard";
 import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
-import { FeedbackBanner, useFeedbackEnabled } from "@/components/FeedbackBanner";
+import { FeedbackCard, QqGroupCard, useFeedbackEnabled, useQqGroupCardEnabled } from "@/components/QqFeedbackCards";
 import { store } from "@/lib/store";
 import { getGreeting, rollEasterEgg, EASTER_EGG_TEXT } from "@/lib/greetings";
 import { invoke } from "@tauri-apps/api/core";
@@ -34,13 +35,22 @@ export default function HomePage() {
   const adaptiveTextColor = useAdaptiveTextColor();
   const [greetingText, setGreetingText] = useState("");
   const usernameRef = useRef("");
-  const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
-  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
-  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
+  const [gameLauncherEnabled, setGameLauncherEnabled] = useState(false);
+  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(false);
+  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(false);
+  const [gameImeLockCardEnabled, setGameImeLockCardEnabled] = useState(false);
+  const [homeCardsReady, setHomeCardsReady] = useState(false);
 
   const computeGreeting = () => {
     if (rollEasterEgg()) return EASTER_EGG_TEXT;
     return getGreeting(new Date(), usernameRef.current).text;
+  };
+
+  // 四个本地主页开关全部加载完成后才渲染卡片区域，避免默认值导致的闪烁
+  const homeCardsReadyRef = useRef(0);
+  const markHomeCardLoaded = () => {
+    homeCardsReadyRef.current += 1;
+    if (homeCardsReadyRef.current >= 4) setHomeCardsReady(true);
   };
 
   // 获取用户名：优先使用自定义标题用户名，留空时回退到系统用户名
@@ -92,11 +102,15 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, []);
 
-  const todayPopularityEnabled = useTodayPopularityEnabled();
-  const feedbackEnabled = useFeedbackEnabled();
-  const announcementEnabled = useAnnouncementEnabled();
-  const randomQuoteEnabled = useRandomQuoteEnabled();
-  const randomImageEnabled = useRandomImageEnabled();
+  const {
+    enabled: todayPopularityEnabled,
+    ready: todayPopularityReady,
+  } = useTodayPopularityEnabled();
+  const { enabled: feedbackEnabled, ready: feedbackReady } = useFeedbackEnabled();
+  const { enabled: qqGroupCardEnabled, ready: qqGroupCardReady } = useQqGroupCardEnabled();
+  const { enabled: announcementEnabled, ready: announcementReady } = useAnnouncementEnabled();
+  const { enabled: randomQuoteEnabled, ready: randomQuoteReady } = useRandomQuoteEnabled();
+  const { enabled: randomImageEnabled, ready: randomImageReady } = useRandomImageEnabled();
   useEffect(() => {
     (async () => {
       const saved = await store.get<boolean>("nexbox_game_launcher_enabled");
@@ -109,6 +123,7 @@ export default function HomePage() {
           setGameLauncherEnabled(ls === "true");
         }
       }
+      markHomeCardLoaded();
     })();
 
     const handleGameLauncherChange = (e: CustomEvent) => {
@@ -131,6 +146,7 @@ export default function HomePage() {
         const ls = localStorage.getItem("nexbox_home_hardware_model_enabled");
         if (ls !== null) setHomeHardwareModelEnabled(ls === "true");
       }
+      markHomeCardLoaded();
     })();
 
     const handler = (e: CustomEvent) => {
@@ -150,6 +166,7 @@ export default function HomePage() {
         const ls = localStorage.getItem("nexbox_game_win_key_card_enabled");
         if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
       }
+      markHomeCardLoaded();
     })();
 
     const handler = (e: CustomEvent) => {
@@ -158,6 +175,26 @@ export default function HomePage() {
 
     window.addEventListener("game-win-key-card-setting-changed", handler as EventListener);
     return () => window.removeEventListener("game-win-key-card-setting-changed", handler as EventListener);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      let saved = await store.get<boolean>("nexbox_game_ime_lock_card_enabled");
+      if (saved !== null && saved !== undefined) {
+        setGameImeLockCardEnabled(saved);
+      } else {
+        const ls = localStorage.getItem("nexbox_game_ime_lock_card_enabled");
+        if (ls !== null) setGameImeLockCardEnabled(ls === "true");
+      }
+      markHomeCardLoaded();
+    })();
+
+    const handler = (e: CustomEvent) => {
+      setGameImeLockCardEnabled(e.detail);
+    };
+
+    window.addEventListener("game-ime-lock-card-setting-changed", handler as EventListener);
+    return () => window.removeEventListener("game-ime-lock-card-setting-changed", handler as EventListener);
   }, []);
 
   const greeting = greetingText || t("home.title");
@@ -177,32 +214,46 @@ export default function HomePage() {
               greeting
             )}
           </Text>
-          {(todayPopularityEnabled || announcementEnabled || randomQuoteEnabled) && (
+          {(todayPopularityReady && todayPopularityEnabled) ||
+          (announcementReady && announcementEnabled) ||
+          (randomQuoteReady && randomQuoteEnabled) ? (
             <HStack mt={3} spacing={3}>
-              {todayPopularityEnabled && <TodayPopularity />}
-              {announcementEnabled && <AnnouncementCard />}
-              {randomQuoteEnabled && <RandomQuote />}
+              {todayPopularityReady && todayPopularityEnabled && <TodayPopularity />}
+              {announcementReady && announcementEnabled && <AnnouncementCard />}
+              {randomQuoteReady && randomQuoteEnabled && <RandomQuote />}
             </HStack>
-          )}
+          ) : null}
         </Box>
-        {feedbackEnabled && (
-          <Box pt={12}>
-            <FeedbackBanner />
+        {(feedbackReady && feedbackEnabled) || (qqGroupCardReady && qqGroupCardEnabled) ? (
+          <Box pt={6}>
+            <VStack spacing={2} align="stretch">
+              {feedbackReady && feedbackEnabled && <FeedbackCard />}
+              {qqGroupCardReady && qqGroupCardEnabled && <QqGroupCard />}
+            </VStack>
           </Box>
-        )}
+        ) : null}
       </Flex>
 
-      {(randomImageEnabled || gameWinKeyCardEnabled || homeHardwareModelEnabled) && (
+      {homeCardsReady &&
+        (randomImageEnabled ||
+          gameWinKeyCardEnabled ||
+          gameImeLockCardEnabled ||
+          homeHardwareModelEnabled) && (
         <Box position="absolute" bottom={4} left={4}>
           <VStack spacing={2} align="stretch">
-            {randomImageEnabled && <RandomImageCard />}
-            {gameWinKeyCardEnabled && <GameWinKeyCard />}
+            {randomImageReady && randomImageEnabled && <RandomImageCard />}
+            {(gameWinKeyCardEnabled || gameImeLockCardEnabled) && (
+              <HStack spacing={2} align="stretch" w="full" justify="space-between">
+                {gameWinKeyCardEnabled && <GameWinKeyCard />}
+                {gameImeLockCardEnabled && <GameImeLockCard />}
+              </HStack>
+            )}
             {homeHardwareModelEnabled && <HardwareModelCard />}
           </VStack>
         </Box>
-      )}
+        )}
 
-      {gameLauncherEnabled && (
+      {homeCardsReady && gameLauncherEnabled && (
         <Box
           position="absolute"
           bottom={4}

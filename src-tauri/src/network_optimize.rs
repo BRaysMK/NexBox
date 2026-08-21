@@ -305,6 +305,78 @@ pub async fn reset_network() -> Result<PerfTweakResult, String> {
     })
 }
 
+/// 修复 DHCP：将物理网卡恢复为 IP + DNS 自动获取，并重新获取 IP、清理 DNS 缓存
+/// 纯原生实现（注册表枚举 + netsh），不启动 PowerShell，启动开销毫秒级
+#[tauri::command]
+pub async fn fix_dhcp() -> Result<PerfTweakResult, String> {
+    // 1. 从网卡设备类键收集物理网卡的接口 GUID（NetCfgInstanceId）
+    //    注意：DHCP 动态网卡在 Tcpip\Interfaces 下可能没有 IPAddress 值，
+    //    因此不能用 IPAddress 过滤，改用设备类键的 NetCfgInstanceId 定位物理网卡
+    let mut physical: Vec<String> = Vec::new();
+    if let Ok(class) = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(NIC_CLASS_KEY, KEY_READ)
+    {
+        for name in class.enum_keys().flatten() {
+            let Ok(k) = class.open_subkey(&name) else { continue };
+            if let Ok(id) = k.get_value::<String, _>("NetCfgInstanceId") {
+                if !id.trim().is_empty() {
+                    physical.push(id);
+                }
+            }
+        }
+    }
+
+    if physical.is_empty() {
+        return Err("未发现物理网络接口".to_string());
+    }
+
+    // 2. 逐个用 netsh 恢复 IP/DNS 为自动获取（DHCP）
+    //    某些网卡可能当前未连接，netsh 会报"找不到接口"之类错误，可忽略；
+    //    仅当出现权限类错误时中断提示管理员权限
+    for guid in &physical {
+        for r in [
+            run_netsh_result(&["interface", "ipv4", "set", "address", "name", guid, "source=dhcp"]),
+            run_netsh_result(&["interface", "ipv4", "set", "dnsservers", "name", guid, "source=dhcp"]),
+        ] {
+            if let Err(e) = r {
+                let lower = e.to_lowercase();
+                if lower.contains("拒绝访问") || lower.contains("denied") || lower.contains("权限不足") || lower.contains("access denied") {
+                    return Err("需要管理员权限，请以管理员身份运行 NexBox".to_string());
+                }
+            }
+        }
+    }
+
+    // 3. 刷新 DNS 解析缓存（毫秒级）
+    //    说明：接口设为 DHCP 后 Windows 会在后台自动续租获取新 IP；
+    //    为避免长时间阻塞等待系统 DHCP 交互（/renew 可能数秒），这里不做 /release /renew，
+    //    从而让修复立即返回
+    let flush = Command::new("ipconfig")
+        .arg("/flushdns")
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行 ipconfig /flushdns 失败: {}", e))?;
+    if !flush.status.success() {
+        let stderr = decode_console(flush.stderr);
+        let stdout = decode_console(flush.stdout);
+        let err_msg = if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else {
+            stdout.trim().to_string()
+        };
+        let lower = err_msg.to_lowercase();
+        if lower.contains("access denied") || lower.contains("denied") || lower.contains("拒绝访问") || lower.contains("权限不足") {
+            return Err("需要管理员权限，请以管理员身份运行 NexBox".to_string());
+        }
+        return Err(format!("ipconfig /flushdns: {}", err_msg));
+    }
+
+    Ok(PerfTweakResult {
+        success: true,
+        message: "已恢复 DHCP 自动获取，DNS 缓存已刷新".to_string(),
+    })
+}
+
 // === 6. 状态检测（纯 Rust 实现，不启动 PowerShell，毫秒级） ===
 
 #[derive(serde::Serialize)]

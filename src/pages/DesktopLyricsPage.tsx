@@ -273,6 +273,7 @@ export default function DesktopLyricsPage() {
           lines={karaokeLines}
           currentTime={estimatedTime}
           fontSize={settings.fontSize}
+          fontFamily={settings.fontFamily}
           highlightColor={settings.highlightColor}
           baseColor={settings.baseColor}
           lineCount={settings.lineCount}

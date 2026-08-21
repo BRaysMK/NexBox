@@ -119,6 +119,7 @@ interface MusicState {
   // 桌面歌词设置
   desktopLyricsVisible: boolean;
   desktopLyricsFontSize: number;
+  desktopLyricsFontFamily: string;
   desktopLyricsHighlightColor: string;
   desktopLyricsBaseColor: string;
   desktopLyricsLineCount: 1 | 2;
@@ -186,6 +187,7 @@ interface MusicState {
   toggleDesktopLyrics: () => Promise<void>;
   setDesktopLyricsVisible: (visible: boolean) => Promise<void>;
   setDesktopLyricsFontSize: (size: number) => Promise<void>;
+  setDesktopLyricsFontFamily: (family: string) => Promise<void>;
   setDesktopLyricsHighlightColor: (color: string) => Promise<void>;
   setDesktopLyricsBaseColor: (color: string) => Promise<void>;
   setDesktopLyricsLineCount: (count: 1 | 2) => Promise<void>;
@@ -572,6 +574,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   desktopLyricsVisible: false,
   desktopLyricsFontSize: 36,
+  desktopLyricsFontFamily: "",
   desktopLyricsHighlightColor: "#FFD700",
   desktopLyricsBaseColor: "rgba(255,255,255,0.35)",
   desktopLyricsLineCount: 2,
@@ -679,6 +682,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const dlBaseColor = await store.get<string>("desktopLyricsBaseColor");
       const dlLineCount = await store.get<1 | 2>("desktopLyricsLineCount");
       const dlLocked = await store.get<boolean>("desktopLyricsLocked");
+      const dlFontFamily = await store.get<string>("desktopLyricsFontFamily");
       const dlShowTranslation = await store.get<boolean>("desktopLyricsShowTranslation");
       const dlHideUnlockBtn = await store.get<boolean>("desktopLyricsHideUnlockBtn");
       if (vol != null) set({ volume: vol, prevVolume: vol > 0 ? vol : 0.7 });
@@ -694,6 +698,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const filmEffect = await store.get<boolean>("coverFilmEffect");
       if (filmEffect) set({ coverFilmEffect: true });
       if (dlFontSize != null) set({ desktopLyricsFontSize: dlFontSize });
+      if (dlFontFamily != null) set({ desktopLyricsFontFamily: dlFontFamily });
       if (dlHighlightColor) set({ desktopLyricsHighlightColor: dlHighlightColor });
       if (dlBaseColor) set({ desktopLyricsBaseColor: dlBaseColor });
       if (dlLineCount) set({ desktopLyricsLineCount: dlLineCount });
@@ -1656,6 +1661,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     get().emitDesktopLyricsSettings();
   },
 
+  setDesktopLyricsFontFamily: async (family) => {
+    set({ desktopLyricsFontFamily: family });
+    getStore().then((s) => s.set("desktopLyricsFontFamily", family).then(() => s.save()));
+    get().emitDesktopLyricsSettings();
+  },
+
   setDesktopLyricsHighlightColor: async (color) => {
     set({ desktopLyricsHighlightColor: color });
     getStore().then((s) => s.set("desktopLyricsHighlightColor", color).then(() => s.save()));
@@ -1701,6 +1712,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     const s = get();
     emit("desktop-lyrics:settings", {
       fontSize: s.desktopLyricsFontSize,
+      fontFamily: s.desktopLyricsFontFamily,
       highlightColor: s.desktopLyricsHighlightColor,
       baseColor: s.desktopLyricsBaseColor,
       lineCount: s.desktopLyricsLineCount,

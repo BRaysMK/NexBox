@@ -1964,6 +1964,7 @@
     "musicPlayPause": "再生 / 一時停止",
     "musicPlayPauseDesc": "ショートカットで音楽を再生または一時停止する",
     "saved": "ホットキーを保存しました",
+    "saveFailed": "ホットキーの保存に失敗しました",
     "masterToggle": "全ホットキー総合スイッチ",
     "masterToggleDesc": "オフにするとすべてのグローバルホットキーが無効になります"
   },

@@ -1572,11 +1572,11 @@ export default function ToolsPage() {
 
   const builtinTools = tools.filter((tool) => tool.type === "builtin");
 
-  const [activeSection, setActiveSection] = useState<"community" | "official" | "thirdparty">("community");
+  const [activeSection, setActiveSection] = useState<"community" | "official" | "thirdparty">("official");
 
   const menuItems = [
-    { key: "community" as const, label: t("tools.community.title"), icon: Boxes },
     { key: "official" as const, label: t("tools.officialTools"), icon: Rocket },
+    { key: "community" as const, label: t("tools.community.title"), icon: Boxes },
     { key: "thirdparty" as const, label: t("tools.thirdpartyTools"), icon: Wrench },
   ];
 

@@ -169,7 +169,7 @@ export function CommunityToolSubmitDialog({
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered scrollBehavior="inside" size="xl">
       <ModalOverlay backdropFilter="blur(4px)" />
-      <ModalContent>
+      <ModalContent bg={useColorModeValue("white", "#000000")}>
         <ModalHeader color={titleColor}>{t("tools.community.submitTitle")}</ModalHeader>
         <ModalCloseButton isDisabled={submitting} />
         <ModalBody sx={themedScrollbar}>

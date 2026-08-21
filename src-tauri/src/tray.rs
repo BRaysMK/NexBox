@@ -66,9 +66,18 @@ fn ensure_main_onscreen<R: Runtime>(app: &AppHandle<R>) -> Option<()> {
                 && y + 10 >= r.y && y - 10 <= r.y + s.height as i32
         });
     if !on_screen {
-        // 明确居中到主显示器：离屏预热位置(-30000,-30000)会导致
-        // MonitorFromWindow(MONITOR_DEFAULTTONEAREST) 返回副显示器，
-        // 若改用 win.center() 会让窗口错误地出现在副显示器上。
+        // 优先恢复到上次保存的位置（若仍在屏幕内），否则明确居中到主显示器：
+        // 离屏预热位置(-30000,-30000)会导致 MonitorFromWindow(MONITOR_DEFAULTTONEAREST)
+        // 返回副显示器，若改用 win.center() 会让窗口错误地出现在副显示器上。
+        if let Some(saved) = crate::main_window::read_saved_position(app) {
+            if crate::main_window::is_on_any_monitor(app, saved) {
+                let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                    x: saved.0,
+                    y: saved.1,
+                }));
+                return Some(());
+            }
+        }
         if let Some(primary) = app.primary_monitor().ok().flatten() {
             let p = primary.position();
             let s = primary.size();

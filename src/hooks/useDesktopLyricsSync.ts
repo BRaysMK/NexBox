@@ -11,9 +11,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { listen, emit, type UnlistenFn } from "@tauri-apps/api/event";
 import type { Song, KaraokeLine, PlayMode } from "@/types/music";
 import { Store } from "@tauri-apps/plugin-store";
+import { ensureCustomFont } from "@/lib/fonts";
 
 export interface DesktopLyricsSettings {
   fontSize: number;
+  fontFamily: string;
   highlightColor: string;
   baseColor: string;
   lineCount: 1 | 2;
@@ -24,6 +26,7 @@ export interface DesktopLyricsSettings {
 
 const DEFAULT_SETTINGS: DesktopLyricsSettings = {
   fontSize: 36,
+  fontFamily: "",
   highlightColor: "#FFD700",
   baseColor: "rgba(255,255,255,0.35)",
   lineCount: 2,
@@ -64,12 +67,14 @@ export function useDesktopLyricsSync() {
       try {
         const store = await Store.load("music-player-settings.json");
         const fontSize = await store.get<number>("desktopLyricsFontSize");
+        const fontFamily = await store.get<string>("desktopLyricsFontFamily");
         const highlightColor = await store.get<string>("desktopLyricsHighlightColor");
         const baseColor = await store.get<string>("desktopLyricsBaseColor");
         const lineCount = await store.get<1 | 2>("desktopLyricsLineCount");
         setSettings((prev) => ({
           ...prev,
           fontSize: fontSize ?? prev.fontSize,
+          fontFamily: fontFamily ?? prev.fontFamily,
           highlightColor: highlightColor ?? prev.highlightColor,
           baseColor: baseColor ?? prev.baseColor,
           lineCount: lineCount ?? prev.lineCount,
@@ -83,6 +88,13 @@ export function useDesktopLyricsSync() {
       }
     })();
   }, []);
+
+  // 若选中的字体是自定义字体，确保其注册到本窗口 document.fonts
+  // （运行期间在主窗口导入的字体不会自动同步到歌词窗口，需按需补注册）
+  useEffect(() => {
+    if (!settings.fontFamily) return;
+    ensureCustomFont(settings.fontFamily);
+  }, [settings.fontFamily]);
 
   // 注册监听器 + 请求数据（合并为一次 effect，确保 listener 就绪后再 request）
   useEffect(() => {

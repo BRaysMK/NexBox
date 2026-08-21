@@ -1,5 +1,6 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
+import { Box } from "@chakra-ui/react";
 import { MainLayout } from "./components/ui/main-layout";
 import { AnimatedPage, type TransitionMode, readTransitionMode } from "./components/ui/animated-page";
 import HomePage from "./pages/HomePage";
@@ -118,10 +119,14 @@ function App() {
         {!isStartupComplete && <SplashScreen />}
         {/* <MiniMusicPlayer /> */}
         <MainLayout>
-        {pageTransitionMode !== "off" ? (
-          <AnimatePresence mode="wait" initial={false}>
+        {/* 主页常驻挂载：路由切换只隐藏、不卸载，避免每次回到主页重新加载硬件信息与快捷启动 */}
+        <Box display={location.pathname === "/" ? "block" : "none"}>
+          <AnimatedPage><HomePage /></AnimatedPage>
+        </Box>
+        {location.pathname !== "/" &&
+          (pageTransitionMode !== "off" ? (
+            <AnimatePresence mode="wait" initial={false}>
             <Routes location={location} key={location.pathname}>
-              <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
               <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
               <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />
               <Route path="/builtin-tools" element={<AnimatedPage><BuiltinToolsPage /></AnimatedPage>} />
@@ -147,15 +152,15 @@ function App() {
               <Route path="/optimize/storage-clean" element={<AnimatedPage><StorageCleanPage /></AnimatedPage>} />
               <Route path="/optimize/startup-manager" element={<AnimatedPage><StartupManagerPage /></AnimatedPage>} />
               <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
-            <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
-            <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
-            <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
-            <Route path="/optimize/cpu-scheduler" element={<AnimatedPage><CpuSchedulerPage /></AnimatedPage>} />
+              <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
+              <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
+              <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
+              <Route path="/optimize/cpu-scheduler" element={<AnimatedPage><CpuSchedulerPage /></AnimatedPage>} />
               <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
               <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
               <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
               <Route path="/nvidia-driver-download" element={<AnimatedPage><NvidiaDriverDownloadPage /></AnimatedPage>} />
-            <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
+              <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
               <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
               <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
               <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
@@ -168,7 +173,6 @@ function App() {
       </AnimatePresence>
     ) : (
       <Routes location={location}>
-            <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
             <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
             <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />
             <Route path="/builtin-tools" element={<AnimatedPage><BuiltinToolsPage /></AnimatedPage>} />
@@ -195,15 +199,15 @@ function App() {
             <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
             <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
-              <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
+            <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
             <Route path="/optimize/cpu-scheduler" element={<AnimatedPage><CpuSchedulerPage /></AnimatedPage>} />
-              <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
-              <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
-              <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
-              <Route path="/nvidia-driver-download" element={<AnimatedPage><NvidiaDriverDownloadPage /></AnimatedPage>} />
-              <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
+            <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
+            <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
+            <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
+            <Route path="/nvidia-driver-download" element={<AnimatedPage><NvidiaDriverDownloadPage /></AnimatedPage>} />
+            <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
             <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
-              <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
+            <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
             <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
             <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
             <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
@@ -212,7 +216,8 @@ function App() {
             <Route path="/hidden-features" element={<AnimatedPage><HiddenFeaturesPage /></AnimatedPage>} />
             <Route path="/context-menu" element={<AnimatedPage><ContextMenuManagerPage /></AnimatedPage>} />
         </Routes>
-    )}
+    )
+      )}
 
       </MainLayout>
 

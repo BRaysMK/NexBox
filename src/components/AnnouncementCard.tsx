@@ -19,27 +19,29 @@ interface AnnouncementResponse {
 }
 
 export function useAnnouncementEnabled() {
-  const [enabled, setEnabled] = useState(true);
+  const [state, setState] = useState({ enabled: false, ready: false });
 
   useEffect(() => {
     (async () => {
+      let enabled = true;
       const saved = await store.get<boolean>("nexbox_announcement_enabled");
       if (saved !== null && saved !== undefined) {
-        setEnabled(saved);
+        enabled = saved;
       } else {
         const ls = localStorage.getItem("nexbox_announcement_enabled");
-        if (ls !== null) setEnabled(ls === "true");
+        if (ls !== null) enabled = ls === "true";
       }
+      setState((s) => ({ ...s, enabled, ready: true }));
     })();
   }, []);
 
   useEffect(() => {
-    const handler = (e: CustomEvent) => setEnabled(e.detail);
+    const handler = (e: CustomEvent) => setState((s) => ({ ...s, enabled: e.detail }));
     window.addEventListener("announcement-setting-changed", handler as EventListener);
     return () => window.removeEventListener("announcement-setting-changed", handler as EventListener);
   }, []);
 
-  return enabled;
+  return state;
 }
 
 export function AnnouncementCard() {

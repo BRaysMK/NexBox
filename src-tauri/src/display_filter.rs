@@ -328,6 +328,11 @@ impl Default for DisplayState {
 static DISPLAY_STATES: Mutex<Option<Vec<Mutex<DisplayState>>>> = Mutex::new(None);
 static ACTIVE_DISPLAY_INDEX: AtomicUsize = AtomicUsize::new(0);
 
+/// 首次应用滤镜前捕获的原始硬件 gamma ramp（按显示器 index 对齐，与 DISPLAY_STATES 键位一致）。
+/// 退出/禁用时据此精确恢复，而不是用 `xcalib -c` 清成线性——那会把图形控制台 /
+/// 系统颜色管理里设置的 sRGB 校色一并抹掉。
+static ORIGINAL_RAMPS: Mutex<Vec<Mutex<Option<[[u16; 256]; 3]>>>> = Mutex::new(Vec::new());
+
 /// Build a `DisplayState` for a given display index, loading any persisted
 /// parameters/ICC from disk. `filter_active` is forced to `false` so we never
 /// auto-apply a filter just because the per-display state vector is (re)built.
@@ -415,6 +420,23 @@ where F: FnOnce(&mut DisplayState) -> R {
     let idx = idx.min(states.len() - 1);
     let mut state = states[idx].lock().unwrap();
     f(&mut *state)
+}
+
+/// 当前连接的显示器数量（与 DISPLAY_STATES 键位一致，至少为 1）。
+fn display_count() -> usize {
+    DISPLAY_DEVICES.lock().unwrap().as_ref().map(|d| d.len()).unwrap_or(1).max(1)
+}
+
+/// 确保 ORIGINAL_RAMPS 与显示器数量对齐；新增的槽位默认为 None（尚未捕获）。
+fn ensure_original_ramps(count: usize) {
+    let mut lock = ORIGINAL_RAMPS.lock().unwrap();
+    if lock.len() > count {
+        lock.truncate(count);
+    } else {
+        while lock.len() < count {
+            lock.push(Mutex::new(None));
+        }
+    }
 }
 
 /// 读取指定显示器的滤镜是否开启（供 game_filter 模块使用）
@@ -1432,6 +1454,10 @@ pub async fn get_filter_settings(display_index: Option<usize>) -> Result<FilterS
 
 /// Apply filter: generates ICC from params (via icc_gen or build_icc_profile) and applies via xcalib.
 pub(crate) fn apply_filter_to_display(idx: usize) -> Result<(), String> {
+    // 首次应用前捕获原始硬件 ramp（每个显示器只捕获一次）。退出/禁用时据此精确
+    // 恢复，避免 `xcalib -c` 把图形控制台/颜色管理里的 sRGB 校色清成线性。
+    capture_original_ramp(idx);
+
     let (icc_active, temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, mode, _icc_ramp_opt) =
         with_display_state(idx, |state| {
             (state.icc_active, state.temperature, state.brightness, state.contrast,
@@ -1481,8 +1507,8 @@ pub(crate) fn apply_filter_to_display(idx: usize) -> Result<(), String> {
         && (b_gamma - 1.0).abs() < 0.001;
 
     if is_identity {
-        log::info!("apply_filter_to_display[{}]: identity params → clear gamma ramp", idx);
-        return clear_gamma_ramp_via_xcalib(idx);
+        log::info!("apply_filter_to_display[{}]: identity params → restore original ramp", idx);
+        return restore_display_default(idx);
     }
 
     let temp_icc = get_temp_icc_path();
@@ -1499,9 +1525,20 @@ pub(crate) fn apply_filter_to_display(idx: usize) -> Result<(), String> {
     apply_icc_via_xcalib(&temp_icc, idx)
 }
 
-/// Restore display to default: clear the gamma ramp via xcalib (-c).
+/// Restore display to default. Prefer restoring the captured original gamma ramp
+/// (preserves the console's sRGB calibration); fall back to xcalib -c (linear).
 pub(crate) fn restore_display_default(idx: usize) -> Result<(), String> {
-    log::info!("restore_display_default[{}]: clearing gamma ramp via xcalib", idx);
+    if let Some(ramp) = take_original_ramp(idx) {
+        log::info!("restore_display_default[{}]: 恢复应用前的原始 gamma ramp（进程内）", idx);
+        return match write_gamma_ramp(idx, &ramp) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                log::error!("restore_display_default[{}]: 进程内恢复失败，回退 xcalib -c: {}", idx, e);
+                clear_gamma_ramp_via_xcalib(idx)
+            }
+        };
+    }
+    log::info!("restore_display_default[{}]: 无捕获的原始 ramp，回退 xcalib -c", idx);
     clear_gamma_ramp_via_xcalib(idx)
 }
 
@@ -1712,7 +1749,13 @@ fn preset_id_to_builtin_icc(preset_id: &str) -> Option<String> {
 }
 
 /// Clear the gamma ramp via xcalib (reset to system default / linear).
+/// 仅在无法恢复捕获的原始 ramp 时作为兜底；系统关机/注销时跳过（外部子进程会
+/// 因运行库被拆除而初始化失败 0xc0000142）。
 fn clear_gamma_ramp_via_xcalib(display_index: usize) -> Result<(), String> {
+    if is_system_shutting_down() {
+        log::info!("clear_gamma_ramp[{}]: 系统关机/注销中，跳过 xcalib 恢复", display_index);
+        return Ok(());
+    }
     let tool = get_tool_path("xcalib.exe")?;
     log::info!("clear_gamma_ramp[{}]: resetting via xcalib -c", display_index);
 
@@ -1736,6 +1779,87 @@ fn clear_gamma_ramp_via_xcalib(display_index: usize) -> Result<(), String> {
     }
     log::info!("xcalib reset 成功");
     Ok(())
+}
+
+// ─── Original gamma ramp capture/restore（进程内 API，避免 xcalib -c 抹掉 sRGB 校色）───
+
+// windows-sys 0.59 / windows 0.58 未导出 GetDeviceGammaRamp / SetDeviceGammaRamp，
+// 这里直接声明 gdi32 导出，无需新增依赖。
+#[cfg(target_os = "windows")]
+#[link(name = "gdi32")]
+extern "system" {
+    fn GetDeviceGammaRamp(hdc: *mut core::ffi::c_void, lp_ramp: *mut u16) -> i32;
+    fn SetDeviceGammaRamp(hdc: *mut core::ffi::c_void, lp_ramp: *const u16) -> i32;
+}
+
+/// 根据显示器 index 取 GDI 设备名（如 \\.\DISPLAY1）创建屏幕 DC。
+/// 与 get_gdi_device_resolution 一致地处理有无 `\\\\.\\` 前缀两种情况。
+fn get_display_hdc(idx: usize) -> Option<windows_sys::Win32::Graphics::Gdi::HDC> {
+    use std::ptr;
+    use windows_sys::Win32::Graphics::Gdi::CreateDCW;
+
+    let device_names = DISPLAY_DEVICES.lock().unwrap();
+    let device_name = device_names.as_ref()?.get(idx)?;
+    let trimmed = device_name.trim_start_matches("\\\\.\\");
+    for name in [trimmed, device_name.as_str()] {
+        if name.is_empty() { continue; }
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        let dc = unsafe { CreateDCW(ptr::null(), wide.as_ptr(), ptr::null(), ptr::null()) };
+        if !dc.is_null() { return Some(dc); }
+    }
+    None
+}
+
+/// 读取当前硬件 gamma ramp（读不到返回 None）。
+fn read_gamma_ramp(idx: usize) -> Option<[[u16; 256]; 3]> {
+    use windows_sys::Win32::Graphics::Gdi::DeleteDC;
+    let dc = get_display_hdc(idx)?;
+    let mut ramp = [[0u16; 256]; 3];
+    let ok = unsafe { GetDeviceGammaRamp(dc, ramp.as_mut_ptr() as *mut u16) };
+    unsafe { let _ = DeleteDC(dc); }
+    if ok != 0 { Some(ramp) } else { None }
+}
+
+/// 写入 gamma ramp（SetDeviceGammaRamp，进程内 API，不产生子进程，退出/关机时也安全）。
+fn write_gamma_ramp(idx: usize, ramp: &[[u16; 256]; 3]) -> Result<(), String> {
+    use windows_sys::Win32::Graphics::Gdi::DeleteDC;
+    let dc = get_display_hdc(idx)
+        .ok_or_else(|| format!("write_gamma_ramp[{}]: 无法获取显示器 DC", idx))?;
+    let ok = unsafe { SetDeviceGammaRamp(dc, ramp.as_ptr() as *const u16) };
+    unsafe { let _ = DeleteDC(dc); }
+    if ok != 0 {
+        log::info!("write_gamma_ramp[{}]: 原始 ramp 恢复成功", idx);
+        Ok(())
+    } else {
+        Err(format!("write_gamma_ramp[{}]: SetDeviceGammaRamp 失败", idx))
+    }
+}
+
+/// 在应用滤镜前捕获原始 ramp（每个显示器只捕获一次，供退出/禁用时精确恢复）。
+fn capture_original_ramp(idx: usize) {
+    ensure_display_states(); // 确保 DISPLAY_DEVICES 已枚举，get_display_hdc 才能取到设备名
+    ensure_original_ramps(display_count());
+    let slot = ORIGINAL_RAMPS.lock().unwrap();
+    let Some(cell) = slot.get(idx) else { return };
+    let mut guard = cell.lock().unwrap();
+    if guard.is_none() {
+        if let Some(ramp) = read_gamma_ramp(idx) {
+            log::info!("capture_original_ramp[{}]: 已捕获原始 gamma ramp（含用户 sRGB 校色）", idx);
+            *guard = Some(ramp);
+        } else {
+            log::warn!("capture_original_ramp[{}]: 读取原始 ramp 失败，恢复时回退 xcalib -c", idx);
+        }
+    }
+}
+
+/// 取走指定显示器的原始 ramp（恢复后清空，下次启用时重新捕获）。
+fn take_original_ramp(idx: usize) -> Option<[[u16; 256]; 3]> {
+    ensure_display_states(); // 确保 DISPLAY_DEVICES 已枚举，get_display_hdc 才能取到设备名
+    ensure_original_ramps(display_count());
+    let slot = ORIGINAL_RAMPS.lock().unwrap();
+    let cell = slot.get(idx)?;
+    let mut guard = cell.lock().unwrap();
+    guard.take()
 }
 
 #[tauri::command]
@@ -1908,11 +2032,8 @@ unsafe extern "system" fn session_watch_proc(
 pub fn cleanup() {
     #[cfg(target_os = "windows")]
     {
-        if is_system_shutting_down() {
-            log::info!("cleanup: 检测到系统关机/注销，跳过 xcalib 恢复 Gamma");
-            return;
-        }
         ensure_display_states();
+        ensure_original_ramps(display_count());
         let num_displays = {
             let lock = DISPLAY_STATES.lock().unwrap();
             let states = lock.as_ref().unwrap();
@@ -1924,10 +2045,25 @@ pub fn cleanup() {
             }
             states.len()
         };
-        log::info!("cleanup: restoring {} displays to default", num_displays);
+        // 只恢复"实际应用过滤镜"的显示器（即捕获过原始 ramp 的），从未开过滤镜的
+        // 显示器完全不动。恢复用进程内 SetDeviceGammaRamp，关机/注销时也不产生
+        // 子进程；xcalib 兜底路径由 clear_gamma_ramp_via_xcalib 内部保护。
+        let mut restored = 0usize;
         for i in 0..num_displays {
-            let _ = restore_display_default(i);
+            let has_orig = ORIGINAL_RAMPS
+                .lock().unwrap()
+                .get(i)
+                .map(|m| m.lock().unwrap().is_some())
+                .unwrap_or(false);
+            if has_orig {
+                if let Err(e) = restore_display_default(i) {
+                    log::error!("cleanup[{}]: 恢复原始 ramp 失败: {}", i, e);
+                } else {
+                    restored += 1;
+                }
+            }
         }
+        log::info!("cleanup: restored {} displays to pre-application state", restored);
     }
 }
 

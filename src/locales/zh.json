@@ -632,8 +632,13 @@
     "confirmAnnouncement": "好的",
     "gameWinKey": {
       "loading": "加载中...",
-      "title": "游戏时禁用 Win 键",
-      "subtitle": "检测到名单内游戏运行时自动屏蔽 Win 键"
+      "line1": "游戏时",
+      "line2": "禁用 Win 键"
+    },
+    "gameImeLock": {
+      "loading": "加载中...",
+      "line1": "游戏时",
+      "line2": "锁定输入法"
     },
     "randomImage": {
       "loading": "加载中...",
@@ -655,6 +660,20 @@
       "downloadFailed": "图片保存失败",
       "noImageYet": "还没有可下载的图片",
       "previewAlt": "随机图片预览"
+    },
+    "feedbackCard": {
+      "title": "问题反馈",
+      "subtitle": "跳转到官网反馈问题"
+    },
+    "qqGroup": {
+      "cardTitle": "官方QQ群",
+      "cardSubtitle": "加入官方交流群",
+      "title": "官方QQ群",
+      "loading": "加载中...",
+      "empty": "暂无可加入的 QQ 群",
+      "number": "群号",
+      "copied": "已复制群号",
+      "tip": "点击群卡片即可加入，点击群号可复制"
     }
   },
   "gameLauncher": {
@@ -1527,7 +1546,8 @@
     "stop": "停止",
     "testing": "测速中...",
     "startHint": "开始测速",
-    "serverNote": "测速源：浙江大学测速服务器（纯国内）"
+    "server": "测速服务器",
+    "serverNote": "下载：所选节点失败自动切国内CDN备用源；上传/延迟统一走南航节点"
   },
   "autoclicker": {
     "title": "连点器",
@@ -1668,14 +1688,18 @@
       "homeHardwareModelDesc": "在主页显示 CPU/GPU/内存/主板/硬盘的型号摘要",
       "gameWinKeyLabel": "Win 键禁用卡片",
       "gameWinKeyDesc": "在主页显示游戏时禁用 Win 键卡片",
+      "gameImeLockLabel": "锁定输入法卡片",
+      "gameImeLockDesc": "在主页显示游戏时锁定输入法卡片",
       "gameModeLabel": "游戏模式",
       "gameModeDesc": "在顶栏显示游戏模式切换条，一键切换默认/常规/竞技压制",
       "randomImageLabel": "随机图片",
       "randomImageDesc": "在主页显示随机图片卡片",
       "searchBarLabel": "搜索框",
       "searchBarDesc": "在标题栏显示全局搜索框",
-      "feedbackLabel": "图片轮播",
-      "feedbackDesc": "在首页显示图片轮播",
+      "feedbackLabel": "问题反馈",
+      "feedbackDesc": "在首页显示问题反馈卡片",
+      "qqGroupCardLabel": "官方QQ群",
+      "qqGroupCardDesc": "在首页显示官方QQ群卡片",
       "splash": "动画",
       "splashLogoLabel": "启动动画 Logo",
       "splashLogoDesc": "自定义启动动画中显示的 Logo 图片",
@@ -1862,6 +1886,9 @@
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "感谢上海交通大学Minecraft社开源项目",
       "joinUs": "加入我们",
+      "feedbackTitle": "问题反馈",
+      "qqGroup": "QQ 交流群",
+      "joinQqGroup": "加入",
       "changelog": "更新日志",
       "changelogTitle": "当前版本更新内容",
       "noChangelog": "暂无更新日志",
@@ -2246,6 +2273,14 @@
       "done": "网络已重置，建议重启电脑后生效",
       "error": "网络重置失败"
     },
+    "fixDhcp": {
+      "title": "修复 DHCP",
+      "description": "将启用网卡的 IP 与 DNS 恢复为自动获取，并重新获取 IP，解决无法自动获取 IP 的问题",
+      "fix": "立即修复",
+      "fixing": "修复中...",
+      "done": "已恢复 DHCP 自动获取，DNS 缓存已刷新",
+      "error": "DHCP 修复失败"
+    },
     "dns": {
       "title": "DNS 设置",
       "primary": "首选 DNS",
@@ -2294,7 +2329,22 @@
     "mouseSection": "鼠标注册表优化",
     "mouseDesc": "按需设置 Win32PrioritySeparation 的十进制数值",
     "keyboardSection": "键盘注册表优化",
-    "keyboardDesc": "按需设置 KeyboardDataQueueSize 的十进制数值",
+    "keyboardDesc": "按需设置 KeyboardDataQueueSize 的十进制数值（驱动事件缓冲，默认 100，越小延迟越低，过小可能丢键）",
+    "mouseQueueSection": "鼠标队列优化",
+    "mouseQueueDesc": "按需设置 MouseDataQueueSize 的十进制数值（驱动事件缓冲，默认 100，越小延迟越低，过小可能丢事件）",
+    "recommended": "推荐",
+    "mouseValue26": "长时间片+固定调度：上下文切换最少、整体最平滑，后台任务更稳",
+    "mouseValue36": "短时间片+前后台等量：输入延迟最低，但后台无优待",
+    "mouseValue38": "短时间片+前台约3倍时间片：Windows 官方「程序」方案，均衡推荐",
+    "mouseValue40": "短时间片+前后台等量：公平分配，无前台提升",
+    "keyboardValue16": "最小缓冲：延迟最低，极限连击时可能丢键",
+    "keyboardValue18": "小缓冲：延迟低且连击更稳，均衡之选",
+    "keyboardValue20": "中等缓冲：连击更稳，延迟略升",
+    "keyboardValue22": "较大缓冲：最不易丢键，延迟相对最高",
+    "mouseQueueValue16": "最小缓冲：延迟最低，高速移动时可能丢事件",
+    "mouseQueueValue18": "小缓冲：延迟低且移动更稳，均衡之选",
+    "mouseQueueValue20": "中等缓冲：移动更稳，延迟略升",
+    "mouseQueueValue22": "较大缓冲：最不易丢事件，延迟相对最高",
     "apply": "应用到注册表",
     "applying": "正在应用...",
     "success": "注册表优化已应用",
@@ -2302,8 +2352,7 @@
     "revert": "恢复默认",
     "reverting": "正在恢复...",
     "revertSuccess": "已恢复为系统默认值",
-    "currentValue": "当前值",
-    "lowerIsBetter": "越低越好"
+    "currentValue": "当前值"
   },
   "shaderCache": {
     "title": "着色器缓存清理",
@@ -2523,6 +2572,7 @@
     "musicPlayPause": "播放 / 暂停",
     "musicPlayPauseDesc": "使用快捷键播放或暂停音乐",
     "saved": "快捷键已保存",
+    "saveFailed": "快捷键保存失败",
     "masterToggle": "全部热键总开关",
     "masterToggleDesc": "关闭后所有全局热键将不生效"
   },

@@ -422,6 +422,14 @@
         "done": "Network has been reset. A reboot is recommended.",
         "error": "Network reset failed"
       },
+      "fixDhcp": {
+        "title": "Fix DHCP",
+        "description": "Restore IP and DNS to automatic (DHCP) on enabled adapters and renew IP",
+        "fix": "Fix now",
+        "fixing": "Fixing...",
+        "done": "DHCP auto-obtain restored; DNS cache flushed",
+        "error": "DHCP fix failed"
+      },
       "tcpCongestion": {
         "title": "TCP Congestion Control",
         "description": "Set TCP congestion control to CTCP/CUBIC for better throughput"
@@ -468,7 +476,22 @@
       "mouseSection": "Mouse Registry Optimization",
       "mouseDesc": "Set Win32PrioritySeparation decimal value",
       "keyboardSection": "Keyboard Registry Optimization",
-      "keyboardDesc": "Set KeyboardDataQueueSize decimal value",
+      "keyboardDesc": "Set KeyboardDataQueueSize decimal value (event buffer, default 100; lower = less lag, too low may drop keys)",
+      "mouseQueueSection": "Mouse Queue Optimization",
+      "mouseQueueDesc": "Set MouseDataQueueSize decimal value (event buffer, default 100; lower = less lag, too low may drop events)",
+      "recommended": "Recommended",
+      "mouseValue26": "Long quantum + fixed: fewest context switches, smoothest, stable background tasks",
+      "mouseValue36": "Short quantum + equal front/back: lowest input lag, no foreground boost",
+      "mouseValue38": "Short quantum + ~3x foreground quantum: Windows official Programs scheme, balanced pick",
+      "mouseValue40": "Short quantum + equal front/back: fair allocation, no foreground boost",
+      "keyboardValue16": "Smallest buffer: lowest lag, may drop keys on extreme bursts",
+      "keyboardValue18": "Small buffer: low lag with stable bursts, balanced pick",
+      "keyboardValue20": "Medium buffer: more stable bursts, slightly higher lag",
+      "keyboardValue22": "Larger buffer: least likely to drop keys, highest lag",
+      "mouseQueueValue16": "Smallest buffer: lowest lag, may drop events on fast swipes",
+      "mouseQueueValue18": "Small buffer: low lag with stable tracking, balanced pick",
+      "mouseQueueValue20": "Medium buffer: more stable tracking, slightly higher lag",
+      "mouseQueueValue22": "Larger buffer: least likely to drop events, highest lag",
       "apply": "Apply to Registry",
       "applying": "Applying...",
       "success": "Registry optimization applied",
@@ -476,8 +499,7 @@
       "revert": "Restore Default",
       "reverting": "Restoring...",
       "revertSuccess": "Restored to system defaults",
-      "currentValue": "Current",
-      "lowerIsBetter": "Lower is better"
+      "currentValue": "Current"
     },
     "memoryLimit": {
       "title": "Memory Limit",
@@ -805,8 +827,13 @@
     "confirmAnnouncement": "OK",
     "gameWinKey": {
       "loading": "Loading...",
-      "title": "Disable Win key while gaming",
-      "subtitle": "Automatically blocks the Win key when a listed game is running"
+      "line1": "While gaming",
+      "line2": "Block Win key"
+    },
+    "gameImeLock": {
+      "loading": "Loading...",
+      "line1": "While gaming",
+      "line2": "Lock input method"
     },
     "randomImage": {
       "loading": "Loading...",
@@ -828,6 +855,20 @@
       "downloadFailed": "Failed to save image",
       "noImageYet": "No image to download yet",
       "previewAlt": "Random image preview"
+    },
+    "feedbackCard": {
+      "title": "Feedback",
+      "subtitle": "Report issues on the official website"
+    },
+    "qqGroup": {
+      "cardTitle": "Official QQ Groups",
+      "cardSubtitle": "Join our community groups",
+      "title": "Official QQ Groups",
+      "loading": "Loading...",
+      "empty": "No QQ group available",
+      "number": "Group",
+      "copied": "Group number copied",
+      "tip": "Click a group to join, click the number to copy"
     }
   },
   "gameLauncher": {
@@ -1658,7 +1699,8 @@
     "stop": "Stop",
     "testing": "Testing...",
     "startHint": "Start speed test",
-    "serverNote": "Source: Zhejiang University speed test server (China)"
+    "server": "Server",
+    "serverNote": "Download: falls back to domestic CDN when node fails; upload/latency use NUAA node"
   },
   "gpuRename": {
     "title": "GPU Rename",
@@ -1776,14 +1818,18 @@
       "homeHardwareModelDesc": "Show a brief summary of CPU/GPU/RAM/Motherboard/Storage on the homepage",
       "gameWinKeyLabel": "Win Key Disable Card",
       "gameWinKeyDesc": "Show the disable Win key while gaming card on the homepage",
+      "gameImeLockLabel": "Lock Input Method Card",
+      "gameImeLockDesc": "Show the lock input method while gaming card on the homepage",
       "gameModeLabel": "Game Mode",
       "gameModeDesc": "Show the game mode switcher in the title bar to toggle Default/Regular/Competitive suppression with one click",
       "randomImageLabel": "Random Image",
       "randomImageDesc": "Show the random image card on the homepage",
       "searchBarLabel": "Search Bar",
       "searchBarDesc": "Show the global search bar in the title bar",
-      "feedbackLabel": "Image Carousel",
-      "feedbackDesc": "Show image carousel on the home page",
+      "feedbackLabel": "Feedback",
+      "feedbackDesc": "Show the feedback card on the home page",
+      "qqGroupCardLabel": "QQ Groups",
+      "qqGroupCardDesc": "Show the QQ group card on the home page",
       "splash": "Animation",
       "splashLogoLabel": "Splash Logo",
       "splashLogoDesc": "Customize the logo image shown during startup",
@@ -1970,6 +2016,9 @@
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "Thanks to SJTU Minecraft Club open source project",
       "joinUs": "Join Us",
+      "feedbackTitle": "Feedback",
+      "qqGroup": "QQ Group",
+      "joinQqGroup": "Join",
       "changelog": "Changelog",
       "changelogTitle": "Current Version Updates",
       "noChangelog": "No changelog available",
@@ -2396,6 +2445,7 @@
     "musicPlayPause": "Play / Pause",
     "musicPlayPauseDesc": "Use shortcut to play or pause music",
     "saved": "Hotkey saved",
+    "saveFailed": "Hotkey save failed",
     "masterToggle": "Master Hotkey Switch",
     "masterToggleDesc": "When off, all global hotkeys will not work"
   },

@@ -89,13 +89,13 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #98DDD0;
+  background: var(--theme-primary, #98DDD0);
   border-radius: 3px;
   min-height: 40px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #7FD1C1;
+  background: var(--theme-primary-hover, #7FD1C1);
 }
 
 /* 碟片旋转动画 */
@@ -193,6 +193,11 @@ body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-tool-card,
 body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-menu-item,
 body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-button {
   animation: jellyBounce 0.62s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 跳过弹跳：局部卡片（如首页反馈/QQ群卡片）不需要路由切换弹跳动画 */
+body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-card.no-bounce {
+  animation: none !important;
 }
 
 body.jelly-bounce-enabled.jelly-bounce-active .jelly-bounce-nav-button {

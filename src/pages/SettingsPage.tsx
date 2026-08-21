@@ -49,6 +49,7 @@ import {
   LuPlus,
   LuTrash2,
   LuUsers,
+  LuBug,
   LuRotateCcw,
   LuSlidersHorizontal,
 } from "react-icons/lu";
@@ -66,6 +67,8 @@ import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { CustomSelect } from "@/components/special/custom-select";
+import { useQQGroups, type QqGroup } from "@/hooks/use-qq-groups";
+import { QqGroupIcon } from "@/components/ui/qq-group-icon";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { useSearchParams } from "react-router-dom";
 import { useUpdate } from "@/contexts/update-context";
@@ -192,9 +195,11 @@ function GeneralSettings() {
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
+  const [gameImeLockCardEnabled, setGameImeLockCardEnabled] = useState(true);
   const [gameModeEnabled, setGameModeEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  const [qqGroupCardEnabled, setQqGroupCardEnabled] = useState(true);
   const [randomImageEnabled, setRandomImageEnabled] = useState(true);
   const [homeUsername, setHomeUsername] = useState("");
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
@@ -339,6 +344,15 @@ function GeneralSettings() {
         if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
       }
 
+      // 游戏时锁定输入法卡片显示（store 持久化，默认显示）
+      v = await store.get<boolean>("nexbox_game_ime_lock_card_enabled");
+      if (v !== null && v !== undefined) {
+        setGameImeLockCardEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_game_ime_lock_card_enabled");
+        if (ls !== null) setGameImeLockCardEnabled(ls === "true");
+      }
+
       // 游戏模式（顶栏切换条）显示开关（store 持久化，默认显示）
       v = await store.get<boolean>("nexbox_game_mode_enabled");
       if (v !== null && v !== undefined) {
@@ -355,6 +369,15 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_feedback_enabled");
         if (ls !== null) setFeedbackEnabled(ls === "true");
+      }
+
+      // 官方QQ群卡片
+      v = await store.get<boolean>("nexbox_qq_group_card_enabled");
+      if (v !== null && v !== undefined) {
+        setQqGroupCardEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_qq_group_card_enabled");
+        if (ls !== null) setQqGroupCardEnabled(ls === "true");
       }
 
       // 主页随机图片卡片显示（store 持久化，默认开启）
@@ -561,6 +584,22 @@ function GeneralSettings() {
     }
   };
 
+  const handleGameImeLockCardToggle = async () => {
+    const newValue = !gameImeLockCardEnabled;
+    setGameImeLockCardEnabled(newValue);
+    store.set("nexbox_game_ime_lock_card_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_game_ime_lock_card_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("game-ime-lock-card-setting-changed", { detail: newValue }));
+    // 卡片隐藏时功能同步关闭，保持显示与功能一致
+    if (!newValue) {
+      try {
+        await invoke("set_game_ime_lock_enabled", { enabled: false });
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   const handleGameModeToggle = () => {
     const newValue = !gameModeEnabled;
     setGameModeEnabled(newValue);
@@ -589,6 +628,14 @@ function GeneralSettings() {
     store.set("nexbox_feedback_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_feedback_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("feedback-setting-changed", { detail: newValue }));
+  };
+
+  const handleQqGroupCardToggle = () => {
+    const newValue = !qqGroupCardEnabled;
+    setQqGroupCardEnabled(newValue);
+    store.set("nexbox_qq_group_card_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_qq_group_card_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("qq-group-card-setting-changed", { detail: newValue }));
   };
 
   const handleRandomImageToggle = () => {
@@ -1021,6 +1068,22 @@ function GeneralSettings() {
             <HStack justify="space-between" py={2}>
               <Box flex={1}>
                 <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.gameImeLockLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.gameImeLockDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={gameImeLockCardEnabled}
+                onChange={handleGameImeLockCardToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
                   {t("settings.generalSettings.gameModeLabel")}
                 </Text>
                 <Text fontSize="xs" color={subLabelColor} mt={0.5}>
@@ -1079,6 +1142,22 @@ function GeneralSettings() {
                 size="md"
                 isChecked={feedbackEnabled}
                 onChange={handleFeedbackToggle}
+              />
+            </HStack>
+            <Divider />
+            <HStack justify="space-between" py={2}>
+              <Box flex={1}>
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  {t("settings.generalSettings.qqGroupCardLabel")}
+                </Text>
+                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                  {t("settings.generalSettings.qqGroupCardDesc")}
+                </Text>
+              </Box>
+              <ThemeSwitch
+                size="md"
+                isChecked={qqGroupCardEnabled}
+                onChange={handleQqGroupCardToggle}
               />
             </HStack>
           </VStack>
@@ -2983,9 +3062,12 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "8.5.2";
+  const currentVersion = "8.6.7";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
+
+  // 官方 QQ 群（从 gitee 配置获取，含内置兜底）
+  const { groups: qqGroups, loading: loadingQQ } = useQQGroups();
 
   // LOGO 连续点击 5 次跳转原神官网的彩蛋
   // 用 useRef 同步计数，避免 React 异步 setState 在快速连点 5 次内计数不生效的问题
@@ -3075,6 +3157,26 @@ function AboutSettings() {
     } catch (fallbackError) {
       console.error("[AboutSettings] window.open failed:", fallbackError);
     }
+  };
+
+  // 加入/复制 QQ 群：有加群链接则打开，否则复制群号
+  const onJoinGroup = (group: QqGroup) => {
+    if (group.link) {
+      handleOpenLink(group.link);
+      return;
+    }
+    navigator.clipboard
+      .writeText(group.number)
+      .then(() =>
+        toast({
+          title: group.number,
+          description: group.name,
+          status: "success",
+          duration: 1500,
+          isClosable: false,
+        })
+      )
+      .catch(() => {});
   };
 
   return (
@@ -3215,10 +3317,10 @@ function AboutSettings() {
           <Divider my={3} borderColor={dividerColor} />
           <HStack justify="space-between">
             <Text fontSize="sm" color={subLabelColor}>
-              QQ 交流群
+              {t("settings.aboutSettings.feedbackTitle")}
             </Text>
             <HStack spacing={2}>
-              <Tooltip label="点击加入 QQ 群">
+              <Tooltip label={t("settings.aboutSettings.feedbackTitle")}>
                 <Box
                   w="24px"
                   h="24px"
@@ -3226,32 +3328,58 @@ function AboutSettings() {
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
+                  color={getActiveColor()}
                   cursor="pointer"
                   transition="all 0.2s"
-                  _hover={{ transform: "scale(1.1)" }}
-                  onClick={() => handleOpenLink("https://qm.qq.com/q/atlGEA2tQk")}
+                  _hover={{ transform: "scale(1.1)", bg: `${getActiveColor()}1a` }}
+                  onClick={() => handleOpenLink("https://nexbox.top/feedback")}
                 >
-                <img
-                  src="/icons/qq.png"
-                  alt="QQ"
-                  style={{ width: "20px", height: "20px", objectFit: "contain" }}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = "none";
-                    const parent = target.parentElement!;
-                    parent.innerHTML = `
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="#12B7F5">
-                        <path d="M12.002 2c-5.338 0-9.668 3.93-9.668 8.774 0 2.822 1.589 5.33 4.064 6.887l.113.072-.575 1.926c-.042.142.045.29.192.29.04 0 .081-.01.118-.03l2.485-1.347.201.012c.984.06 1.99.06 2.977 0l.202-.012 2.484 1.347c.038.02.079.03.119.03.146 0 .234-.148.192-.29l-.575-1.926.113-.072c2.476-1.557 4.065-4.065 4.065-6.887 0-4.845-4.33-8.774-9.668-8.774z"/>
-                      </svg>
-                    `;
-                  }}
-                />
-              </Box>
+                  <LuBug size={16} />
+                </Box>
               </Tooltip>
-              <Text fontSize="sm" color={labelColor} fontWeight="medium" userSelect="all">
-                526045683
-              </Text>
             </HStack>
+          </HStack>
+          <Divider my={3} borderColor={dividerColor} />
+          <HStack justify="space-between">
+            <Text fontSize="sm" color={subLabelColor}>
+              {t("settings.aboutSettings.qqGroup")}
+            </Text>
+            <VStack spacing={1.5} align="flex-end">
+              {loadingQQ && qqGroups.length === 0 ? (
+                <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                  ...
+                </Text>
+              ) : (
+                qqGroups.map((g) => (
+                  <HStack spacing={2} key={g.number}>
+                    {g.icon ? <QqGroupIcon url={g.icon} size={16} /> : null}
+                    <Text fontSize="xs" color={subLabelColor}>
+                      {g.name}
+                    </Text>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium" userSelect="all">
+                      {g.number}
+                    </Text>
+                    <Tooltip label={`${t("settings.aboutSettings.joinQqGroup")} ${g.name}`}>
+                      <Box
+                        w="20px"
+                        h="20px"
+                        borderRadius="md"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        color={getActiveColor()}
+                        cursor="pointer"
+                        transition="all 0.2s"
+                        _hover={{ transform: "scale(1.15)", bg: `${getActiveColor()}1a` }}
+                        onClick={() => onJoinGroup(g)}
+                      >
+                        <LuExternalLink size={14} />
+                      </Box>
+                    </Tooltip>
+                  </HStack>
+                ))
+              )}
+            </VStack>
           </HStack>
           <Divider my={3} borderColor={dividerColor} />
           <HStack justify="space-between">
@@ -3544,12 +3672,12 @@ function HotkeySettings() {
             <HotkeyRecorder
               value={musicPrevHotkey}
               onChange={async (val) => {
-                const ok = await saveMusicPrevHotkey(val);
+                const err = await saveMusicPrevHotkey(val);
                 toast({
-                  title: ok
-                    ? (t("hotkeySettings.saved") || "快捷键已保存")
-                    : (t("hotkeySettings.saveFailed") || "快捷键保存失败"),
-                  status: ok ? "success" : "error",
+                  title: err
+                    ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
+                    : (t("hotkeySettings.saved") || "快捷键已保存"),
+                  status: err ? "error" : "success",
                   duration: 2000,
                   isClosable: true,
                 });
@@ -3571,7 +3699,7 @@ function HotkeySettings() {
                 const err = await saveMusicNextHotkey(val);
                 toast({
                   title: err
-                    ? err
+                    ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
                     : (t("hotkeySettings.saved") || "快捷键已保存"),
                   status: err ? "error" : "success",
                   duration: 2000,
@@ -3595,7 +3723,7 @@ function HotkeySettings() {
                 const err = await saveMusicPlayPauseHotkey(val);
                 toast({
                   title: err
-                    ? err
+                    ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
                     : (t("hotkeySettings.saved") || "快捷键已保存"),
                   status: err ? "error" : "success",
                   duration: 2000,

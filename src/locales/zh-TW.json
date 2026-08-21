@@ -636,8 +636,13 @@
     "confirmAnnouncement": "好的",
     "gameWinKey": {
       "loading": "載入中...",
-      "title": "遊戲時停用 Win 鍵",
-      "subtitle": "偵測到名單內遊戲執行時自動屏蔽 Win 鍵"
+      "line1": "遊戲時",
+      "line2": "停用 Win 鍵"
+    },
+    "gameImeLock": {
+      "loading": "載入中...",
+      "line1": "遊戲時",
+      "line2": "鎖定輸入法"
     },
     "randomImage": {
       "loading": "載入中...",
@@ -1339,6 +1344,8 @@
       "feedbackDesc": "在首頁顯示圖片輪播",
       "gameWinKeyLabel": "Win 鍵停用卡片",
       "gameWinKeyDesc": "在首頁顯示遊戲時停用 Win 鍵卡片",
+      "gameImeLockLabel": "鎖定輸入法卡片",
+      "gameImeLockDesc": "在首頁顯示遊戲時鎖定輸入法卡片",
       "gameModeLabel": "遊戲模式",
       "gameModeDesc": "在頂欄顯示遊戲模式切換條，一鍵切換預設/一般/競技壓制",
       "randomImageLabel": "隨機圖片",
@@ -1597,6 +1604,7 @@
     "musicPlayPause": "播放 / 暫停",
     "musicPlayPauseDesc": "使用快速鍵播放或暫停音樂",
     "saved": "快速鍵已保存",
+    "saveFailed": "快速鍵保存失敗",
     "masterToggle": "全部熱鍵總開關",
     "masterToggleDesc": "關閉後所有全域熱鍵將不生效"
   },

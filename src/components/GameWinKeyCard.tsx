@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Text, HStack, VStack, useColorModeValue, Spinner } from "@chakra-ui/react";
+import { Text, HStack, VStack, useColorModeValue, Spinner } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { ThemeSwitch } from "@/components/special/theme-switch";
@@ -13,7 +13,6 @@ export default function GameWinKeyCard() {
   const [busy, setBusy] = useState(false);
 
   const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.600", "#ffffff");
 
   useEffect(() => {
     let mounted = true;
@@ -54,31 +53,29 @@ export default function GameWinKeyCard() {
   };
 
   return (
-    <LiquidGlassCard px={3} py={2} boxShadow="sm" minW="260px" maxW="360px">
+    <LiquidGlassCard px={3} py={2} boxShadow="sm" minW="0">
       {loading ? (
-        <HStack spacing={3} align="center">
+        <HStack spacing={2} align="center" justify="center" minH="42px">
           <Spinner size="sm" />
-          <Text fontSize="sm">{t("home.gameWinKey.loading") || t("home.loading")}</Text>
         </HStack>
       ) : (
-        <VStack spacing={1} align="start">
-          <HStack spacing={3} align="center" justify="space-between" w="full">
-            <HStack spacing={2} minW={0}>
-              <Text fontSize="sm" color={textColor} fontWeight="semibold" noOfLines={1}>
-                {t("home.gameWinKey.title") || "游戏时禁用 Win 键"}
-              </Text>
-              <FaWindows size={16} color={textColor} style={{ flexShrink: 0 }} />
-            </HStack>
-            <ThemeSwitch
-              isChecked={enabled}
-              onChange={(e) => handleToggle(e.target.checked)}
-              isDisabled={busy}
-            />
-          </HStack>
-          <Text fontSize="xs" color={subTextColor} noOfLines={1}>
-            {t("home.gameWinKey.subtitle") || "检测到名单内游戏运行时自动屏蔽 Win 键"}
-          </Text>
-        </VStack>
+        <HStack spacing={2} align="center">
+          <FaWindows size={18} color={textColor} style={{ flexShrink: 0 }} />
+          <VStack spacing={0} align="start">
+            <Text fontSize="sm" color={textColor} fontWeight="semibold" whiteSpace="nowrap">
+              {t("home.gameWinKey.line1") || "游戏时"}
+            </Text>
+            <Text fontSize="sm" color={textColor} fontWeight="semibold" whiteSpace="nowrap">
+              {t("home.gameWinKey.line2") || "禁用 Win 键"}
+            </Text>
+          </VStack>
+          <ThemeSwitch
+            size="sm"
+            isChecked={enabled}
+            onChange={(e) => handleToggle(e.target.checked)}
+            isDisabled={busy}
+          />
+        </HStack>
       )}
     </LiquidGlassCard>
   );

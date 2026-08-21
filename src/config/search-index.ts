@@ -369,7 +369,7 @@ export const searchIndex: SearchItem[] = [
     path: "/optimize/peripheral-optimize",
     icon: MousePointer2,
     category: "optimization",
-    keywords: ["外设", "鼠标", "键盘", "peripheral", "mouse", "keyboard", "注册表", "优化", "输入延迟", "Win32PrioritySeparation", "KeyboardDataQueueSize"],
+    keywords: ["外设", "鼠标", "键盘", "peripheral", "mouse", "keyboard", "注册表", "优化", "输入延迟", "Win32PrioritySeparation", "KeyboardDataQueueSize", "MouseDataQueueSize"],
   },
   {
     id: "cpu-scheduler",

@@ -19,7 +19,7 @@ import {
   VStack,
   Spinner,
 } from "@chakra-ui/react";
-import { Gamepad2, Plus, X, FolderOpen, GripVertical } from "lucide-react";
+import { Gamepad2, Plus, X, FolderOpen, GripVertical, FileBox } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -204,7 +204,7 @@ function SortableGameItem({
       >
         <Icon as={GripVertical} boxSize={3.5} color={descColor} />
       </Box>
-      {icon && (
+      {icon ? (
         <Image
           src={icon}
           boxSize="20px"
@@ -212,6 +212,17 @@ function SortableGameItem({
           flexShrink={0}
           alt=""
         />
+      ) : (
+        <Flex
+          boxSize="20px"
+          borderRadius="4px"
+          bg={hoverBg}
+          flexShrink={0}
+          align="center"
+          justify="center"
+        >
+          <Icon as={FileBox} boxSize={3.5} color={descColor} />
+        </Flex>
       )}
       <MarqueeText text={game.name} color={titleColor} />
       {isLaunching ? (
@@ -468,6 +479,8 @@ export default function GameLauncher() {
       });
     } catch (error) {
       console.warn("Failed to get icon for", game.name, error);
+      // 提取失败后移除标记，允许下次列表变化时重新尝试（例如路径修复后）
+      loadingIcons.current.delete(game.id);
     }
   };
 
@@ -697,7 +710,7 @@ export default function GameLauncher() {
                     _hover={{ bg: userGameHoverBg }}
                     transition="background 0.15s"
                   >
-                    {icons[game.id] && (
+                    {icons[game.id] ? (
                       <Image
                         src={icons[game.id]}
                         boxSize="20px"
@@ -705,6 +718,17 @@ export default function GameLauncher() {
                         flexShrink={0}
                         alt=""
                       />
+                    ) : (
+                      <Flex
+                        boxSize="20px"
+                        borderRadius="4px"
+                        bg={cardBg}
+                        flexShrink={0}
+                        align="center"
+                        justify="center"
+                      >
+                        <Icon as={FileBox} boxSize={3.5} color={descColor} />
+                      </Flex>
                     )}
                     <MarqueeText text={game.name} color={titleColor} />
                     {isLaunching === game.id && (

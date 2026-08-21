@@ -8,25 +8,27 @@ import RandomImageModal from "@/components/RandomImageModal";
 
 /** 主页「随机图片」卡片显示开关（store 持久化，默认开启） */
 export function useRandomImageEnabled() {
-  const [enabled, setEnabled] = useState(true);
+  const [state, setState] = useState({ enabled: false, ready: false });
 
   useEffect(() => {
     (async () => {
+      let enabled = true;
       const saved = await store.get<boolean>("nexbox_random_image_enabled");
       if (saved !== null && saved !== undefined) {
-        setEnabled(saved);
+        enabled = saved;
       } else {
         const ls = localStorage.getItem("nexbox_random_image_enabled");
-        if (ls !== null) setEnabled(ls === "true");
+        if (ls !== null) enabled = ls === "true";
       }
+      setState((s) => ({ ...s, enabled, ready: true }));
     })();
 
-    const handler = (e: CustomEvent) => setEnabled(e.detail);
+    const handler = (e: CustomEvent) => setState((s) => ({ ...s, enabled: e.detail }));
     window.addEventListener("random-image-setting-changed", handler as EventListener);
     return () => window.removeEventListener("random-image-setting-changed", handler as EventListener);
   }, []);
 
-  return enabled;
+  return state;
 }
 
 /** 主页「随机图片」卡片：与 Win 键卡片同尺寸，点击打开弹窗选择类别并生成图片 */

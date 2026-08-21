@@ -339,7 +339,8 @@ pub async fn get_lhm_gpu_status() -> Result<Vec<(Option<f64>, Option<u32>)>, Str
                     .next();
                 let usage = response.sensors.iter()
                     .filter(|s| s.hardware_type == *hw_type && s.sensor_type == "Load"
-                        && (s.name == "GPU Core" || s.name == "GPU" || s.name == "D3D Usage" || s.name == "Core"))
+                        && (s.name == "GPU Core" || s.name == "D3D 3D" || s.name == "GPU"
+                            || s.name == "D3D Usage" || s.name == "Core"))
                     .map(|s| s.value as u32)
                     .next();
                 results.push((temp, usage));

@@ -34,6 +34,11 @@ const OAUTH_SCOPE: &str = "all_projects all_repository all_pr all_user";
 /// 走仓库 API 直传的压缩包大小上限（GitCode contents API 单文件限制，较大包请改用 download_url 外链）
 const MAX_CONTENTS_UPLOAD: u64 = 1024 * 1024;
 
+/// 社区插件仓库只读下载用的 GitCode 个人访问令牌(PAT)。
+/// 仅用于读取/下载以提升接口限额，权限请只开 Repository「上传下载」类，勿开写操作。
+/// 留空则退化为匿名请求。⚠ 公开仓库勿硬编码真实令牌，否则会泄露。
+const TOOL_API_PAT: &str = "WmAt3-nHJiYGKrCby8bGajtw";
+
 // ============================== 数据模型 ==============================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,6 +110,29 @@ fn write_cache(tools: Vec<CommunityTool>) {
 pub fn invalidate_community_cache() {
     let mut guard = cache_lock().lock().unwrap();
     *guard = None;
+}
+
+/// 磁盘缓存路径：应用数据目录下的 community_tools_cache.json
+fn disk_cache_path(app: &tauri::AppHandle) -> PathBuf {
+    app.path().app_data_dir().unwrap_or_default().join("community_tools_cache.json")
+}
+
+/// 将上次成功拉取的工具列表持久化到磁盘，供限流/离线时优雅降级
+fn write_disk_cache(app: &tauri::AppHandle, tools: &[CommunityTool]) {
+    if let Ok(s) = serde_json::to_string(tools) {
+        let _ = std::fs::write(disk_cache_path(app), s);
+    }
+}
+
+/// 读取磁盘缓存；仅当内容非空才视为有效
+fn read_disk_cache(app: &tauri::AppHandle) -> Option<Vec<CommunityTool>> {
+    let path = disk_cache_path(app);
+    let content = std::fs::read_to_string(path).ok()?;
+    let tools: Vec<CommunityTool> = serde_json::from_str(&content).ok()?;
+    if tools.is_empty() {
+        return None;
+    }
+    Some(tools)
 }
 
 // ============================== 工具函数 ==============================
@@ -186,6 +214,11 @@ async fn send_with_retry(
             if attempt == RATE_LIMIT_MAX_RETRY - 1 {
                 return Err("GitCode 接口限流(429)，请稍后再试".to_string());
             }
+            // 加入随机抖动（±20%），避免并发线程同时醒来集中重试再次触发 429
+            use rand::Rng;
+            let wait = ((wait as f32) * (0.8 + rand::thread_rng().gen::<f32>() * 0.4))
+                .round()
+                .max(1.0) as u64;
             tokio::time::sleep(Duration::from_secs(wait)).await;
             continue;
         }
@@ -210,7 +243,7 @@ fn resp_retry_seconds(resp: &reqwest::Response) -> u64 {
             }
         }
     }
-    10
+    15
 }
 
 async fn api_get(token: &str, path: &str, query: &[(&str, &str)]) -> Result<serde_json::Value, String> {
@@ -319,15 +352,15 @@ fn parse_content_entries(v: &serde_json::Value) -> Vec<ContentEntry> {
     out
 }
 
+/// 通过 contents 单文件接口获取 base64 content（带 429 限流重试）
 async fn fetch_plugin_json(encoded_path: &str, token: &str) -> Option<String> {
-    // 通过 contents 单文件接口获取 base64 content
-    let url = format!("{API_BASE}/repos/{OWNER}/{REPO}/contents/{encoded_path}");
-    let client = authed_client(token);
-    let resp = client.get(&url).send().await.ok()?;
-    if !resp.status().is_success() {
-        return None;
-    }
-    let v: serde_json::Value = resp.json().await.ok()?;
+    let v = api_get(
+        token,
+        &format!("repos/{OWNER}/{REPO}/contents/{encoded_path}"),
+        &[],
+    )
+    .await
+    .ok()?;
     let content = v.get("content")?.as_str()?;
     let cleaned: String = content.chars().filter(|c| !c.is_whitespace()).collect();
     use base64::Engine as _;
@@ -335,76 +368,203 @@ async fn fetch_plugin_json(encoded_path: &str, token: &str) -> Option<String> {
     Some(String::from_utf8(bytes).ok()?)
 }
 
-/// 读取单个工具目录：列目录拿 sha 映射 + 下载 plugin.json → 解析
+/// 读取单个工具目录：列目录拿 sha 映射（图标 blob 直链用）+ 下载 plugin.json → 解析
 async fn fetch_one_tool(
     token: &str,
     cat_name: &str,
-    tool_entry: &ContentEntry,
+    tool_path: &str,
+    tool_name: &str,
     sem: &Arc<Semaphore>,
 ) -> Option<CommunityTool> {
     let _permit = sem.acquire().await.ok()?;
-    let tool_seg = encode_path_segments(&tool_entry.path);
+    let tool_seg = encode_path_segments(tool_path);
+    // 列工具目录拿 full path -> sha 映射（含图标），并确认存在 plugin.json
     let tool_list = api_get(token, &format!("repos/{OWNER}/{REPO}/contents/{tool_seg}"), &[]).await.ok()?;
     let entries = parse_content_entries(&tool_list);
     if !entries.iter().any(|e| e.name.eq_ignore_ascii_case("plugin.json")) {
         return None;
     }
-    // 路径 -> sha 映射，用于生成 GitCode blob 直链（图标更稳定）
     let sha_map: HashMap<String, String> = entries
         .iter()
         .filter_map(|e| e.sha.clone().map(|s| (e.path.clone(), s)))
         .collect();
     let plugin_path = format!("{}/plugin.json", tool_seg);
     let json = fetch_plugin_json(&plugin_path, token).await?;
-    // 注意用 cat.name（纯目录名）而非 cat.path（带 plugins/ 前缀），否则 repo_path 会重复 plugins 目录
-    parse_plugin_json(&json, cat_name, &tool_entry.name, &sha_map)
+    // cat.name 是纯分类目录名（不含 plugins/ 前缀），避免 repo_path 重复
+    parse_plugin_json(&json, cat_name, tool_name, &sha_map)
 }
 
-/// 并行拉取某个分类下的所有工具
-async fn fetch_cat_tools(token: &str, cat: &ContentEntry, sem: &Arc<Semaphore>) -> Vec<CommunityTool> {
-    let cat_seg = encode_path_segments(&cat.path);
-    let cat_list = match api_get(token, &format!("repos/{OWNER}/{REPO}/contents/{cat_seg}"), &[]).await {
-        Ok(v) => v,
-        Err(_) => return Vec::new(),
-    };
-    let tool_dirs: Vec<ContentEntry> = parse_content_entries(&cat_list)
+/// 通过 raw blob 直链拉取文件文本（raw 域不占 GitCode API 限流配额）
+async fn fetch_raw_blob(sha: &str, file_name: &str) -> Option<String> {
+    let url = format!(
+        "https://raw.gitcode.com/{OWNER}/{REPO}/blobs/{}/{}",
+        sha,
+        urlencoding::encode(file_name)
+    );
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("NexBox-Community")
+        .build()
+        .ok()?;
+    let resp = client.get(&url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    resp.text().await.ok()
+}
+
+/// 拉取整棵 plugins 目录树（带分页），返回 (path, type, sha)。
+/// GitCode 树接口默认每页 20，此前「截断约 20 条」正是因此；设 per_page=100 并翻页拿全量。
+async fn fetch_tree_entries(token: &str) -> Result<Vec<(String, String, String)>, String> {
+    let mut entries: Vec<(String, String, String)> = Vec::new();
+    let prefix = format!("{PLUGINS_PATH}/");
+    for page in 1..=10u32 {
+        let v = api_get(
+            token,
+            &format!("repos/{OWNER}/{REPO}/git/trees/main"),
+            &[("recursive", "1"), ("per_page", "100"), ("page", &page.to_string())],
+        )
+        .await?;
+        let tree = v.get("tree").and_then(|x| x.as_array()).cloned().unwrap_or_default();
+        let cur: Vec<(String, String, String)> = tree
+            .into_iter()
+            .filter_map(|item| {
+                let p = item.get("path").and_then(|x| x.as_str())?;
+                if !p.starts_with(&prefix) {
+                    return None;
+                }
+                let t = item.get("type").and_then(|x| x.as_str()).unwrap_or("");
+                let s = item.get("sha").and_then(|x| x.as_str()).unwrap_or("");
+                Some((p.to_string(), t.to_string(), s.to_string()))
+            })
+            .collect();
+        let n = cur.len();
+        entries.extend(cur);
+        // 未取满一页说明没有更多内容，停止翻页
+        if n < 100 {
+            break;
+        }
+    }
+    Ok(entries)
+}
+
+/// 树驱动构建：从一次目录树请求枚举全部工具，再经 raw blob 直链读 plugin.json。
+/// 相比旧版「contents 逐层遍历」（1 根 + N 分类 + 2×M 工具），API 调用数骤降至 1 次，彻底规避 429 限流。
+async fn build_tools_from_tree(
+    token: &str,
+    sem: &Arc<Semaphore>,
+) -> Result<Vec<CommunityTool>, String> {
+    let entries = fetch_tree_entries(token).await?;
+    let prefix = format!("{PLUGINS_PATH}/");
+
+    struct ToolCtx {
+        plugin_sha: String,
+        icon_sha_map: HashMap<String, String>,
+    }
+    let mut tool_map: std::collections::BTreeMap<String, (String, String, ToolCtx)> =
+        std::collections::BTreeMap::new();
+
+    for (path, kind, sha) in &entries {
+        let rel = path.strip_prefix(&prefix).unwrap_or("");
+        let mut segs = rel.split('/');
+        let (cat, tool) = match (segs.next(), segs.next()) {
+            (Some(c), Some(t)) if !c.is_empty() && !t.is_empty() => (c.to_string(), t.to_string()),
+            _ => continue, // 根、分类目录
+        };
+        let key = format!("{cat}/{tool}");
+        let ctx_entry = tool_map
+            .entry(key)
+            .or_insert_with(|| (cat.clone(), tool.clone(), ToolCtx { plugin_sha: String::new(), icon_sha_map: HashMap::new() }));
+        let ctx = &mut ctx_entry.2;
+        if *kind == "blob" {
+            if rel.ends_with("/plugin.json") {
+                ctx.plugin_sha = sha.clone();
+            } else if !sha.is_empty() {
+                ctx.icon_sha_map.insert(path.clone(), sha.clone());
+            }
+        }
+    }
+
+    let plan: Vec<(String, String, String, HashMap<String, String>)> = tool_map
         .into_iter()
-        .filter(|e| e.kind == "dir")
+        .filter(|(_, (_, _, c))| !c.plugin_sha.is_empty())
+        .map(|(_, (cat, tool, c))| (cat, tool, c.plugin_sha, c.icon_sha_map))
         .collect();
-    let results = join_all(tool_dirs.iter().map(|te| {
+
+    if plan.is_empty() {
+        return Err("树请求未解析到任何工具".to_string());
+    }
+
+    let results = join_all(plan.into_iter().map(|(cat, tool, plugin_sha, sha_map)| {
         let sem = sem.clone();
-        let cat_name = cat.name.clone();
-        async move { fetch_one_tool(token, &cat_name, te, &sem).await }
+        async move {
+            let _permit = sem.acquire().await.ok()?;
+            let json = fetch_raw_blob(&plugin_sha, "plugin.json").await?;
+            parse_plugin_json(&json, &cat, &tool, &sha_map)
+        }
     }))
     .await;
-    results.into_iter().flatten().collect()
+
+    Ok(results.into_iter().flatten().collect())
 }
 
+/// 加载社区工具：优先「单次树请求 + raw 直链读 plugin.json」，失败时回退到 contents 逐层遍历。
 async fn load_tools_inner() -> Result<Vec<CommunityTool>, String> {
-    let token = "";
+    let token = TOOL_API_PAT;
     let sem = Arc::new(Semaphore::new(MAX_CONCURRENT));
-    let root_seg = encode_path_segments(PLUGINS_PATH);
-    let root = api_get(
-        token,
-        &format!("repos/{OWNER}/{REPO}/contents/{root_seg}"),
-        &[],
-    )
-    .await
-    .map_err(|e| format!("无法读取社区插件目录：{e}"))?;
 
+    if let Ok(tools) = build_tools_from_tree(token, &sem).await {
+        if !tools.is_empty() {
+            return Ok(tools);
+        }
+    }
+
+    // 回退：contents 逐层遍历（保留旧路径作为安全网）
+    // 根目录：plugins 下的分类
+    let root_seg = encode_path_segments(PLUGINS_PATH);
+    let root = api_get(token, &format!("repos/{OWNER}/{REPO}/contents/{root_seg}"), &[])
+        .await
+        .map_err(|e| format!("无法读取社区插件目录：{e}"))?;
     let cats: Vec<ContentEntry> = parse_content_entries(&root)
         .into_iter()
         .filter(|c| c.kind == "dir")
         .collect();
 
-    // 各分类并行拉取
+    // 各分类目录并发展开为工具目录
     let cat_results = join_all(cats.iter().map(|cat| {
         let sem = sem.clone();
-        async move { fetch_cat_tools(token, cat, &sem).await }
+        let token = token.to_string();
+        let cat_name = cat.name.clone();
+        async move {
+            let _permit = sem.acquire().await.ok()?;
+            let cat_seg = encode_path_segments(&cat.path);
+            let cat_list = api_get(&token, &format!("repos/{OWNER}/{REPO}/contents/{cat_seg}"), &[]).await.ok()?;
+            let tool_dirs: Vec<ContentEntry> = parse_content_entries(&cat_list)
+                .into_iter()
+                .filter(|e| e.kind == "dir")
+                .collect();
+            Some((cat_name, tool_dirs))
+        }
     }))
     .await;
 
-    Ok(cat_results.into_iter().flatten().collect())
+    // 对所有 (分类, 工具) 并发拉详情
+    let plan: Vec<(String, ContentEntry)> = cat_results
+        .into_iter()
+        .flatten()
+        .flat_map(|(cat, dirs)| dirs.into_iter().map(move |d| (cat.clone(), d)))
+        .collect();
+    let results = join_all(plan.iter().map(|(cat_name, te)| {
+        let sem = sem.clone();
+        let token = token.to_string();
+        let cat_name = cat_name.clone();
+        let te_path = te.path.clone();
+        let te_name = te.name.clone();
+        async move { fetch_one_tool(&token, &cat_name, &te_path, &te_name, &sem).await }
+    }))
+    .await;
+
+    Ok(results.into_iter().flatten().collect())
 }
 
 fn parse_plugin_json(
@@ -472,18 +632,29 @@ fn parse_plugin_json(
 }
 
 #[tauri::command]
-pub async fn get_community_tools() -> Result<Vec<CommunityTool>, String> {
+pub async fn get_community_tools(app: tauri::AppHandle) -> Result<Vec<CommunityTool>, String> {
     if let Some(cached) = read_cache() {
         return Ok(cached);
     }
-    let tools = load_tools_inner().await?;
-    write_cache(tools.clone());
-    Ok(tools)
+    match load_tools_inner().await {
+        Ok(tools) => {
+            write_cache(tools.clone());
+            write_disk_cache(&app, &tools);
+            Ok(tools)
+        }
+        Err(e) => {
+            // API 失败（尤其 429）时回退磁盘缓存，避免直接报空列表/红字错误
+            if let Some(cached) = read_disk_cache(&app) {
+                return Ok(cached);
+            }
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
-pub async fn get_community_categories() -> Result<Vec<String>, String> {
-    let tools = get_community_tools().await?;
+pub async fn get_community_categories(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let tools = get_community_tools(app).await?;
     let mut cats: Vec<String> = tools
         .iter()
         .map(|t| t.category.clone())
@@ -495,8 +666,8 @@ pub async fn get_community_categories() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub async fn search_community_tools(query: String) -> Result<Vec<CommunityTool>, String> {
-    let tools = get_community_tools().await?;
+pub async fn search_community_tools(query: String, app: tauri::AppHandle) -> Result<Vec<CommunityTool>, String> {
+    let tools = get_community_tools(app).await?;
     let q = query.trim().to_lowercase();
     Ok(tools
         .into_iter()

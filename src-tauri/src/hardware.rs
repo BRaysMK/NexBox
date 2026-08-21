@@ -497,14 +497,23 @@ fn get_gpus_from_lhml() -> Vec<GpuInfo> {
             .map(|s| s.value / 1024.0)
             .filter(|v| *v > 0.0);
 
-        let temperature = sensors
+        let temperature = ["GPU Core", "GPU", "Core", "GPU Temperature"]
             .iter()
-            .find(|s| s.sensor_type == "Temperature" && s.name == "GPU Core")
+            .find_map(|n| {
+                sensors
+                    .iter()
+                    .find(|s| s.sensor_type == "Temperature" && s.name == *n)
+            })
             .map(|s| s.value);
 
-        let usage = sensors
+        // Intel 核显的占用传感器名为 "D3D 3D"（来自 D3D 引擎枚举），并非 "GPU Core"
+        let usage = ["GPU Core", "D3D 3D", "GPU", "D3D Usage", "Core"]
             .iter()
-            .find(|s| s.sensor_type == "Load" && s.name == "GPU Core")
+            .find_map(|n| {
+                sensors
+                    .iter()
+                    .find(|s| s.sensor_type == "Load" && s.name == *n)
+            })
             .map(|s| s.value as u32);
 
         log::info!(
@@ -1630,17 +1639,20 @@ pub async fn get_gpu_status(index: usize) -> Result<GpuStatus, String> {
                     .filter(|s| {
                         s.hardware == **gpu_name
                             && s.sensor_type == "Temperature"
-                            && s.name == "GPU Core"
+                            && (s.name == "GPU Core" || s.name == "GPU" || s.name == "Core"
+                                || s.name == "GPU Temperature")
                     })
                     .map(|s| s.value)
                     .next();
+                // Intel 核显的占用传感器名为 "D3D 3D"（来自 D3D 引擎枚举），并非 "GPU Core"
                 let usage = response
                     .sensors
                     .iter()
                     .filter(|s| {
                         s.hardware == **gpu_name
                             && s.sensor_type == "Load"
-                            && s.name == "GPU Core"
+                            && (s.name == "GPU Core" || s.name == "D3D 3D" || s.name == "GPU"
+                                || s.name == "D3D Usage" || s.name == "Core")
                     })
                     .map(|s| s.value as u32)
                     .next();

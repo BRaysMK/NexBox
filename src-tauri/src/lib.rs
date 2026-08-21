@@ -23,6 +23,7 @@ mod game_launcher;
 mod game_mode;
 mod game_process_optimize;
 mod game_win_key;
+mod game_ime_lock;
 mod game_ping;
 mod gpu_rename;
 mod hardware;
@@ -30,6 +31,7 @@ mod hardware_report;
 
 mod feature_flags;
 mod hotkey;
+mod main_window;
 mod music;
 mod network_optimize;
 #[allow(dead_code, unused_imports)]
@@ -50,8 +52,10 @@ mod pawnio_driver;
 mod smart;
 mod sponsor;
 mod contributor;
+mod qq_group;
 mod startup_manager;
 mod service_manager;
+mod system_fonts;
 mod context_menu;
 mod steam;
 mod speedtest;
@@ -329,6 +333,12 @@ pub fn run() {
                 let _ = game_win_key::init(app_handle_for_game_win_key).await;
             });
 
+            // 初始化游戏启动时锁定输入法（读取持久化配置并启动后台轮询）
+            let app_handle_for_game_ime_lock = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = game_ime_lock::init(app_handle_for_game_ime_lock).await;
+            });
+
             // 初始化游戏进程优化（恢复持久化配置，首次预置三角洲；启动自动优化线程）
             let app_handle_for_game_opt = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -353,6 +363,7 @@ pub fn run() {
                     match event {
                         tauri::WindowEvent::CloseRequested { api, .. } => {
                             api.prevent_close();
+                            main_window::save_current_position(&main_clone.app_handle());
                             let _ = main_clone.hide();
                             emit_main_visibility(&main_clone.app_handle(), false);
                         }
@@ -400,8 +411,9 @@ pub fn run() {
                     let _ = main_window.show();
                     log::info!("开机自启模式：主窗口离屏预热，前端初始化后隐藏到托盘");
                 } else {
-                    // 正常启动：确保非跳过任务栏、正常位置显示（避免 autostart 时闪现启动画面）
+                    // 正常启动：确保非跳过任务栏、恢复上次位置（无记录则居中）、正常显示
                     let _ = main_window.set_skip_taskbar(false);
+                    main_window::restore_position(app.handle());
                     let _ = main_window.show();
                     emit_main_visibility(app.handle(), true);
                     log::info!("正常启动：主窗口已显示");
@@ -632,6 +644,7 @@ pub fn run() {
         network_optimize::restore_dns_servers,
         network_optimize::clear_dns_cache,
         network_optimize::reset_network,
+        network_optimize::fix_dhcp,
         network_optimize::check_network_tweak_states,
         network_optimize::batch_network_enable,
         network_optimize::batch_network_disable,
@@ -709,6 +722,8 @@ pub fn run() {
         game_mode::game_mode_get_status,
         game_win_key::get_game_win_key_status,
         game_win_key::set_game_win_key_enabled,
+        game_ime_lock::get_game_ime_lock_status,
+        game_ime_lock::set_game_ime_lock_enabled,
         // === EQ 调音命令 ===
         audio_eq::check_virtual_audio_driver,
         audio_eq::install_virtual_audio_driver,
@@ -846,6 +861,8 @@ pub fn run() {
         video_bg::pick_video_file,
             sponsor::get_sponsors,
             contributor::get_contributors,
+        qq_group::get_qq_groups,
+        qq_group::get_qq_group_icon,
         shader_cache::scan_shader_caches,
         shader_cache::clean_shader_cache,
         nvapi::get_nvapi_status,
@@ -898,6 +915,7 @@ pub fn run() {
             utils::cursor::set_desktop_lyrics_click_through,
             utils::cursor::clamp_lyrics_window_position,
             utils::cursor::center_lyrics_window,
+            system_fonts::get_system_fonts,
             utils::lyrics_btn::show_lyrics_unlock_btn,
             utils::lyrics_btn::hide_lyrics_unlock_btn,
                         utils::lyrics_btn::unlock_lyrics,
@@ -943,6 +961,7 @@ pub fn run() {
         speedtest::start_speedtest,
         speedtest::stop_speedtest,
         speedtest::is_speedtest_running,
+        speedtest::get_speedtest_servers,
 
         // === UAPI 随机图片 ===
         uapi::get_random_image,
@@ -979,10 +998,13 @@ pub fn run() {
                 }
             }
             tauri::RunEvent::Exit => {
+                // 退出前兜底保存主窗口位置（与竖排悬浮窗 cleanup 对齐）
+                main_window::save_current_position(app_handle);
                 sensor::stop_sensor_process(app_handle);
                 hardware::cleanup_hardware_cache();
                 overlay_panel::cleanup(); // 先停后台轮询线程(FPS/传感器)，再恢复 Gamma
                 game_win_key::cleanup();
+                game_ime_lock::cleanup();
                 speedtest::cleanup();
                 display_filter::cleanup();
                 game_mode::shutdown();

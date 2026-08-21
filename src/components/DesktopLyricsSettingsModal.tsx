@@ -9,7 +9,7 @@
  * - 实时预览
  */
 
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import {
   Modal,
   ModalOverlay,
@@ -27,12 +27,19 @@ import {
   useColorModeValue,
   ButtonGroup,
   Switch,
+  useToast,
+  Divider,
 } from "@chakra-ui/react";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
+import { CustomSelect } from "@/components/special/custom-select";
 import { useMusicStore } from "@/stores/music-store";
 import { useAppStartup } from "@/contexts/app-startup-context";
+import { useFont } from "@/contexts/font-context";
+import { useThemeColor } from "@/contexts/theme-color-context";
+import { hexToRgba } from "@/lib/color-utils";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
-import { Eraser, LocateFixed } from "lucide-react";
+import { Eraser, LocateFixed, Upload } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { centerLyricsWindow } from "@/lib/desktop-lyrics-window";
 
 interface DesktopLyricsSettingsModalProps {
@@ -79,46 +86,150 @@ function DesktopLyricsSettingsModalInner({
   onClose,
 }: DesktopLyricsSettingsModalProps) {
   const desktopLyricsFontSize = useMusicStore((s) => s.desktopLyricsFontSize);
+  const desktopLyricsFontFamily = useMusicStore((s) => s.desktopLyricsFontFamily);
   const desktopLyricsHighlightColor = useMusicStore((s) => s.desktopLyricsHighlightColor);
   const desktopLyricsBaseColor = useMusicStore((s) => s.desktopLyricsBaseColor);
   const desktopLyricsLineCount = useMusicStore((s) => s.desktopLyricsLineCount);
   const desktopLyricsShowTranslation = useMusicStore((s) => s.desktopLyricsShowTranslation);
   const desktopLyricsHideUnlockBtn = useMusicStore((s) => s.desktopLyricsHideUnlockBtn);
   const { lyricsBtnHotkey, saveLyricsBtnHotkey } = useAppStartup();
+  const { fontOptions, importCustomFont, importing } = useFont();
+  const toast = useToast();
+  // 系统中文字体列表（打开弹窗时拉取）
+  const [systemFonts, setSystemFonts] = useState<
+    { name: string; supports_chinese: boolean }[]
+  >([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await invoke<{ name: string; supports_chinese: boolean }[]>(
+          "get_system_fonts"
+        );
+        if (!cancelled) setSystemFonts(Array.isArray(res) ? res : []);
+      } catch (err) {
+        console.error("[DesktopLyrics] list system fonts failed:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  // 组装字体下拉选项：跟随全局（留空） + 全局字体(内置/自定义) + 系统中文字体，按值去重
+  const fontSelectOptions = useMemo(() => {
+    const seen = new Set<string>([""]);
+    const opts: { value: string; label: string; badge?: string }[] = [
+      { value: "", label: "跟随全局字体（默认）" },
+    ];
+    for (const f of fontOptions) {
+      if (seen.has(f.value)) continue;
+      seen.add(f.value);
+      opts.push({ value: f.value, label: f.label, badge: f.isCustom ? "自定义" : "全局" });
+    }
+    for (const f of systemFonts) {
+      if (!f.supports_chinese) continue;
+      const v = f.name.trim();
+      if (!v || seen.has(v)) continue;
+      seen.add(v);
+      opts.push({ value: v, label: v, badge: "系统" });
+    }
+    return opts;
+  }, [fontOptions, systemFonts]);
 
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
-  const previewBg = useColorModeValue("linear-gradient(135deg, #1a1a2e, #16213e)", "linear-gradient(135deg, #1a1a2e, #16213e)");
 
-  // 预览用的模拟歌词
-  const previewLines = [
-    { text: "你是我最美的意外", progress: 0.5 },
-    { text: "让我牵着你的手", progress: 0 },
-  ];
+  const { getActiveColor, getHoverColor } = useThemeColor();
+  const themeColor = getActiveColor();
+  const themeHover = getHoverColor();
 
-  const accentColor = desktopLyricsHighlightColor;
+  // 滚动条适配主题色
+  const modalBodySx = {
+    "&::-webkit-scrollbar": {
+      width: "6px",
+    },
+    "&::-webkit-scrollbar-track": {
+      background: "transparent",
+    },
+    "&::-webkit-scrollbar-thumb": {
+      background: getActiveColor(),
+      borderRadius: "3px",
+    },
+    "&::-webkit-scrollbar-thumb:hover": {
+      background: getHoverColor(),
+    },
+  };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} isCentered size="md">
+    <Modal isOpen={isOpen} onClose={onClose} isCentered scrollBehavior="inside" size="4xl">
       <ModalOverlay />
       <ModalContent
         bg={modalBg}
         borderColor={modalBorderColor}
         borderRadius="xl"
-        maxHeight="80vh"
+        maxWidth="860px"
+        w="100%"
+        maxHeight="70vh"
         display="flex"
         flexDirection="column"
+        sx={modalBodySx}
       >
         <ModalHeader color={labelColor} fontSize="lg" fontWeight="bold">
           桌面歌词设置
         </ModalHeader>
         <ModalCloseButton />
 
-        <ModalBody overflowY="auto" flex="1" minH={0} pr={4}>
-          <VStack spacing={5} align="stretch">
+        <ModalBody overflowY="auto" flex="1" minH={0} pr={4} sx={modalBodySx}>
+          <HStack align="flex-start" spacing={6}>
+            <VStack spacing={3} align="stretch" flex={1} minW={0}>
+            {/* 字体选择 */}
+            <Box>
+              <Text color={labelColor} fontSize="sm" fontWeight="medium" mb={1}>
+                字体
+              </Text>
+              <Text color={subLabelColor} fontSize="xs" mb={2}>
+                选择歌词显示字体，跟随全局字体时留空
+              </Text>
+              <HStack spacing={2} align="flex-start">
+                <Box flex={1} minW={0}>
+                  <CustomSelect
+                    value={desktopLyricsFontFamily}
+                    onChange={(val) =>
+                      useMusicStore.getState().setDesktopLyricsFontFamily(val)
+                    }
+                    options={fontSelectOptions}
+                    placeholder="跟随全局字体"
+                    width="100%"
+                  />
+                </Box>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<Upload size={14} />}
+                  isLoading={importing}
+                  flexShrink={0}
+                  onClick={() =>
+                    document
+                      .getElementById("desktop-lyrics-font-upload")
+                      ?.click()
+                  }
+                  borderColor={themeColor}
+                  color={themeColor}
+                  _hover={{
+                    bg: hexToRgba(themeColor, 0.12),
+                  }}
+                >
+                  导入字体
+                </Button>
+              </HStack>
+            </Box>
+
             {/* 字体大小 */}
             <Box>
               <HStack justify="space-between" mb={2}>
@@ -146,14 +257,14 @@ function DesktopLyricsSettingsModalInner({
                   w="100%"
                   sx={{
                     ...rangeSliderSx,
-                    background: `linear-gradient(to right, ${accentColor} 0%, ${accentColor} ${((desktopLyricsFontSize - 24) / 36) * 100}%, ${sliderTrackBg} ${((desktopLyricsFontSize - 24) / 36) * 100}%, ${sliderTrackBg} 100%)`,
+                    background: `linear-gradient(to right, ${themeColor} 0%, ${themeColor} ${((desktopLyricsFontSize - 24) / 36) * 100}%, ${sliderTrackBg} ${((desktopLyricsFontSize - 24) / 36) * 100}%, ${sliderTrackBg} 100%)`,
                     "&::-webkit-slider-thumb": {
                       ...rangeSliderSx["&::-webkit-slider-thumb"],
-                      background: accentColor,
+                      background: themeColor,
                     },
                     "&::-moz-range-thumb": {
                       ...rangeSliderSx["&::-moz-range-thumb"],
-                      background: accentColor,
+                      background: themeColor,
                     },
                   }}
                 />
@@ -191,25 +302,29 @@ function DesktopLyricsSettingsModalInner({
               <ButtonGroup size="sm" variant="outline" isAttached>
                 <Button
                   onClick={() => useMusicStore.getState().setDesktopLyricsLineCount(1)}
-                  bg={desktopLyricsLineCount === 1 ? `${accentColor}22` : "transparent"}
-                  borderColor={desktopLyricsLineCount === 1 ? accentColor : modalBorderColor}
-                  color={desktopLyricsLineCount === 1 ? accentColor : subLabelColor}
+                  bg={desktopLyricsLineCount === 1 ? hexToRgba(themeColor, 0.15) : "transparent"}
+                  borderColor={desktopLyricsLineCount === 1 ? themeColor : modalBorderColor}
+                  color={desktopLyricsLineCount === 1 ? themeColor : subLabelColor}
                   fontWeight={desktopLyricsLineCount === 1 ? "bold" : "normal"}
                 >
                   单行（仅当前句）
                 </Button>
                 <Button
                   onClick={() => useMusicStore.getState().setDesktopLyricsLineCount(2)}
-                  bg={desktopLyricsLineCount === 2 ? `${accentColor}22` : "transparent"}
-                  borderColor={desktopLyricsLineCount === 2 ? accentColor : modalBorderColor}
-                  color={desktopLyricsLineCount === 2 ? accentColor : subLabelColor}
+                  bg={desktopLyricsLineCount === 2 ? hexToRgba(themeColor, 0.15) : "transparent"}
+                  borderColor={desktopLyricsLineCount === 2 ? themeColor : modalBorderColor}
+                  color={desktopLyricsLineCount === 2 ? themeColor : subLabelColor}
                   fontWeight={desktopLyricsLineCount === 2 ? "bold" : "normal"}
                 >
                   双行（当前+下一句）
                 </Button>
               </ButtonGroup>
             </Box>
+            </VStack>
 
+            <Divider orientation="vertical" />
+
+            <VStack spacing={3} align="stretch" flex={1} minW={0}>
             {/* 显示翻译 */}
             <Box>
               <HStack justify="space-between" align="center">
@@ -231,7 +346,7 @@ function DesktopLyricsSettingsModalInner({
                   }
                   sx={{
                     "& .chakra-switch__track": {
-                      bg: desktopLyricsShowTranslation ? accentColor : undefined,
+                      bg: desktopLyricsShowTranslation ? themeColor : undefined,
                     },
                   }}
                 />
@@ -259,7 +374,7 @@ function DesktopLyricsSettingsModalInner({
                   }
                   sx={{
                     "& .chakra-switch__track": {
-                      bg: desktopLyricsHideUnlockBtn ? accentColor : undefined,
+                      bg: desktopLyricsHideUnlockBtn ? themeColor : undefined,
                     },
                   }}
                 />
@@ -288,7 +403,7 @@ function DesktopLyricsSettingsModalInner({
                     leftIcon={<Eraser size={14} />}
                     onClick={() => saveLyricsBtnHotkey("")}
                     color={subLabelColor}
-                    _hover={{ color: labelColor }}
+                    _hover={{ color: themeColor }}
                   >
                     清除
                   </Button>
@@ -307,99 +422,64 @@ function DesktopLyricsSettingsModalInner({
                 w="100%"
                 leftIcon={<LocateFixed size={14} />}
                 onClick={() => centerLyricsWindow()}
-                borderColor={modalBorderColor}
-                color={labelColor}
+                borderColor={themeColor}
+                color={themeColor}
                 _hover={{
-                  borderColor: accentColor,
-                  color: accentColor,
-                  bg: `${accentColor}11`,
+                  bg: hexToRgba(themeColor, 0.12),
                 }}
               >
                 复位到屏幕中央
               </Button>
             </Box>
-
-            {/* 预览 */}
-            <Box>
-              <Text color={subLabelColor} fontSize="xs" mb={2}>
-                预览效果：
-              </Text>
-              <Box
-                borderRadius="lg"
-                p={4}
-                bg={previewBg}
-                overflow="hidden"
-              >
-                <VStack spacing={2} align="center">
-                  {/* 当前行预览 */}
-                  <Box position="relative" overflow="hidden" textAlign="center">
-                    <span
-                      style={{
-                        fontSize: `${desktopLyricsFontSize * 0.6}px`,
-                        fontWeight: "bold",
-                        color: desktopLyricsBaseColor,
-                        textShadow: "-1px -1px 0 rgba(0,0,0,0.8), 1px -1px 0 rgba(0,0,0,0.8), -1px 1px 0 rgba(0,0,0,0.8), 1px 1px 0 rgba(0,0,0,0.8)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {previewLines[0].text}
-                    </span>
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        fontSize: `${desktopLyricsFontSize * 0.6}px`,
-                        fontWeight: "bold",
-                        color: desktopLyricsHighlightColor,
-                        textShadow: "-1px -1px 0 rgba(0,0,0,0.8), 1px -1px 0 rgba(0,0,0,0.8), -1px 1px 0 rgba(0,0,0,0.8), 1px 1px 0 rgba(0,0,0,0.8)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        width: `${previewLines[0].progress * 100}%`,
-                      }}
-                    >
-                      {previewLines[0].text}
-                    </span>
-                  </Box>
-                  {/* 当前行翻译预览 */}
-                  {desktopLyricsShowTranslation && (
-                    <span
-                      style={{
-                        fontSize: `${Math.max(18, Math.round(desktopLyricsFontSize * 0.6 * 0.65))}px`,
-                        fontWeight: "bold",
-                        color: desktopLyricsBaseColor,
-                        opacity: 0.8,
-                        textShadow: "-1px -1px 0 rgba(0,0,0,0.9), 1px -1px 0 rgba(0,0,0,0.9), -1px 1px 0 rgba(0,0,0,0.9), 1px 1px 0 rgba(0,0,0,0.9)",
-                      }}
-                    >
-                      You are my most beautiful accident
-                    </span>
-                  )}
-                  {/* 下一行预览 */}
-                  {desktopLyricsLineCount === 2 && (
-                    <span
-                      style={{
-                        fontSize: `${desktopLyricsFontSize * 0.6 * 0.7}px`,
-                        fontWeight: "bold",
-                        color: desktopLyricsBaseColor,
-                        opacity: 0.5,
-                        textShadow: "-1px -1px 0 rgba(0,0,0,0.6), 1px -1px 0 rgba(0,0,0,0.6), -1px 1px 0 rgba(0,0,0,0.6), 1px 1px 0 rgba(0,0,0,0.6)",
-                      }}
-                    >
-                      {previewLines[1].text}
-                    </span>
-                  )}
-                </VStack>
-              </Box>
-            </Box>
           </VStack>
+          </HStack>
         </ModalBody>
 
         <ModalFooter>
-          <Button variant="ghost" onClick={onClose} color={labelColor}>
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            color={themeColor}
+            _hover={{ bg: hexToRgba(themeColor, 0.1) }}
+          >
             完成
           </Button>
         </ModalFooter>
+        <input
+          id="desktop-lyrics-font-upload"
+          type="file"
+          accept=".ttf,.otf,.woff,.woff2"
+          style={{ display: "none" }}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const family = file.name
+                .replace(/\.(ttf|otf|woff|woff2)$/i, "")
+                .replace(/\s+/g, "-");
+              try {
+                await importCustomFont(file);
+                await useMusicStore.getState().setDesktopLyricsFontFamily(family);
+              } catch (err) {
+                if (err instanceof Error && err.message === "DUPLICATE_FONT") {
+                  toast({
+                    title: "已存在同名自定义字体",
+                    status: "warning",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                } else {
+                  toast({
+                    title: "字体导入失败",
+                    status: "error",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }
+              }
+            }
+            e.target.value = "";
+          }}
+        />
       </ModalContent>
     </Modal>
   );

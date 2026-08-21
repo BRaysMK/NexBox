@@ -31,10 +31,48 @@ export function keyToHotkeyFormat(key: string): string | null {
   if (key === "PrintScreen") return "PrintScreen";
   if (/^[0-9]$/.test(key)) return key;
   if (/^[a-zA-Z]$/.test(key)) return key.toUpperCase();
-  if (key === "[") return "[";
-  if (key === "]") return "]";
+  // 标点符号键：把物理键的基准/上档两种字符都映射为后端可识别的 token
+  const symbol = SYMBOL_KEYS[key];
+  if (symbol) return symbol;
   return null;
 }
+
+/// 标点符号 → 后端 global-hotkey 可识别的 KeyCode token（大小写不敏感）
+/// 上档形式（如对 !@#$% 等）对应的仍是同一物理键，因此映射到基准键
+const SYMBOL_KEYS: Record<string, string> = {
+  "-": "Minus",
+  "_": "Minus",
+  "=": "Equal",
+  "+": "Equal",
+  "[": "[",
+  "]": "]",
+  "{": "[",
+  "}": "]",
+  "\\": "Backslash",
+  "|": "Backslash",
+  ";": "Semicolon",
+  ":": "Semicolon",
+  "'": "Quote",
+  '"': "Quote",
+  ",": "Comma",
+  "<": "Comma",
+  ".": "Period",
+  ">": "Period",
+  "/": "Slash",
+  "?": "Slash",
+  "`": "Backquote",
+  "~": "Backquote",
+  "!": "1",
+  "@": "2",
+  "#": "3",
+  "$": "4",
+  "%": "5",
+  "^": "6",
+  "&": "7",
+  "*": "8",
+  "(": "9",
+  ")": "0",
+};
 
 function buildComboFromEvent(e: React.KeyboardEvent): string[] {
   const parts: string[] = [];

@@ -179,6 +179,21 @@ export function CustomSelect({
             zIndex={99999}
             maxH="280px"
             overflowY="auto"
+            sx={{
+              "&::-webkit-scrollbar": {
+                width: "6px",
+              },
+              "&::-webkit-scrollbar-track": {
+                background: "transparent",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                background: getActiveColor(),
+                borderRadius: "3px",
+              },
+              "&::-webkit-scrollbar-thumb:hover": {
+                background: getHoverColor(),
+              },
+            }}
           >
             {options.map((option) => (
               <Box

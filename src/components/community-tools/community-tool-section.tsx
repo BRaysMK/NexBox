@@ -471,7 +471,7 @@ export function CommunityToolSection() {
 
       <AlertDialog isOpen={!!installTool} leastDestructiveRef={cancelRef as never} onClose={() => setInstallTool(null)}>
         <AlertDialogOverlay backdropFilter="blur(4px)" />
-        <AlertDialogContent>
+        <AlertDialogContent bg={useColorModeValue("white", "#000000")}>
           <AlertDialogHeader fontSize="lg" fontWeight="bold">
             {installTool?.name}
           </AlertDialogHeader>
@@ -495,7 +495,7 @@ export function CommunityToolSection() {
       {/* 详情弹窗：完整信息 + 下载/打开 + 进度条 */}
       <Modal isOpen={!!detailTool} onClose={() => setDetailTool(null)} isCentered size="lg" scrollBehavior="inside" closeOnOverlayClick={!installing}>
         <ModalOverlay backdropFilter="blur(4px)" />
-        <ModalContent>
+        <ModalContent bg={useColorModeValue("white", "#000000")}>
           <ModalHeader fontSize="lg">
             {detailLive?.name}
             {detailLive && (
@@ -586,7 +586,7 @@ export function CommunityToolSection() {
 
       <AlertDialog isOpen={!!deleteTool} leastDestructiveRef={cancelRef as never} onClose={() => setDeleteTool(null)}>
         <AlertDialogOverlay backdropFilter="blur(4px)" />
-        <AlertDialogContent>
+        <AlertDialogContent bg={useColorModeValue("white", "#000000")}>
           <AlertDialogHeader fontSize="lg" fontWeight="bold">
             {t("tools.community.deleteTitle")}
           </AlertDialogHeader>
@@ -606,7 +606,7 @@ export function CommunityToolSection() {
       {/* 删除进行中：正在提交 PR */}
       <Modal isOpen={removing} onClose={() => {}} isCentered size="sm" closeOnOverlayClick={false} closeOnEsc={false}>
         <ModalOverlay backdropFilter="blur(4px)" />
-        <ModalContent>
+        <ModalContent bg={useColorModeValue("white", "#000000")}>
           <ModalHeader fontSize="md">正在提交 PR</ModalHeader>
           <ModalBody pb={4}>
             <HStack spacing={3}>

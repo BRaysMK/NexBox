@@ -322,7 +322,7 @@ mod imp {
                     .filter_map(|i| sessions.GetAt(i).ok())
                     .filter_map(|s| s.SourceAppUserModelId().map(|v| v.to_string()).ok())
                     .collect();
-                log::info!("[SMTC] 检测到 {size} 个媒体会话但未接管；AUMID 列表: {ids:?}");
+                log::debug!("[SMTC] 检测到 {size} 个媒体会话但未接管；AUMID 列表: {ids:?}");
             }
         }
 

@@ -14,7 +14,7 @@ import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { ArrowLeft, MousePointer2, Keyboard } from "lucide-react";
+import { ArrowLeft, MousePointer2, Keyboard, Mouse } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -23,10 +23,18 @@ import { invoke } from "@tauri-apps/api/core";
 interface PeripheralStatus {
   mouse_value: number | null;
   keyboard_value: number | null;
+  mouse_queue_value: number | null;
 }
 
 const MOUSE_OPTIONS = [26, 36, 38, 40];
 const KEYBOARD_OPTIONS = [16, 18, 20, 22];
+const MOUSE_QUEUE_OPTIONS = [16, 18, 20, 22];
+// 推荐档位：鼠标调度 38(Windows 官方「程序」方案)、队列 18(延迟/稳定性平衡)
+const RECOMMENDED = {
+  mouse: 38,
+  keyboard: 18,
+  mouseQueue: 18,
+} as const;
 
 export default function PeripheralOptimizePage() {
   const { t } = useTranslation();
@@ -36,6 +44,7 @@ export default function PeripheralOptimizePage() {
 
   const [selectedMouse, setSelectedMouse] = useState<number | null>(null);
   const [selectedKeyboard, setSelectedKeyboard] = useState<number | null>(null);
+  const [selectedMouseQueue, setSelectedMouseQueue] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
   const [isReverting, setIsReverting] = useState(false);
@@ -66,6 +75,12 @@ export default function PeripheralOptimizePage() {
       if (status.keyboard_value !== null && KEYBOARD_OPTIONS.includes(status.keyboard_value)) {
         setSelectedKeyboard(status.keyboard_value);
       }
+      if (
+        status.mouse_queue_value !== null &&
+        MOUSE_QUEUE_OPTIONS.includes(status.mouse_queue_value)
+      ) {
+        setSelectedMouseQueue(status.mouse_queue_value);
+      }
     } catch (error) {
       console.error("Failed to load peripheral status:", error);
     } finally {
@@ -89,6 +104,7 @@ export default function PeripheralOptimizePage() {
       await invoke("set_peripheral_settings", {
         mouseValue: selectedMouse ?? 26,
         keyboardValue: selectedKeyboard ?? 16,
+        mouseQueueValue: selectedMouseQueue ?? 16,
       });
       toast({
         title: t("peripheralOptimize.success"),
@@ -115,6 +131,7 @@ export default function PeripheralOptimizePage() {
       await invoke("reset_peripheral_settings");
       setSelectedMouse(null);
       setSelectedKeyboard(null);
+      setSelectedMouseQueue(null);
       toast({
         title: t("peripheralOptimize.revertSuccess"),
         status: "success",
@@ -139,36 +156,63 @@ export default function PeripheralOptimizePage() {
     isSelected,
     onClick,
     label,
+    desc,
+    isRecommended,
   }: {
     value: number;
     isSelected: boolean;
     onClick: () => void;
     label: string;
+    desc?: string;
+    isRecommended?: boolean;
   }) {
     const content = (
-      <VStack justify="center" align="center" spacing={2} py={6} px={4}>
-        <Box
-          w="16px"
-          h="16px"
-          borderRadius="full"
-          border="2px solid"
-          borderColor={isSelected ? themeColorHex : subTextColor}
-          bg={isSelected ? themeColorHex : "transparent"}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-        >
-          {isSelected && (
-            <Box w="5px" h="5px" borderRadius="full" bg="#1a1a1a" />
+      <Box position="relative" w="full">
+        {isRecommended && (
+          <Box
+            position="absolute"
+            top={1.5}
+            right={1.5}
+            fontSize="10px"
+            fontWeight="600"
+            px={1.5}
+            py={0.5}
+            borderRadius="full"
+            bg={themeColorHex}
+            color={contrastText}
+          >
+            {t("peripheralOptimize.recommended")}
+          </Box>
+        )}
+        <VStack justify="center" align="center" spacing={2} py={6} px={4}>
+          <Box
+            w="16px"
+            h="16px"
+            borderRadius="full"
+            border="2px solid"
+            borderColor={isSelected ? themeColorHex : subTextColor}
+            bg={isSelected ? themeColorHex : "transparent"}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+          >
+            {isSelected && (
+              <Box w="5px" h="5px" borderRadius="full" bg="#1a1a1a" />
+            )}
+          </Box>
+          <Text color={headingColor} fontSize="xl" fontWeight="700">
+            {value}
+          </Text>
+          <Text color={subTextColor} fontSize="xs">
+            {label}
+          </Text>
+          {desc && (
+            <Text color={subTextColor} fontSize="xs" textAlign="center">
+              {desc}
+            </Text>
           )}
-        </Box>
-        <Text color={headingColor} fontSize="xl" fontWeight="700">
-          {value}
-        </Text>
-        <Text color={subTextColor} fontSize="xs">
-          {label}
-        </Text>
-      </VStack>
+        </VStack>
+      </Box>
     );
 
     if (liquidGlassEnabled) {
@@ -232,7 +276,6 @@ export default function PeripheralOptimizePage() {
         </HStack>
         <Text color={subTextColor} fontSize="sm" mb={4}>
           {t("peripheralOptimize.mouseDesc")}
-          <Text as="span" color="red.400" fontSize="xs" ml={2} fontWeight="medium">↓ {t("peripheralOptimize.lowerIsBetter")}</Text>
         </Text>
         <SimpleGrid columns={{ base: 2, md: 4 }} spacing={3}>
           {MOUSE_OPTIONS.map((val) => (
@@ -242,6 +285,8 @@ export default function PeripheralOptimizePage() {
               isSelected={selectedMouse === val}
               onClick={() => setSelectedMouse(val)}
               label="Win32PrioritySeparation"
+              desc={t(`peripheralOptimize.mouseValue${val}`)}
+              isRecommended={val === RECOMMENDED.mouse}
             />
           ))}
         </SimpleGrid>
@@ -256,7 +301,6 @@ export default function PeripheralOptimizePage() {
         </HStack>
         <Text color={subTextColor} fontSize="sm" mb={4}>
           {t("peripheralOptimize.keyboardDesc")}
-          <Text as="span" color="red.400" fontSize="xs" ml={2} fontWeight="medium">↓ {t("peripheralOptimize.lowerIsBetter")}</Text>
         </Text>
         <SimpleGrid columns={{ base: 2, md: 4 }} spacing={3}>
           {KEYBOARD_OPTIONS.map((val) => (
@@ -266,6 +310,33 @@ export default function PeripheralOptimizePage() {
               isSelected={selectedKeyboard === val}
               onClick={() => setSelectedKeyboard(val)}
               label="KeyboardDataQueueSize"
+              desc={t(`peripheralOptimize.keyboardValue${val}`)}
+              isRecommended={val === RECOMMENDED.keyboard}
+            />
+          ))}
+        </SimpleGrid>
+      </Box>
+
+      <Box w="full">
+        <HStack spacing={2} mb={1}>
+          <Mouse size={18} color={themeColorHex} />
+          <Heading as="h3" fontSize="md" fontWeight="bold" color={headingColor}>
+            {t("peripheralOptimize.mouseQueueSection")}
+          </Heading>
+        </HStack>
+        <Text color={subTextColor} fontSize="sm" mb={4}>
+          {t("peripheralOptimize.mouseQueueDesc")}
+        </Text>
+        <SimpleGrid columns={{ base: 2, md: 4 }} spacing={3}>
+          {MOUSE_QUEUE_OPTIONS.map((val) => (
+            <OptionCard
+              key={val}
+              value={val}
+              isSelected={selectedMouseQueue === val}
+              onClick={() => setSelectedMouseQueue(val)}
+              label="MouseDataQueueSize"
+              desc={t(`peripheralOptimize.mouseQueueValue${val}`)}
+              isRecommended={val === RECOMMENDED.mouseQueue}
             />
           ))}
         </SimpleGrid>

@@ -476,7 +476,7 @@ fn collect_all_gpu_sensors(
 
         let usage = extract_sensor(
             sensors, "Load", &hw_type, Some(hw_name),
-            &["GPU Core", "GPU", "D3D Usage", "Core"],
+            &["GPU Core", "D3D 3D", "GPU", "D3D Usage", "Core"],
             false,
         ).map(|(v, _)| v as u32);
 

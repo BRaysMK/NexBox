@@ -1612,6 +1612,7 @@
     "musicPlayPause": "Abspielen / Pause",
     "musicPlayPauseDesc": "Tastenkürzel zum Abspielen oder Pausieren von Musik",
     "saved": "Tastenkürzel gespeichert",
+    "saveFailed": "Tastenkürzel speichern fehlgeschlagen",
     "masterToggle": "Globaler Hotkey-Schalter",
     "masterToggleDesc": "Wenn ausgeschaltet, funktionieren keine globalen Hotkeys"
   },

@@ -50,7 +50,7 @@ export function GitCodeLoginDialog({
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered>
       <ModalOverlay backdropFilter="blur(4px)" />
-      <ModalContent>
+      <ModalContent bg={useColorModeValue("white", "#000000")}>
         <ModalHeader color={titleColor}>{t("tools.community.loginTitle")}</ModalHeader>
         <ModalCloseButton />
         <ModalBody>

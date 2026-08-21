@@ -2,28 +2,83 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bytes::Bytes;
 use futures_util::{future::join_all, StreamExt};
 use reqwest::Client;
 use tauri::{AppHandle, Emitter};
 
-// ===== 测速服务器配置（纯国内） =====
-// 下载测速：浙大测速 garbage.php（返回随机数据，LibreSpeed 协议）
-const DOWNLOAD_URLS: &[&str] = &[
-    "http://speedtest.zju.edu.cn/garbage.php",
-    "http://speedtest.zju.edu.cn/1000M",
-    "https://wirelesscdn-download.xuexi.cn/publish/xuexi_android/latest/xuexi_android_10002068.apk",
+// ===== 测速服务器配置（纯国内，可在前端切换） =====
+// 说明：
+// - 南航(NUAA) LibreSpeed 节点：实测可用，作为默认服务器；
+// - 浙大(ZJU) 节点：近期持续返回 502 宕机，保留以便其恢复后使用；
+// - 中科大(USTC) 节点：实测对非浏览器客户端返回 500 / not ustc，拒绝外部测速，仅作备选；
+// - 下载测速在所选节点失败时自动切换到下方国内大厂 CDN 备用源（保障下载始终可测）；
+// - 上传/延迟目前只有南航 empty.php 对外开放，故所有服务器统一走南航节点测上传与延迟。
+struct ServerConfig {
+    id: &'static str,
+    name: &'static str,
+    download_urls: &'static [&'static str],
+    upload_urls: &'static [&'static str],
+    ping_urls: &'static [&'static str],
+}
+
+const SERVERS: &[ServerConfig] = &[
+    ServerConfig {
+        id: "nuaa",
+        name: "南京航空航天大学",
+        download_urls: &[
+            "http://speed.nuaa.edu.cn/backend/garbage.php?ckSize=50",
+            "http://speed.nuaa.edu.cn/backend/garbage.php?ckSize=10",
+            "https://wirelesscdn-download.xuexi.cn/publish/xuexi_android/latest/xuexi_android_10002068.apk",
+            "https://dldir1.qq.com/weixin/Windows/WeChatSetup.exe",
+            "http://speed.nuaa.edu.cn/backend/garbage.php?ckSize=10",
+        ],
+        upload_urls: &["http://speed.nuaa.edu.cn/backend/empty.php"],
+        ping_urls: &["http://speed.nuaa.edu.cn/backend/empty.php"],
+    },
+    ServerConfig {
+        id: "zju",
+        name: "浙江大学",
+        download_urls: &[
+            "http://speedtest.zju.edu.cn/garbage.php",
+            "http://speedtest.zju.edu.cn/1000M",
+            "https://wirelesscdn-download.xuexi.cn/publish/xuexi_android/latest/xuexi_android_10002068.apk",
+            "https://dldir1.qq.com/weixin/Windows/WeChatSetup.exe",
+            "https://wirelesscdn-download.xuexi.cn/publish/xuexi_android/latest/xuexi_android_10002068.apk",
+        ],
+        upload_urls: &["http://speed.nuaa.edu.cn/backend/empty.php"],
+        ping_urls: &["http://speed.nuaa.edu.cn/backend/empty.php"],
+    },
+    ServerConfig {
+        id: "ustc",
+        name: "中国科学技术大学",
+        download_urls: &[
+            "https://test.ustc.edu.cn/backend/garbage.php",
+            "https://wirelesscdn-download.xuexi.cn/publish/xuexi_android/latest/xuexi_android_10002068.apk",
+            "https://dldir1.qq.com/weixin/Windows/WeChatSetup.exe",
+            "https://wirelesscdn-download.xuexi.cn/publish/xuexi_android/latest/xuexi_android_10002068.apk",
+        ],
+        upload_urls: &["http://speed.nuaa.edu.cn/backend/empty.php"],
+        ping_urls: &["http://speed.nuaa.edu.cn/backend/empty.php"],
+    },
 ];
-// 上传测速：empty.php 接受 POST 且返回空响应，避免干扰统计
-const UPLOAD_URLS: &[&str] = &["http://speedtest.zju.edu.cn/empty.php"];
-// 延迟/抖动测试目标
-const PING_URLS: &[&str] = &["http://speedtest.zju.edu.cn/empty.php"];
+
+fn default_server() -> &'static ServerConfig {
+    &SERVERS[0]
+}
+
+fn find_server(id: &str) -> &'static ServerConfig {
+    SERVERS
+        .iter()
+        .find(|s| s.id == id)
+        .unwrap_or_else(default_server)
+}
 
 const PING_COUNT: u32 = 8;
 const DEFAULT_THREADS: u32 = 16;
 const DEFAULT_DURATION_SECS: u32 = 6;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(80);
-const CHUNK_SIZE: usize = 2 * 1024 * 1024;
+/// 上传单次请求数据块：成功后按实际发出字节计数；小块可让低带宽下实时速率更平滑
+const UPLOAD_CHUNK_SIZE: usize = 256 * 1024;
 /// 预热期：TCP 慢启动 + 发送缓冲区填满期间速率虚高，跳过这段时间的显示
 const WARMUP_SECS: f64 = 0.8;
 /// 上传预热期：多线程并发时会先在本地 TCP 缓冲区堆积大量数据，需要更长时间才回落
@@ -55,11 +110,20 @@ pub struct SpeedTestProgress {
     pub message: String,
 }
 
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeedTestServerInfo {
+    pub id: String,
+    pub name: String,
+}
+
 #[derive(Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpeedTestConfig {
     pub threads: Option<u32>,
     pub duration_secs: Option<u32>,
+    /// 服务器 id（见 get_speedtest_servers），缺省使用默认服务器
+    pub server: Option<String>,
 }
 
 impl Default for SpeedTestConfig {
@@ -67,8 +131,21 @@ impl Default for SpeedTestConfig {
         Self {
             threads: Some(DEFAULT_THREADS),
             duration_secs: Some(DEFAULT_DURATION_SECS),
+            server: None,
         }
     }
+}
+
+/// 获取可切换的测速服务器列表
+#[tauri::command]
+pub fn get_speedtest_servers() -> Vec<SpeedTestServerInfo> {
+    SERVERS
+        .iter()
+        .map(|s| SpeedTestServerInfo {
+            id: s.id.to_string(),
+            name: s.name.to_string(),
+        })
+        .collect()
 }
 
 fn now_phase(phase: &str) -> f64 {
@@ -106,7 +183,12 @@ fn emit_progress(
 }
 
 /// 延迟 + 抖动 + 丢包测试（对多个目标并发 HTTP 测 RTT）
-async fn run_ping_test(client: &Client, app: &AppHandle, server: &str) -> (f64, f64, f64) {
+async fn run_ping_test(
+    client: &Client,
+    app: &AppHandle,
+    urls: &[String],
+    server: &str,
+) -> (f64, f64, f64) {
     let mut all_rtts: Vec<f64> = Vec::new();
     let mut failures: u32 = 0;
 
@@ -115,7 +197,7 @@ async fn run_ping_test(client: &Client, app: &AppHandle, server: &str) -> (f64, 
             break;
         }
         let mut round: Vec<f64> = Vec::new();
-        for &url in PING_URLS {
+        for url in urls {
             let start = Instant::now();
             let result = client
                 .get(url)
@@ -184,6 +266,7 @@ async fn run_ping_test(client: &Client, app: &AppHandle, server: &str) -> (f64, 
 async fn run_download_test(
     client: &Client,
     app: &AppHandle,
+    urls: &[String],
     server: &str,
     threads: u32,
     duration: Duration,
@@ -192,21 +275,24 @@ async fn run_download_test(
     loss: f64,
 ) -> f64 {
     let counter = Arc::new(AtomicU64::new(0));
+    let url_list = urls.to_vec();
 
-    // 为每个线程分配独立 URL（循环使用），避免单点瓶颈
+    // 为每个线程分配起始 URL（循环使用），失败时自动切换到下一个源（故障转移）
     let mut handles = Vec::new();
     for i in 0..threads {
         let client = client.clone();
         let counter = counter.clone();
-        let url = DOWNLOAD_URLS[(i as usize) % DOWNLOAD_URLS.len()].to_string();
+        let urls = url_list.clone();
         handles.push(tokio::spawn(async move {
             let deadline = Instant::now() + duration;
+            let mut idx = (i as usize) % urls.len();
             while Instant::now() < deadline {
                 if TEST_STOP.load(Ordering::SeqCst) {
                     break;
                 }
+                let url = &urls[idx];
                 let send_fut = client
-                    .get(&url)
+                    .get(url)
                     .timeout(Duration::from_secs(8))
                     .send();
                 let resp = tokio::select! {
@@ -233,7 +319,8 @@ async fn run_download_test(
                         }
                     }
                     Err(_) => {
-                        // 单个请求失败，短暂等待后重试
+                        // 单个请求失败：切换到下一个 URL 源（故障转移），短暂等待后重试
+                        idx = (idx + 1) % urls.len();
                         tokio::time::sleep(Duration::from_millis(300)).await;
                     }
                 }
@@ -307,6 +394,7 @@ async fn run_download_test(
 async fn run_upload_test(
     client: &Client,
     app: &AppHandle,
+    urls: &[String],
     server: &str,
     threads: u32,
     duration: Duration,
@@ -315,61 +403,47 @@ async fn run_upload_test(
     loss: f64,
     download: f64,
 ) -> f64 {
-    use futures_util::stream::unfold;
     use rand::rngs::StdRng;
     use rand::{RngCore, SeedableRng};
     use reqwest::Body;
 
     let counter = Arc::new(AtomicU64::new(0));
-    const SUB_CHUNK: usize = 64 * 1024;
 
     let mut handles = Vec::new();
     for i in 0..threads {
         let client = client.clone();
         let counter = counter.clone();
-        let url = UPLOAD_URLS[(i as usize) % UPLOAD_URLS.len()].to_string();
+        let url = urls[(i as usize) % urls.len()].clone();
         handles.push(tokio::spawn(async move {
             let deadline = Instant::now() + duration;
+            let mut rng = StdRng::from_entropy();
 
             while Instant::now() < deadline {
                 if TEST_STOP.load(Ordering::SeqCst) {
                     break;
                 }
 
-                // 单次请求：流式发送 CHUNK_SIZE 字节，每 64KB 子块发出前立即累加计数
-                let counter_inner = counter.clone();
-                let rng = StdRng::from_entropy();
-                let remaining = CHUNK_SIZE;
-                let stream = unfold(
-                    (remaining, rng, counter_inner),
-                    move |(rem, mut rng, cnt)| async move {
-                        if rem == 0 || TEST_STOP.load(Ordering::SeqCst) {
-                            return None;
-                        }
-                        let n = SUB_CHUNK.min(rem);
-                        let mut buf = vec![0u8; n];
-                        rng.fill_bytes(&mut buf);
-                        cnt.fetch_add(n as u64, Ordering::Relaxed);
-                        Some((
-                            Ok::<Bytes, reqwest::Error>(Bytes::from(buf)),
-                            (rem - n, rng, cnt),
-                        ))
-                    },
-                );
-                let body = Body::wrap_stream(stream);
+                // 生成一次待发送数据块；仅当请求成功（数据真正发出）后才计入速率，
+                // 避免服务器不可达时把本地缓冲中从未发出的数据也算进去导致速率虚高
+                let mut buf = vec![0u8; UPLOAD_CHUNK_SIZE];
+                rng.fill_bytes(&mut buf);
+
                 // 单请求硬性超时 5s（与 deadline select 竞争，确保线程及时退出）
                 let req_fut = client
                     .post(&url)
-                    .body(body)
+                    .body(Body::from(buf))
                     .timeout(Duration::from_secs(5))
                     .send();
-                let _ = tokio::select! {
-                    res = req_fut => { res }
+                let res = tokio::select! {
+                    res = req_fut => res,
                     _ = tokio::time::sleep_until(deadline.into()) => {
                         // deadline 到达，丢弃挂起请求，线程立即退出
                         break;
                     }
                 };
+                if res.is_ok() {
+                    counter.fetch_add(UPLOAD_CHUNK_SIZE as u64, Ordering::Relaxed);
+                }
             }
         }));
     }
@@ -448,11 +522,25 @@ pub async fn start_speedtest(app: AppHandle, config: Option<SpeedTestConfig>) ->
         .unwrap_or(DEFAULT_DURATION_SECS)
         .clamp(1, 30);
 
+    // 解析目标服务器（缺省使用默认服务器）
+    let server_cfg = match &cfg.server {
+        Some(id) => find_server(id),
+        None => default_server(),
+    };
+    let server_name = format!("{}测速服务器", server_cfg.name);
+    let download_urls: Vec<String> = server_cfg
+        .download_urls
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let upload_urls: Vec<String> = server_cfg.upload_urls.iter().map(|s| s.to_string()).collect();
+    let ping_urls: Vec<String> = server_cfg.ping_urls.iter().map(|s| s.to_string()).collect();
+
     TEST_RUNNING.store(true, Ordering::SeqCst);
     TEST_STOP.store(false, Ordering::SeqCst);
 
     let handle = tauri::async_runtime::spawn(async move {
-        let server = "浙江大学测速服务器".to_string();
+        let server = server_name;
         let client = match Client::builder()
             .connect_timeout(Duration::from_secs(5))
             .build()
@@ -477,7 +565,7 @@ pub async fn start_speedtest(app: AppHandle, config: Option<SpeedTestConfig>) ->
 
         // 1. 延迟/抖动/丢包
         emit_progress(&app, "ping", 0.0, 0.0, 0.0, 0.0, 0.0, &server, "正在测试延迟...");
-        let (ping, jitter, loss) = run_ping_test(&client, &app, &server).await;
+        let (ping, jitter, loss) = run_ping_test(&client, &app, &ping_urls, &server).await;
         if TEST_STOP.load(Ordering::SeqCst) {
             emit_progress(&app, "done", ping, jitter, loss, 0.0, 0.0, &server, "已停止");
             TEST_RUNNING.store(false, Ordering::SeqCst);
@@ -499,6 +587,7 @@ pub async fn start_speedtest(app: AppHandle, config: Option<SpeedTestConfig>) ->
         let download = run_download_test(
             &client,
             &app,
+            &download_urls,
             &server,
             threads,
             Duration::from_secs(duration_secs as u64),
@@ -528,6 +617,7 @@ pub async fn start_speedtest(app: AppHandle, config: Option<SpeedTestConfig>) ->
         let upload = run_upload_test(
             &client,
             &app,
+            &upload_urls,
             &server,
             threads,
             Duration::from_secs(duration_secs as u64),

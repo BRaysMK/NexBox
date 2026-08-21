@@ -137,6 +137,17 @@ export function ThemeColorProvider({ children }: { children: ReactNode }) {
     saveSettings();
   }, [config, isLoaded]);
 
+  // 暴露主题色 CSS 变量，供全局样式（滚动条等）跟随主题色
+  useEffect(() => {
+    if (!isLoaded) return;
+    const root = document.documentElement;
+    root.style.setProperty("--theme-primary", config.primaryColor);
+    root.style.setProperty(
+      "--theme-primary-hover",
+      hexToRgba(config.primaryColor, Math.min(1, config.hoverOpacity + 0.15))
+    );
+  }, [config, isLoaded]);
+
   const setPrimaryColor = useCallback((color: string) => {
     if (isValidHexColor(color)) {
       setConfig(prev => ({ ...prev, primaryColor: normalizeHexColor(color) }));

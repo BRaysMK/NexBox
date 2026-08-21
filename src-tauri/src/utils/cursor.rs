@@ -71,48 +71,70 @@ const PROP_ORIG_PROC: &[u16] = &[
     b'g' as u16, b'_' as u16, b'p' as u16, b'r' as u16, b'o' as u16, b'c' as u16, 0,
 ];
 
-/// 将窗口矩形钳制到所在（最近的）显示器工作区内，保证窗口完全可见
-/// （rcWork 已排除任务栏，用于拖动时的"碰撞体"）
+/// 获取指定点所在显示器的工作区（排除任务栏），失败返回 None
 #[cfg(windows)]
-unsafe fn clamp_rect_to_work_area(rect: &mut windows_sys::Win32::Foundation::RECT) {
+unsafe fn work_area_at(x: i32, y: i32) -> Option<windows_sys::Win32::Foundation::RECT> {
+    use windows_sys::Win32::Foundation::POINT;
     use windows_sys::Win32::Graphics::Gdi::{
-        GetMonitorInfoW, MonitorFromRect, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+        GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
 
-    let w = rect.right - rect.left;
-    let h = rect.bottom - rect.top;
-    let monitor = MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST);
+    let monitor = MonitorFromPoint(POINT { x, y }, MONITOR_DEFAULTTONEAREST);
+    if monitor.is_null() {
+        return None;
+    }
     let mut info: MONITORINFO = std::mem::zeroed();
     info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
     if GetMonitorInfoW(monitor, &mut info) == 0 {
+        return None;
+    }
+    Some(info.rcWork)
+}
+
+/// 跨屏钳制：窗口可横跨多块显示器，但每条边都不得越过「该边所在显示器」的工作区边界
+/// （rcWork 已排除任务栏，用于拖动时的"碰撞体"）。
+/// 保持窗口宽高不变（WM_MOVING 拖动过程中尺寸不变）。
+///
+/// 注意：不能像旧实现那样用 MonitorFromRect(rect, MONITOR_DEFAULTTONEAREST) 找目标显示器 ——
+/// 它返回与窗口矩形「交集面积最大」的显示器，而钳制又总是把窗口完全塞进当前显示器内，
+/// 交集永远 100%，目标显示器永远不变，窗口因此被钉在当前屏、永远无法拖到副屏。
+/// 这里改为按窗口各条边分别定位所在显示器，允许窗口跨屏。
+#[cfg(windows)]
+unsafe fn clamp_rect_to_work_area(rect: &mut windows_sys::Win32::Foundation::RECT) {
+    let w = rect.right - rect.left;
+    let h = rect.bottom - rect.top;
+    if w <= 0 || h <= 0 {
         return;
     }
-    let wa = info.rcWork;
-    let mut left = rect.left;
-    let mut top = rect.top;
-    if left < wa.left {
-        left = wa.left;
+    let cx = rect.left + w / 2;
+    let cy = rect.top + h / 2;
+
+    // 左边缘：不得越过其所在显示器工作区的左边界
+    if let Some(wa) = work_area_at(rect.left, cy) {
+        if rect.left < wa.left {
+            rect.left = wa.left;
+        }
     }
-    if left + w > wa.right {
-        left = wa.right - w;
+    // 右边缘：不得越过其所在显示器工作区的右边界（整体平移，保持宽度）
+    if let Some(wa) = work_area_at(rect.right - 1, cy) {
+        if rect.right > wa.right {
+            rect.left = rect.right - w;
+        }
     }
-    if top < wa.top {
-        top = wa.top;
+    // 顶边缘：不得越过其所在显示器工作区的上边界
+    if let Some(wa) = work_area_at(cx, rect.top) {
+        if rect.top < wa.top {
+            rect.top = wa.top;
+        }
     }
-    if top + h > wa.bottom {
-        top = wa.bottom - h;
+    // 底边缘：不得越过其所在显示器工作区的下边界（整体平移，保持高度）
+    if let Some(wa) = work_area_at(cx, rect.bottom - 1) {
+        if rect.bottom > wa.bottom {
+            rect.top = rect.bottom - h;
+        }
     }
-    // 兜底：窗口比工作区还大时，保证左上角不跑到工作区外
-    if left < wa.left {
-        left = wa.left;
-    }
-    if top < wa.top {
-        top = wa.top;
-    }
-    rect.left = left;
-    rect.top = top;
-    rect.right = left + w;
-    rect.bottom = top + h;
+    rect.right = rect.left + w;
+    rect.bottom = rect.top + h;
 }
 
 /// 桌面歌词窗口的 hook 窗口过程（父窗口 + 子窗口共用）
@@ -297,20 +319,14 @@ pub fn set_desktop_lyrics_click_through(
 // 桌面歌词窗口边界约束
 // ═══════════════════════════════════════════════════════════════
 //
-// 将歌词窗口完全钳制在所在显示器的工作区（排除任务栏）内，
-// 防止被拖出屏幕外或压住任务栏。
-// 通过 MonitorFromWindow 找到窗口所在（最近）的显示器，
-// 再用 GetMonitorInfoW 取其 rcWork（工作区矩形），
-// 最后把窗口左上角调整到窗口完全落在工作区内。
+// 将歌词窗口钳制在多显示器工作区范围内（排除任务栏），
+// 防止被拖出屏幕外或压住任务栏，同时允许窗口被拖到副屏或停在跨屏边界。
+// 使用跨屏钳制 clamp_rect_to_work_area：按窗口各条边所在显示器分别钳制。
 
 #[cfg(windows)]
 #[tauri::command]
 pub fn clamp_lyrics_window_position(app_handle: tauri::AppHandle) -> Result<bool, String> {
     use tauri::Manager;
-    use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::Graphics::Gdi::{
-        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
-    };
 
     let window = app_handle
         .get_webview_window("desktop-lyrics")
@@ -322,52 +338,25 @@ pub fn clamp_lyrics_window_position(app_handle: tauri::AppHandle) -> Result<bool
     let size = window
         .outer_size()
         .map_err(|e| format!("Failed to get lyrics window size: {}", e))?;
-    let hwnd = window
-        .hwnd()
-        .map_err(|e| format!("Failed to get lyrics window hwnd: {}", e))?;
 
     let mut clamped = false;
 
+    // 复用跨屏钳制逻辑（与拖动时 WM_MOVING 处理一致），
+    // 保证停在副屏/跨屏位置的窗口在保存/恢复时不会被拽回单一显示器
     unsafe {
-        let monitor = MonitorFromWindow(hwnd.0 as HWND, MONITOR_DEFAULTTONEAREST);
-        if !monitor.is_null() {
-            let mut info: MONITORINFO = std::mem::zeroed();
-            info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
-            if GetMonitorInfoW(monitor, &mut info) != 0 {
-                let wa = info.rcWork;
-                let win_w = size.width as i32;
-                let win_h = size.height as i32;
+        let mut rect = windows_sys::Win32::Foundation::RECT {
+            left: pos.x,
+            top: pos.y,
+            right: pos.x + size.width as i32,
+            bottom: pos.y + size.height as i32,
+        };
+        clamp_rect_to_work_area(&mut rect);
 
-                let mut x = pos.x;
-                let mut y = pos.y;
-
-                if x < wa.left {
-                    x = wa.left;
-                }
-                if x + win_w > wa.right {
-                    x = wa.right - win_w;
-                }
-                if y < wa.top {
-                    y = wa.top;
-                }
-                if y + win_h > wa.bottom {
-                    y = wa.bottom - win_h;
-                }
-
-                // 兜底：若窗口比工作区还大，上面的减法可能把左上角推到
-                // 工作区左侧/上侧之外，这里再钳制一次，保证窗口左上角可见。
-                if x < wa.left {
-                    x = wa.left;
-                }
-                if y < wa.top {
-                    y = wa.top;
-                }
-
-                if x != pos.x || y != pos.y {
-                    clamped = true;
-                    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
-                }
-            }
+        let x = rect.left;
+        let y = rect.top;
+        if x != pos.x || y != pos.y {
+            clamped = true;
+            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
         }
     }
 

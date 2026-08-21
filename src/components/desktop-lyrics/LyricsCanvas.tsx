@@ -16,6 +16,7 @@ interface LyricsCanvasProps {
   lines: KaraokeLine[];
   currentTime: number;
   fontSize: number;
+  fontFamily: string;
   highlightColor: string;
   baseColor: string;
   lineCount: 1 | 2;
@@ -40,6 +41,7 @@ function ActiveKaraokeLine({
   nextLine,
   currentTime,
   fontSize,
+  fontFamily,
   highlightColor,
   baseColor,
   isPlaying,
@@ -49,6 +51,7 @@ function ActiveKaraokeLine({
   nextLine?: KaraokeLine;
   currentTime: number;
   fontSize: number;
+  fontFamily: string;
   highlightColor: string;
   baseColor: string;
   isPlaying: boolean;
@@ -118,6 +121,7 @@ function ActiveKaraokeLine({
     display: "inline-block",
     whiteSpace: "nowrap",
     fontSize: `${fontSize}px`,
+    fontFamily: fontFamily || undefined,
     fontWeight: "bold",
     lineHeight: 1.4,
     letterSpacing: "0px",
@@ -175,6 +179,7 @@ function ActiveKaraokeLine({
           style={{
             marginTop: "2px",
             fontSize: `${Math.max(18, Math.round(fontSize * 0.65))}px`,
+            fontFamily: fontFamily || undefined,
             color: baseColor,
             fontWeight: "bold",
             lineHeight: 1.3,
@@ -203,6 +208,7 @@ function LyricsCanvasInner({
   lines,
   currentTime,
   fontSize,
+  fontFamily,
   highlightColor,
   baseColor,
   lineCount,
@@ -229,6 +235,7 @@ function LyricsCanvasInner({
         <span
           style={{
             fontSize: `${fontSize * 0.7}px`,
+            fontFamily: fontFamily || undefined,
             color: baseColor,
             fontWeight: "bold",
             textShadow: `
@@ -265,6 +272,7 @@ function LyricsCanvasInner({
         nextLine={nextLine}
         currentTime={currentTime}
         fontSize={fontSize}
+        fontFamily={fontFamily}
         highlightColor={highlightColor}
         baseColor={baseColor}
         isPlaying={isPlaying}
@@ -287,6 +295,7 @@ function LyricsCanvasInner({
               display: "inline-block",
               whiteSpace: "nowrap",
               fontSize: `${fontSize * 0.7}px`,
+              fontFamily: fontFamily || undefined,
               fontWeight: "bold",
               color: baseColor,
               opacity: 0.6,
@@ -309,6 +318,7 @@ function LyricsCanvasInner({
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 fontSize: `${Math.max(14, Math.round(fontSize * 0.48))}px`,
+                fontFamily: fontFamily || undefined,
                 fontWeight: "bold",
                 color: baseColor,
                 opacity: 0.6,
