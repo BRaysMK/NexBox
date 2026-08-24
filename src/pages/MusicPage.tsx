@@ -1212,6 +1212,14 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           <Box
             role="group"
             position="relative"
+            onWheel={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const s = useMusicStore.getState();
+              const step = 0.02;
+              const next = Math.min(1, Math.max(0, s.volume + (e.deltaY < 0 ? step : -step)));
+              s.setVolume(Math.round(next * 100) / 100);
+            }}
             sx={{
               "&:hover .volume-slider": {
                 width: "80px",
@@ -1706,7 +1714,19 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
           </HStack>
 
           {/* 右侧：音质 + 音量 + 播放队列 */}
-          <HStack spacing={1} w="180px" ml="auto">
+          <HStack
+            spacing={1}
+            w="180px"
+            ml="auto"
+            onWheel={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const s = useMusicStore.getState();
+              const step = 0.02;
+              const next = Math.min(1, Math.max(0, s.volume + (e.deltaY < 0 ? step : -step)));
+              s.setVolume(Math.round(next * 100) / 100);
+            }}
+          >
             <Menu>
               <Tooltip label="音质选择">
                 <MenuButton

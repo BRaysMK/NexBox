@@ -386,33 +386,33 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     [t, toast, handleInstall],
   );
 
-  // 启动完成后的自动检查：开启静默 → 后台下载不弹窗；关闭 → 弹窗但不下载
-  useEffect(() => {
-    if (!isStartupComplete) return;
-    if (!autoUpdateLoaded) return;
-    if (downloadStartedRef.current) return;
-
-    (async () => {
-      try {
-        const release = await fetchLatestRelease();
-        if (release) {
-          const found = compareVersions(CURRENT_VERSION, release.tag_name);
-          if (found) {
-            setLatestRelease(release);
-            setHasUpdate(true);
-            if (autoUpdateEnabledRef.current) {
-              await startDownload(release, false);
-            } else {
-              // 静默更新关闭：仅弹窗通知，不下载
-              setIsModalOpen(true);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("[Update] 启动更新检查失败:", error);
-      }
-    })();
-  }, [isStartupComplete, autoUpdateLoaded, startDownload]);
+  // 已阉割：启动完成后的自动更新检查（不再请求官方 release / 不再静默下载）
+  // useEffect(() => {
+  //   if (!isStartupComplete) return;
+  //   if (!autoUpdateLoaded) return;
+  //   if (downloadStartedRef.current) return;
+  //
+  //   (async () => {
+  //     try {
+  //       const release = await fetchLatestRelease();
+  //       if (release) {
+  //         const found = compareVersions(CURRENT_VERSION, release.tag_name);
+  //         if (found) {
+  //           setLatestRelease(release);
+  //           setHasUpdate(true);
+  //           if (autoUpdateEnabledRef.current) {
+  //             await startDownload(release, false);
+  //           } else {
+  //             // 静默更新关闭：仅弹窗通知，不下载
+  //             setIsModalOpen(true);
+  //           }
+  //         }
+  //       }
+  //     } catch (error) {
+  //       console.error("[Update] 启动更新检查失败:", error);
+  //     }
+  //   })();
+  // }, [isStartupComplete, autoUpdateLoaded, startDownload]);
 
   // 托盘"检查更新"事件
   useEffect(() => {

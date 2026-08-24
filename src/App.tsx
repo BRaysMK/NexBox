@@ -222,8 +222,10 @@ function App() {
       </MainLayout>
 
       <UpdateModal />
-      <ImportantAnnouncementModal />
-      <DynamicIslandHost />
+      {/* 已阉割：重要公告弹窗（不再拉取官方公告） */}
+      {false && <ImportantAnnouncementModal />}
+      {/* 已阉割：灵动岛 */}
+      {false && <DynamicIslandHost />}
       </>
       </MusicProvider>
   );

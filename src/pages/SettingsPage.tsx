@@ -107,10 +107,7 @@ const settingItems = [
   { id: "general", labelKey: "settings.general", icon: LuSettings },
   { id: "appearance", labelKey: "settings.appearance", icon: LuMonitor },
   { id: "advanced", labelKey: "settings.advanced.label", icon: LuSlidersHorizontal },
-  { id: "hotkeys", labelKey: "settings.hotkeys", icon: LuKeyboard },
   { id: "network", labelKey: "settings.network", icon: LuWifi },
-  { id: "contributor", labelKey: "settings.contributor", icon: LuUsers },
-  { id: "sponsor", labelKey: "settings.sponsor", icon: LuHeart },
   { id: "about", labelKey: "settings.about", icon: LuInfo },
 ];
 
@@ -969,53 +966,62 @@ function GeneralSettings() {
               </HStack>
             </HStack>
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.todayPopularityLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.todayPopularityDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={todayPopularityEnabled}
-                onChange={handleTodayPopularityToggle}
-              />
-            </HStack>
+            {/* 已阉割：今日人气开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.todayPopularityLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.todayPopularityDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={todayPopularityEnabled}
+                  onChange={handleTodayPopularityToggle}
+                />
+              </HStack>
+            )}
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.announcementLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.announcementDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={announcementEnabled}
-                onChange={handleAnnouncementToggle}
-              />
-            </HStack>
+            {/* 已阉割：公告开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.announcementLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.announcementDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={announcementEnabled}
+                  onChange={handleAnnouncementToggle}
+                />
+              </HStack>
+            )}
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.randomQuoteLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.randomQuoteDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={randomQuoteEnabled}
-                onChange={handleRandomQuoteToggle}
-              />
-            </HStack>
+            {/* 已阉割：随机一言开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.randomQuoteLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.randomQuoteDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={randomQuoteEnabled}
+                  onChange={handleRandomQuoteToggle}
+                />
+              </HStack>
+            )}
             <Divider />
             <HStack justify="space-between" py={2}>
               <Box flex={1}>
@@ -1049,37 +1055,43 @@ function GeneralSettings() {
               />
             </HStack>
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.gameWinKeyLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.gameWinKeyDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={gameWinKeyCardEnabled}
-                onChange={handleGameWinKeyCardToggle}
-              />
-            </HStack>
+            {/* 已阉割：锁定Win键开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.gameWinKeyLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.gameWinKeyDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={gameWinKeyCardEnabled}
+                  onChange={handleGameWinKeyCardToggle}
+                />
+              </HStack>
+            )}
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.gameImeLockLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.gameImeLockDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={gameImeLockCardEnabled}
-                onChange={handleGameImeLockCardToggle}
-              />
-            </HStack>
+            {/* 已阉割：锁定输入法开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.gameImeLockLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.gameImeLockDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={gameImeLockCardEnabled}
+                  onChange={handleGameImeLockCardToggle}
+                />
+              </HStack>
+            )}
             <Divider />
             <HStack justify="space-between" py={2}>
               <Box flex={1}>
@@ -1097,69 +1109,81 @@ function GeneralSettings() {
               />
             </HStack>
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.randomImageLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.randomImageDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={randomImageEnabled}
-                onChange={handleRandomImageToggle}
-              />
-            </HStack>
+            {/* 已阉割：随机图片开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.randomImageLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.randomImageDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={randomImageEnabled}
+                  onChange={handleRandomImageToggle}
+                />
+              </HStack>
+            )}
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.searchBarLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.searchBarDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={searchBarEnabled}
-                onChange={handleSearchBarToggle}
-              />
-            </HStack>
+            {/* 已阉割：搜索框开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.searchBarLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.searchBarDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={searchBarEnabled}
+                  onChange={handleSearchBarToggle}
+                />
+              </HStack>
+            )}
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.feedbackLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.feedbackDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={feedbackEnabled}
-                onChange={handleFeedbackToggle}
-              />
-            </HStack>
+            {/* 已阉割：问题反馈开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.feedbackLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.feedbackDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={feedbackEnabled}
+                  onChange={handleFeedbackToggle}
+                />
+              </HStack>
+            )}
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.qqGroupCardLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.qqGroupCardDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={qqGroupCardEnabled}
-                onChange={handleQqGroupCardToggle}
-              />
-            </HStack>
+            {/* 已阉割：官方QQ群开关 */}
+            {false && (
+              <HStack justify="space-between" py={2}>
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.generalSettings.qqGroupCardLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.generalSettings.qqGroupCardDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={qqGroupCardEnabled}
+                  onChange={handleQqGroupCardToggle}
+                />
+              </HStack>
+            )}
           </VStack>
         </LiquidGlassCard>
       </Box>
@@ -3340,47 +3364,50 @@ function AboutSettings() {
             </HStack>
           </HStack>
           <Divider my={3} borderColor={dividerColor} />
-          <HStack justify="space-between">
-            <Text fontSize="sm" color={subLabelColor}>
-              {t("settings.aboutSettings.qqGroup")}
-            </Text>
-            <VStack spacing={1.5} align="flex-end">
-              {loadingQQ && qqGroups.length === 0 ? (
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  ...
-                </Text>
-              ) : (
-                qqGroups.map((g) => (
-                  <HStack spacing={2} key={g.number}>
-                    {g.icon ? <QqGroupIcon url={g.icon} size={16} /> : null}
-                    <Text fontSize="xs" color={subLabelColor}>
-                      {g.name}
-                    </Text>
-                    <Text fontSize="sm" color={labelColor} fontWeight="medium" userSelect="all">
-                      {g.number}
-                    </Text>
-                    <Tooltip label={`${t("settings.aboutSettings.joinQqGroup")} ${g.name}`}>
-                      <Box
-                        w="20px"
-                        h="20px"
-                        borderRadius="md"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color={getActiveColor()}
-                        cursor="pointer"
-                        transition="all 0.2s"
-                        _hover={{ transform: "scale(1.15)", bg: `${getActiveColor()}1a` }}
-                        onClick={() => onJoinGroup(g)}
-                      >
-                        <LuExternalLink size={14} />
-                      </Box>
-                    </Tooltip>
-                  </HStack>
-                ))
-              )}
-            </VStack>
-          </HStack>
+          {/* 已阉割：官方QQ群信息 */}
+          {false && (
+            <HStack justify="space-between">
+              <Text fontSize="sm" color={subLabelColor}>
+                {t("settings.aboutSettings.qqGroup")}
+              </Text>
+              <VStack spacing={1.5} align="flex-end">
+                {loadingQQ && qqGroups.length === 0 ? (
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    ...
+                  </Text>
+                ) : (
+                  qqGroups.map((g) => (
+                    <HStack spacing={2} key={g.number}>
+                      {g.icon ? <QqGroupIcon url={g.icon} size={16} /> : null}
+                      <Text fontSize="xs" color={subLabelColor}>
+                        {g.name}
+                      </Text>
+                      <Text fontSize="sm" color={labelColor} fontWeight="medium" userSelect="all">
+                        {g.number}
+                      </Text>
+                      <Tooltip label={`${t("settings.aboutSettings.joinQqGroup")} ${g.name}`}>
+                        <Box
+                          w="20px"
+                          h="20px"
+                          borderRadius="md"
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                          color={getActiveColor()}
+                          cursor="pointer"
+                          transition="all 0.2s"
+                          _hover={{ transform: "scale(1.15)", bg: `${getActiveColor()}1a` }}
+                          onClick={() => onJoinGroup(g)}
+                        >
+                          <LuExternalLink size={14} />
+                        </Box>
+                      </Tooltip>
+                    </HStack>
+                  ))
+                )}
+              </VStack>
+            </HStack>
+          )}
           <Divider my={3} borderColor={dividerColor} />
           <HStack justify="space-between">
             <Text fontSize="sm" color={subLabelColor}>
@@ -3803,10 +3830,7 @@ export default function SettingsPage() {
           {activeItem === "general" && <GeneralSettings />}
           {activeItem === "appearance" && <AppearanceSettings />}
           {activeItem === "advanced" && <AdvancedPage />}
-          {activeItem === "hotkeys" && <HotkeySettings />}
           {activeItem === "network" && <NetworkSettings />}
-          {activeItem === "contributor" && <ContributorSettings />}
-          {activeItem === "sponsor" && <SponsorSettings />}
           {activeItem === "about" && <AboutSettings />}
         </div>
       </Box>

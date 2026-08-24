@@ -36,21 +36,25 @@ const authenticatedHeaders = () => ({
   Authorization: `Bearer ${GITCODE_READ_TOKEN}`,
 });
 
+// 已阉割：跟随官方的自动更新不再联网检查。直接返回 null，
+// 使启动自动检查 / 托盘检查更新 / 设置页手动检查全部静默失效。
 export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
-  try {
-    const response = await fetch(releaseBaseUrl("/releases/latest"), {
-      headers: authenticatedHeaders(),
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    return { ...data, html_url: releaseHtmlUrl(data.tag_name) };
-  } catch (error) {
-    return null;
-  }
+  return null;
+  // 已阉割：以下原逻辑不再执行（不请求官方 release）
+  // try {
+  //   const response = await fetch(releaseBaseUrl("/releases/latest"), {
+  //     headers: authenticatedHeaders(),
+  //   });
+  //
+  //   if (!response.ok) {
+  //     return null;
+  //   }
+  //
+  //   const data = await response.json();
+  //   return { ...data, html_url: releaseHtmlUrl(data.tag_name) };
+  // } catch (error) {
+  //   return null;
+  // }
 }
 
 export async function fetchAllReleases(): Promise<ReleaseInfo[]> {

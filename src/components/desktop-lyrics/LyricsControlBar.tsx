@@ -160,7 +160,7 @@ function LyricsControlBarInner({
         </button>
       </Tooltip>
 
-      {/* 音量：图标 + 悬浮展开调节条（主题色） */}
+      {/* 音量：图标 + 悬浮展开调节条（主题色），支持滚轮调节 */}
       <div
         style={{
           display: "flex",
@@ -172,6 +172,15 @@ function LyricsControlBarInner({
         onMouseLeave={() => {
           setVolOpen(false);
           setVolPreview(null);
+        }}
+        onWheel={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const step = 0.02;
+          const next = Math.min(1, Math.max(0, displayVol + (e.deltaY < 0 ? step : -step)));
+          const rounded = Math.round(next * 100) / 100;
+          setVolPreview(rounded);
+          onControl("volume", rounded);
         }}
       >
         <Tooltip label="音量">

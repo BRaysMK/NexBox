@@ -232,7 +232,17 @@ export function MusicPlayer() {
           </Tooltip>
         </HStack>
 
-        <HStack spacing={2} w="120px">
+        <HStack
+          spacing={2}
+          w="120px"
+          onWheel={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const step = 0.02;
+            const next = Math.min(1, Math.max(0, volume + (e.deltaY < 0 ? step : -step)));
+            setVolume(Math.round(next * 100) / 100);
+          }}
+        >
           <Tooltip label={isMuted ? t("musicPlayer.unmute") : t("musicPlayer.mute")}>
             <IconButton
               aria-label={isMuted ? "Unmute" : "Mute"}

@@ -214,9 +214,8 @@ export default function HomePage() {
               greeting
             )}
           </Text>
-          {(todayPopularityReady && todayPopularityEnabled) ||
-          (announcementReady && announcementEnabled) ||
-          (randomQuoteReady && randomQuoteEnabled) ? (
+          {/* 已阉割：今日人气 / 公告 / 随机一言 */}
+          {false ? (
             <HStack mt={3} spacing={3}>
               {todayPopularityReady && todayPopularityEnabled && <TodayPopularity />}
               {announcementReady && announcementEnabled && <AnnouncementCard />}
@@ -224,7 +223,8 @@ export default function HomePage() {
             </HStack>
           ) : null}
         </Box>
-        {(feedbackReady && feedbackEnabled) || (qqGroupCardReady && qqGroupCardEnabled) ? (
+        {/* 已阉割：问题反馈卡片 / 官方QQ群卡片 */}
+        {false ? (
           <Box pt={6}>
             <VStack spacing={2} align="stretch">
               {feedbackReady && feedbackEnabled && <FeedbackCard />}
@@ -234,15 +234,14 @@ export default function HomePage() {
         ) : null}
       </Flex>
 
+      {/* 已阉割：随机图片 / 锁定Win键 / 锁定输入法 */}
       {homeCardsReady &&
-        (randomImageEnabled ||
-          gameWinKeyCardEnabled ||
-          gameImeLockCardEnabled ||
+        (false ||
           homeHardwareModelEnabled) && (
         <Box position="absolute" bottom={4} left={4}>
           <VStack spacing={2} align="stretch">
-            {randomImageReady && randomImageEnabled && <RandomImageCard />}
-            {(gameWinKeyCardEnabled || gameImeLockCardEnabled) && (
+            {false && randomImageReady && randomImageEnabled && <RandomImageCard />}
+            {(false || false) && (
               <HStack spacing={2} align="stretch" w="full" justify="space-between">
                 {gameWinKeyCardEnabled && <GameWinKeyCard />}
                 {gameImeLockCardEnabled && <GameImeLockCard />}

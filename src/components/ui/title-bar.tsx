@@ -221,7 +221,8 @@ export function TitleBar() {
             transition="margin 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {searchBarVisible && <GlobalSearch />}
+            {/* 已阉割：搜索框 */}
+            {false && searchBarVisible && <GlobalSearch />}
           </Flex>
           <HStack id="window-controls" spacing={1} h="40px" align="center">
             {gameModeVisible && (

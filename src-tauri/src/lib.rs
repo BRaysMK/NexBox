@@ -297,7 +297,8 @@ pub fn run() {
             // （碰撞体），任何部分都不允许移出屏幕外或压住任务栏。
             let _ = utils::cursor::install_lyrics_move_clamp(app.handle());
 
-            utils::sys_info::check_and_send_statistics(app);
+            // 已阉割：不再向官方服务器上报启动统计（版本/系统信息）
+            // utils::sys_info::check_and_send_statistics(app);
             overlay_panel::start_hardware_poller();
             hardware_report::start_recording();
 
@@ -423,31 +424,29 @@ pub fn run() {
             // 提前从持久化存储加载悬浮框设置，确保快捷键触发时使用已保存的配置而非默认值
             overlay_panel::try_load_persisted_settings(app.handle());
 
-            // 启动时直接从持久化配置读取用户设置的快捷键并注册，
-            // 不再依赖前端启动后覆盖，避免用户自定义热键重启后失效
-            let overlay_hotkey = hotkey::load_saved_hotkey(app.handle(), "overlay-hotkey", "Shift+F10");
-            let crosshair_hotkey = hotkey::load_saved_hotkey(app.handle(), "crosshair-hotkey", "Shift+F9");
-            let filter_hotkey = hotkey::load_saved_hotkey(app.handle(), "filter-hotkey", "Shift+F8");
-            let autoclicker_hotkey = hotkey::load_saved_hotkey(app.handle(), "autoclicker-hotkey", "F8");
-            let music_prev_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-prev-hotkey", "Alt+[");
-            let music_next_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-next-hotkey", "Alt+]");
-            let music_playpause_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-playpause-hotkey", "Alt+Space");
-            let lyrics_btn_hotkey = hotkey::load_saved_hotkey(app.handle(), "lyrics-btn-hotkey", "");
-            hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
-
-            let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
-            let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
-            let _ = hotkey::init_filter(app.handle(), &filter_hotkey);
-            let _ = hotkey::init_autoclicker(app.handle(), &autoclicker_hotkey);
-            let _ = hotkey::init_music_prev(app.handle(), &music_prev_hotkey);
-            let _ = hotkey::init_music_next(app.handle(), &music_next_hotkey);
-            let _ = hotkey::init_music_playpause(app.handle(), &music_playpause_hotkey);
-            let _ = hotkey::init_lyrics_btn_toggle(app.handle(), &lyrics_btn_hotkey);
-
-            // 若保存的总开关为“关闭”，上面已注册的热键需立即注销以释放按键
-            if !hotkey::is_hotkeys_enabled() {
-                hotkey::apply_hotkeys_enabled(app.handle(), false);
-            }
+            // 已阉割：全部全局热键不再注册（含音乐热键），仅保留 SMTC 系统媒体会话
+            // let overlay_hotkey = hotkey::load_saved_hotkey(app.handle(), "overlay-hotkey", "Shift+F10");
+            // let crosshair_hotkey = hotkey::load_saved_hotkey(app.handle(), "crosshair-hotkey", "Shift+F9");
+            // let filter_hotkey = hotkey::load_saved_hotkey(app.handle(), "filter-hotkey", "Shift+F8");
+            // let autoclicker_hotkey = hotkey::load_saved_hotkey(app.handle(), "autoclicker-hotkey", "F8");
+            // let music_prev_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-prev-hotkey", "Alt+[");
+            // let music_next_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-next-hotkey", "Alt+]");
+            // let music_playpause_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-playpause-hotkey", "Alt+Space");
+            // let lyrics_btn_hotkey = hotkey::load_saved_hotkey(app.handle(), "lyrics-btn-hotkey", "");
+            // hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
+            //
+            // let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
+            // let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
+            // let _ = hotkey::init_filter(app.handle(), &filter_hotkey);
+            // let _ = hotkey::init_autoclicker(app.handle(), &autoclicker_hotkey);
+            // let _ = hotkey::init_music_prev(app.handle(), &music_prev_hotkey);
+            // let _ = hotkey::init_music_next(app.handle(), &music_next_hotkey);
+            // let _ = hotkey::init_music_playpause(app.handle(), &music_playpause_hotkey);
+            // let _ = hotkey::init_lyrics_btn_toggle(app.handle(), &lyrics_btn_hotkey);
+            //
+            // if !hotkey::is_hotkeys_enabled() {
+            //     hotkey::apply_hotkeys_enabled(app.handle(), false);
+            // }
 
             // 启动外部客户端播放的后台系统媒体会话轮询
             external_player::start(app.handle().clone());

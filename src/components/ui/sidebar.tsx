@@ -396,14 +396,16 @@ export function Sidebar() {
   const navItems: NavItem[] = [
     { path: "/", icon: Home, ariaLabel: t("sidebar.home") },
     { path: "/hardware", icon: Cpu, ariaLabel: t("sidebar.hardware") },
-    { path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") },
+    // 已阉割：工具 (/tools)
+    // { path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") },
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
     { path: "/music", icon: Music, ariaLabel: t("sidebar.music") },
     { path: "/delta-force", icon: null, customIcon: deltaForceIconLight, customIconDark: deltaForceIconDark, customIconSize: "20px", ariaLabel: t("sidebar.deltaForce") },
     { path: "/steam", icon: null, customIcon: steamIconLight, customIconDark: steamIconDark, customIconSize: "44px", ariaLabel: t("sidebar.steam"), alwaysShowLabel: true },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
-    { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
+    // 已阉割：心境 (/mood)
+    // { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
     { path: "/custom", icon: LayoutGrid, ariaLabel: t("sidebar.custom") },
     { path: "/settings", icon: Settings, ariaLabel: t("sidebar.settings") },
   ];
