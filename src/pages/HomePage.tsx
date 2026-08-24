@@ -7,8 +7,6 @@ import { AnnouncementCard, useAnnouncementEnabled } from "@/components/Announcem
 import { RandomQuote, useRandomQuoteEnabled } from "@/components/RandomQuote";
 import { useState, useEffect, useRef } from "react";
 import HardwareModelCard from "@/components/HardwareModelCard";
-import GameWinKeyCard from "@/components/GameWinKeyCard";
-import GameImeLockCard from "@/components/GameImeLockCard";
 import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
 import { FeedbackCard, QqGroupCard, useFeedbackEnabled, useQqGroupCardEnabled } from "@/components/QqFeedbackCards";
 import { store } from "@/lib/store";
@@ -37,8 +35,6 @@ export default function HomePage() {
   const usernameRef = useRef("");
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(false);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(false);
-  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(false);
-  const [gameImeLockCardEnabled, setGameImeLockCardEnabled] = useState(false);
   const [homeCardsReady, setHomeCardsReady] = useState(false);
 
   const computeGreeting = () => {
@@ -50,7 +46,7 @@ export default function HomePage() {
   const homeCardsReadyRef = useRef(0);
   const markHomeCardLoaded = () => {
     homeCardsReadyRef.current += 1;
-    if (homeCardsReadyRef.current >= 4) setHomeCardsReady(true);
+    if (homeCardsReadyRef.current >= 2) setHomeCardsReady(true);
   };
 
   // 获取用户名：优先使用自定义标题用户名，留空时回退到系统用户名
@@ -157,46 +153,6 @@ export default function HomePage() {
     return () => window.removeEventListener("home-hardware-model-setting-changed", handler as EventListener);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      let saved = await store.get<boolean>("nexbox_game_win_key_card_enabled");
-      if (saved !== null && saved !== undefined) {
-        setGameWinKeyCardEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_game_win_key_card_enabled");
-        if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
-      }
-      markHomeCardLoaded();
-    })();
-
-    const handler = (e: CustomEvent) => {
-      setGameWinKeyCardEnabled(e.detail);
-    };
-
-    window.addEventListener("game-win-key-card-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("game-win-key-card-setting-changed", handler as EventListener);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      let saved = await store.get<boolean>("nexbox_game_ime_lock_card_enabled");
-      if (saved !== null && saved !== undefined) {
-        setGameImeLockCardEnabled(saved);
-      } else {
-        const ls = localStorage.getItem("nexbox_game_ime_lock_card_enabled");
-        if (ls !== null) setGameImeLockCardEnabled(ls === "true");
-      }
-      markHomeCardLoaded();
-    })();
-
-    const handler = (e: CustomEvent) => {
-      setGameImeLockCardEnabled(e.detail);
-    };
-
-    window.addEventListener("game-ime-lock-card-setting-changed", handler as EventListener);
-    return () => window.removeEventListener("game-ime-lock-card-setting-changed", handler as EventListener);
-  }, []);
-
   const greeting = greetingText || t("home.title");
   const { main: greetingMain, emoji: greetingEmoji } = splitEmojiBlock(greeting);
 
@@ -241,12 +197,6 @@ export default function HomePage() {
         <Box position="absolute" bottom={4} left={4}>
           <VStack spacing={2} align="stretch">
             {false && randomImageReady && randomImageEnabled && <RandomImageCard />}
-            {(false || false) && (
-              <HStack spacing={2} align="stretch" w="full" justify="space-between">
-                {gameWinKeyCardEnabled && <GameWinKeyCard />}
-                {gameImeLockCardEnabled && <GameImeLockCard />}
-              </HStack>
-            )}
             {homeHardwareModelEnabled && <HardwareModelCard />}
           </VStack>
         </Box>

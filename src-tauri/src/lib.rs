@@ -16,14 +16,13 @@ mod display_cache;
 mod display_filter;
 mod downloader;
 mod smtc;
+mod media_keys;
 mod anticheat;
 mod game_fps;
 mod game_filter;
 mod game_launcher;
 mod game_mode;
 mod game_process_optimize;
-mod game_win_key;
-mod game_ime_lock;
 mod game_ping;
 mod gpu_rename;
 mod hardware;
@@ -328,18 +327,6 @@ pub fn run() {
                 let _ = optimization::init_game_start_clean(app_handle_for_game_start_clean).await;
             });
 
-            // 初始化游戏启动时禁用 Win 键（读取持久化配置并启动后台轮询）
-            let app_handle_for_game_win_key = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = game_win_key::init(app_handle_for_game_win_key).await;
-            });
-
-            // 初始化游戏启动时锁定输入法（读取持久化配置并启动后台轮询）
-            let app_handle_for_game_ime_lock = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = game_ime_lock::init(app_handle_for_game_ime_lock).await;
-            });
-
             // 初始化游戏进程优化（恢复持久化配置，首次预置三角洲；启动自动优化线程）
             let app_handle_for_game_opt = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -453,6 +440,10 @@ pub fn run() {
 
             // 注册本应用内置播放器的 SMTC 媒体会话（音量浮层/锁屏显示「新境盒」并支持媒体键控制）
             smtc::start(app.handle().clone());
+
+            // 键盘物理媒体键统一捕获（前台聚焦时 WebView2 会抢键，必须接管）
+            // 方案来源：上游 v9.0.0 media_keys.rs（WM_APPCOMMAND 子类化 + RegisterHotKey 双路）
+            media_keys::start(app.handle().clone());
 
             Ok(())
         })
@@ -719,10 +710,6 @@ pub fn run() {
         game_mode::game_mode_set_auto,
         game_mode::game_mode_set_auto_preset,
         game_mode::game_mode_get_status,
-        game_win_key::get_game_win_key_status,
-        game_win_key::set_game_win_key_enabled,
-        game_ime_lock::get_game_ime_lock_status,
-        game_ime_lock::set_game_ime_lock_enabled,
         // === EQ 调音命令 ===
         audio_eq::check_virtual_audio_driver,
         audio_eq::install_virtual_audio_driver,
@@ -1002,8 +989,6 @@ pub fn run() {
                 sensor::stop_sensor_process(app_handle);
                 hardware::cleanup_hardware_cache();
                 overlay_panel::cleanup(); // 先停后台轮询线程(FPS/传感器)，再恢复 Gamma
-                game_win_key::cleanup();
-                game_ime_lock::cleanup();
                 speedtest::cleanup();
                 display_filter::cleanup();
                 game_mode::shutdown();

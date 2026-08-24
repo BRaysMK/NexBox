@@ -191,8 +191,6 @@ function GeneralSettings() {
   const [randomQuoteEnabled, setRandomQuoteEnabled] = useState(true);
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
-  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
-  const [gameImeLockCardEnabled, setGameImeLockCardEnabled] = useState(true);
   const [gameModeEnabled, setGameModeEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
@@ -330,24 +328,6 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_home_hardware_model_enabled");
         if (ls !== null) setHomeHardwareModelEnabled(ls === "true");
-      }
-
-      // 游戏时禁用 Win 键卡片显示（store 持久化，默认显示）
-      v = await store.get<boolean>("nexbox_game_win_key_card_enabled");
-      if (v !== null && v !== undefined) {
-        setGameWinKeyCardEnabled(v);
-      } else {
-        const ls = localStorage.getItem("nexbox_game_win_key_card_enabled");
-        if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
-      }
-
-      // 游戏时锁定输入法卡片显示（store 持久化，默认显示）
-      v = await store.get<boolean>("nexbox_game_ime_lock_card_enabled");
-      if (v !== null && v !== undefined) {
-        setGameImeLockCardEnabled(v);
-      } else {
-        const ls = localStorage.getItem("nexbox_game_ime_lock_card_enabled");
-        if (ls !== null) setGameImeLockCardEnabled(ls === "true");
       }
 
       // 游戏模式（顶栏切换条）显示开关（store 持久化，默认显示）
@@ -505,18 +485,12 @@ function GeneralSettings() {
       .catch(() => {});
 
     // 监听主页卡片显示变化，保持同步
-    const handleWinKeyCardSync = (e: CustomEvent) => {
-      setGameWinKeyCardEnabled(e.detail);
-    };
-    window.addEventListener("game-win-key-card-setting-changed", handleWinKeyCardSync as EventListener);
-
     const handleRandomImageSync = (e: CustomEvent) => {
       setRandomImageEnabled(e.detail);
     };
     window.addEventListener("random-image-setting-changed", handleRandomImageSync as EventListener);
 
     return () => {
-      window.removeEventListener("game-win-key-card-setting-changed", handleWinKeyCardSync as EventListener);
       window.removeEventListener("random-image-setting-changed", handleRandomImageSync as EventListener);
     };
   }, []);
@@ -563,38 +537,6 @@ function GeneralSettings() {
     store.set("nexbox_home_hardware_model_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_home_hardware_model_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("home-hardware-model-setting-changed", { detail: newValue }));
-  };
-
-  const handleGameWinKeyCardToggle = async () => {
-    const newValue = !gameWinKeyCardEnabled;
-    setGameWinKeyCardEnabled(newValue);
-    store.set("nexbox_game_win_key_card_enabled", newValue).then(() => store.save());
-    localStorage.setItem("nexbox_game_win_key_card_enabled", String(newValue));
-    window.dispatchEvent(new CustomEvent("game-win-key-card-setting-changed", { detail: newValue }));
-    // 卡片隐藏时功能同步关闭，保持显示与功能一致
-    if (!newValue) {
-      try {
-        await invoke("set_game_win_key_enabled", { enabled: false });
-      } catch {
-        // ignore
-      }
-    }
-  };
-
-  const handleGameImeLockCardToggle = async () => {
-    const newValue = !gameImeLockCardEnabled;
-    setGameImeLockCardEnabled(newValue);
-    store.set("nexbox_game_ime_lock_card_enabled", newValue).then(() => store.save());
-    localStorage.setItem("nexbox_game_ime_lock_card_enabled", String(newValue));
-    window.dispatchEvent(new CustomEvent("game-ime-lock-card-setting-changed", { detail: newValue }));
-    // 卡片隐藏时功能同步关闭，保持显示与功能一致
-    if (!newValue) {
-      try {
-        await invoke("set_game_ime_lock_enabled", { enabled: false });
-      } catch {
-        // ignore
-      }
-    }
   };
 
   const handleGameModeToggle = () => {
@@ -1055,43 +997,6 @@ function GeneralSettings() {
               />
             </HStack>
             <Divider />
-            {/* 已阉割：锁定Win键开关 */}
-            {false && (
-              <HStack justify="space-between" py={2}>
-                <Box flex={1}>
-                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                    {t("settings.generalSettings.gameWinKeyLabel")}
-                  </Text>
-                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                    {t("settings.generalSettings.gameWinKeyDesc")}
-                  </Text>
-                </Box>
-                <ThemeSwitch
-                  size="md"
-                  isChecked={gameWinKeyCardEnabled}
-                  onChange={handleGameWinKeyCardToggle}
-                />
-              </HStack>
-            )}
-            <Divider />
-            {/* 已阉割：锁定输入法开关 */}
-            {false && (
-              <HStack justify="space-between" py={2}>
-                <Box flex={1}>
-                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                    {t("settings.generalSettings.gameImeLockLabel")}
-                  </Text>
-                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                    {t("settings.generalSettings.gameImeLockDesc")}
-                  </Text>
-                </Box>
-                <ThemeSwitch
-                  size="md"
-                  isChecked={gameImeLockCardEnabled}
-                  onChange={handleGameImeLockCardToggle}
-                />
-              </HStack>
-            )}
             <Divider />
             <HStack justify="space-between" py={2}>
               <Box flex={1}>

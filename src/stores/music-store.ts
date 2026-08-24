@@ -26,6 +26,20 @@ import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 let isAutoSkipping = false;
 let unplayableSkipCount = 0;
 
+// SMTC 控制事件去重：物理媒体键会同时触发「media_keys 捕获」与系统 SMTC ButtonPressed
+// 两条链路，毫秒级内对同一动作各 emit 一次；窗口期内忽略相同动作的重复事件。
+// （配合后端 media_keys.rs 使用，来源：上游 v9.0.0）
+let lastSmtcAction: string | null = null;
+let lastSmtcActionTime = 0;
+function shouldHandleSmtc(action: string): boolean {
+  if (action === "seek") return true; // seek 来自浮层拖动，不会重复
+  const now = Date.now();
+  if (action === lastSmtcAction && now - lastSmtcActionTime < 150) return false;
+  lastSmtcAction = action;
+  lastSmtcActionTime = now;
+  return true;
+}
+
 interface MusicState {
   // 播放状态
   currentSong: Song | null;
@@ -795,6 +809,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     unlistenFns.push(
       await listen<{ action: string; positionMs?: number }>("smtc:control", (event) => {
         const { action, positionMs } = event.payload;
+        // 物理媒体键双链路去重：同一动作 150ms 内忽略重复事件
+        if (!shouldHandleSmtc(action)) return;
         switch (action) {
           case "play-pause":
             get().togglePlay();
