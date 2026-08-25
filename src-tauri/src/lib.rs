@@ -52,6 +52,7 @@ mod smart;
 mod sponsor;
 mod contributor;
 mod qq_group;
+mod local_gun_codes;
 mod startup_manager;
 mod service_manager;
 mod system_fonts;
@@ -290,7 +291,8 @@ pub fn run() {
                     std::env::current_dir().ok(),
                 );
             }
-            sensor::start_sensor_process(app);
+            // 已阉割：传感器子进程（游戏覆盖层数据源）
+            // sensor::start_sensor_process(app);
 
             // 桌面歌词窗口：安装 WM_MOVING 拦截，拖动时实时钳制窗口在工作区内
             // （碰撞体），任何部分都不允许移出屏幕外或压住任务栏。
@@ -298,8 +300,9 @@ pub fn run() {
 
             // 已阉割：不再向官方服务器上报启动统计（版本/系统信息）
             // utils::sys_info::check_and_send_statistics(app);
-            overlay_panel::start_hardware_poller();
-            hardware_report::start_recording();
+            // 已阉割：游戏覆盖层硬件采集 + 硬件快照磁盘持久化
+            // overlay_panel::start_hardware_poller();
+            // hardware_report::start_recording();
 
             // 初始化 ACE / 反作弊自动检测（读取持久化配置并启动后台任务）
             let app_handle = app.handle().clone();
@@ -958,6 +961,16 @@ pub fn run() {
         feature_flags::feature_flags_query,
         feature_flags::feature_flags_set,
         feature_flags::feature_flags_reset,
+
+        // === 三角洲本地改枪码记事本（融合自 GunCodesAssistant）===
+        local_gun_codes::get_local_gun_codes,
+        local_gun_codes::add_local_gun_code,
+        local_gun_codes::delete_local_gun_code,
+        local_gun_codes::update_local_gun_code,
+        local_gun_codes::recognize_gun_name,
+        local_gun_codes::import_gun_codes_batch,
+        local_gun_codes::export_gun_codes,
+        local_gun_codes::import_gun_codes,
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

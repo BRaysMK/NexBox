@@ -434,16 +434,17 @@ pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
             Ok(response)
         }
         None => {
-            // 尝试启动
-            drop(guard);
-            match spawn_sensor() {
-                Ok(Some(bridge)) => {
-                    log::info!("延迟启动 NexBoxMonitor (pid={})", bridge.child.id());
-                    *SENSOR_BRIDGE.lock().unwrap() = Some(bridge);
-                    Err("子进程已启动，请重试".to_string())
-                }
-                _ => Err("NexBoxMonitor 不可用".to_string()),
-            }
+            // 已阉割：不再自动启动 NexBoxMonitor 子进程（硬件监控/游戏覆盖层已移除）
+            // drop(guard);
+            // match spawn_sensor() {
+            //     Ok(Some(bridge)) => {
+            //         log::info!("延迟启动 NexBoxMonitor (pid={})", bridge.child.id());
+            //         *SENSOR_BRIDGE.lock().unwrap() = Some(bridge);
+            //         Err("子进程已启动，请重试".to_string())
+            //     }
+            //     _ => Err("NexBoxMonitor 不可用".to_string()),
+            // }
+            Err("NexBoxMonitor 未启动（硬件监控已禁用）".to_string())
         }
     }
 }

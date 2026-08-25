@@ -84,10 +84,10 @@ function App() {
     return <VerticalOverlayPage />;
   }
 
-  // Sensor monitor window: standalone, no main layout
-  if (location.pathname === "/sensor-monitor") {
-    return <SensorMonitorPage />;
-  }
+  // 已阉割：传感器监控窗口（独立窗口，无主布局）
+  // if (location.pathname === "/sensor-monitor") {
+  //   return <SensorMonitorPage />;
+  // }
 
   // 开机自启(--autostart)模式：后端已离屏预热加载本窗口，前端初始化完成后隐藏到托盘，
   // 复用 minimize_to_tray 正确更新后端可见性并触发 EcoQoS。
@@ -127,7 +127,8 @@ function App() {
           (pageTransitionMode !== "off" ? (
             <AnimatePresence mode="wait" initial={false}>
             <Routes location={location} key={location.pathname}>
-              <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
+              {/* 已阉割：硬件状态页 (/hardware) */}
+              {/* <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} /> */}
               <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />
               <Route path="/builtin-tools" element={<AnimatedPage><BuiltinToolsPage /></AnimatedPage>} />
               <Route path="/optimization" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
@@ -141,7 +142,8 @@ function App() {
               <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
               <Route path="/autoclicker" element={<AnimatedPage><AutoClickerPage /></AnimatedPage>} />
               <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
-              <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
+              {/* 已阉割：游戏覆盖层 (/overlay-panel) */}
+              {/* <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} /> */}
               <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
               <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
               <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
@@ -173,7 +175,8 @@ function App() {
       </AnimatePresence>
     ) : (
       <Routes location={location}>
-            <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
+            {/* 已阉割：硬件状态页 (/hardware) */}
+            {/* <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} /> */}
             <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />
             <Route path="/builtin-tools" element={<AnimatedPage><BuiltinToolsPage /></AnimatedPage>} />
             <Route path="/optimization" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
@@ -186,7 +189,8 @@ function App() {
             <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
             <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
             <Route path="/autoclicker" element={<AnimatedPage><AutoClickerPage /></AnimatedPage>} />
-            <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
+            {/* 已阉割：游戏覆盖层 (/overlay-panel) */}
+            {/* <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} /> */}
             <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
             <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
             <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />

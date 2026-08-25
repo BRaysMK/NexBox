@@ -190,7 +190,6 @@ function GeneralSettings() {
   const [announcementEnabled, setAnnouncementEnabled] = useState(true);
   const [randomQuoteEnabled, setRandomQuoteEnabled] = useState(true);
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
-  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [gameModeEnabled, setGameModeEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
@@ -205,7 +204,8 @@ function GeneralSettings() {
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const NAV_ORDER_KEY = "nexbox_nav_order";
-  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
+  // 已阉割：/hardware /tools /mood 不在导航列表展示
+  const defaultNavOrder = ["/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
   const [navOrder, setNavOrder] = useState<string[]>(defaultNavOrder);
   const navSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -321,15 +321,6 @@ function GeneralSettings() {
         if (ls !== null) setGameLauncherEnabled(ls === "true");
       }
 
-      // 硬件模型
-      v = await store.get<boolean>("nexbox_home_hardware_model_enabled");
-      if (v !== null && v !== undefined) {
-        setHomeHardwareModelEnabled(v);
-      } else {
-        const ls = localStorage.getItem("nexbox_home_hardware_model_enabled");
-        if (ls !== null) setHomeHardwareModelEnabled(ls === "true");
-      }
-
       // 游戏模式（顶栏切换条）显示开关（store 持久化，默认显示）
       v = await store.get<boolean>("nexbox_game_mode_enabled");
       if (v !== null && v !== undefined) {
@@ -422,7 +413,7 @@ function GeneralSettings() {
 
       // 导航可见性
       const visibilityMap: Record<string, boolean> = {};
-      for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"]) {
+      for (const p of ["/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"]) {
         const key = `nexbox_nav_visible_${p.replace(/\//g, "").replace(/-/g, "_")}`;
         let vis = await store.get<boolean>(key);
         if (vis === null || vis === undefined) {
@@ -440,7 +431,12 @@ function GeneralSettings() {
       let orderStr = await store.get<string>("nexbox_nav_order");
       if (orderStr) {
         try {
-          const parsed = JSON.parse(orderStr) as string[];
+          let parsed = JSON.parse(orderStr) as string[];
+          // 已阉割路径从保存的顺序中过滤掉（/hardware /tools /mood 已移除）
+          const REMOVED_NAV_PATHS = ["/hardware", "/tools", "/mood"];
+          if (parsed.some((p) => REMOVED_NAV_PATHS.includes(p))) {
+            parsed = parsed.filter((p) => !REMOVED_NAV_PATHS.includes(p));
+          }
           let changed = false;
           for (const p of defaultNavOrder) {
             if (!parsed.includes(p)) { parsed.push(p); changed = true; }
@@ -529,14 +525,6 @@ function GeneralSettings() {
     setGameLauncherEnabled(newValue);
     store.set("nexbox_game_launcher_enabled", newValue).then(() => store.save());
     window.dispatchEvent(new CustomEvent("game-launcher-setting-changed", { detail: newValue }));
-  };
-
-  const handleHomeHardwareModelToggle = () => {
-    const newValue = !homeHardwareModelEnabled;
-    setHomeHardwareModelEnabled(newValue);
-    store.set("nexbox_home_hardware_model_enabled", newValue).then(() => store.save());
-    localStorage.setItem("nexbox_home_hardware_model_enabled", String(newValue));
-    window.dispatchEvent(new CustomEvent("home-hardware-model-setting-changed", { detail: newValue }));
   };
 
   const handleGameModeToggle = () => {
@@ -981,21 +969,6 @@ function GeneralSettings() {
               />
             </HStack>
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.homeHardwareModelLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.homeHardwareModelDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={homeHardwareModelEnabled}
-                onChange={handleHomeHardwareModelToggle}
-              />
-            </HStack>
             <Divider />
             <Divider />
             <HStack justify="space-between" py={2}>

@@ -395,7 +395,8 @@ export function Sidebar() {
 
   const navItems: NavItem[] = [
     { path: "/", icon: Home, ariaLabel: t("sidebar.home") },
-    { path: "/hardware", icon: Cpu, ariaLabel: t("sidebar.hardware") },
+    // 已阉割：硬件状态 (/hardware)
+    // { path: "/hardware", icon: Cpu, ariaLabel: t("sidebar.hardware") },
     // 已阉割：工具 (/tools)
     // { path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") },
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },

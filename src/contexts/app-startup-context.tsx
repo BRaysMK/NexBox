@@ -359,20 +359,20 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 启动时自动启用悬浮框（仿照辅助准心：仅当用户保存过设置时触发）
-      if (savedSettings) {
-        let autoOverlay = await store.get<boolean>("nexbox_auto_overlay");
-        if (autoOverlay === null || autoOverlay === undefined) {
-          autoOverlay = localStorage.getItem("nexbox_auto_overlay") === "true";
-        }
-        if (autoOverlay) {
-          try {
-            await invoke("start_overlay_panel", { settings: settingsToUse });
-          } catch (e) {
-            console.error("Failed to auto-enable overlay on startup:", e);
-          }
-        }
-      }
+      // 已阉割：启动时自动启用游戏覆盖层
+      // if (savedSettings) {
+      //   let autoOverlay = await store.get<boolean>("nexbox_auto_overlay");
+      //   if (autoOverlay === null || autoOverlay === undefined) {
+      //     autoOverlay = localStorage.getItem("nexbox_auto_overlay") === "true";
+      //   }
+      //   if (autoOverlay) {
+      //     try {
+      //       await invoke("start_overlay_panel", { settings: settingsToUse });
+      //     } catch (e) {
+      //       console.error("Failed to auto-enable overlay on startup:", e);
+      //     }
+      //   }
+      // }
     } catch (error) {
       console.error("Failed to load overlay settings:", error);
       // 加载失败时仅设置前端 UI 默认值，不覆盖后端已有的设置；用户已修改过则不覆盖
@@ -710,7 +710,8 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
     const runStartup = async () => {
       const tasks = [
         { name: "overlay-settings", fn: loadOverlaySettings, weight: 1 },
-        { name: "hardware-info", fn: loadHardwareInfo, weight: 4 },
+        // 已阉割：启动时不再获取硬件信息（避免拉起 NexBoxMonitor 子进程）
+        // { name: "hardware-info", fn: loadHardwareInfo, weight: 4 },
         { name: "overlay-hotkey", fn: loadOverlayHotkey, weight: 1 },
         { name: "crosshair-hotkey", fn: loadCrosshairHotkey, weight: 1 },
         { name: "crosshair-settings", fn: loadCrosshairSettings, weight: 1 },

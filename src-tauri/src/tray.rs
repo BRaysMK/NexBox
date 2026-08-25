@@ -170,12 +170,13 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                         let _ = menu_window.set_focus();
                     }
                 }
-                tauri::tray::TrayIconEvent::Enter { .. } => {
-                    start_tray_hover_tooltip(tray);
-                }
-                tauri::tray::TrayIconEvent::Leave { .. } => {
-                    stop_tray_hover_tooltip(tray);
-                }
+                // 已阉割：托盘悬停硬件浮窗（CPU/GPU/内存/磁盘），硬件监控已移除
+                // tauri::tray::TrayIconEvent::Enter { .. } => {
+                //     start_tray_hover_tooltip(tray);
+                // }
+                // tauri::tray::TrayIconEvent::Leave { .. } => {
+                //     stop_tray_hover_tooltip(tray);
+                // }
                 _ => {}
             }
         })

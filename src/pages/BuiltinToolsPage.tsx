@@ -58,14 +58,15 @@ const defaultTools: ViewItem[] = [
     descriptionKey: "builtinTools.crosshairDesc",
     color: "#FF6B9D",
   },
-  {
-    id: "overlay-panel",
-    path: "/overlay-panel",
-    icon: Layout,
-    titleKey: "sidebar.overlayPanel",
-    descriptionKey: "builtinTools.overlayPanelDesc",
-    color: "#9B59B6",
-  },
+  // 已阉割：游戏覆盖层 (overlay-panel)
+  // {
+  //   id: "overlay-panel",
+  //   path: "/overlay-panel",
+  //   icon: Layout,
+  //   titleKey: "sidebar.overlayPanel",
+  //   descriptionKey: "builtinTools.overlayPanelDesc",
+  //   color: "#9B59B6",
+  // },
   {
     id: "gpu-rename",
     path: "/gpu-rename",

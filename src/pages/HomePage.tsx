@@ -190,10 +190,8 @@ export default function HomePage() {
         ) : null}
       </Flex>
 
-      {/* 已阉割：随机图片 / 锁定Win键 / 锁定输入法 */}
-      {homeCardsReady &&
-        (false ||
-          homeHardwareModelEnabled) && (
+      {/* 已阉割：随机图片 / 锁定Win键 / 锁定输入法 / 硬件型号卡 */}
+      {false && homeCardsReady && (
         <Box position="absolute" bottom={4} left={4}>
           <VStack spacing={2} align="stretch">
             {false && randomImageReady && randomImageEnabled && <RandomImageCard />}
