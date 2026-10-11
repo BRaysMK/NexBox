@@ -10,6 +10,7 @@ import android.hardware.display.DisplayManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
+import android.os.PowerManager
 import android.os.StatFs
 import android.os.SystemClock
 import android.opengl.EGL14
@@ -77,9 +78,16 @@ object LocalDeviceReader {
     /** cpuidle 的每个空闲状态目录：cpu0/cpuidle/state0、state1… */
     private val IDLE_STATE_DIR = Regex("^state\\d+$")
 
-    /** 这些 zone 量的是电源路径 / modem / 摄像头 / 虚拟调节点，不是芯片温度 */
+    /**
+     * 这些 zone 量的是电源路径 / modem / 摄像头 / 虚拟调节点，不是芯片温度。
+     * `limit|pause|hotplug|cooling|governor|trip` 是高通新平台的**限速控制区**：
+     * 它们的 temp 是当前生效的限速阈值（典型 95℃）而不是实测值，一并拉黑。
+     */
     private val ZONE_IGNORE =
-        Regex("step|bcl|ibat|socd|virtual|^pa\\d*$|sdr|mmw|mdmss|nspss|camera|^pm\\d|battery|usb|quiet")
+        Regex(
+            "step|bcl|ibat|socd|virtual|limit|pause|hotplug|cooling|governor|trip" +
+                "|^pa\\d*$|sdr|mmw|mdmss|nspss|camera|^pm\\d|battery|usb|quiet",
+        )
 
     @Volatile
     private var zones: ThermalZones? = null
@@ -191,6 +199,8 @@ object LocalDeviceReader {
         val totalTenths = totalBytes?.let { Math.round(it / GB * 10) }
         val freeTenths = freeBytes?.let { Math.round(it / GB * 10) }
         val power = batteryPowerWatt(app, battery)
+        // 热档位不含温度数值，只在没有可信温度时给界面兜底说明
+        val thermalStatus = thermalStatusLabel(app)
         DeviceRuntime(
             coresOnline = cores,
             ramAvailable = gbText(memoryInfo(app)?.availMem, decimals = 1),
@@ -207,8 +217,9 @@ object LocalDeviceReader {
                 ?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0)
                 ?.takeIf { it > 0 }
                 ?.let { String.format(Locale.US, "%.2f V", it / 1000.0) },
-            cpuTempC = maxZoneTemp(thermalZones().cpu),
-            gpuTempC = maxZoneTemp(thermalZones().gpu),
+            cpuTempC = representativeTempC(thermalZones().cpu, app),
+            gpuTempC = representativeTempC(thermalZones().gpu, app),
+            thermalStatusLabel = thermalStatus,
             cpuUsagePercent = cpuUsagePercent(cores),
             gpuUsagePercent = null,
             cpuClock = cpuClockText(),
@@ -878,32 +889,75 @@ object LocalDeviceReader {
     // ───────────────────────── 温度 / 占用 / 频率 / 功耗 ─────────────────────────
 
     /**
+     * 一个候选温度区。`type` 扫描时顺手读到（限速控制区的判定要用），
+     * 下面几个字段是「温度是否钉死」的判定状态，跟着缓存一起活到 resetSensors。
+     */
+    private class Zone(val file: File, val type: String) {
+        var tripTempsC: List<Double>? = null
+        var lastTempC = Double.NaN
+        var lastChangeMs = 0L
+        var samples = 0
+
+        /** 自身全部 trip 阈值（℃，懒加载一次）。限速区的 temp 就是钉在这些值上的 */
+        fun tripTemps(): List<Double> {
+            tripTempsC?.let { return it }
+            val found = mutableListOf<Double>()
+            var i = 0
+            while (i < 16) {
+                val raw = readSysfsLong("${file.path}/trip_point_${i}_temp") ?: break
+                (raw / 1000.0).takeIf { it in 1.0..150.0 }?.let { found += it }
+                i++
+            }
+            tripTempsC = found
+            return found
+        }
+    }
+
+    /** 名字含义模糊、不能直接拉黑、只能配合数值判定的策略区关键字 */
+    private const val SOFT_POLICY_KEYWORD = "usr"
+
+    /** 温度连续不动多久算异常；也是「别人在动」的观察窗口 */
+    private const val FREEZE_MS = 30_000L
+
+    /** 温度压在自身 trip 值上多久判为镜像（usr 区首次采样即判，不用等） */
+    private const val TRIP_DWELL_MS = 5_000L
+
+    /** 温度变化粒度：小于它就当没动过 */
+    private const val FREEZE_DELTA_C = 0.1
+
+    /** 热余量低于此值说明机器离限速阈值还很远，此时报高温的区必是镜像 */
+    private const val HEADROOM_COOL = 0.5f
+    private const val SUSPECT_HOT_C = 85.0
+
+    /**
      * 温度区快照。`type` 不会自己变，本机 76 个 zone 每轮都重扫一遍纯属浪费，
      * 所以扫一次缓存起来，点「重新扫描」时由 [resetSensors] 清掉。
      */
-    private class ThermalZones(val cpu: List<File>, val gpu: List<File>)
+    private class ThermalZones(val cpu: List<Zone>, val gpu: List<Zone>)
 
     private fun thermalZones(): ThermalZones {
         zones?.let { return it }
         val found = runCatching {
-            val cpu = mutableListOf<File>()
-            val gpu = mutableListOf<File>()
-            val soc = mutableListOf<File>()
+            val cpu = mutableListOf<Zone>()
+            val gpu = mutableListOf<Zone>()
+            val soc = mutableListOf<Zone>()
             File(THERMAL_ROOT).listFiles { f -> f.isDirectory && ZONE_DIR.matches(f.name) }
                 .orEmpty()
                 .forEach { dir ->
                     val type = readSysfs("${dir.path}/type")?.lowercase()?.removePrefix("qcom,") ?: return@forEach
                     if (type.isBlank() || ZONE_IGNORE.containsMatchIn(type)) return@forEach
+                    val zone = Zone(dir, type)
                     when {
                         // qcom 的 "gpu-0"、mtk 的 "mtkgpu"、海思直接叫 "gpu"（Pura 80 实测），按包含认
-                        "gpu" in type -> gpu += dir
+                        "gpu" in type -> gpu += zone
                         // 有 cpu 字样的直接认；麒麟的 CPU 簇叫 cluster0/1/2（Pura 80 实测，没有
-                        // cpu 字样）、三星大小核叫 big_core/little_core，按真实命名收
+                        // cpu 字样）、三星大小核叫 big_core/little_core，按真实命名收。
+                        // 这里不排除 -usr：部分机型的真实传感器就叫 cpuss-N-usr，交给数值判定
                         "cpu" in type || "cluster" in type ||
-                            ("core" in type && Regex("big|little|mid").containsMatchIn(type)) -> cpu += dir
+                            ("core" in type && Regex("big|little|mid").containsMatchIn(type)) -> cpu += zone
                         // 海思老内核（麒麟 980 时代）整机温度区 soc-thermal，与 qcom aoss 一样兜底；
                         // pa/shell/charger/bat_raw/npu/isp 等外设与协处理器区分类不中自然丢弃
-                        "aoss" in type || "soc" in type -> soc += dir
+                        "aoss" in type || "soc" in type -> soc += zone
                     }
                 }
             ThermalZones(cpu.ifEmpty { soc }, gpu)
@@ -914,11 +968,93 @@ object LocalDeviceReader {
     }
 
     /** 毫摄氏度 → 摄氏度。断开源回 -273000、策略伪 zone 回 0，都当没有这个传感器 */
-    private fun readZoneTempC(dir: File): Double? =
-        readSysfsLong("${dir.path}/temp")?.let { it / 1000.0 }?.takeIf { it in 1.0..150.0 }
+    private fun readZoneTempC(zone: Zone): Double? =
+        readSysfsLong("${zone.file.path}/temp")?.let { it / 1000.0 }?.takeIf { it in 1.0..150.0 }
 
-    /** 组内取最高而不是平均：一个 80℃ 的热点不该被七个冷核抹平成 30℃ */
-    private fun maxZoneTemp(dirs: List<File>): Double? = dirs.mapNotNull { readZoneTempC(it) }.maxOrNull()
+    /**
+     * 组内取最高而不是平均：一个 80℃ 的热点不该被七个冷核抹平成 30℃。
+     *
+     * 但高通新平台（8 Gen 3 / 8 Elite 一代起）会在同一命名空间里混进
+     * `cpu-0-0-limit`、`cpu-0-0-usr` 这类限速策略区：它们的 temp 是当前生效的限速阈值
+     * （典型 95℃）且恒定不动，直接取最大值就会永远显示 95。这里先按名字拉黑控制区
+     * （见 [ZONE_IGNORE]），再用「钉在自身 trip 值上不动 / 别人在动它不动 / 热余量交叉验证」
+     * 把含义模糊的 usr 区也剔掉；全被判掉就返回 null —— 宁可没数，也不报假温度。
+     */
+    @Synchronized
+    private fun representativeTempC(zones: List<Zone>, context: Context?): Double? {
+        if (zones.isEmpty()) return null
+        val now = SystemClock.elapsedRealtime()
+        val readings = zones.mapNotNull { zone -> readZoneTempC(zone)?.let { zone to it } }
+        if (readings.isEmpty()) return null
+        readings.forEach { (zone, temp) ->
+            // 首轮没有基线，当作刚变化过；之后按 0.1℃ 的粒度记变化时刻
+            if (zone.samples == 0 || abs(temp - zone.lastTempC) >= FREEZE_DELTA_C) {
+                zone.lastChangeMs = now
+            }
+            zone.lastTempC = temp
+            zone.samples++
+        }
+        // 同一组里还有别的区在动 → 那些一动不动的就该被怀疑
+        val liveCount = readings.count { (zone, _) -> now - zone.lastChangeMs < FREEZE_MS }
+        val headroom = thermalHeadroom(context)
+        return readings
+            .filterNot { (zone, temp) -> zone.isLimitMirror(temp, now, liveCount, headroom) }
+            .maxOfOrNull { (_, temp) -> temp }
+    }
+
+    /** 判据见 [representativeTempC]：命中任意一条即认定这个区读的不是实测温度 */
+    private fun Zone.isLimitMirror(temp: Double, now: Long, liveCount: Int, headroom: Float?): Boolean {
+        val onTrip = tripTemps().any { abs(it - temp) < 0.05 }
+        val frozenMs = now - lastChangeMs
+        val softPolicy = SOFT_POLICY_KEYWORD in type
+        return when {
+            // 名字带 usr 又正好压在自身 trip 值上：首次采样就能判，避免先闪一下 95
+            onTrip && softPolicy -> true
+            // 真传感器不会长期精确坐在自己的 trip 阈值上
+            onTrip && frozenMs >= TRIP_DWELL_MS -> true
+            // 整组里别人都在动只有它不动；或整机只剩它一个 usr 区可读
+            frozenMs >= FREEZE_MS && (liveCount > 0 || softPolicy) -> true
+            // 系统离限速阈值还很远（热余量充裕）却报 85℃+，必是限速镜像而不是实测值
+            headroom != null && headroom < HEADROOM_COOL && temp >= SUSPECT_HOT_C -> true
+            else -> false
+        }
+    }
+
+    /**
+     * 归一化热余量：0=凉，1=到达限速阈值，>1=正在限速。API 30 以下、设备不支持或异常都给 null。
+     * 它本身不含温度数值，只用来判断「机器到底热不热」，给上面对不上的读数打假。
+     */
+    private fun thermalHeadroom(context: Context?): Float? {
+        if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return runCatching {
+            (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)
+                ?.getThermalHeadroom(0)
+                ?.takeIf { !it.isNaN() }
+        }.getOrNull()
+    }
+
+    /**
+     * 热档位文案：拿不到可信温度时用它兜底说明设备真实热状态。
+     * `getCurrentThermalStatus` 是 API 29+ 的公开接口，不需要任何权限。
+     */
+    private fun thermalStatusLabel(context: Context): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return runCatching {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                ?: return@runCatching null
+            when (pm.currentThermalStatus) {
+                PowerManager.THERMAL_STATUS_NONE -> "正常"
+                PowerManager.THERMAL_STATUS_LIGHT -> "偏热"
+                PowerManager.THERMAL_STATUS_MODERATE -> "限速中"
+                PowerManager.THERMAL_STATUS_SEVERE,
+                PowerManager.THERMAL_STATUS_CRITICAL,
+                PowerManager.THERMAL_STATUS_EMERGENCY,
+                PowerManager.THERMAL_STATUS_SHUTDOWN,
+                -> "严重过热"
+                else -> null
+            }
+        }.getOrNull()
+    }
 
     /**
      * 供悬浮窗服务独立使用：占用与温度的轻量读数。类型归属与 readRuntime 完全一致，
@@ -926,9 +1062,11 @@ object LocalDeviceReader {
      */
     internal fun cpuUsageNow(): Int? = cpuUsagePercent(coresOnline())
 
-    internal fun cpuTempNow(): Double? = maxZoneTemp(thermalZones().cpu)
+    internal fun cpuTempNow(context: Context): Double? =
+        representativeTempC(thermalZones().cpu, context)
 
-    internal fun gpuTempNow(): Double? = maxZoneTemp(thermalZones().gpu)
+    internal fun gpuTempNow(context: Context): Double? =
+        representativeTempC(thermalZones().gpu, context)
 
     /** 内存占用率：(总内存 - 可用内存) / 总内存。availMem 已含系统可回收部分，口径与系统设置一致 */
     internal fun memUsageNow(context: Context): Int? = runCatching {

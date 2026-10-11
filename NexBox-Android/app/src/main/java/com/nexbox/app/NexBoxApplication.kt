@@ -3,6 +3,8 @@ package com.nexbox.app
 import android.app.Application
 import com.nexbox.app.data.AppearanceStore
 import com.nexbox.app.data.BackgroundStore
+import com.nexbox.app.data.ClipboardSyncManager
+import com.nexbox.app.data.ClipboardSyncStore
 import com.nexbox.app.data.CrosshairStore
 import com.nexbox.app.data.NetworkModule
 import com.nexbox.app.data.OverlayStore
@@ -18,5 +20,8 @@ class NexBoxApplication : Application() {
         AppearanceStore.init(this)
         OverlayStore.init(this)
         CrosshairStore.init(this)
+        // 剪贴板同步：恢复开关持久化状态 + 注入上下文（协程由 MainActivity 前后台事件驱动）
+        ClipboardSyncStore.init(this)
+        ClipboardSyncManager.init(this)
     }
 }

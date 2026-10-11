@@ -121,7 +121,9 @@ pub fn capabilities() -> Value {
                 "id": "music",
                 "title": "音乐控制",
                 "queries": [
-                    { "key": "music.state", "title": "当前播放(软件内/外部统一)" }
+                    { "key": "music.state", "title": "当前播放(软件内/外部统一)" },
+                    { "key": "music.lyrics", "title": "当前歌曲歌词(网易云)" },
+                    { "key": "audio.volume", "title": "PC 系统主音量" }
                 ],
                 "actions": [
                     {
@@ -150,6 +152,12 @@ pub fn capabilities() -> Value {
                             param("positionMs", "number", true, None),
                             param("source", "string", false, Some(vec!["auto", "app", "external"]))
                         ]
+                    },
+                    {
+                        "key": "audio.volume",
+                        "title": "设置 PC 系统主音量",
+                        "needsConfirm": false,
+                        "params": [ param("percent", "number", true, None) ]
                     }
                 ]
             }
@@ -170,6 +178,7 @@ pub fn is_known_action(key: &str) -> bool {
             | "gamemode.set_preset" | "gamemode.set_auto" | "filter.enable" | "filter.disable" | "overlay.toggle"
             | "crosshair.toggle"
             | "music.play_pause" | "music.next" | "music.prev" | "music.seek"
+            | "audio.volume"
     )
 }
 
@@ -180,6 +189,6 @@ pub fn is_known_query(key: &str) -> bool {
         "stats.hw" | "mem.status" | "disk.status" | "hw.info" | "power.active" | "power.plans"
             | "gamemode.status" | "filter.settings" | "apps.list"
             | "crosshair.status" | "overlay.status"
-            | "music.state"
+            | "music.state" | "music.lyrics" | "audio.volume"
     )
 }

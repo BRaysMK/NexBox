@@ -115,7 +115,7 @@ pub fn ensure_vertical_overlay<R: tauri::Runtime>(
         .title("NexBox Vertical Overlay")
         // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
         // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
         .inner_size(220.0, 400.0)
         .resizable(false)
         .decorations(false)
@@ -151,7 +151,7 @@ pub fn ensure_mood_window<R: tauri::Runtime>(
         .title("心境")
         // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
         // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
         .inner_size(1000.0, 700.0)
         .resizable(true)
         .center()
@@ -493,19 +493,6 @@ pub fn run() {
                 });
             }
 
-            // Tray menu: hide when losing focus (click outside), reset always-on-top.
-            // 关闭主路径；菜单未抢到前台或点击区域不移走前台时不会触发，
-            // 那两种情况由 tray.rs 里的低级鼠标钩子守护兜底。
-            if let Some(tray_menu) = app.get_webview_window("tray-menu") {
-                let menu_clone = tray_menu.clone();
-                tray_menu.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(false) = event {
-                        let _ = menu_clone.set_always_on_top(false);
-                        let _ = menu_clone.hide();
-                    }
-                });
-            }
-
             // 显示器信息改为前端按需加载 (get_displays 内部已有缓存逻辑)，
             // 不在启动阶段预填，避免阻塞 WebView 加载导致白屏。
 
@@ -766,6 +753,9 @@ pub fn run() {
         remote_access::transfer::cmd_transfer_save_file,
         remote_access::transfer::cmd_transfer_reveal,
         remote_access::transfer::cmd_transfer_unsaved_count,
+        // === 剪贴板同步（PC ↔ 已配对手机 · 纯文本） ===
+        remote_access::clipboard_sync::cmd_get_clipboard_sync,
+        remote_access::clipboard_sync::cmd_set_clipboard_sync,
         downloader::download_file,
         downloader::open_system_browser,
         downloader::open_installer,
@@ -1304,7 +1294,7 @@ pub fn run() {
                     }
                 }
                 // 退出流程开始前隐藏所有窗口，避免 WebView2 销毁后闪现原生标题栏
-                for label in &["main", "tray-menu", "desktop-lyrics", "vertical-overlay", "dynamic-island"] {
+                for label in &["main", "desktop-lyrics", "vertical-overlay", "dynamic-island"] {
                     if let Some(w) = app_handle.get_webview_window(label) {
                         let _ = w.hide();
                     }

@@ -106,6 +106,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/query", post(query))
         .route("/api/action", post(action))
         .route("/api/music/cover", get(music_cover))
+        .route("/api/clipboard", get(clipboard_pull).post(clipboard_push))
         .nest("/api/transfer", transfer_routes)
         .route("/api/ws", get(ws))
         .with_state(state)
@@ -366,6 +367,8 @@ async fn run_socket(
     // 封面只给 coverKey（字节走 /api/music/cover），因此帧很小、可以每秒推。
     let mut last_music_sig = String::new();
     let mut last_music_pos: Option<i64> = None;
+    // 歌词随 WS 主动推（手机端不再查询）：key 变化才发帧，避免每秒重发同样的歌词
+    let mut last_lyrics_key = String::new();
 
     loop {
         tokio::select! {
@@ -386,6 +389,25 @@ async fn run_socket(
                             break;
                         }
                     }
+                }
+
+                // 歌词帧：软件内读前端推来的内存缓存（零 HTTP）；外部读搜索缓存，
+                // 未命中时后台补搜一次（防重、不阻塞帧循环）。手机端被动接收。
+                match super::music::lyrics_for_stream(&music.title, &music.artist, music.source.as_deref()) {
+                    Some(l) => {
+                        let lkey = format!("{}|{}|{}", l.title, l.artist, l.lines.len());
+                        if lkey != last_lyrics_key {
+                            last_lyrics_key = lkey;
+                            if let Ok(lv) = serde_json::to_value(&l) {
+                                let frame = json!({ "type": "music.lyrics", "data": lv }).to_string();
+                                if sink.send(Message::Text(frame)).await.is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // 无歌词可推时清 key：下次命中（如后台搜索完成）要能再推
+                    None => last_lyrics_key.clear(),
                 }
 
                 let data = tokio::task::spawn_blocking(crate::overlay_panel::collect_hardware_data).await;
@@ -432,6 +454,46 @@ async fn run_socket(
 
     auth::unregister_connection(&device_id);
     let _ = state.app.emit("remote-access://connection-changed", ());
+}
+
+// ───────────────────────── 剪贴板同步（手机端调用） ─────────────────────────
+
+#[derive(Deserialize)]
+struct ClipboardPushBody {
+    text: String,
+}
+
+/// POST /api/clipboard —— 手机推送本机剪贴板文本，PC 端写入系统剪贴板（接收方向，不受 PC 发送开关影响）。
+async fn clipboard_push(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<ClipboardPushBody>,
+) -> Response {
+    let device_id = match authorize(&headers) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
+    let text = body.text;
+    if text.is_empty() {
+        return json_ok(json!({}));
+    }
+    if text.len() > super::clipboard_sync::MAX_TEXT_BYTES {
+        return json_err(StatusCode::PAYLOAD_TOO_LARGE, "clipboard text too large");
+    }
+    if let Err(e) = super::clipboard_sync::write_from_remote(&state.app, &text).await {
+        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &e);
+    }
+    log::info!("[RemoteAccess] 设备 {device_id} 推送剪贴板 {} 字节", text.len());
+    json_ok(json!({}))
+}
+
+/// GET /api/clipboard —— 手机切前台补齐：取 PC 当前剪贴板文本（无/超限返回空串）。
+async fn clipboard_pull(headers: HeaderMap) -> Response {
+    if let Err(r) = authorize(&headers) {
+        return r;
+    }
+    let text = super::clipboard_sync::read_local_async().await.unwrap_or_default();
+    json_ok(json!({ "text": text }))
 }
 
 // ───────────────────────── 文件互传（手机端调用） ─────────────────────────

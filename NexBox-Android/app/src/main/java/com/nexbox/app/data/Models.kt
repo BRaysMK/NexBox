@@ -563,3 +563,56 @@ data class TransferProgress(
     val total: Long,
     val speed: Double,
 )
+
+// ───────────────────────── 远程音乐 ─────────────────────────
+
+/**
+ * PC 端统一「当前播放」快照（PC 侧 remote_access::music::MusicState，serde camelCase）。
+ *
+ * 两个来源二选一：[source] = `"app"` 软件内播放器 / `"external"` 系统 SMTC 会话
+ * （网易云、QQ 音乐等外部软件），null 表示 PC 端当前没有可展示的播放内容。
+ * 封面字节不随 WS 帧下发（外部封面可达数 MB），只给内容寻址的 [coverKey]
+ * 与相对路径 [coverUrl]（形如 `/api/music/cover?k=xxx`），字节按需拉取、可长期缓存。
+ */
+@Immutable
+@Serializable
+data class MusicState(
+    val source: String? = null,
+    val playing: Boolean = false,
+    val title: String = "",
+    val artist: String = "",
+    val album: String = "",
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
+    val canSeek: Boolean = false,
+    val coverKey: String? = null,
+    val coverUrl: String? = null,
+    /** 外部来源的进程标识（如 `cloudmusic.exe`）；软件内来源为 null */
+    val sourceAppId: String? = null,
+    /** PC 端合成该快照的时刻（epoch 毫秒），本机用它推算实时播放位置 */
+    val updatedAt: Long = 0,
+)
+
+// ───────────────────────── 远程歌词 ─────────────────────────
+
+/** 一行带时间戳的歌词（PC 端 remote_access::music::lyrics_json，serde camelCase） */
+@Immutable
+@Serializable
+data class LyricsLine(
+    val timeMs: Long = 0,
+    val text: String = "",
+)
+
+/**
+ * 当前播放歌曲的歌词包。PC 端按「歌名 + 歌手」查网易云曲库：
+ * [lines] 为空表示没匹配到歌词（PC 端也做了负缓存，不会反复打接口）；
+ * [title] / [artist] 用于手机端与当前播放帧对齐（防止拉取期间换歌串词）。
+ */
+@Immutable
+@Serializable
+data class MusicLyrics(
+    val trackKey: String = "",
+    val title: String = "",
+    val artist: String = "",
+    val lines: List<LyricsLine> = emptyList(),
+)

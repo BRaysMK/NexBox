@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -157,17 +160,18 @@ private fun ConfigOverviewScreen(
         }
     }
 
-    PageColumn {
-        Spacer(Modifier.height(2.dp))
-        Text(
-            "配置",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
+    Box(Modifier.fillMaxSize()) {
+        PageColumn {
+            // 与设置页同款：标题在内容流里，状态栏留白由 PageColumn 统一处理
+            Text(
+                "配置",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
 
-        // 机型卡：整块可点，进详情看全量参数
-        AppCard(
+            // 机型卡：整块可点，进详情看全量参数
+            AppCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
@@ -249,6 +253,7 @@ private fun ConfigOverviewScreen(
                     .clickable(enabled = !state.scanning, onClick = onRescan)
                     .padding(horizontal = 6.dp, vertical = 3.dp),
             )
+        }
         }
     }
 }
@@ -356,6 +361,7 @@ private fun LocalPerfCard(
                     color = MetricCpu,
                     percent = r.cpuUsagePercent,
                     temp = r.cpuTempC,
+                    tempFallback = r.thermalStatusLabel,
                     footnote = r.cpuClock,
                     tempWarn = SOC_TEMP_WARN,
                     tempDanger = SOC_TEMP_DANGER,
@@ -650,10 +656,13 @@ private fun ConfigDetailScreen(state: ConfigUiState, onBack: () -> Unit) {
     val spec = state.spec
     val runtime = state.runtime
 
-    PageColumn(spacing = 12.dp) {
-        DetailTopBar(title = "完整参数", onBack = onBack, trailingText = state.readAt?.let { "读取于 $it" })
-
-        SectionCard(title = "设备") {
+    DetailScaffold(
+        title = "完整参数",
+        onBack = onBack,
+        trailingText = state.readAt?.let { "读取于 $it" },
+    ) {
+        PageColumn(spacing = 12.dp, floatingHeader = true) {
+            SectionCard(title = "设备") {
             SpecRow("产品名称", spec?.marketName)
             SpecRow("品牌 / 制造商", joined(spec?.brand, spec?.manufacturer))
             SpecRow("型号", spec?.model)
@@ -732,20 +741,34 @@ private fun ConfigDetailScreen(state: ConfigUiState, onBack: () -> Unit) {
             color = TextSecondary,
             lineHeight = 15.sp,
         )
+        }
     }
 }
 
-/** 概览与详情共用的页面骨架：状态栏留白 + 横向 18dp 内边距 + 底部玻璃条余量 */
+/** 概览与详情共用的页面骨架：横向 18dp 内边距 + 底部玻璃条余量。
+ *  [floatingHeader] = 详情页（有 DetailScaffold 悬浮头）用头部净距；概览页标题在内容流里，同设置页 */
 @Composable
-private fun PageColumn(spacing: Dp = 12.dp, content: @Composable ColumnScope.() -> Unit) {
+private fun PageColumn(
+    spacing: Dp = 12.dp,
+    floatingHeader: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .statusBarsPadding()
+            .contentTopFade()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = 18.dp)
+            .then(
+                if (floatingHeader) Modifier.detailHeaderSpacing() else Modifier,
+            ),
         verticalArrangement = Arrangement.spacedBy(spacing),
     ) {
+        if (!floatingHeader) {
+            // 概览页：状态栏留白作为滚动内容的一部分，标题随内容滚动
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            Spacer(Modifier.height(2.dp))
+        }
         content()
         Spacer(Modifier.height(8.dp))
         // 悬浮玻璃导航条的余量：内容从它下面穿过，末尾留出高度不被永久遮住

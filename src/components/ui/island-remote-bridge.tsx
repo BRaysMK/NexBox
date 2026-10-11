@@ -26,6 +26,7 @@ import {
   setIslandExternalRequested,
   setIslandSnapshotSink,
   setIslandWindowAlive,
+  type IslandMusicLiked,
 } from "./dynamic-island";
 
 /** 桌面岛窗口回传的交互命令 */
@@ -130,6 +131,33 @@ function pushMusicProgress() {
   );
 }
 
+/**
+ * 收藏（红心）状态下发：载荷极小，无需指纹去重。store 订阅里每次变更都推——
+ * 换曲 / likedSongIds 变化（含 toggleLike 乐观更新与失败回滚）/ 登录态变化都会自动同步到岛窗口。
+ * 可收藏判定与 toggleLike 的路由键（playbackSource）保持同一口径：
+ * qqmusic/migu 不可写、未登录写也失败；本地歌曲（provider==="local"，MusicProvider
+ * 类型上不含 local 所以单独判 currentSong）会被 toggleLike 误路由到平台接口，一并排除。
+ * likedSongIds 只按当前 playbackSource 加载，与 currentSong 同源，
+ * has(currentSong.id) 判定天然一致，无需平台映射。
+ */
+function pushMusicLiked() {
+  const s = useMusicStore.getState();
+  const songId = s.currentSong?.id ?? null;
+  const supported = Boolean(songId)
+    && s.currentSong?.provider !== "local"
+    && s.playbackSource !== "qqmusic"
+    && s.playbackSource !== "migu"
+    && Boolean(s.loginInfos[s.playbackSource]?.logged_in);
+  const payload: IslandMusicLiked = {
+    songId,
+    liked: supported && songId ? s.likedSongIds.has(songId) : false,
+    supported,
+  };
+  void emit("island:music-liked", payload).catch((e) =>
+    console.warn("[Island] island:music-liked 下发失败:", e)
+  );
+}
+
 export function IslandRemoteBridge() {
   const navigate = useNavigate();
 
@@ -161,6 +189,7 @@ export function IslandRemoteBridge() {
         pushIslandSnapshot();
         pushMusicTrack(true);
         pushMusicProgress();
+        pushMusicLiked();
       }
       wasOn = on;
     };
@@ -186,6 +215,7 @@ export function IslandRemoteBridge() {
         pushIslandSnapshot();
         pushMusicTrack(true);
         pushMusicProgress();
+        pushMusicLiked();
       });
       const onAlive = await listen("island:alive", () => {
         lastAliveAt = Date.now();
@@ -239,6 +269,11 @@ export function IslandRemoteBridge() {
               void invoke("show_window").catch(() => {});
               navigate("/music", { state: { expandPlayer: true } });
               break;
+            case "like":
+              // 岛窗口收藏：落到主窗口真源（toggleLike 内部含乐观更新与失败回滚），
+              // 结果经 island:music-liked 自动回流到岛窗口
+              if (s.currentSong) void s.toggleLike(s.currentSong.id);
+              break;
           }
         }
       );
@@ -261,6 +296,8 @@ export function IslandRemoteBridge() {
     const unsubStore = useMusicStore.subscribe(() => {
       if (!isIslandRemoteMode()) return;
       pushMusicTrack();
+      // 收藏状态跟随 store：换曲 / likedSongIds 变化（含失败回滚）/ 登录态都会触发
+      pushMusicLiked();
     });
 
     // 进度：高频但载荷极小（秒 + 播放态）；未开启外部模式时完全不发事件

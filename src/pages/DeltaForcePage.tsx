@@ -268,7 +268,7 @@ function MoreGunCodesCard() {
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
@@ -322,7 +322,7 @@ function RouletteCard() {
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
@@ -376,7 +376,7 @@ function OfficialMapCard() {
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
@@ -452,7 +452,7 @@ function OfficialWallpaperCard() {
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
@@ -673,7 +673,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const primaryColor = getActiveColor();
   const textColor = useColorModeValue("#000000", "#ffffff");
   const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
 
@@ -1255,7 +1255,7 @@ function StatsAnalysisCard() {
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
@@ -1309,7 +1309,7 @@ function StreamerSettingsCard() {
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const cardHoverBg = useColorModeValue("gray.100", "#222222");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();

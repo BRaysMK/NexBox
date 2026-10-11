@@ -327,7 +327,7 @@ export const searchIndex: SearchItem[] = [
   {
     id: "system-optimizer",
     nameKey: "systemOptimizer.pageTitle",
-    path: "/optimize/system-optimizer",
+    path: "/system-optimizer",
     icon: Settings2,
     category: "optimization",
     keywords: ["系统优化", "system", "optimizer", "注册表", "服务", "性能", "隐私", "游戏", "一键优化"],

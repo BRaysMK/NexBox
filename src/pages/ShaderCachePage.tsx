@@ -85,10 +85,9 @@ function VendorCard({
   const mutedColor = useColorModeValue("gray.400", "#8a8a8a");
   const idleBorder = useColorModeValue("gray.200", "#333333");
   const rowBg = useColorModeValue("rgba(0,0,0,0.02)", "rgba(255,255,255,0.03)");
-  const selectedBg = useColorModeValue(
-    "rgba(72,187,120,0.07)",
-    "rgba(72,187,120,0.12)"
-  );
+  // 选中态背景必须为实底色：LiquidGlassCard 的 bg 会被整体替换而非叠加，
+  // 半透明色会让背景图透出（浅色=浅绿实底，深色=墨绿实底）
+  const selectedBg = useColorModeValue("#F0FFF4", "#152A20");
 
   const name = t(`shaderCache.${vendorKey}.name`);
   const description = t(`shaderCache.${vendorKey}.description`);
@@ -107,7 +106,8 @@ function VendorCard({
       title={pathsTip}
       border="1.5px solid"
       borderColor={isSelected ? accent : idleBorder}
-      bg={isSelected ? selectedBg : undefined}
+      // 仅选中时覆盖背景；未选中不传 bg，避免 undefined 覆盖 LiquidGlassCard 的实底背景（关玻璃时卡片透明）
+      {...(isSelected ? { bg: selectedBg } : {})}
       transition="border-color 0.15s ease, background 0.15s ease"
       _hover={{ borderColor: isSelected ? accent : mutedColor }}
     >

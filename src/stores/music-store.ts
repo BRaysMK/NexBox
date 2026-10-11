@@ -795,6 +795,8 @@ async function pushSmtc(force = false) {
     playing: s.isPlaying,
     positionMs: posMs,
     durationMs: durMs,
+    // 软件内歌词原文随状态顺路推给 Rust：手机远程端的歌词优先走这份精确数据
+    lyricLrc: s.currentLyrics?.lyric || null,
   };
   invoke("smtc_update_state", { state: payload }).catch(() => {});
 }
@@ -1507,6 +1509,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             loginInfos: { ...s.loginInfos, qishui: info }
           }));
           get().loadUserPlaylists();
+          // 红心集合与其他平台登录回调对齐：不加载的话收藏列表/播放器红心全空
+          get().loadLikedList();
           // 事件里的 info 可能只有 cookie 判定，再拉一次带个人信息的登录态
           void get().loginStatusFor("qishui");
           // 登录后探测签名依赖（缺失时前端提示手动下载 Node 包）
@@ -1539,6 +1543,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       } else if (get().playbackSource === "migu") {
         get().loadOfficialCharts();
         get().loadRecommendations();
+      } else if (get().playbackSource === "qishui") {
+        // 汽水：红心集合此前漏加载，导致收藏列表进入时全部无红心，
+        // 直到手动点亮一首触发 toggleLike 内的回读才补齐
+        await get().loadLikedList();
       }
     }
   },
@@ -2888,6 +2896,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       } else if (provider === "migu") {
         get().loadOfficialCharts();
         get().loadRecommendations();
+      } else if (provider === "qishui") {
+        // 汽水：切源时同样加载红心集合（此前漏掉，收藏列表进入时全空）
+        await get().loadLikedList();
       }
     }
   },
@@ -3309,6 +3320,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
       const lyrics = await invoke<Lyrics>("music_lyric", { id: songId });
       set({ currentLyrics: lyrics });
+      // 歌词到位后立刻补推一次 SMTC 状态：手机远程端的歌词走这份 LRC，
+      // 暂停状态下没有 timeupdate 事件，不补推的话手机永远拿不到歌词
+      pushSmtc(true);
       if (get().desktopLyricsVisible) {
         get().emitDesktopLyricsData();
       }
@@ -3335,6 +3349,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           if (lrcText && lrcText.trim()) {
             hasLyric = true;
             set({ currentLyrics: { lyric: lrcText }, currentLyricsSongId: song.id });
+            // 歌词到位后立刻补推（同上：暂停状态无 timeupdate，手机端等不到）
+            pushSmtc(true);
             if (get().desktopLyricsVisible) {
               get().emitDesktopLyricsData();
             }
@@ -3399,6 +3415,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         ? await invoke<Lyrics>("qishui_lyric", { id: song.id })
         : await invoke<Lyrics>("music_lyric", { id: song.id });
       set({ currentLyrics: lyrics });
+      // 歌词到位后立刻补推一次 SMTC 状态（暂停时无 timeupdate 事件，必须主动推）
+      pushSmtc(true);
       if (get().desktopLyricsVisible) {
         get().emitDesktopLyricsData();
       }

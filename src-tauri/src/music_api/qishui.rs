@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -120,6 +120,9 @@ struct QishuiAuthRuntime {
 
 static RUNTIME: OnceLock<Arc<QishuiAuthRuntime>> = OnceLock::new();
 
+/// 签名载荷临时文件序号：并发请求各用独立文件，避免互相覆盖（见 qishui_signed_post）
+static SIGN_PAYLOAD_SEQ: AtomicU64 = AtomicU64::new(0);
+
 fn runtime(app: &AppHandle) -> Arc<QishuiAuthRuntime> {
     RUNTIME
         .get_or_init(|| {
@@ -155,7 +158,7 @@ impl QishuiAuthRuntime {
         // 与其它窗口保持一致的 WebView2 参数（必须与 tauri.conf.json 逐字相同）：
         // 参数不同会让 WebView2 为同一数据目录再建一个环境，创建控制器直接失败
         // （0x8007139F），窗口没有 webview，后面所有 eval 都会挂住。
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
         .auto_resize()
         .build()
         .map_err(|e| format!("创建汽水验证窗口失败: {e}"))?;
@@ -1467,7 +1470,10 @@ async fn qishui_signed_post(
         "body": body.to_string(),
     });
     let script_path = std::env::temp_dir().join("qishui-signer.cjs");
-    let payload_path = std::env::temp_dir().join(format!("qishui-sign-payload-{}.json", std::process::id()));
+    // 载荷文件名必须带请求序号：并发签名请求（如登录后红心列表与听歌模式同时发）共用
+    // 同名文件会互相覆盖——先写的请求其 node 进程可能读到后一个请求的载荷，结果错乱失败
+    let seq = SIGN_PAYLOAD_SEQ.fetch_add(1, Ordering::Relaxed);
+    let payload_path = std::env::temp_dir().join(format!("qishui-sign-payload-{}-{seq}.json", std::process::id()));
     std::fs::write(&script_path, QISHUI_SIGNER_JS).map_err(|e| e.to_string())?;
     std::fs::write(&payload_path, payload.to_string()).map_err(|e| e.to_string())?;
 

@@ -55,6 +55,8 @@ import com.nexbox.app.data.AnnouncementStore
 import com.nexbox.app.data.NetworkModule
 import com.nexbox.app.data.todayKey
 import com.nexbox.app.ui.AppCard
+import com.nexbox.app.ui.consumeDialogClick
+import com.nexbox.app.ui.dialogScrimClick
 import com.nexbox.app.ui.theme.Danger
 import com.nexbox.app.ui.theme.TextSecondary
 import kotlin.random.Random
@@ -197,7 +199,9 @@ fun AnnouncementListDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 18.dp),
+                .padding(horizontal = 18.dp)
+                // 内容铺满全屏导致系统"点外部关闭"永远不触发：点空白手动关闭
+                .dialogScrimClick(onDismiss),
             contentAlignment = Alignment.Center,
         ) {
             Column(
@@ -206,6 +210,8 @@ fun AnnouncementListDialog(
                     .heightIn(max = 600.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(MaterialTheme.colorScheme.surface)
+                    // 卡片消费点击：点卡片本体不关弹窗（滚动区手势各自消费）
+                    .consumeDialogClick()
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

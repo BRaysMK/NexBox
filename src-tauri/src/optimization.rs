@@ -1528,7 +1528,7 @@ fn reclaim_file_cache_native() {
 }
 
 /// 原生清理待机内存（standby 文件缓存 + 待机列表），无需 PowerShell
-fn clean_standby_memory_inner() -> u64 {
+pub(crate) fn clean_standby_memory_inner() -> u64 {
     let before = get_memory_info();
 
     // 1) 清空待机列表（管理员权限下生效）
@@ -1619,7 +1619,7 @@ fn is_protected_process_name(name: &str) -> bool {
 /// 原生遍历所有进程并 EmptyWorkingSet（收紧工作集），无需 PowerShell
 /// 跳过：自身、游戏进程（滤镜名单）、受保护的系统关键进程
 /// 按 CPU 核数分块多线程并行处理，大幅缩短全进程收紧耗时
-fn trim_working_set_inner() -> u64 {
+pub(crate) fn trim_working_set_inner() -> u64 {
     // 收集正在运行的滤镜名单游戏进程，避免游戏刚启动就被砍工作集
     let mut sys = System::new();
     sys.refresh_processes();
@@ -4584,6 +4584,95 @@ pub async fn scan_registry_tweaks(names: Vec<String>) -> Result<Vec<TweakScanRes
     .map_err(|e| format!("扫描线程异常: {}", e))?
 }
 
+/// 判断注册表写入错误是否为拒绝访问（os error 5 / ACL / 未提权）
+fn is_access_denied_err(err: &str) -> bool {
+    err.contains("os error 5") || err.contains("拒绝访问") || err.contains("Access is denied")
+}
+
+/// 通过 UAC 提权运行 reg.exe import 导入 .reg 文件（弹出一次 UAC 确认）。
+/// 用于进程未提权或键 ACL 受保护时（os error 5）的兜底写入。
+fn elevated_reg_import(reg_path: &Path) -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
+    use windows::Win32::UI::Shell::{
+        ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+
+    let system_root = env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+    let reg_exe = format!(r"{}\System32\reg.exe", system_root);
+    let args = format!("import \"{}\"", reg_path.display());
+
+    let to_w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let verb_w = to_w("runas");
+    let file_w = to_w(&reg_exe);
+    let args_w = to_w(&args);
+
+    let mut sei: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+    sei.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+    sei.lpVerb = PCWSTR(verb_w.as_ptr());
+    sei.lpFile = PCWSTR(file_w.as_ptr());
+    sei.lpParameters = PCWSTR(args_w.as_ptr());
+    sei.nShow = SW_HIDE.0;
+
+    if unsafe { ShellExecuteExW(&mut sei) }.is_err() {
+        let code = unsafe { GetLastError() };
+        return Err(format!(
+            "需要管理员权限：UAC 授权未完成（错误码 {}）。请以管理员身份运行 NexBox 后重试。",
+            code
+        ));
+    }
+
+    unsafe { WaitForSingleObject(sei.hProcess, u32::MAX) };
+
+    let mut exit_code: u32 = 0;
+    if unsafe { GetExitCodeProcess(sei.hProcess, &mut exit_code) }.is_err() {
+        let _ = unsafe { CloseHandle(sei.hProcess) };
+        return Err("无法获取 reg.exe 执行结果".to_string());
+    }
+    let _ = unsafe { CloseHandle(sei.hProcess) };
+
+    if exit_code != 0 {
+        return Err(format!("注册表导入失败（reg.exe 退出码 {}）", exit_code));
+    }
+    Ok(())
+}
+
+/// 将多个 .reg 文件合并为一个临时文件（保留首个头行），返回路径。
+/// 供批量提权导入使用：一次 UAC 完成整批写入。
+fn merge_reg_files(paths: &[PathBuf]) -> Result<PathBuf, String> {
+    let mut out = String::from("Windows Registry Editor Version 5.00\r\n\r\n");
+    for p in paths {
+        let bytes = fs::read(p).map_err(|e| format!("读取注册表文件失败 ({}): {}", p.display(), e))?;
+        let content = if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+            let u16s: Vec<u16> = bytes[2..]
+                .chunks_exact(2)
+                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                .collect();
+            String::from_utf16_lossy(&u16s)
+        } else if bytes.len() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
+            String::from_utf8_lossy(&bytes[3..]).to_string()
+        } else {
+            String::from_utf8_lossy(&bytes).to_string()
+        };
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("Windows Registry Editor") {
+                continue;
+            }
+            out.push_str(line);
+            out.push_str("\r\n");
+        }
+    }
+    let tmp = env::temp_dir().join("nexbox_batch_import.reg");
+    let mut bytes: Vec<u8> = vec![0xFF, 0xFE];
+    bytes.extend(out.encode_utf16().flat_map(|u| u.to_le_bytes()));
+    fs::write(&tmp, bytes).map_err(|e| format!("写入临时合并文件失败: {}", e))?;
+    Ok(tmp)
+}
+
 /// 应用单个注册表优化（读取 aq_registry/<name>.reg 并通过 winreg 写入）
 #[tauri::command]
 pub async fn apply_registry_tweak(name: String) -> Result<PerfTweakResult, String> {
@@ -4594,7 +4683,15 @@ pub async fn apply_registry_tweak(name: String) -> Result<PerfTweakResult, Strin
     // 注册表读写为阻塞操作，放入后台线程执行，避免卡顿主线程 UI
     tokio::task::spawn_blocking(move || {
         let content = read_reg_file(&name, false)?;
-        apply_reg_content(&content)?;
+        if let Err(e) = apply_reg_content(&content) {
+            if is_access_denied_err(&e) {
+                // 拒绝访问：进程未提权或键 ACL 受保护 → 提权 reg.exe 导入整个文件（弹一次 UAC）
+                let path = resolve_reg_path(&name, false)?;
+                elevated_reg_import(&path)?;
+            } else {
+                return Err(e);
+            }
+        }
         Ok(PerfTweakResult {
             success: true,
             message: "优化已应用".to_string(),
@@ -4613,7 +4710,14 @@ pub async fn restore_registry_tweak(name: String) -> Result<PerfTweakResult, Str
 
     tokio::task::spawn_blocking(move || {
         let content = read_reg_file(&name, true)?;
-        apply_reg_content(&content)?;
+        if let Err(e) = apply_reg_content(&content) {
+            if is_access_denied_err(&e) {
+                let path = resolve_reg_path(&name, true)?;
+                elevated_reg_import(&path)?;
+            } else {
+                return Err(e);
+            }
+        }
         Ok(PerfTweakResult {
             success: true,
             message: "优化已恢复".to_string(),
@@ -4668,22 +4772,56 @@ pub async fn batch_apply_registry_tweaks(names: Vec<String>) -> Result<PerfTweak
         let (success_count, failed) = batch_apply_reg_files(&names, false);
 
         if failed.is_empty() {
-            Ok(PerfTweakResult {
+            return Ok(PerfTweakResult {
                 success: true,
                 message: format!("成功应用 {} 项优化", success_count),
-            })
-        } else {
-            let failed_names: Vec<String> = failed.iter().map(|(n, _)| n.clone()).collect();
-            Ok(PerfTweakResult {
-                success: failed.len() < names.len(),
-                message: format!(
-                    "成功 {} 项，失败 {} 项: {}",
-                    success_count,
-                    failed.len(),
-                    failed_names.join(", ")
-                ),
-            })
+            });
         }
+
+        // 失败项为拒绝访问（未提权/ACL 保护）时：合并失败项的 .reg 一次提权导入（单次 UAC）
+        let denied: Vec<&(String, String)> =
+            failed.iter().filter(|(_, e)| is_access_denied_err(e)).collect();
+        if !denied.is_empty() {
+            let paths: Result<Vec<PathBuf>, String> = denied
+                .iter()
+                .map(|(n, _)| resolve_reg_path(n, false))
+                .collect();
+            match paths.and_then(|paths| merge_reg_files(&paths)).and_then(|p| elevated_reg_import(&p)) {
+                Ok(()) => {
+                    return Ok(PerfTweakResult {
+                        success: true,
+                        message: format!(
+                            "成功应用 {} 项优化（其中 {} 项通过管理员权限写入）",
+                            names.len(),
+                            denied.len()
+                        ),
+                    })
+                }
+                Err(elevated_err) => {
+                    return Ok(PerfTweakResult {
+                        success: failed.len() < names.len(),
+                        message: format!(
+                            "成功 {} 项，失败 {} 项: {}；提权重试失败: {}",
+                            success_count,
+                            failed.len(),
+                            failed.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>().join(", "),
+                            elevated_err
+                        ),
+                    })
+                }
+            }
+        }
+
+        let failed_names: Vec<String> = failed.iter().map(|(n, _)| n.clone()).collect();
+        Ok(PerfTweakResult {
+            success: failed.len() < names.len(),
+            message: format!(
+                "成功 {} 项，失败 {} 项: {}",
+                success_count,
+                failed.len(),
+                failed_names.join(", ")
+            ),
+        })
     })
     .await
     .map_err(|e| format!("批量优化线程异常: {}", e))?
@@ -4700,22 +4838,55 @@ pub async fn batch_restore_registry_tweaks(names: Vec<String>) -> Result<PerfTwe
         let (success_count, failed) = batch_apply_reg_files(&names, true);
 
         if failed.is_empty() {
-            Ok(PerfTweakResult {
+            return Ok(PerfTweakResult {
                 success: true,
                 message: format!("成功恢复 {} 项优化", success_count),
-            })
-        } else {
-            let failed_names: Vec<String> = failed.iter().map(|(n, _)| n.clone()).collect();
-            Ok(PerfTweakResult {
-                success: failed.len() < names.len(),
-                message: format!(
-                    "成功 {} 项，失败 {} 项: {}",
-                    success_count,
-                    failed.len(),
-                    failed_names.join(", ")
-                ),
-            })
+            });
         }
+
+        let denied: Vec<&(String, String)> =
+            failed.iter().filter(|(_, e)| is_access_denied_err(e)).collect();
+        if !denied.is_empty() {
+            let paths: Result<Vec<PathBuf>, String> = denied
+                .iter()
+                .map(|(n, _)| resolve_reg_path(n, true))
+                .collect();
+            match paths.and_then(|paths| merge_reg_files(&paths)).and_then(|p| elevated_reg_import(&p)) {
+                Ok(()) => {
+                    return Ok(PerfTweakResult {
+                        success: true,
+                        message: format!(
+                            "成功恢复 {} 项优化（其中 {} 项通过管理员权限写入）",
+                            names.len(),
+                            denied.len()
+                        ),
+                    })
+                }
+                Err(elevated_err) => {
+                    return Ok(PerfTweakResult {
+                        success: failed.len() < names.len(),
+                        message: format!(
+                            "成功 {} 项，失败 {} 项: {}；提权重试失败: {}",
+                            success_count,
+                            failed.len(),
+                            failed.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>().join(", "),
+                            elevated_err
+                        ),
+                    })
+                }
+            }
+        }
+
+        let failed_names: Vec<String> = failed.iter().map(|(n, _)| n.clone()).collect();
+        Ok(PerfTweakResult {
+            success: failed.len() < names.len(),
+            message: format!(
+                "成功 {} 项，失败 {} 项: {}",
+                success_count,
+                failed.len(),
+                failed_names.join(", ")
+            ),
+        })
     })
     .await
     .map_err(|e| format!("批量恢复线程异常: {}", e))?

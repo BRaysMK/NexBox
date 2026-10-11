@@ -865,7 +865,6 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
     const standalonePaths = [
       "/vertical-overlay",
       "/desktop-lyrics",
-      "/tray-menu",
       "/sensor-monitor",
       "/dynamic-island",
     ];

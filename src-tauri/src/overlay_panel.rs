@@ -2530,7 +2530,23 @@ pub async fn stop_overlay_panel(app_handle: tauri::AppHandle) -> Result<OverlayR
 
 #[tauri::command]
 pub async fn toggle_overlay_panel(app_handle: tauri::AppHandle) -> Result<OverlayResult, String> {
-    toggle_overlay(&app_handle)
+    // async command 跑在 tokio runtime 上：竖排分支不能经过 toggle_overlay 内部的
+    // block_on 包装（runtime 线程内嵌套 block_on 会 panic），按样式直接编排。
+    let settings = get_or_init_settings();
+    if settings.style == "vertical_panel" {
+        if crate::vertical_overlay::is_vertical_overlay_active() {
+            crate::vertical_overlay::stop_vertical_overlay(app_handle).await
+        } else {
+            crate::vertical_overlay::start_vertical_overlay(app_handle, None).await
+        }
+    } else {
+        // Win32：竖排在运行先异步停掉（互斥）；toggle_overlay 内部的 block_on
+        // 分支因竖排已停而不会触达（该分支仅供主线程全局快捷键使用，安全）
+        if crate::vertical_overlay::is_vertical_overlay_active() {
+            let _ = crate::vertical_overlay::stop_vertical_overlay(app_handle.clone()).await;
+        }
+        toggle_overlay(&app_handle)
+    }
 }
 
 #[tauri::command]

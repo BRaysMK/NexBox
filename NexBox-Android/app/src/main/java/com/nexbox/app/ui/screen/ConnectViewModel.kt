@@ -124,6 +124,9 @@ class ConnectViewModel : ViewModel() {
             }
             is WsEvent.ActionDone -> Unit // 控制页据此重拉 query，本轮先忽略
             is WsEvent.TransferUpdate -> Unit // 文件互传列表刷新由 FileTransferViewModel 处理
+            is WsEvent.MusicStateUpdate -> Unit // 音乐快照由音乐遥控消费
+            is WsEvent.LyricsUpdate -> Unit // 歌词由音乐遥控消费
+            is WsEvent.ClipboardUpdate -> Unit // 剪贴板文本由 ClipboardSyncManager 消费
             is WsEvent.Unknown -> Unit
         }
     }

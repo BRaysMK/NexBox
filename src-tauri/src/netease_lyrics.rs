@@ -5,9 +5,39 @@ pub struct Snapshot {
     pub song_artist: Option<String>,
 }
 
+/// 远程歌词行（带时间戳，毫秒）。serde camelCase：`timeMs` / `text`。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteLyricLine {
+    pub time_ms: i64,
+    pub text: String,
+}
+
+/// 一首歌的完整歌词包：`track_key` 供 PC 端缓存对位，手机端按 title/artist 对齐当前播放。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteLyrics {
+    pub track_key: String,
+    pub title: String,
+    pub artist: String,
+    pub lines: Vec<RemoteLyricLine>,
+}
+
 #[cfg(not(target_os = "windows"))]
 pub fn collect_snapshot() -> Snapshot {
     Snapshot::default()
+}
+
+/// 非 Windows 平台无网易云歌词采集，远程歌词查询直接返回空。
+#[cfg(not(target_os = "windows"))]
+pub fn fetch_meta_lyrics(_song_title: &str, _song_artist: &str) -> Option<RemoteLyrics> {
+    None
+}
+
+/// 解析 LRC 文本为带时间戳的歌词行（供软件内播放器把前端歌词转给远程接入用）。
+#[cfg(not(target_os = "windows"))]
+pub fn parse_lrc_text(_lrc: &str) -> Vec<RemoteLyricLine> {
+    Vec::new()
 }
 
 #[cfg(target_os = "windows")]
@@ -46,6 +76,8 @@ mod imp {
     };
 
     use super::Snapshot;
+    // 远程歌词的 DTO 定义在父模块（与 not-windows stub 同级），imp 内引用需显式导入
+    use super::{RemoteLyricLine, RemoteLyrics};
 
     const NETEASE_EAPI_KEY: &[u8; 16] = b"e82ckenh8dichen8";
     const NETEASE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 9; PCT-AL10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.64 HuaweiBrowser/10.0.3.311 Mobile Safari/537.36";
@@ -347,128 +379,240 @@ mod imp {
         }
 
         fn fetch_track_lyrics(&self, song_title: &str, song_artist: &str) -> Result<Vec<LyricLine>, String> {
-            let keyword = build_keyword(song_title, song_artist);
-            let song_id = self.search_best_match(&keyword, song_title, song_artist)?;
-            let response = self.post_eapi(
-                LYRIC_API_URL,
-                LYRIC_API_PATH,
-                map_from_pairs([
-                    ("id", json!(song_id)),
-                    ("cp", json!("false")),
-                    ("lv", json!("0")),
-                    ("kv", json!("0")),
-                    ("tv", json!("0")),
-                    ("rv", json!("0")),
-                    ("yv", json!("0")),
-                    ("ytv", json!("0")),
-                    ("yrv", json!("0")),
-                    ("csrf_token", json!("")),
-                ]),
-            )?;
-
-            if response.get("code").and_then(Value::as_i64) != Some(200) {
-                return Err("网易云歌词接口返回失败".to_string());
-            }
-
-            let lrc = response
-                .get("lrc")
-                .and_then(Value::as_object)
-                .and_then(|value| value.get("lyric"))
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-
-            if lrc.is_empty() || lrc.contains("纯音乐，请欣赏") {
-                return Ok(Vec::new());
-            }
-
-            Ok(parse_lrc(lrc))
+            fetch_track_lyrics_with(&self.http_client, song_title, song_artist)
         }
 
         fn search_best_match(&self, keyword: &str, song_title: &str, song_artist: &str) -> Result<String, String> {
-            let response = self.post_eapi(
-                SEARCH_API_URL,
-                SEARCH_API_PATH,
-                map_from_pairs([
-                    ("s", json!(keyword)),
-                    ("limit", json!("5")),
-                    ("offset", json!("0")),
-                    ("type", json!("1")),
-                    ("csrf_token", json!("")),
-                ]),
-            )?;
+            search_best_match_with(&self.http_client, keyword, song_title, song_artist)
+        }
 
-            if response.get("code").and_then(Value::as_i64) != Some(200) {
-                return Err("网易云搜索接口返回失败".to_string());
-            }
+        fn post_eapi(&self, url: &str, api_path: &str, payload: Map<String, Value>) -> Result<Value, String> {
+            post_eapi_with(&self.http_client, url, api_path, payload)
+        }
+    }
 
-            let songs = response
-                .get("result")
-                .and_then(Value::as_object)
-                .and_then(|value| value.get("songs"))
+    /// 网易云 eapi 请求公共通道（加密 + Cookie），collector 方法与远程歌词拉取共用。
+    fn post_eapi_with(
+        client: &Client,
+        url: &str,
+        api_path: &str,
+        mut payload: Map<String, Value>,
+    ) -> Result<Value, String> {
+        let header_payload = build_eapi_header();
+        payload.insert(
+            "header".to_string(),
+            Value::String(
+                serde_json::to_string(&header_payload).map_err(|error| error.to_string())?,
+            ),
+        );
+
+        let payload_text = serde_json::to_string(&payload).map_err(|error| error.to_string())?;
+        let encrypted = encrypt_eapi_payload(api_path, &payload_text)?;
+        let cookie = header_payload
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join("; ");
+
+        let response_text = client
+            .post(url)
+            .header(USER_AGENT, NETEASE_USER_AGENT)
+            .header(REFERER, "https://music.163.com/")
+            .header(COOKIE, cookie)
+            .form(&[("params", encrypted)])
+            .send()
+            .and_then(|response| response.error_for_status())
+            .map_err(|error| error.to_string())?
+            .text()
+            .map_err(|error| error.to_string())?;
+
+        serde_json::from_str(&response_text).map_err(|error| error.to_string())
+    }
+
+    /// 按「歌名 + 歌手」在网易云搜索最佳匹配曲目，返回歌曲 ID。
+    fn search_best_match_with(
+        client: &Client,
+        keyword: &str,
+        song_title: &str,
+        song_artist: &str,
+    ) -> Result<String, String> {
+        let response = post_eapi_with(
+            client,
+            SEARCH_API_URL,
+            SEARCH_API_PATH,
+            map_from_pairs([
+                ("s", json!(keyword)),
+                ("limit", json!("5")),
+                ("offset", json!("0")),
+                ("type", json!("1")),
+                ("csrf_token", json!("")),
+            ]),
+        )?;
+
+        if response.get("code").and_then(Value::as_i64) != Some(200) {
+            return Err("网易云搜索接口返回失败".to_string());
+        }
+
+        let songs = response
+            .get("result")
+            .and_then(Value::as_object)
+            .and_then(|value| value.get("songs"))
+            .and_then(Value::as_array)
+            .ok_or_else(|| "网易云搜索结果为空".to_string())?;
+
+        let mut best_song_id: Option<String> = None;
+        let mut best_score = 0.0f64;
+
+        for song in songs {
+            let cloud_title = song
+                .get("name")
+                .and_then(Value::as_str)
+                .map(normalize_owned)
+                .unwrap_or_default();
+            let cloud_artist = song
+                .get("artists")
                 .and_then(Value::as_array)
-                .ok_or_else(|| "网易云搜索结果为空".to_string())?;
+                .map(|artists| join_artist_names(artists))
+                .unwrap_or_default();
 
-            let mut best_song_id: Option<String> = None;
-            let mut best_score = 0.0f64;
+            let score = score_track_match(song_title, song_artist, &cloud_title, &cloud_artist);
+            if score > best_score {
+                best_score = score;
+                best_song_id = extract_song_id(song);
+            }
+        }
 
-            for song in songs {
-                let cloud_title = song
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .map(normalize_owned)
-                    .unwrap_or_default();
-                let cloud_artist = song
-                    .get("artists")
-                    .and_then(Value::as_array)
-                    .map(|artists| join_artist_names(artists))
-                    .unwrap_or_default();
+        if best_score < MATCH_THRESHOLD {
+            return Err(format!("未找到足够匹配的网易云歌曲，最高匹配度为 {:.0}%", best_score * 100.0));
+        }
 
-                let score = score_track_match(song_title, song_artist, &cloud_title, &cloud_artist);
-                if score > best_score {
-                    best_score = score;
-                    best_song_id = extract_song_id(song);
+        best_song_id.ok_or_else(|| "网易云搜索结果缺少歌曲 ID".to_string())
+    }
+
+    /// 按「歌名 + 歌手」拉整首带时间戳歌词。
+    fn fetch_track_lyrics_with(
+        client: &Client,
+        song_title: &str,
+        song_artist: &str,
+    ) -> Result<Vec<LyricLine>, String> {
+        let keyword = build_keyword(song_title, song_artist);
+        let song_id = search_best_match_with(client, &keyword, song_title, song_artist)?;
+        let response = post_eapi_with(
+            client,
+            LYRIC_API_URL,
+            LYRIC_API_PATH,
+            map_from_pairs([
+                ("id", json!(song_id)),
+                ("cp", json!("false")),
+                ("lv", json!("0")),
+                ("kv", json!("0")),
+                ("tv", json!("0")),
+                ("rv", json!("0")),
+                ("yv", json!("0")),
+                ("ytv", json!("0")),
+                ("yrv", json!("0")),
+                ("csrf_token", json!("")),
+            ]),
+        )?;
+
+        if response.get("code").and_then(Value::as_i64) != Some(200) {
+            return Err("网易云歌词接口返回失败".to_string());
+        }
+
+        let lrc = response
+            .get("lrc")
+            .and_then(Value::as_object)
+            .and_then(|value| value.get("lyric"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+
+        if lrc.is_empty() || lrc.contains("纯音乐，请欣赏") {
+            return Ok(Vec::new());
+        }
+
+        Ok(parse_lrc(lrc))
+    }
+
+    /// 解析 LRC 文本为远程歌词行（软件内播放器歌词通路用）。
+    pub fn parse_lrc_text(lrc: &str) -> Vec<RemoteLyricLine> {
+        parse_lrc(lrc)
+            .into_iter()
+            .map(|line| RemoteLyricLine { time_ms: line.time_ms, text: line.text })
+            .collect()
+    }
+
+    /// 去掉歌名尾部的括号注记：「我好想你（苏打绿版）」→「我好想你」。
+    /// 版本后缀（翻唱版/Live/语言版…）是搜索匹配失败的大头；
+    /// 注记内容超过 16 字符不当后缀处理，防误伤正常含括号歌名。
+    fn strip_title_suffix(title: &str) -> String {
+        let original = title.trim().to_string();
+        let mut s = original.clone();
+        loop {
+            let trimmed = s.trim_end().to_string();
+            if !(trimmed.ends_with('）') || trimmed.ends_with(')')) {
+                break;
+            }
+            let Some(open_pos) = trimmed.rfind(|c| c == '（' || c == '(') else {
+                break;
+            };
+            let inner = &trimmed[open_pos + 1..trimmed.len() - 1];
+            if inner.chars().count() > 16 {
+                break;
+            }
+            s = trimmed[..open_pos].trim_end().to_string();
+            if s.is_empty() {
+                return original; // 全是括号，放弃去后缀
+            }
+        }
+        s
+    }
+
+    /// 给远程接入（remote_access::music）用：按歌名+歌手拉网易云歌词。
+    /// 刻意不依赖 SMTC 会话/UIA：任何来源（软件内播放器、QQ/酷狗等外部客户端）
+    /// 只要有元数据就能查网易云曲库。**阻塞**（每个变体搜索 + 歌词两次 HTTP，共 8s 超时），
+    /// 调用方必须放在 spawn_blocking 里；无匹配/无歌词返回 None。
+    /// 歌名先试原始名，再试去尾部括号注记的变体（版本后缀是匹配失败的大头）。
+    pub fn fetch_meta_lyrics(song_title: &str, song_artist: &str) -> Option<RemoteLyrics> {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(8))
+            .build()
+            .ok()?;
+
+        let trimmed = song_title.trim();
+        let mut candidates: Vec<String> = vec![trimmed.to_string()];
+        let stripped = strip_title_suffix(trimmed);
+        if !stripped.is_empty() && stripped != trimmed && !candidates.contains(&stripped) {
+            candidates.push(stripped);
+        }
+
+        for candidate in &candidates {
+            let lines = match fetch_track_lyrics_with(&client, candidate, song_artist) {
+                Ok(lines) if !lines.is_empty() => lines,
+                Ok(_) => {
+                    log::info!("[NeteaseLyrics] 远程歌词无歌词: {candidate} - {song_artist}");
+                    continue;
                 }
-            }
-
-            if best_score < MATCH_THRESHOLD {
-                return Err(format!("未找到足够匹配的网易云歌曲，最高匹配度为 {:.0}%", best_score * 100.0));
-            }
-
-            best_song_id.ok_or_else(|| "网易云搜索结果缺少歌曲 ID".to_string())
-        }
-
-        fn post_eapi(&self, url: &str, api_path: &str, mut payload: Map<String, Value>) -> Result<Value, String> {
-            let header_payload = build_eapi_header();
-            payload.insert(
-                "header".to_string(),
-                Value::String(
-                    serde_json::to_string(&header_payload).map_err(|error| error.to_string())?,
-                ),
+                Err(error) => {
+                    log::warn!("[NeteaseLyrics] 远程歌词拉取失败({candidate}): {error}");
+                    continue;
+                }
+            };
+            log::info!(
+                "[NeteaseLyrics] 远程歌词命中: {candidate} - {song_artist}，共 {} 行",
+                lines.len()
             );
-
-            let payload_text = serde_json::to_string(&payload).map_err(|error| error.to_string())?;
-            let encrypted = encrypt_eapi_payload(api_path, &payload_text)?;
-            let cookie = header_payload
-                .iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect::<Vec<_>>()
-                .join("; ");
-
-            let response_text = self
-                .http_client
-                .post(url)
-                .header(USER_AGENT, NETEASE_USER_AGENT)
-                .header(REFERER, "https://music.163.com/")
-                .header(COOKIE, cookie)
-                .form(&[("params", encrypted)])
-                .send()
-                .and_then(|response| response.error_for_status())
-                .map_err(|error| error.to_string())?
-                .text()
-                .map_err(|error| error.to_string())?;
-
-            serde_json::from_str(&response_text).map_err(|error| error.to_string())
+            // track_key/title/artist 都用原始歌名：与远程快照的 cache_key/匹配逻辑保持一致
+            return Some(RemoteLyrics {
+                track_key: build_track_key(Some(song_title), Some(song_artist)),
+                title: song_title.to_string(),
+                artist: song_artist.to_string(),
+                lines: lines
+                    .into_iter()
+                    .map(|line| RemoteLyricLine { time_ms: line.time_ms, text: line.text })
+                    .collect(),
+            });
         }
+        None
     }
 
 
@@ -828,3 +972,7 @@ mod imp {
 
 #[cfg(target_os = "windows")]
 pub use imp::collect_snapshot;
+#[cfg(target_os = "windows")]
+pub use imp::fetch_meta_lyrics;
+#[cfg(target_os = "windows")]
+pub use imp::parse_lrc_text;

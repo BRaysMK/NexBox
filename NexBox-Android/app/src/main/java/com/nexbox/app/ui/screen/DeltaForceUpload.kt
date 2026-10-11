@@ -57,18 +57,17 @@ internal fun UploadFormScreen(state: DeltaUiState, vm: DeltaForceViewModel) {
     val selectedCategory = categories.firstOrNull { it.id == state.uploadCategoryId }
     val selectedWeapon = state.uploadWeapon
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .imePadding()
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        DetailTopBar(title = "上传改枪码", onBack = vm::closeUpload)
-
-        AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+    DetailScaffold(title = "上传改枪码", onBack = vm::closeUpload) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .contentTopFade()                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(horizontal = 18.dp)
+                .detailHeaderSpacing(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 FormChoice(
                     label = "分类",
@@ -156,6 +155,7 @@ internal fun UploadFormScreen(state: DeltaUiState, vm: DeltaForceViewModel) {
         Spacer(Modifier.height(8.dp))
         // 悬浮玻璃导航条的余量
         Spacer(Modifier.navigationBarsPadding().height(96.dp))
+    }
     }
 }
 

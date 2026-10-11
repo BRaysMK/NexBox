@@ -73,24 +73,23 @@ fun HardwareDetailScreen(
     state: HardwareUiState,
     onBack: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    DetailScaffold(
+        title = if (kind == HardwareDetailKind.CPU) "CPU 详情" else "GPU 详情",
+        onBack = onBack,
+        trailingText = "实时刷新",
     ) {
-        DetailTopBar(
-            title = if (kind == HardwareDetailKind.CPU) "CPU 详情" else "GPU 详情",
-            onBack = onBack,
-            trailingText = "实时刷新",
-        )
-
-        when (kind) {
-            HardwareDetailKind.CPU -> CpuDetailBody(state)
-            HardwareDetailKind.GPU -> GpuDetailBody(state)
-        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .contentTopFade()                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp)
+                .detailHeaderSpacing(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when (kind) {
+                HardwareDetailKind.CPU -> CpuDetailBody(state)
+                HardwareDetailKind.GPU -> GpuDetailBody(state)
+            }
 
         Text(
             "数据来自 PC 端传感器（每秒刷新），读不到的项目显示「—」；趋势为最近 90 秒占用率。",
@@ -101,6 +100,7 @@ fun HardwareDetailScreen(
         Spacer(Modifier.height(8.dp))
         // 悬浮玻璃导航条的余量：内容从它下面穿过，末尾留出高度不被永久遮住
         Spacer(Modifier.navigationBarsPadding().height(96.dp))
+        }
     }
 }
 

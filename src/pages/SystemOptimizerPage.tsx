@@ -10,7 +10,6 @@ import {
   Flex,
   Switch,
   Button,
-  IconButton,
   useColorModeValue,
   Spinner,
   Badge,
@@ -22,9 +21,8 @@ import {
   ModalFooter,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { store } from "@/lib/store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -304,10 +302,11 @@ function buildScanStates(results: { name: string; applied: boolean }[]) {
 
 export default function SystemOptimizerPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { liquidGlassEnabled } = useBackground();
   const toast = useDynamicIsland("sparkles");
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
+
+  const [activeCategory, setActiveCategory] = useState<OptimizerCategory>("gaming");
 
   const [savedStates, setSavedStatesState] = useState<Record<string, boolean | string>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -658,13 +657,6 @@ export default function SystemOptimizerPage() {
         gap={3}
       >
         <HStack spacing={3}>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/optimize")}
-            color={headingColor}
-          />
           <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
             {t("systemOptimizer.pageTitle")}
           </Heading>
@@ -741,25 +733,60 @@ export default function SystemOptimizerPage() {
         </HStack>
       </Flex>
 
-      {/* 优化项分类列表 */}
-      {categoryOrder.map((cat) => (
-        <CategorySection
-          key={cat}
-          category={cat}
-          items={itemsByCategory[cat]}
-          savedStates={savedStates}
-          togglingItems={togglingItems}
-          onToggle={toggleItem}
-          onSelect={selectItem}
-          headingColor={headingColor}
-          subTextColor={subTextColor}
-          activeColor={activeColor}
-          cardBg={cardBg}
-          cardBorder={cardBorder}
-          liquidGlassEnabled={liquidGlassEnabled}
-          t={t}
-        />
-      ))}
+      {/* 分类 Tab 栏 */}
+      <Flex w="full" flexWrap="wrap" gap={2}>
+        {categoryOrder.map((cat) => {
+          const isActive = activeCategory === cat;
+          const count = itemsByCategory[cat].length;
+          return (
+            <Button
+              key={cat}
+              size="sm"
+              borderRadius="full"
+              onClick={() => setActiveCategory(cat)}
+              bg={isActive ? activeColor : "transparent"}
+              color={isActive ? contrastText : headingColor}
+              variant={isActive ? "solid" : "outline"}
+              borderColor={cardBorder}
+              borderWidth="1px"
+              _hover={{ bg: isActive ? activeColor : hoverBg }}
+              _active={{ transform: "scale(0.97)" }}
+              transition="all 0.15s"
+            >
+              {t(categoryLabels[cat])}
+              <Box
+                as="span"
+                ml={2}
+                px={1.5}
+                borderRadius="full"
+                fontSize="2xs"
+                lineHeight="1.6"
+                bg={isActive ? "rgba(255,255,255,0.25)" : cardBg}
+                color={isActive ? contrastText : subTextColor}
+              >
+                {count}
+              </Box>
+            </Button>
+          );
+        })}
+      </Flex>
+
+      {/* 当前分类的优化项列表 */}
+      <CategorySection
+        category={activeCategory}
+        items={itemsByCategory[activeCategory]}
+        savedStates={savedStates}
+        togglingItems={togglingItems}
+        onToggle={toggleItem}
+        onSelect={selectItem}
+        headingColor={headingColor}
+        subTextColor={subTextColor}
+        activeColor={activeColor}
+        cardBg={cardBg}
+        cardBorder={cardBorder}
+        liquidGlassEnabled={liquidGlassEnabled}
+        t={t}
+      />
 
       {/* 温馨提示弹窗 */}
       <Modal

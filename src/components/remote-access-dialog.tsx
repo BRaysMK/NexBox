@@ -30,6 +30,7 @@ import {
   X,
   ArrowLeft,
   ArrowLeftRight,
+  ClipboardList,
   Plus,
   Save,
   FolderOpen,
@@ -132,6 +133,9 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
 
   const [transfer, setTransfer] = useState<TransferLists | null>(null);
   const [transferBusy, setTransferBusy] = useState(false);
+  // 剪贴板同步发送开关（只管"PC → 手机"方向；接收常开）
+  const [clipSync, setClipSync] = useState(false);
+  const [clipSyncBusy, setClipSyncBusy] = useState(false);
   /** 进行中的传输进度（fileId → 进度），由后端事件驱动；带 receivedAt 用于老化失效 */
   const [progressMap, setProgressMap] = useState<Record<string, ProgressEntry>>({});
   // 有在途进度时每秒强制重渲染一次，让超龄进度自动退场（传输被中断时不会再有事件来）
@@ -151,14 +155,16 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
 
   const refresh = useCallback(async () => {
     try {
-      const [a, d, r] = await Promise.all([
+      const [a, d, r, c] = await Promise.all([
         invoke<AccessInfo>("cmd_get_remote_access"),
         invoke<PairedDevice[]>("cmd_list_paired_devices"),
         invoke<PairRequest[]>("cmd_list_pair_requests"),
+        invoke<boolean>("cmd_get_clipboard_sync"),
       ]);
       setAccess(a);
       setDevices(d);
       setPairRequests(r);
+      setClipSync(c);
     } catch {
       /* ignore */
     }
@@ -419,6 +425,18 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
     setProgressMap({});
   };
 
+  // 切换剪贴板同步发送开关（只影响"PC → 手机"方向），由方块内的 Switch 触发
+  const toggleClipSync = (next: boolean) => {
+    if (clipSyncBusy) return;
+    setClipSyncBusy(true);
+    invoke<boolean>("cmd_set_clipboard_sync", { on: next })
+      .then(setClipSync)
+      .catch(() => {
+        /* 状态以后端为准，下次 refresh 恢复 */
+      })
+      .finally(() => setClipSyncBusy(false));
+  };
+
   // 第二页：单个列表混排两个方向，新的在前
   const allFiles: TransferFile[] = transfer
     ? [...transfer.to_device, ...transfer.from_device].sort((a, b) => b.created_at - a.created_at)
@@ -514,34 +532,67 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                 />
               </HStack>
 
-              {/* 下方：文件互传小方块，整块点击进入互传页 */}
-              <Box
-                w="112px"
-                h="112px"
-                borderRadius="xl"
-                bg={hexToRgba(getActiveColor(), 0.08)}
-                border="1px solid"
-                borderColor={hexToRgba(getActiveColor(), 0.28)}
-                display="flex"
-                flexDirection="column"
-                alignItems="center"
-                justifyContent="center"
-                gap={2}
-                cursor="pointer"
-                transition="border-color 0.2s, background 0.2s"
-                _hover={{ borderColor: getActiveColor(), bg: hexToRgba(getActiveColor(), 0.14) }}
-                onClick={() => openFilesPage(d)}
-              >
-                <ArrowLeftRight size={22} style={{ color: getActiveColor() }} />
-                <Text fontSize="xs" fontWeight="bold">
-                  {t("overlayPanel.remoteAccess.fileTransfer") || "文件互传"}
-                </Text>
-                <Text fontSize="2xs" color={textColor}>
-                  {d.connected
-                    ? t("overlayPanel.remoteAccess.transferEnterHint") || "点击收发文件"
-                    : t("overlayPanel.remoteAccess.transferEnterOffline") || "离线可暂存"}
-                </Text>
-              </Box>
+              {/* 下方：文件互传 + 剪贴板同步两个小方块（同构 112x112） */}
+              <HStack spacing={3} align="stretch">
+                <Box
+                  w="112px"
+                  h="112px"
+                  borderRadius="xl"
+                  bg={hexToRgba(getActiveColor(), 0.08)}
+                  border="1px solid"
+                  borderColor={hexToRgba(getActiveColor(), 0.28)}
+                  display="flex"
+                  flexDirection="column"
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={2}
+                  cursor="pointer"
+                  transition="border-color 0.2s, background 0.2s"
+                  _hover={{ borderColor: getActiveColor(), bg: hexToRgba(getActiveColor(), 0.14) }}
+                  onClick={() => openFilesPage(d)}
+                >
+                  <ArrowLeftRight size={22} style={{ color: getActiveColor() }} />
+                  <Text fontSize="xs" fontWeight="bold">
+                    {t("overlayPanel.remoteAccess.fileTransfer") || "文件互传"}
+                  </Text>
+                  <Text fontSize="2xs" color={textColor}>
+                    {d.connected
+                      ? t("overlayPanel.remoteAccess.transferEnterHint") || "点击收发文件"
+                      : t("overlayPanel.remoteAccess.transferEnterOffline") || "离线可暂存"}
+                  </Text>
+                </Box>
+                {/* 剪贴板同步方块：内置开关控件，只管"PC → 手机"发送方向；接收常开 */}
+                <Box
+                  w="112px"
+                  h="112px"
+                  borderRadius="xl"
+                  bg={hexToRgba(getActiveColor(), clipSync ? 0.16 : 0.08)}
+                  border="1px solid"
+                  borderColor={clipSync ? getActiveColor() : hexToRgba(getActiveColor(), 0.28)}
+                  display="flex"
+                  flexDirection="column"
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={2}
+                  transition="border-color 0.2s, background 0.2s"
+                >
+                  <ClipboardList size={22} style={{ color: getActiveColor() }} />
+                  <Text fontSize="xs" fontWeight="bold">
+                    {t("overlayPanel.remoteAccess.clipboardSync") || "剪贴板同步"}
+                  </Text>
+                  <Switch
+                    size="sm"
+                    isChecked={clipSync}
+                    isDisabled={clipSyncBusy}
+                    onChange={(e) => toggleClipSync(e.target.checked)}
+                    sx={{
+                      "& .chakra-switch__track[data-checked]": {
+                        bg: getActiveColor(),
+                      },
+                    }}
+                  />
+                </Box>
+              </HStack>
             </VStack>
           </HStack>
         </Box>

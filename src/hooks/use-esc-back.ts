@@ -45,7 +45,6 @@ const PAGE_PARENT: Record<string, string> = {
   "/optimize/pso-cache": "/optimize",
   "/optimize/power-management": "/optimize",
   "/optimize/startup-manager": "/optimize",
-  "/optimize/system-optimizer": "/optimize",
   "/optimize/network-optimizer": "/optimize",
   "/optimize/peripheral-optimize": "/optimize",
   "/optimize/windows-update": "/optimize",

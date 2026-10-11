@@ -570,8 +570,8 @@ class HudOverlayService : Service() {
         while (scope.isActive) {
             val next = HudSample(
                 cpuUsage = LocalDeviceReader.cpuUsageNow(),
-                cpuTemp = LocalDeviceReader.cpuTempNow(),
-                gpuTemp = LocalDeviceReader.gpuTempNow(),
+                cpuTemp = LocalDeviceReader.cpuTempNow(this@HudOverlayService),
+                gpuTemp = LocalDeviceReader.gpuTempNow(this@HudOverlayService),
                 memUsage = LocalDeviceReader.memUsageNow(this@HudOverlayService),
             )
             // Compose 快照状态支持跨线程写入，这里不切主线程，省一次往返还避免抖动

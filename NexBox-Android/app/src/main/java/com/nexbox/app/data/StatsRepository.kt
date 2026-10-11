@@ -85,6 +85,10 @@ class StatsRepository(
                             is WsEvent.Disconnected, is WsEvent.Unauthorized -> _connected.value = false
                             is WsEvent.Stats -> _hardware.value = HardwareSnapshot.from(event.payload)
                             is WsEvent.ActionDone, is WsEvent.TransferUpdate, is WsEvent.Unknown -> Unit
+                            // 音乐快照/歌词无本仓状态可记，直接透传给订阅方（音乐遥控）
+                            is WsEvent.MusicStateUpdate, is WsEvent.LyricsUpdate -> Unit
+                            // 剪贴板文本无本仓状态可记，透传给订阅方（ClipboardSyncManager）
+                            is WsEvent.ClipboardUpdate -> Unit
                         }
                         _events.tryEmit(event)
                     }

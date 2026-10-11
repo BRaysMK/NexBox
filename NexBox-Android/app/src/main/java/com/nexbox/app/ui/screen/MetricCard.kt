@@ -79,6 +79,8 @@ internal fun MetricGauge(
     hint: String? = null,
     tempWarn: Double = 80.0,
     tempDanger: Double = 90.0,
+    /** 没有可信温度时显示的兜底文案（如热档位「偏热」），不冒充温度数值 */
+    tempFallback: String? = null,
 ) {
     Column(
         modifier = modifier.padding(14.dp),
@@ -100,6 +102,13 @@ internal fun MetricGauge(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = tempColor(temp, tempWarn, tempDanger),
+                )
+            } else if (!tempFallback.isNullOrBlank()) {
+                Text(
+                    tempFallback,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextSecondary,
                 )
             }
         }

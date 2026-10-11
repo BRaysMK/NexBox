@@ -1,5 +1,5 @@
 import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image, useColorMode } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Cpu, TrendingUp, Package, Music, LayoutGrid, Gamepad2 } from "lucide-react";
+import { Home, Wrench, Settings, Settings2, Cpu, TrendingUp, Package, Music, LayoutGrid, Gamepad2 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -15,7 +15,7 @@ import steamIconLight from "@/assets/tools/Steam-light.webp";
 import steamIconDark from "@/assets/tools/Steam-dark.webp";
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 
-const HIDEABLE_NAV_PATHS = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+const HIDEABLE_NAV_PATHS = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
 const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
 
 // 同步从 localStorage 预填充导航可见性：store 的读取是异步的，若首帧用空对象初始化，
@@ -204,7 +204,8 @@ export function Sidebar() {
   const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, jellyBounceEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
   const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
-  const [showLabel, setShowLabel] = useState(false);
+  // 默认显示文字标签（未配置过时为开；显式存过 "false" 的用户保持关闭）
+  const [showLabel, setShowLabel] = useState(() => localStorage.getItem("nexbox_sidebar_show_label") !== "false");
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
 
   useEffect(() => {
@@ -213,7 +214,7 @@ export function Sidebar() {
       if (v !== null && v !== undefined) {
         setShowLabel(v);
       } else {
-        setShowLabel(localStorage.getItem("nexbox_sidebar_show_label") === "true");
+        setShowLabel(localStorage.getItem("nexbox_sidebar_show_label") !== "false");
       }
       let nv = await store.get<string>("nexbox_nav_position");
       if (nv === "top" || nv === "left") {
@@ -295,7 +296,7 @@ export function Sidebar() {
       if (orderStr) {
         try {
           const parsed = JSON.parse(orderStr) as string[];
-          const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+          const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
           let changed = false;
           for (const p of allPaths) {
             if (!parsed.includes(p)) { parsed.push(p); changed = true; }
@@ -312,7 +313,7 @@ export function Sidebar() {
           const saved = localStorage.getItem(NAV_ORDER_KEY);
           if (saved) {
             const parsed = JSON.parse(saved) as string[];
-            const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+            const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
             let changed = false;
             for (const p of allPaths) {
               if (!parsed.includes(p)) { parsed.push(p); changed = true; }
@@ -398,6 +399,7 @@ export function Sidebar() {
     ...(IS_STORE_BUILD ? [] : [{ path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") }]),
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
+    { path: "/system-optimizer", icon: Settings2, ariaLabel: t("sidebar.systemOptimizer") },
     { path: "/music", icon: Music, ariaLabel: t("sidebar.music") },
     { path: "/delta-force", icon: null, customIcon: deltaForceIconLight, customIconDark: deltaForceIconDark, customIconSize: "20px", ariaLabel: t("sidebar.deltaForce") },
     { path: "/steam", icon: null, customIcon: steamIconLight, customIconDark: steamIconDark, customIconSize: "44px", ariaLabel: t("sidebar.steam"), alwaysShowLabel: true },

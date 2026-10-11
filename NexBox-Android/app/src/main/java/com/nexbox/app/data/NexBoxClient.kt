@@ -10,9 +10,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.Request
@@ -106,6 +109,25 @@ class NexBoxClient(private val sessionStore: SessionStore) {
     /** 自助解绑：撤销本机令牌（成功后再清本地会话） */
     suspend fun unpair() {
         authed("DELETE", "/api/pair")
+    }
+
+    // ───────────────────────── 剪贴板同步 ─────────────────────────
+
+    /** POST /api/clipboard —— 把本机剪贴板文本推给 PC 端（PC 写入系统剪贴板） */
+    suspend fun clipboardPush(text: String) {
+        val payload = NetworkModule.json.encodeToString(
+            JsonObject.serializer(),
+            buildJsonObject { put("text", text) },
+        )
+        authed("POST", "/api/clipboard", payload)
+    }
+
+    /** GET /api/clipboard —— 取 PC 当前剪贴板文本（切前台补齐用），无内容返回空串 */
+    suspend fun clipboardPull(): String {
+        val data = authed("GET", "/api/clipboard")
+        return data.jsonObject["text"]
+            ?.let { el -> runCatching { el.jsonPrimitive.content }.getOrNull() }
+            .orEmpty()
     }
 
     // ───────────────────────── 文件互传（文件篮） ─────────────────────────

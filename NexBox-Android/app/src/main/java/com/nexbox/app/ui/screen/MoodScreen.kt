@@ -51,20 +51,20 @@ fun MoodScreen(onBack: () -> Unit) {
     // 主题底色要在组合期取好：AndroidView 的 factory 不是组合作用域，读不到 @Composable 语义色
     val canvasColor = PageBg.toArgb()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .background(PageBg),
+    DetailScaffold(
+        title = "心境",
+        onBack = onBack,
+        trailingText = when {
+            loading -> "加载中…"
+            else -> null
+        },
     ) {
-        DetailTopBar(
-            title = "心境",
-            onBack = onBack,
-            trailingText = when {
-                loading -> "加载中…"
-                else -> null
-            },
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(PageBg)
+                .detailHeaderSpacing(),
+        ) {
         Box(Modifier.weight(1f)) {
             @Suppress("DEPRECATION")
             AndroidView(
@@ -147,6 +147,7 @@ fun MoodScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
     }
 
     // 系统返回键：网页还能后退就先在网页里后退，退无可退才关掉头心境页

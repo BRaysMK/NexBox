@@ -97,9 +97,17 @@ data class DeviceRuntime(
     val chargingLabel: String? = null,
     val batteryVoltage: String? = null,
 
-    /** CPU 温度：所有 cpu/cpuss 温度区里的最高值。取最高不取平均 —— 一个热点不该被七个冷核抹平 */
+    /**
+     * CPU 温度：可信 cpu/cpuss 温度区里的最高值（限速策略区已被剔除）。取最高不取平均 ——
+     * 一个热点不该被七个冷核抹平；候选全被判假时是 null，界面宁可空着也不报假数
+     */
     val cpuTempC: Double? = null,
     val gpuTempC: Double? = null,
+    /**
+     * 热档位文案（正常 / 偏热 / 限速中 / 严重过热）：温度读不到或不值得信时兜底显示。
+     * 它不含温度数值，只说明设备真实热状态；API 29 以下为 null
+     */
+    val thermalStatusLabel: String? = null,
     /** CPU 占用：1 −（各核 cpuidle 空闲驻留之和 ÷ 在线核数 × 墙钟差）。首轮采样必为 null */
     val cpuUsagePercent: Int? = null,
     /** 预留：需要 root 才能读到，绝大多数机器上是 null，字段留着以便换机后直接可用 */

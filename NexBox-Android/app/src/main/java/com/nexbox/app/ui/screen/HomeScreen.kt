@@ -38,6 +38,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,10 +57,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.nexbox.app.data.AnnouncementStore
+import com.nexbox.app.data.ClipboardSyncStore
 import com.nexbox.app.data.NetworkModule
 import com.nexbox.app.ui.MessageToast
 import com.nexbox.app.ui.screen.home.AddDeviceDialog
 import com.nexbox.app.ui.screen.home.AnnouncementListDialog
+import com.nexbox.app.ui.screen.home.ClipboardSyncCard
 import com.nexbox.app.ui.screen.home.FileTransferCard
 import com.nexbox.app.ui.screen.home.HomeTopCards
 import com.nexbox.app.ui.screen.home.ImportantAnnouncementDialog
@@ -69,12 +82,15 @@ fun HomeScreen(
     hw: HardwareViewModel = viewModel(),
     pc: PcControlViewModel = viewModel(),
     ft: FileTransferViewModel = viewModel(),
+    music: MusicRemoteViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val hwState by hw.state.collectAsStateWithLifecycle()
     val pcState by pc.state.collectAsStateWithLifecycle()
     val ftState by ft.state.collectAsStateWithLifecycle()
+    val musicState by music.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val appContext = LocalContext.current
 
     // —— 页面层级：主页 ↔ CPU / GPU 图表详情页 / 文件互传页 ——
     // 存枚举名而不是枚举本身：rememberSaveable 的自动 Saver 对 null 值不友好，字符串最稳。
@@ -92,6 +108,7 @@ fun HomeScreen(
     var showAdd by rememberSaveable { mutableStateOf(false) }
     var addMode by rememberSaveable { mutableStateOf("menu") } // menu | scan
     var showAnnouncements by rememberSaveable { mutableStateOf(false) }
+    var showMusic by rememberSaveable { mutableStateOf(false) }
     var importantKey by rememberSaveable { mutableStateOf("") }
     var importantHandled by remember { mutableStateOf(false) }
 
@@ -181,6 +198,26 @@ fun HomeScreen(
                         controlsEnabled = phase == LinkPhase.CONNECTED,
                         phase = phase,
                         transferPending = ftState.incoming.count { !it.acked },
+                        musicState = musicState,
+                        clipboardSyncEnabled = ClipboardSyncStore.enabled,
+                        onToggleClipboardSync = { on ->
+                            scope.launch {
+                                ClipboardSyncStore.setEnabled(appContext, on)
+                                // 首次开启提示一次：Android 10+ 后台读写剪贴板受限，仅前台工作
+                                if (on && !ClipboardSyncStore.hintShown) {
+                                    ClipboardSyncStore.markHintShown(appContext)
+                                    android.widget.Toast.makeText(
+                                        appContext,
+                                        "剪贴板同步仅在新境盒位于前台时工作",
+                                        android.widget.Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
+                        onOpenMusic = { showMusic = true },
+                        onMusicPlayPause = music::playPause,
+                        onMusicNext = music::next,
+                        onMusicPrev = music::prev,
                         onOpenCpuDetail = { detailKey = HardwareDetailKind.CPU.name },
                         onOpenGpuDetail = { detailKey = HardwareDetailKind.GPU.name },
                         onOpenTransfer = { detailKey = "file_transfer" },
@@ -203,19 +240,21 @@ fun HomeScreen(
             }
         }
 
-        // 轻提示：连接页 / 硬件页 / PC 功能开关共用一个通道，按优先级取第一个非空的
+        // 轻提示：连接页 / 硬件页 / PC 功能开关 / 音乐遥控共用一个通道，按优先级取第一个非空的
         MessageToast(
-            message = state.message ?: hwState.message ?: pcState.message,
+            message = state.message ?: hwState.message ?: pcState.message ?: musicState.message,
             isError = when {
                 state.message != null -> state.messageIsError
                 hwState.message != null -> hwState.messageIsError
-                else -> pcState.messageIsError
+                pcState.message != null -> pcState.messageIsError
+                else -> musicState.messageIsError
             },
             onDismiss = {
                 when {
                     state.message != null -> vm.consumeMessage()
                     hwState.message != null -> hw.consumeMessage()
-                    else -> pc.consumeMessage()
+                    pcState.message != null -> pc.consumeMessage()
+                    else -> music.consumeMessage()
                 }
             },
             modifier = Modifier
@@ -234,6 +273,19 @@ fun HomeScreen(
                 onScanQr = launchScan,
                 onBackToMenu = { addMode = "menu" },
                 onDismiss = { showAdd = false },
+            )
+        }
+
+        if (showMusic) {
+            MusicRemoteDialog(
+                state = musicState,
+                onDismiss = { showMusic = false },
+                onPlayPause = music::playPause,
+                onNext = music::next,
+                onPrev = music::prev,
+                onSeek = music::seek,
+                onVolumeDialogShown = music::refreshPcVolume,
+                onPcVolumeChange = music::setPcVolume,
             )
         }
 
@@ -267,6 +319,14 @@ private fun HomeContent(
     phase: LinkPhase,
     /** PC 发来的待接收文件数（文件互传卡副标题角标） */
     transferPending: Int,
+    musicState: MusicRemoteUiState,
+    /** 剪贴板同步发送开关状态（ClipboardSyncStore.enabled） */
+    clipboardSyncEnabled: Boolean,
+    onToggleClipboardSync: (Boolean) -> Unit,
+    onOpenMusic: () -> Unit,
+    onMusicPlayPause: () -> Unit,
+    onMusicNext: () -> Unit,
+    onMusicPrev: () -> Unit,
     onOpenCpuDetail: () -> Unit,
     onOpenGpuDetail: () -> Unit,
     onOpenTransfer: () -> Unit,
@@ -276,17 +336,20 @@ private fun HomeContent(
     onAdd: () -> Unit,
     onOpenAnnouncements: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        TopBar()
 
-        HomeTopCards(onOpenAnnouncements = onOpenAnnouncements)
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                // 内容滚进状态栏 + 悬浮标题区域时渐隐（背景不渐隐）
+                .contentTopFade()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Spacer(Modifier.pageHeaderSpacing())
+
+            HomeTopCards(onOpenAnnouncements = onOpenAnnouncements)
 
         // 一整块互联卡：未配对时是配对故事 + 卡内「添加设备」；已配对后顶部显示
         // 名称 / 已连接 + 右上角「断开连接」，主体是**可左右翻页的两页** ——
@@ -308,6 +371,18 @@ private fun HomeContent(
             onUnpair = onUnpair,
         )
 
+        // 电脑音乐 mini 控件：连接上 PC 后才显示；已在播时卡上直接播放/暂停、
+        // 切歌，整卡点击开完整遥控弹窗
+        if (phase == LinkPhase.CONNECTED) {
+            MusicMiniCard(
+                state = musicState,
+                onOpen = onOpenMusic,
+                onPlayPause = onMusicPlayPause,
+                onNext = onMusicNext,
+                onPrev = onMusicPrev,
+            )
+        }
+
         // 文件互传卡：配对完成后出现，点进互传页（收 PC 发来的文件 / 发文件给 PC）
         if (phase != LinkPhase.IDLE) {
             FileTransferCard(
@@ -315,22 +390,33 @@ private fun HomeContent(
                 connected = phase == LinkPhase.CONNECTED,
                 onClick = onOpenTransfer,
             )
+
+            // 剪贴板同步卡：文件互传卡正下方。开关只管发送方向（本机 → PC），接收常开
+            ClipboardSyncCard(
+                enabled = clipboardSyncEnabled,
+                connected = phase == LinkPhase.CONNECTED,
+                onToggle = onToggleClipboardSync,
+            )
         }
 
 
         Spacer(Modifier.height(8.dp))
         // 悬浮玻璃导航条的余量：内容从它下面穿过，末尾留出高度不被永久遮住
         Spacer(Modifier.navigationBarsPadding().height(96.dp))
+        }
+
+        TopBar(Modifier.align(Alignment.TopCenter))
     }
 }
 
-/** 顶部：一行标题 + BETA 角标（连接状态只在互联卡里显示，这里不再重复一个胶囊） */
+/** 顶部：一行标题（连接状态只在互联卡里显示，这里不再重复一个胶囊）——悬浮显示 */
 @Composable
-private fun TopBar() {
+private fun TopBar(modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(top = 14.dp),
+            .statusBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -339,19 +425,5 @@ private fun TopBar() {
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        Spacer(Modifier.width(7.dp))
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-                .padding(horizontal = 6.dp, vertical = 2.dp),
-        ) {
-            Text(
-                "BETA",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
     }
 }

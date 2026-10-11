@@ -37,6 +37,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.nexbox.app.data.DiscoveryReply
 import com.nexbox.app.ui.AppCard
+import com.nexbox.app.ui.consumeDialogClick
+import com.nexbox.app.ui.dialogScrimClick
 import com.nexbox.app.ui.screen.ConnectUiState
 import com.nexbox.app.ui.theme.Accent
 import com.nexbox.app.ui.theme.Hairline
@@ -65,7 +67,9 @@ fun AddDeviceDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 18.dp),
+                .padding(horizontal = 18.dp)
+                // 内容铺满全屏导致系统"点外部关闭"永远不触发：点空白手动关闭
+                .dialogScrimClick(onDismiss),
             contentAlignment = Alignment.Center,
         ) {
             Column(
@@ -73,6 +77,8 @@ fun AddDeviceDialog(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
                     .background(MaterialTheme.colorScheme.surface)
+                    // 卡片消费点击：点卡片本体不关弹窗（内部菜单项各自消费）
+                    .consumeDialogClick()
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {

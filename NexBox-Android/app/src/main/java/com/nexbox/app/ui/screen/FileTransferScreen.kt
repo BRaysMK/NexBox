@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,7 +30,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -54,6 +54,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nexbox.app.data.NetworkModule
 import com.nexbox.app.data.TransferFile
 import com.nexbox.app.ui.AppCard
+import com.nexbox.app.ui.elasticPress
 import com.nexbox.app.ui.theme.Accent
 import com.nexbox.app.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
@@ -119,21 +120,20 @@ fun FileTransferScreen(vm: FileTransferViewModel = viewModel(), onBack: () -> Un
             .sortedByDescending { it.file.createdAt }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    DetailScaffold(
+        title = "文件互传",
+        onBack = onBack,
+        trailingText = if (connected) "已连接" else "未连接",
     ) {
-        DetailTopBar(
-            title = "文件互传",
-            onBack = onBack,
-            trailingText = if (connected) "已连接" else "未连接",
-        )
-
-        Text(
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .contentTopFade()                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp)
+                .detailHeaderSpacing(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
             "通过局域网直接传输，文件不经过外部服务器；PC 端在「手机远程连接」弹窗的设备页收发文件。",
             fontSize = 11.sp,
             color = TextSecondary,
@@ -179,6 +179,7 @@ fun FileTransferScreen(vm: FileTransferViewModel = viewModel(), onBack: () -> Un
         Spacer(Modifier.height(8.dp))
         // 悬浮玻璃导航条的余量：内容从它下面穿过，末尾留出高度不被永久遮住
         Spacer(Modifier.navigationBarsPadding().height(96.dp))
+        }
     }
 }
 
@@ -232,7 +233,14 @@ private fun IncomingRow(
                     else -> SmallActionButton(text = "下载", primary = true) { onDownload(file) }
                 }
                 // 来件也可以清除（两端共享同一份列表，删了 PC 端也会消失）
-                IconButton(onClick = { vm.removeFile(file) }, modifier = Modifier.size(30.dp)) {
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .elasticPress { vm.removeFile(file) }
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         Icons.Rounded.Close,
                         contentDescription = "清除",
@@ -304,7 +312,14 @@ private fun SentRow(file: TransferFile, vm: FileTransferViewModel) {
                 fontWeight = FontWeight.Medium,
                 color = if (file.acked) MaterialTheme.colorScheme.primary else TextSecondary,
             )
-            IconButton(onClick = { vm.removeFile(file) }, modifier = Modifier.size(32.dp)) {
+            Box(
+                Modifier
+                    .size(32.dp)
+                    .elasticPress { vm.removeFile(file) }
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     Icons.Rounded.Close,
                     contentDescription = "删除",

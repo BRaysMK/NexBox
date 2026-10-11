@@ -132,7 +132,7 @@ function AddToolModal({
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const hoverBg = useColorModeValue("gray.100", "#2a2a2a");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const iconColor = useColorModeValue("gray.700", "gray.300");

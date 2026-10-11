@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -76,6 +79,7 @@ import com.nexbox.app.data.DeltaPasswordItem
 import com.nexbox.app.data.DeltaWeapon
 import com.nexbox.app.ui.AppCard
 import com.nexbox.app.ui.MessageToast
+import com.nexbox.app.ui.elasticPress
 import com.nexbox.app.ui.theme.Accent
 import com.nexbox.app.ui.theme.Hairline
 import com.nexbox.app.ui.theme.TextSecondary
@@ -159,25 +163,26 @@ private fun DeltaForceList(
     listState: LazyListState,
     onOpenRoulette: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
-    ) {
-        Text(
-            "三角洲专区",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(start = 18.dp, top = 14.dp, bottom = 14.dp),
-        )
-
+    // 滚动列表铺满全屏（不避让状态栏），标题作为列表首项自带状态栏内边距：
+    // 内容滚动时能完整穿到状态栏底下，顶部不再被割裂
+    Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            item(key = "title") {
+                Text(
+                    "三角洲专区",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(top = 14.dp, bottom = 14.dp),
+                )
+            }
             item(key = "password") { PasswordCard(state, vm) }
             item(key = "features") { FeatureRow(onOpenRoulette = onOpenRoulette) }
             item(key = "loadout-header") { LoadoutHeader(state, vm) }
@@ -254,13 +259,13 @@ private fun PasswordCard(state: DeltaUiState, vm: DeltaForceViewModel) {
 }
 
 /**
- * 密码块单行铺开：6 张一行（多出来的自动换行），手机上正好放今日全部地图。
- * 每张块很窄，字号整体压小一档；不显示「复制」字样，点按静默复制。
+ * 密码块单行铺开：一行 3 张（多出来的自动换行），一屏能看到更多行。
+ * 不显示「复制」字样，点按静默复制。
  */
 @Composable
 private fun PasswordGrid(items: List<DeltaPasswordItem>, onCopy: (DeltaPasswordItem) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.chunked(6).forEach { row ->
+        items.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 row.forEach { item ->
                     PasswordTile(
@@ -269,8 +274,8 @@ private fun PasswordGrid(items: List<DeltaPasswordItem>, onCopy: (DeltaPasswordI
                         modifier = Modifier.weight(1f),
                     )
                 }
-                // 不足 6 张时补空位，保证每张密码块的宽度与整行一致
-                repeat(6 - row.size) { Spacer(Modifier.weight(1f)) }
+                // 不足 3 张时补空位，保证每张密码块的宽度与整行一致
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
@@ -460,12 +465,12 @@ private fun LoadoutHeader(state: DeltaUiState, vm: DeltaForceViewModel) {
 private fun FilterPill(text: String, selected: Boolean, count: Int = 0, onClick: () -> Unit) {
     Box(
         modifier = Modifier
+            .elasticPress(onClick = onClick)
             .clip(CircleShape)
             .background(
                 if (selected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
             )
-            .clickable(onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 7.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

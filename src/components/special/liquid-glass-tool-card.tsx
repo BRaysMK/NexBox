@@ -27,7 +27,7 @@ export function LiquidGlassToolCard({
   const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
   const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
 
-  const defaultBg = useColorModeValue("gray.50", "#111111");
+  const defaultBg = useColorModeValue("white", "#111111");
   const defaultHoverBg = useColorModeValue("gray.100", "#222222");
   const defaultBorder = useColorModeValue("gray.200", "#333333");
 

@@ -117,6 +117,11 @@ export default function DynamicIslandWindowPage() {
   // 左键按住中的时间戳：拖动进度条时绝不能中途开启穿透，否则 mouseup 会丢到
   // 下方窗口、拖动状态永远不重置（带 5s 上限，即使漏事件也不会永久挡下点击）
   const mouseDownAtRef = useRef(0);
+  // 穿透活动锁：窗口非穿透期间收到 mousemove 就续期（锁定期内禁止切回穿透）。
+  // 解决悬停展开动画（岛体 200→320px）中 60ms 轮询的滞后矩形判定导致
+  // 「穿透翻转 ↔ notifyIslandIdle ↔ collapse/expand」循环 → 文字反复消失出现。
+  // 穿透开启时窗口收不到 mousemove，锁不会误触发；光标真正离开后锁 400ms 过期恢复判定
+  const lockThroughUntilRef = useRef(0);
 
   useEffect(() => {
     const down = () => {
@@ -135,6 +140,15 @@ export default function DynamicIslandWindowPage() {
     };
   }, []);
 
+  // 穿透活动锁：只在非穿透期间（窗口收得到鼠标事件）才会触发，光标在窗内移动即续期
+  useEffect(() => {
+    const onMove = () => {
+      lockThroughUntilRef.current = Date.now() + 400;
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
   // 强制整窗背景透明：index.css 的 :root{background-color} 会填充 WebView2 导致穿透失效
   useEffect(() => {
     const html = document.documentElement;
@@ -148,6 +162,32 @@ export default function DynamicIslandWindowPage() {
       html.style.background = prev[0];
       body.style.background = prev[1];
       if (root) root.style.background = prev[2];
+    };
+  }, []);
+
+  // ── 闪烁诊断（验证后可移除）──
+  // 1) 渲染停摆探测：正常 60fps 帧间隔 ~16ms，出现 >500ms 间隔 = 渲染被挂起
+  //    （Chromium 遮挡误判/后台节流），这正是"不碰也闪、动画抽搐"的直接证据
+  // 2) visibilitychange 监控：visibilityState 翻转 = 遮挡计算误判的铁证
+  useEffect(() => {
+    let last = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const delta = now - last;
+      if (delta > 500) {
+        console.warn(`[IslandWindow] 渲染停摆 ${Math.round(delta)}ms @ ${new Date().toISOString()}`);
+      }
+      last = now;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const onVis = () => {
+      console.warn(`[IslandWindow] visibility -> ${document.visibilityState} @ ${new Date().toISOString()}`);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
@@ -312,6 +352,13 @@ export default function DynamicIslandWindowPage() {
         }
         if (!hasContentRef.current) {
           await setThrough(true);
+          return;
+        }
+        // 活动锁定期：光标刚在窗内活动过（悬停/展开动画中），强制保持可交互，
+        // 跳过矩形判定——动画中 getBoundingClientRect 每帧变化，滞后 60ms 的判定
+        // 在岛体边缘极易翻转穿透引发 collapse/expand 循环
+        if (Date.now() < lockThroughUntilRef.current) {
+          await setThrough(false);
           return;
         }
         const el = document.getElementById(ISLAND_HOST_DOM_ID);

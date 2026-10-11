@@ -62,6 +62,7 @@ import com.nexbox.app.data.CrosshairStore
 import com.nexbox.app.data.CrosshairStyles
 import com.nexbox.app.overlay.HudOverlayService
 import com.nexbox.app.ui.AppCard
+import com.nexbox.app.ui.elasticPress
 import com.nexbox.app.ui.theme.Accent
 import com.nexbox.app.ui.theme.FillColor
 import com.nexbox.app.ui.theme.TextSecondary
@@ -103,20 +104,19 @@ fun CrosshairSettingsScreen(onBack: () -> Unit) {
             if (Settings.canDrawOverlays(context)) launchCrosshair()
         }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        DetailTopBar(title = "辅助准心", onBack = onBack)
-
-        AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    DetailScaffold(title = "辅助准心", onBack = onBack) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .contentTopFade()                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp)
+                .detailHeaderSpacing(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 IconBadge(Icons.Rounded.GpsFixed, Accent, size = 40.dp, iconSize = 21.dp)
@@ -187,8 +187,8 @@ fun CrosshairSettingsScreen(onBack: () -> Unit) {
                         androidx.compose.foundation.Canvas(
                             modifier = Modifier
                                 .size(26.dp)
-                                .clip(CircleShape)
-                                .clickable { CrosshairStore.setColor(context, hex) },
+                                .elasticPress { CrosshairStore.setColor(context, hex) }
+                                .clip(CircleShape),
                         ) {
                             drawCircle(parseHexColor(hex) ?: Color.Transparent)
                             // 浅色卡片上白色色块会隐身，统一描一圈细边
@@ -277,8 +277,8 @@ fun CrosshairSettingsScreen(onBack: () -> Unit) {
                                     tint = TextSecondary,
                                     modifier = Modifier
                                         .size(26.dp)
+                                        .elasticPress { deleteTarget = preset }
                                         .clip(CircleShape)
-                                        .clickable { deleteTarget = preset }
                                         .padding(6.dp),
                                 )
                             }
@@ -296,6 +296,7 @@ fun CrosshairSettingsScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         // 悬浮玻璃导航条的余量：内容从它下面穿过，末尾留出高度不被永久遮住
         Spacer(Modifier.navigationBarsPadding().height(96.dp))
+        }
     }
 
     if (showSaveDialog) {

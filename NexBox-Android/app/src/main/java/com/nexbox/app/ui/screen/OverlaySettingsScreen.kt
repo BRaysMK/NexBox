@@ -94,19 +94,19 @@ fun OverlaySettingsScreen(onBack: () -> Unit) {
             if (Settings.canDrawOverlays(context)) launchOverlay()
         }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp),
-        // 卡片之间的缝隙：不写这个四张卡会糊成一块
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        DetailTopBar(title = "悬浮框设置", onBack = onBack)
-        Spacer(Modifier.height(12.dp))
+    DetailScaffold(title = "悬浮框设置", onBack = onBack) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .contentTopFade()                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp)
+                .detailHeaderSpacing(),
+            // 卡片之间的缝隙：不写这个四张卡会糊成一块
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Spacer(Modifier.height(12.dp))
 
-        AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -307,6 +307,7 @@ fun OverlaySettingsScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         // 悬浮玻璃导航条的余量：内容从它下面穿过，末尾留出高度不被永久遮住
         Spacer(Modifier.navigationBarsPadding().height(96.dp))
+        }
     }
 }
 
@@ -392,17 +393,17 @@ private fun OverlayMapsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     BackHandler { onBack() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp),
-    ) {
-        DetailTopBar(title = "选择地图", onBack = onBack)
-        Spacer(Modifier.height(12.dp))
+    DetailScaffold(title = "选择地图", onBack = onBack) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .contentTopFade()                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp)
+                .detailHeaderSpacing(),
+        ) {
+            Spacer(Modifier.height(12.dp))
 
-        AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SectionTitle("每日密码地图")
                 DELTA_MAPS.forEach { map ->
@@ -443,4 +444,5 @@ private fun OverlayMapsScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Spacer(Modifier.navigationBarsPadding().height(96.dp))
     }
+}
 }

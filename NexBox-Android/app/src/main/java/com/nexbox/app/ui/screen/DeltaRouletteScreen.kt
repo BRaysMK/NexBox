@@ -16,13 +16,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -124,45 +121,17 @@ fun DeltaRouletteScreen(onClose: () -> Unit) {
     // 整页覆盖层：底下还画着三角洲主页，必须自己铺完整背景才盖得住。
     // 用 AppBackground（与 NexBoxApp 背景层同一份渲染）：液态玻璃卡片采样的是背景层，
     // 两边逐像素一致，卡片透出的背景才和页面背景对得上，而不是「卡片里有背景图、页面纯色」
-    Box(Modifier.fillMaxSize()) {
+    DetailScaffold(title = "随机装备", onBack = onClose) {
         AppBackground(Modifier.fillMaxSize())
         Column(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding(),
+                .contentTopFade()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp)
+                .detailHeaderSpacing(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 6.dp, end = 18.dp, top = 8.dp, bottom = 8.dp),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "返回",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .clickable(onClick = onClose)
-                        .padding(10.dp)
-                        .size(24.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "随机装备",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 18.dp)
-                    .navigationBarsPadding()
-                    .padding(bottom = 108.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
                 // 筛选：与 PC 端一致的「只玩绝密」「不用手枪」
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RouletteOption("只玩绝密", onlyClassified) { onlyClassified = it }
@@ -213,7 +182,10 @@ fun DeltaRouletteScreen(onClose: () -> Unit) {
                         )
                     }
                 }
-            }
+
+            // 底部悬浮玻璃导航条余量：内容从它下面穿过，末尾留出高度不被永久遮住
+            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.navigationBarsPadding().height(108.dp))
         }
     }
 }

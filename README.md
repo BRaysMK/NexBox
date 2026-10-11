@@ -1,6 +1,5 @@
 <p align="center">
   <img src="docs/screenshots/banner.png" alt="NexBox Logo" width="820" style=""></p>
-<p align="center"><br></p>
 
 <p align="center">
   <a href="https://github.com/MuLiuSaMa/NexBox/releases">
@@ -58,7 +57,7 @@ PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看�
 ## 界面预览
 
 | 硬件监控 | 系统优化 |
-| :---: | :---: |
+| --- | --- |
 | [![硬件监控](docs/screenshots/hardware.png)](docs/screenshots/hardware.png) | [![系统优化](docs/screenshots/system-optimize.png)](docs/screenshots/system-optimize.png) |
 | 内置工具 | Steam 库管理 |
 | [![内置工具](docs/screenshots/toolbox.png)](docs/screenshots/toolbox.png) | [![Steam 库管理](docs/screenshots/steam-library.png)](docs/screenshots/steam-library.png) |

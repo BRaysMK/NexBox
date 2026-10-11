@@ -87,9 +87,17 @@ pub async fn exec_query(app: &tauri::AppHandle, key: &str, args: &Value) -> Resu
             .await
             .map(|active| json!({ "active": active }))),
         "apps.list" => v(crate::app_manager::list_installed_apps().await),
-        // 统一「当前播放」：软件内播放器 / 外部 SMTC，按优先级二选一
-        "music.state" => super::music::state_json(),
-        _ => Err(format!("unknown query: {key}")),
+// 统一「当前播放」：软件内播放器 / 外部 SMTC，按优先级二选一
+"music.state" => super::music::state_json(),
+// PC 系统主音量（手机端音量弹窗显示用）。取整为 i64：
+// f32 会序列化成 87.0 这类浮点字面量，安卓端 Int 字段反序列化直接失败
+"audio.volume" => super::system_volume::get_pc_volume()
+    .map(|percent| json!({ "percent": percent.round() as i64 })),
+// 歌词：按当前播放的「歌名 + 歌手」查网易云曲库（阻塞 HTTP，放 spawn_blocking）
+"music.lyrics" => tokio::task::spawn_blocking(super::music::lyrics_json)
+.await
+.map_err(|e| format!("歌词拉取任务失败: {e}"))?,
+_ => Err(format!("unknown query: {key}")),
     }
 }
 
@@ -119,7 +127,28 @@ pub async fn exec_action(app: &tauri::AppHandle, key: &str, args: &Value) -> Res
             let idx = get_usize(args, "displayIndex");
             v(crate::display_filter::disable_filter(idx).await)
         }
-        "overlay.toggle" => v(crate::overlay_panel::toggle_overlay_panel(app.clone()).await),
+        // 悬浮框开关。本分支跑在 tokio runtime 线程上，**不能**走 toggle_overlay_panel →
+        // toggle_overlay → toggle_vertical_overlay 的同步包装链：链内的
+        // async_runtime::block_on 在 runtime 线程内嵌套调用会直接 panic，
+        // 表现为竖排（Tauri 窗口）悬浮框从手机端永远打不开（Win32 分支无 block_on 所以正常）。
+        // 这里按样式原生 async 编排，与 PC 前端 start/stop_overlay_panel 同路径。
+        "overlay.toggle" => {
+            let style = crate::overlay_panel::get_or_init_settings().style;
+            if style == "vertical_panel" {
+                if crate::vertical_overlay::is_vertical_overlay_active() {
+                    v(crate::vertical_overlay::stop_vertical_overlay(app.clone()).await)
+                } else {
+                    v(crate::vertical_overlay::start_vertical_overlay(app.clone(), None).await)
+                }
+            } else {
+                // Win32 样式：竖排在运行先异步停掉（两实现互斥），
+                // toggle_overlay 内部的 block_on 分支因竖排已停而不会触达
+                if crate::vertical_overlay::is_vertical_overlay_active() {
+                    let _ = crate::vertical_overlay::stop_vertical_overlay(app.clone()).await;
+                }
+                v(crate::overlay_panel::toggle_overlay(&app))
+            }
+        }
         // 准心切换：直接调已有命令（内部同步置位 CROSSHAIR_ACTIVE，回读即准确）
         "crosshair.toggle" => v(crate::crosshair::toggle_crosshair(app.clone()).await),
         // 音乐控制：source 缺省/auto 时按统一优先级打给当前生效来源
@@ -142,6 +171,15 @@ pub async fn exec_action(app: &tauri::AppHandle, key: &str, args: &Value) -> Res
                 .ok_or_else(|| "缺少参数 positionMs".to_string())?;
             let source = get_str(args, "source");
             super::music::control(app, "seek", position_ms, source.as_deref())
+        }
+        // PC 系统主音量（0..100）
+        "audio.volume" => {
+            let percent = args
+                .get("percent")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| "缺少参数 percent".to_string())?;
+            super::system_volume::set_pc_volume(percent as f32)
+                .map(|_| json!({ "percent": percent }))
         }
         _ => Err(format!("unknown action: {key}")),
     }

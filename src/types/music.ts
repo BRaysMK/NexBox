@@ -198,6 +198,8 @@ export interface SmtcState {
   playing: boolean;
   positionMs: number;
   durationMs: number;
+  /** 软件内当前歌的 LRC 歌词原文（供手机远程端显示）；无歌词为 null */
+  lyricLrc?: string | null;
 }
 
 /// 平台显示信息

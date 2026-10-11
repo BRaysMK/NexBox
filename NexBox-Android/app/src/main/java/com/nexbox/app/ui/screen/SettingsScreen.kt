@@ -3,6 +3,7 @@ package com.nexbox.app.ui.screen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image as LogoImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,17 +19,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Colorize
 import androidx.compose.material.icons.rounded.Done
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -44,19 +51,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nexbox.app.BuildConfig
+import com.nexbox.app.R
 import com.nexbox.app.data.AppearanceStore
 import com.nexbox.app.data.BackgroundStore
+import com.nexbox.app.ui.elasticPress
 import com.nexbox.app.data.DefaultAccentHex
 import com.nexbox.app.data.ThemeMode
 import com.nexbox.app.ui.AppCard
@@ -68,6 +79,7 @@ import com.nexbox.app.ui.theme.PageBg
 import com.nexbox.app.ui.theme.PageBgTop
 import com.nexbox.app.ui.theme.TextSecondary
 import com.nexbox.app.ui.theme.accentContentColor
+import com.nexbox.app.ui.theme.isDarkTheme
 import com.nexbox.app.ui.theme.parseHexColor
 import com.nexbox.app.update.UpdateManager
 
@@ -98,11 +110,13 @@ private fun SettingsList(onOpenPicker: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        // 状态栏高度用滚动内边距顶开，而不是滚动容器避让状态栏：
+        // 内容滚动时能完整穿到状态栏底下，顶部不再被割裂
+        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
         Spacer(Modifier.height(2.dp))
         Text(
             "设置",
@@ -110,8 +124,7 @@ private fun SettingsList(onOpenPicker: () -> Unit) {
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onBackground,
         )
-
-        AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionHead(Icons.Rounded.Palette, "主题模式")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -172,13 +185,13 @@ private fun SettingsList(onOpenPicker: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
-                            "玻璃质感卡片",
+                            "液态玻璃（需安卓13及以上）",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            "开启后卡片与底部导航栏变为液态玻璃，导航栏为胶囊式",
+                            "开启后界面卡片将启用液态玻璃效果，拥有模糊和真实的折射，但会大幅增加性能负载和功耗。",
                             fontSize = 11.5.sp,
                             color = TextSecondary,
                         )
@@ -191,18 +204,9 @@ private fun SettingsList(onOpenPicker: () -> Unit) {
             }
         }
 
-        AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionHead(icon = null, title = "关于")
-                AppNameRow()
-                HorizontalDivider(color = Hairline)
-                InfoRow("版本", "v${BuildConfig.VERSION_NAME}")
-                UpdateRow()
-                InfoRow("作者", "木流")
-                SiteRow()
-                OpenSourceRow()
-            }
-        }
+        // 关于：居中头部（双 Logo + 版本徽标 + 检查更新）+ 更多链接
+        AboutHeader()
+        AboutLinks()
 
         Spacer(Modifier.height(8.dp))
         // 悬浮玻璃导航条的余量：内容从它下面穿过，末尾留出高度不被永久遮住
@@ -334,125 +338,159 @@ private fun BackgroundPicker() {
     bgError?.let { Text(it, fontSize = 11.5.sp, color = Danger) }
 }
 
+/** 关于头部：双 Logo + 版本徽标 + 检查更新胶囊按钮（FlClash 式居中排版） */
 @Composable
-private fun AppNameRow() {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "新境盒-安卓端",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.width(7.dp))
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+private fun AboutHeader() {
+    AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp, horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                "BETA",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            // 黑色双 Logo（图形标识 + 中文标准字）
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                LogoImage(
+                    painter = painterResource(R.drawable.logo_nexbox_black),
+                    colorFilter = if (isDarkTheme()) ColorFilter.tint(Color.White) else null,
+                    contentDescription = "新境盒标识",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(48.dp),
+                )
+                LogoImage(
+                    painter = painterResource(R.drawable.logo_chinese_black),
+                    colorFilter = if (isDarkTheme()) ColorFilter.tint(Color.White) else null,
+                    contentDescription = "新境盒",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(width = 133.dp, height = 44.5.dp),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                VersionChip("v${BuildConfig.VERSION_NAME}")
+                VersionChip("GPL-3")
+            }
+            UpdateCheckButton()
         }
     }
 }
 
 @Composable
-private fun SiteRow() {
-    val uriHandler = LocalUriHandler.current
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("官网", fontSize = 13.sp, color = TextSecondary)
-        Spacer(Modifier.weight(1f))
+private fun VersionChip(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
         Text(
-            "nexbox.cn",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .clickable { uriHandler.openUri("https://nexbox.cn") }
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-        )
-    }
-}
-
-/** 开源致谢：液态玻璃效果来自 Kyant0 的 AndroidLiquidGlass（backdrop 库）。 */
-@Composable
-private fun OpenSourceRow() {
-    val uriHandler = LocalUriHandler.current
-    HorizontalDivider(color = Hairline)
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text("开源项目", fontSize = 13.sp, color = TextSecondary)
-        Text(
-            "Kyant0/AndroidLiquidGlass",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .clickable {
-                    uriHandler.openUri("https://github.com/Kyant0/AndroidLiquidGlass/tree/android")
-                }
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-        )
-        Text(
-            "使用了该项目的液态玻璃效果",
+            text,
             fontSize = 11.5.sp,
-            color = TextSecondary,
-        )
-    }
-}
-
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 13.sp, color = TextSecondary)
-        Spacer(Modifier.weight(1f))
-        Text(
-            value,
-            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium,
         )
     }
 }
 
 /**
- * 「检查更新」行：右侧跟随更新流程状态变化；空闲 / 已最新时可点发起手动检查，
- * 其余状态点了只是把进行中的更新弹窗重新拉起来。
+ * 检查更新胶囊按钮：文案跟随更新状态机变化。
+ * 发现新版本时变成「发现新版本」，点击把更新弹窗拉起来；空闲 / 已最新时发起手动检查。
  */
 @Composable
-private fun UpdateRow() {
-    val s = UpdateManager.state
-    val value: String
-    val clickable: Boolean
-    when (s) {
-        is UpdateManager.State.Checking -> { value = "检查中…"; clickable = false }
-        is UpdateManager.State.Available -> { value = "发现 v${s.info.version}"; clickable = true }
-        is UpdateManager.State.Downloading -> { value = "下载中 ${s.progress}%"; clickable = false }
-        is UpdateManager.State.Downloaded -> { value = "待安装"; clickable = true }
-        is UpdateManager.State.Failed -> { value = "失败，点我重试"; clickable = true }
-        UpdateManager.State.Idle, UpdateManager.State.UpToDate -> { value = "检查更新"; clickable = true }
+private fun UpdateCheckButton() {
+    val enabled: Boolean
+    val label: String
+    when (val s = UpdateManager.state) {
+        is UpdateManager.State.Checking -> { enabled = false; label = "检查中…" }
+        is UpdateManager.State.Available -> { enabled = true; label = "发现新版本" }
+        is UpdateManager.State.Downloading -> { enabled = false; label = "下载中 ${s.progress}%" }
+        is UpdateManager.State.Downloaded -> { enabled = true; label = "待安装" }
+        is UpdateManager.State.Failed -> { enabled = true; label = "重试" }
+        UpdateManager.State.Idle, UpdateManager.State.UpToDate -> { enabled = true; label = "检查更新" }
     }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("检查更新", fontSize = 13.sp, color = TextSecondary)
-        Spacer(Modifier.weight(1f))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.primary)
+            .clickable(enabled = enabled) { UpdateManager.manualCheck() }
+            .padding(horizontal = 13.dp, vertical = 6.dp),
+    ) {
+        Icon(
+            Icons.Rounded.Refresh,
+            contentDescription = null,
+            tint = accentContentColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.size(13.dp),
+        )
         Text(
-            value,
-            fontSize = 13.sp,
-            color = if (clickable) MaterialTheme.colorScheme.primary else TextSecondary,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(enabled = clickable) { UpdateManager.manualCheck() }
-                .padding(horizontal = 4.dp, vertical = 2.dp),
+            label,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = accentContentColor(MaterialTheme.colorScheme.primary),
         )
     }
 }
 
+/** 「更多」链接卡：官网 / 本项目 / 液态玻璃效果来源 */
+@Composable
+private fun AboutLinks() {
+    Column {
+        AppCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+            Column {
+                LinkRow(Icons.Rounded.Language, "官网", "nexbox.cn", "https://nexbox.cn")
+                HorizontalDivider(color = Hairline)
+                LinkRow(Icons.Rounded.Code, "本项目", "github.com/MuLiuSaMa/NexBox", "https://github.com/MuLiuSaMa/NexBox")
+                HorizontalDivider(color = Hairline)
+                LinkRow(
+                    Icons.Rounded.BlurOn,
+                    "液态玻璃",
+                    "Kyant0/AndroidLiquidGlass",
+                    "https://github.com/Kyant0/AndroidLiquidGlass/tree/android",
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LinkRow(icon: ImageVector, title: String, subtitle: String, url: String) {
+    val uriHandler = LocalUriHandler.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { uriHandler.openUri(url) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(percent = 32))
+                .background(Accent.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = Accent, modifier = Modifier.size(18.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(subtitle, fontSize = 11.5.sp, color = TextSecondary)
+        }
+        Icon(
+            Icons.Rounded.OpenInNew,
+            contentDescription = "打开链接",
+            tint = TextSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
 /** 预设色块：选中时套一圈跟随主题的描边，深浅色背景上都看得见 */
 @Composable
 private fun AccentSwatch(
@@ -463,6 +501,7 @@ private fun AccentSwatch(
 ) {
     Box(
         modifier = modifier
+            .elasticPress(onClick = onClick)
             .border(
                 width = if (selected) 2.dp else 0.dp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
@@ -470,8 +509,7 @@ private fun AccentSwatch(
             )
             .padding(if (selected) 3.dp else 0.dp)
             .clip(CircleShape)
-            .background(color)
-            .clickable(onClick = onClick),
+            .background(color),
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {

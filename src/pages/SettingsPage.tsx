@@ -212,7 +212,7 @@ function GeneralSettings() {
   const [closeBehavior, setCloseBehavior] = useState<string>(() => {
     return localStorage.getItem("nexbox_close_behavior") || "ask";
   });
-  const [sidebarShowLabel, setSidebarShowLabel] = useState(false);
+  const [sidebarShowLabel, setSidebarShowLabel] = useState(() => localStorage.getItem("nexbox_sidebar_show_label") !== "false");
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const NAV_ORDER_KEY = "nexbox_nav_order";
@@ -2957,7 +2957,7 @@ function AboutSettings() {
   // 卡片图标底色（浅色/深色适配）
   const iconBg = useColorModeValue("#f1f2f4", "#262626");
 
-  const currentVersion = "10.1.3";
+  const currentVersion = "10.2.1";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

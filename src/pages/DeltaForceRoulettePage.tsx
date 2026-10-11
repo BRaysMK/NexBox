@@ -107,7 +107,7 @@ function ResultCard({
   const { liquidGlassEnabled } = useBackground();
   const textColor = useColorModeValue("#000000", "#ffffff");
   const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardBg = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();

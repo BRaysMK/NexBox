@@ -34,6 +34,7 @@ import {
   PanelsTopLeft,
   Gauge,
   Settings,
+  Heart,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
 import { emit as tauriEmit, listen } from "@tauri-apps/api/event";
@@ -93,6 +94,16 @@ export interface IslandOptions {
   onClick?: () => void;
   /** 音乐播放灵动岛：渲染专辑封面 + 音量波动，悬停展开更高的播放控制布局 */
   kind?: "music";
+}
+
+/** 岛窗口收藏状态帧：主窗口 island-remote-bridge 下发（岛窗口 loginInfos 是空镜像，无法自判）。
+ *  类型定义在本文件并导出：island-remote-bridge 已 import 本文件，反向定义会成环。 */
+export interface IslandMusicLiked {
+  /** 对应主窗口 currentSong.id，岛窗口用 songId 匹配兜底换曲事件的错序 */
+  songId: string | null;
+  liked: boolean;
+  /** false = 未登录 / local / qqmusic / migu / 无歌 → 岛窗口隐藏收藏按钮 */
+  supported: boolean;
 }
 
 interface IslandItem {
@@ -344,10 +355,19 @@ export function setIslandSnapshotSink(fn: ((snap: RemoteIslandSnapshot) => void)
 }
 
 /** 桌面窗口：应用主窗口推来的快照（本地不建计时器，关闭时机由主窗口决定） */
+// 上一次应用的快照指纹：多路补推（sink 注册/ready/remoteMode 翻转）会重复推同一份
+// 快照，不去重会导致岛窗口无谓重建 item + 全量 emit + 重渲染（闪烁诱因）
+let lastSnapKey = "";
 export function applyRemoteSnapshot(snap: RemoteIslandSnapshot) {
   if (!IS_ISLAND_WINDOW) return;
+  const snapItem = snap.item;
+  // key 必须包含 progress（静默进度更新同 revision 但 progress 变）与 title；
+  // 未来给 item 新增字段时需同步加入
+  const key = `${snap.revision}|${snapItem ? snapItem.id : "-"}|${snapItem?.progress ?? "-"}|${snapItem?.title ?? "-"}`;
+  if (key === lastSnapKey) return;
+  lastSnapKey = key;
   revision = snap.revision;
-  const it = snap.item;
+  const it = snapItem;
   current = it
     ? {
         id: it.id,
@@ -463,7 +483,9 @@ function show(options: IslandOptions) {
   // 桌面岛窗口只做渲染，不接受本地写入（内容一律由主窗口快照驱动）
   if (IS_ISLAND_WINDOW) return;
   const next = buildItem(options);
-  if (current) revision++; // 已有提示，触发「缩小→换内容→扩散」
+  // 每次内容变更都递增：current 为 null 时也要让渲染端感知「有新内容」，
+  // 否则 dismiss 交叠期新 show 会因 revision 未变被 effect 忽略 → 岛失步/消失
+  revision++;
   if (current?.timer) clearTimeout(current.timer);
   current = next;
   if (typeof next.duration === "number" && next.duration > 0) {
@@ -836,6 +858,42 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
   const isExternal = Boolean(externalTrack?.title) && !(currentSong && (isPlaying || !externalPlaying));
   const proxyPort = useMusicStore((s) => s.proxyPort);
   const audioRef = useMusicStore((s) => s.audioRef);
+  // 收藏（红心）：内部来源才有歌曲 id 可收藏；local/QQ/咪咕 toggleLike 无反馈或误路由，
+  // 未登录点红心静默回滚（与 MusicPage「登录后才显示」一致），这些场景直接隐藏按钮
+  const playbackSource = useMusicStore((s) => s.playbackSource);
+  const likedSongIds = useMusicStore((s) => s.likedSongIds);
+  const loginInfos = useMusicStore((s) => s.loginInfos);
+  // 岛窗口的 liked/可收藏性由主窗口经 island:music-liked 下发（loginInfos 不跨窗口同步）
+  const [islandLike, setIslandLike] = useState<IslandMusicLiked>({ songId: null, liked: false, supported: false });
+  useEffect(() => {
+    if (!IS_ISLAND_WINDOW) return;
+    let disposed = false;
+    let un: (() => void) | undefined;
+    void listen<IslandMusicLiked>("island:music-liked", (e) => setIslandLike(e.payload))
+      .then((off) => {
+        if (disposed) off();
+        else un = off;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      un?.();
+    };
+  }, []);
+  // songId 匹配兜底：换曲时 music-track 与 music-liked 可能短暂错序，错序瞬间不显示旧红心
+  const songMatches = Boolean(currentSong) && islandLike.songId === currentSong?.id;
+  // provider==="local" 的本地歌曲必须排除：toggleLike 按 playbackSource 路由，
+  // 会把本地歌曲 id 误发给平台红心接口（MusicProvider 类型上不含 local）
+  const likeSupported = isExternal || !currentSong
+    ? false
+    : IS_ISLAND_WINDOW
+      ? islandLike.supported && songMatches
+      : currentSong.provider !== "local"
+        && playbackSource !== "qqmusic" && playbackSource !== "migu"
+        && Boolean(loginInfos[playbackSource]?.logged_in);
+  const isLiked = likeSupported && currentSong
+    ? IS_ISLAND_WINDOW ? islandLike.liked && songMatches : likedSongIds.has(currentSong.id)
+    : false;
   // 每次调用实时取 store 动作：桌面岛窗口会在模块加载时把这些动作覆写为跨窗口 emit
   // （见 pages/DynamicIslandWindowPage.tsx），缓存 getState() 会拿到覆写前的旧实现
   const act = () => useMusicStore.getState();
@@ -1169,6 +1227,30 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
               </ControlButton>
             </div>
           )}
+          {/* 左下角收藏（红心）：与右下角「打开播放器」镜像；仅可收藏的内部来源显示 */}
+          {likeSupported && currentSong && (
+            <div style={{ position: "absolute", left: 12 }}>
+              <ControlButton
+                label={isLiked ? "取消红心" : "红心"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (IS_ISLAND_WINDOW) {
+                    // 岛窗口：转发主窗口执行（主窗口才有完整 currentSong/登录态/红心集合）
+                    void tauriEmit("island:music-control", { action: "like" });
+                    return;
+                  }
+                  void act().toggleLike(currentSong.id);
+                }}
+              >
+                <Heart
+                  size={16}
+                  strokeWidth={2.2}
+                  color={isLiked ? "#e53e3e" : titleColor}
+                  fill={isLiked ? "#e53e3e" : "none"}
+                />
+              </ControlButton>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1370,6 +1452,9 @@ export function DynamicIslandHost() {
   const chainRef = useRef<Promise<void>>(Promise.resolve());
   const islandRef = useRef<HTMLDivElement | null>(null);
   const lastMusicKeyRef = useRef<string>("");
+  // dismiss 动画排队/进行中标记：期间收到新内容时改走「dismiss 完成后整体重新出现」，
+  // 否则 effect 三分支全不命中（visibleRef 仍 true、revision 未变）→ dismiss 跑完后岛永久消失
+  const dismissQueuedRef = useRef(false);
 
   useEffect(() => {
     itemRef.current = item;
@@ -1414,11 +1499,15 @@ export function DynamicIslandHost() {
     }
   }, [item, displayed?.id]);
 
-  // 文字显示不全时用右端淡出代替省略号：实时测量是否溢出
+  // 文字显示不全时用右端淡出代替省略号：实时测量是否溢出。
+  // 带回差：进入阈值 +2px、退出阈值 0px，宽度临界时 maskImage 不再反复翻转闪烁
   useEffect(() => {
     const el = textRef.current;
     if (!el) return;
-    const check = () => setTextOverflowing(el.scrollWidth > el.clientWidth + 1);
+    const check = () =>
+      setTextOverflowing((prev) =>
+        prev ? el.scrollWidth > el.clientWidth : el.scrollWidth > el.clientWidth + 2
+      );
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
@@ -1426,6 +1515,15 @@ export function DynamicIslandHost() {
   }, [displayed, textVisible, expanded]);
 
   const run = useCallback((fn: () => Promise<void>) => {
+    // 闪烁排查日志（仅 dev 构建）：悬停应恰好 1× playExpand + 1× playCollapse，
+    // 自动关闭应恰好 1× playDismiss 且其后无多余 appear/replace；验证完成后可移除
+    if (import.meta.env.DEV) {
+      const w = window as unknown as { __island?: { counts: Record<string, number> } };
+      w.__island = w.__island || { counts: {} };
+      const name = fn.name || "anonymous";
+      w.__island.counts[name] = (w.__island.counts[name] || 0) + 1;
+      console.debug(`[island] run: ${name}`);
+    }
     chainRef.current = chainRef.current.then(fn).catch(() => {});
   }, []);
 
@@ -1637,22 +1735,34 @@ export function DynamicIslandHost() {
 
   useEffect(() => {
     if (item) {
-      if (!visibleRef.current) {
+      if (dismissQueuedRef.current) {
+        // dismiss 已排队/进行中：新内容等 dismiss 跑完后整体重新出现。
+        // 必须走 playAppear（自带 opacity 0→1），playReplace 只动 width 会得到「隐形岛」
+        run(playAppear);
+      } else if (!visibleRef.current) {
         run(playAppear);
       } else if (revision !== lastRevisionRef.current) {
         run(playReplace);
       }
       lastRevisionRef.current = revision;
     } else if (visibleRef.current) {
-      run(playDismiss);
+      dismissQueuedRef.current = true;
+      run(async () => {
+        try {
+          await playDismiss();
+        } finally {
+          dismissQueuedRef.current = false;
+        }
+      });
     }
   }, [item, revision, run, playAppear, playReplace, playDismiss]);
 
   // 桌面岛窗口底下就是真实桌面：半透明底色会直接透出桌面内容（看起来像没加载完），
-  // 而 CSS backdrop-filter 在透明窗口里又采不到桌面像素，所以直接用不透明实色
+  // 而 CSS backdrop-filter 在透明窗口里又采不到桌面像素，所以直接用不透明实色。
+  // 主窗口内嵌岛去掉 blur 后把透明度从 0.9/0.88 提到 0.96/0.95，补偿原本的通透感
   const pillBg = useColorModeValue(
-    IS_ISLAND_WINDOW ? "#ffffff" : "rgba(255,255,255,0.9)",
-    IS_ISLAND_WINDOW ? "#141414" : "rgba(20,20,20,0.88)"
+    IS_ISLAND_WINDOW ? "#ffffff" : "rgba(255,255,255,0.96)",
+    IS_ISLAND_WINDOW ? "#141414" : "rgba(20,20,20,0.95)"
   );
   const glassBg = useColorModeValue("rgba(255,255,255,0.10)", "rgba(12,12,12,0.22)");
   // 真实液态玻璃：SVG 位移折射 + 轻模糊 + 提饱和；折射强度/边缘带在 liquid-glass-svg-filter.tsx 顶部可调
@@ -1661,12 +1771,15 @@ export function DynamicIslandHost() {
   // 胶囊只有 30px 高，模糊给大了会糊成一团，10px 是「看得出磨砂但还能辨认内容」的量
   const frostBg = useColorModeValue("rgba(255,255,255,0.52)", "rgba(24,24,26,0.55)");
   const frostBackdrop = "blur(10px) saturate(1.4)";
+  // 非玻璃模式不挂任何 backdrop-filter：blur(20px) 挂在每帧改 width/height 的岛体上
+  // 会强制每帧重新采样模糊整层重绘，且 WebView2 透明窗口上 blur 是已知闪烁源
+  // （悬停文字闪、关闭后圆圈回闪的直接元凶），去掉后由 pillBg 提高不透明度补偿通透感
   const islandBg = islandGlassReal ? glassBg : islandGlassFrosted ? frostBg : pillBg;
   const islandBackdrop = islandGlassReal
     ? glassBackdrop
     : islandGlassFrosted
       ? frostBackdrop
-      : "blur(20px)";
+      : undefined;
   const islandGlassClass = islandGlassReal
     ? "real-liquid-glass"
     : islandGlassFrosted
@@ -1719,7 +1832,6 @@ export function DynamicIslandHost() {
         onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        onPointerLeave={handleMouseLeave}
         className={islandGlassClass}
         style={{
           borderRadius: displayed?.kind === "music" ? 22 : (expanded ? 20 : 999),

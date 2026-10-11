@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -25,6 +27,17 @@ sealed interface WsEvent {
     /** PC 端文件互传列表有变化（添加/删除/已接收回执），触发本机刷新互传列表 */
     data object TransferUpdate : WsEvent
 
+    /** PC 端统一「当前播放」快照更新（软件内 / 外部 SMTC，每秒至多一帧，位置推进也会推） */
+    data class MusicStateUpdate(val state: MusicState) : WsEvent
+
+    /**
+     * 当前播放歌曲的歌词随 WS 主动下发（PC 端软件内读前端推送缓存 / 外部读搜索缓存，
+     * key 变化才发帧）。手机端被动接收，不再主动查询。
+     */
+    data class LyricsUpdate(val lyrics: MusicLyrics) : WsEvent
+
+    /** PC 端剪贴板文本更新（剪贴板同步 · PC → 手机方向）：内容应写入本机系统剪贴板 */
+    data class ClipboardUpdate(val text: String) : WsEvent
 
     data object Connected : WsEvent
 
@@ -111,6 +124,30 @@ class StatsSocket(private val sessionStore: SessionStore) {
             "stats" -> WsEvent.Stats(frame.statsPayload(), frame.statsMeta())
             "action.done" -> WsEvent.ActionDone(frame.key.orEmpty())
             "transfer.update" -> WsEvent.TransferUpdate
+            // 剪贴板文本：取 data.text，解析失败按 Unknown 兜底不中断 WS 流
+            "clipboard.update" -> frame.data
+                ?.get("text")
+                ?.let { el -> runCatching { el.jsonPrimitive.content }.getOrNull() }
+                ?.let { WsEvent.ClipboardUpdate(it) }
+                ?: WsEvent.Unknown(frame.type)
+            // 歌词解析失败按 Unknown 兜底，不中断 WS 流
+            "music.lyrics" -> frame.data
+                ?.let { d ->
+                    runCatching {
+                        NetworkModule.json.decodeFromJsonElement(MusicLyrics.serializer(), d)
+                    }.getOrNull()
+                }
+                ?.let { WsEvent.LyricsUpdate(it) }
+                ?: WsEvent.Unknown(frame.type)
+            // 音乐快照解析失败按 Unknown 兜底，不中断 WS 流
+            "music.state" -> frame.data
+                ?.let { d ->
+                    runCatching {
+                        NetworkModule.json.decodeFromJsonElement(MusicState.serializer(), d)
+                    }.getOrNull()
+                }
+                ?.let { WsEvent.MusicStateUpdate(it) }
+                ?: WsEvent.Unknown(frame.type)
             else -> WsEvent.Unknown(frame.type)
         }
     }

@@ -110,6 +110,10 @@ README.md
 # 安卓端说明文档随源码分发，需要放行
 !NexBox-Android/README.md
 
+# 安卓端第三方/独立源码，不随本仓库分发
+NexBox-Android/AndroidLiquidGlass-kmp/
+NexBox-Android/FlClash-main/
+
 # Build output (frontend)
 dist/
 

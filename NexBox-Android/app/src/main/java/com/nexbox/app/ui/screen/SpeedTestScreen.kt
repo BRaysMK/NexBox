@@ -74,21 +74,31 @@ fun SpeedTestScreen(vm: SpeedTestViewModel = viewModel(), onBack: () -> Unit) {
     // 不停的话测速会在后台继续跑，白白吃流量
     DisposableEffect(Unit) { onDispose { vm.stop() } }
 
-    Box(Modifier.fillMaxSize()) {
+    DetailScaffold(
+        title = "网络测速",
+        onBack = onBack,
+        trailingText = stageLabel(state.stage),
+        overlay = {
+            MessageToast(
+                message = state.error,
+                isError = true,
+                onDismiss = vm::consumeError,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, end = 12.dp)
+                    .fillMaxWidth(0.86f),
+            )
+        },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp),
+                .contentTopFade()                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp)
+                .detailHeaderSpacing(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            DetailTopBar(
-                title = "网络测速",
-                onBack = onBack,
-                trailingText = stageLabel(state.stage),
-            )
-
             // ── 下载 / 上传大数字 ──
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SpeedMeter(
@@ -241,17 +251,6 @@ fun SpeedTestScreen(vm: SpeedTestViewModel = viewModel(), onBack: () -> Unit) {
             // 悬浮玻璃导航条的余量：内容从它下面穿过，末尾留出高度不被永久遮住
             Spacer(Modifier.navigationBarsPadding().height(96.dp))
         }
-
-        MessageToast(
-            message = state.error,
-            isError = true,
-            onDismiss = vm::consumeError,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(top = 8.dp, end = 12.dp)
-                .fillMaxWidth(0.86f),
-        )
     }
 }
 

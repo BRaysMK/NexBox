@@ -23,9 +23,19 @@ use std::sync::Mutex;
 /// 否则「键盘媒体键控制」关闭时手机端会看不到软件内音乐。
 static CURRENT: Mutex<Option<SmtcState>> = Mutex::new(None);
 
-/// 读取最近一次缓存的软件内播放状态（供远程接入合成统一快照）。
-pub fn current_state() -> Option<SmtcState> {
-    CURRENT.lock().ok().and_then(|s| s.clone())
+/// 最近一次前端推送时刻（epoch 毫秒）：远程快照据此在两次推送之间线性推算位置，
+/// 消除前端 1s 节流带来的固有滞后（否则手机端歌词/进度会慢 1~2 秒）。
+static CURRENT_AT: Mutex<Option<u64>> = Mutex::new(None);
+
+/// 读取软件内播放状态 + 数据年龄（距前端上次推送的毫秒数）。
+pub fn current_with_age() -> Option<(SmtcState, u64)> {
+    let s = CURRENT.lock().ok().and_then(|v| v.clone())?;
+    let at = CURRENT_AT.lock().ok().and_then(|v| *v).unwrap_or(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    Some((s, now.saturating_sub(at)))
 }
 
 /// 把封面来源字符串解析为规范化图片字节（供远程接入的封面端点复用）。
@@ -530,6 +540,11 @@ pub struct SmtcState {
     pub playing: bool,
     pub position_ms: i64,
     pub duration_ms: i64,
+    /// 软件内当前歌的 LRC 歌词原文（前端 currentLyrics.lyric），
+    /// 供远程接入（手机端）显示歌词用；None = 无歌词。
+    /// 旧版前端不推此字段，serde default 兼容。
+    #[serde(default)]
+    pub lyric_lrc: Option<String>,
 }
 
 /// 启动后台注册本应用媒体会话（在 setup 中调用）
@@ -543,6 +558,22 @@ pub fn smtc_update_state(state: SmtcState) {
     if let Ok(mut cur) = CURRENT.lock() {
         *cur = Some(state.clone());
     }
+    if let Ok(mut at) = CURRENT_AT.lock() {
+        *at = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0),
+        );
+    }
+
+    // 歌词顺路写入远程接入缓存：软件内播放的歌词走前端精确数据（按歌曲 id 拉取），
+    // 比远程侧按元数据搜网易云可靠得多；远程侧 lyric_lyrics 查询优先消费它。
+    crate::remote_access::music::cache_app_lyrics(
+        &state.title,
+        &state.artist,
+        state.lyric_lrc.clone(),
+    );
 
     // 「设置 → 高级 → 键盘媒体键控制」关闭时：不向系统推送/启用本应用媒体会话。
     // 启用中的 SMTC 会话会让系统把物理媒体键路由给新境盒（前端又因开关不响应），
@@ -557,6 +588,9 @@ pub fn smtc_update_state(state: SmtcState) {
 pub fn smtc_clear() {
     if let Ok(mut cur) = CURRENT.lock() {
         *cur = None;
+    }
+    if let Ok(mut at) = CURRENT_AT.lock() {
+        *at = None;
     }
     imp::clear();
 }

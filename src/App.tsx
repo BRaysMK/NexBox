@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { Box } from "@chakra-ui/react";
 import { MainLayout } from "./components/ui/main-layout";
 import HomePage from "./pages/HomePage";
@@ -39,7 +39,6 @@ import NvidiaDriverPage from "./pages/NvidiaDriverPage";
 import NvidiaDriverDownloadPage from "./pages/NvidiaDriverDownloadPage";
 import EpicFreePage from "./pages/EpicFreePage";
 import SteamPage from "./pages/SteamPage";
-import TrayMenuPage from "./pages/TrayMenuPage";
 import DesktopLyricsPage from "./pages/DesktopLyricsPage";
 import DynamicIslandWindowPage from "./pages/DynamicIslandWindowPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
@@ -71,6 +70,7 @@ import { useAppStartup } from "./contexts/app-startup-context";
 import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
+import { StarPromptModal } from "./components/StarPromptModal";
 import { DynamicIslandHost } from "./components/ui/dynamic-island";
 import { AccelIslandBridge } from "./components/ui/accel-island-bridge";
 import { IslandRemoteBridge } from "./components/ui/island-remote-bridge";
@@ -84,11 +84,6 @@ function StartupAdHost() {
 function App() {
   const { isStartupComplete } = useAppStartup();
   const location = useLocation();
-
-  // Tray menu: render standalone, no main layout
-  if (location.pathname === "/tray-menu") {
-    return <TrayMenuPage />;
-  }
 
   // 桌面灵动岛独立窗口：只负责渲染，状态真源在主窗口（见 IslandRemoteBridge）
   if (location.pathname === "/dynamic-island") {
@@ -310,9 +305,16 @@ function App() {
                     }
                   />
                   <Route
-                    path="/optimize/system-optimizer"
+                    path="/system-optimizer"
                     element={
                       <SystemOptimizerPage />
+                    }
+                  />
+                  {/* 旧路径（原优化页子页）重定向到独立导航页 */}
+                  <Route
+                    path="/optimize/system-optimizer"
+                    element={
+                      <Navigate to="/system-optimizer" replace />
                     }
                   />
                   <Route
@@ -468,6 +470,7 @@ function App() {
 
         <UpdateModal />
         <ImportantAnnouncementModal />
+        <StarPromptModal />
         <DynamicIslandHost />
         <AccelIslandBridge />
         <IslandRemoteBridge />

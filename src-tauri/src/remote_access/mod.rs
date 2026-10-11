@@ -12,11 +12,17 @@
 mod actions;
 mod api;
 mod auth;
+/// 剪贴板同步（PC ↔ 手机 · 纯文本）：发送轮询 + 接收写入。
+/// 命令的隐藏 `__cmd__` 宏在此模块内，lib.rs 需以完整路径 `remote_access::clipboard_sync::cmd_*` 注册
+pub mod clipboard_sync;
 mod discovery;
 mod models;
 /// 统一「当前播放」：软件内播放器 + 外部 SMTC，供手机端查看与控制。
-mod music;
+/// `pub(crate)`：smtc.rs 要把前端歌词写进这里的 `cache_app_lyrics`。
+pub(crate) mod music;
 mod registry;
+/// PC 系统主音量（手机端音量弹窗读写）
+pub(crate) mod system_volume;
 /// 文件互传：命令的隐藏 `__cmd__` 宏在此模块内，lib.rs 需以完整路径 `remote_access::transfer::cmd_*` 注册
 pub mod transfer;
 
@@ -93,6 +99,8 @@ pub fn init(app: &tauri::AppHandle) {
     let _ = APP_HANDLE.set(app.clone());
     auth::load_persisted(app);
     transfer::load_all(app);
+    // 剪贴板同步：载入发送开关持久化状态（服务随后开启时自动拉起轮询）
+    clipboard_sync::load_persisted(app);
     if read_enabled_flag(app) {
         tauri::async_runtime::spawn(async {
             match cmd_enable_remote_access(true).await {
@@ -167,6 +175,7 @@ pub fn shutdown() {
     if let Some(h) = DISCOVERY_TASK.lock().take() {
         h.abort();
     }
+    clipboard_sync::shutdown_task();
     ENABLED.store(false, Ordering::Relaxed);
     PORT.store(0, Ordering::Relaxed);
     log::info!("[RemoteAccess] 已关闭远程控制服务");
@@ -258,6 +267,8 @@ pub async fn cmd_enable_remote_access(on: bool) -> Result<AccessInfo, String> {
         ENABLED.store(true, Ordering::Relaxed);
         auth::rotate_code();
         try_add_firewall_rules();
+        // 剪贴板同步发送轮询：开关开着才真正启动（幂等）
+        clipboard_sync::startup_if_needed();
     } else {
         shutdown();
     }

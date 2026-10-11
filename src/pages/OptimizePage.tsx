@@ -14,7 +14,6 @@ import {
   Zap,
   HardDrive,
   List,
-  Settings2,
   Network,
   MousePointer2,
   Download,
@@ -89,14 +88,6 @@ const defaultTools: ViewItem[] = [
     titleKey: "optimization.startupManager.title",
     descriptionKey: "optimization.startupManager.description",
     color: "#805AD5",
-  },
-  {
-    id: "system-optimizer",
-    path: "/optimize/system-optimizer",
-    icon: Settings2,
-    titleKey: "systemOptimizer.pageTitle",
-    descriptionKey: "systemOptimizer.pageDesc",
-    color: "#667EEA",
   },
   {
     id: "network-optimizer",
