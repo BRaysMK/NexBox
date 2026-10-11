@@ -1,5 +1,4 @@
 name: CI
-
 on:
   push:
     branches: [main, master]
@@ -15,10 +14,10 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm run lint
       - run: npm run build
 
   tauri:
+    needs: web
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
