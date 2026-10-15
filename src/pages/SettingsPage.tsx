@@ -593,13 +593,7 @@ function GeneralSettings() {
     localStorage.setItem("nexbox_game_win_key_card_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("game-win-key-card-setting-changed", { detail: newValue }));
     // 卡片隐藏时功能同步关闭，保持显示与功能一致
-    if (!newValue) {
-      try {
-        await invoke("set_game_win_key_enabled", { enabled: false });
-      } catch {
-        // ignore
-      }
-    }
+    // 已阉割：后端 game_win_key 模块已删除，不再调用 set_game_win_key_enabled
   };
 
   const handleGameModeToggle = () => {
@@ -1080,6 +1074,7 @@ function GeneralSettings() {
                 </HStack>
                 )}
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1092,7 +1087,9 @@ function GeneralSettings() {
                     onChange={handleMoodCardToggle}
                   />
                 </HStack>
+                )}
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1105,6 +1102,7 @@ function GeneralSettings() {
                     onChange={handleGameWinKeyCardToggle}
                   />
                 </HStack>
+                )}
                 <Divider />
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>

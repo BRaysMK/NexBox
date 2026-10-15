@@ -5,8 +5,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { LuMinus, LuSquare, LuCopy, LuX } from "react-icons/lu";
 import { useCallback, useState, useEffect, useRef } from "react";
-// 已阉割：搜索框
-// import { GlobalSearch } from "./global-search";
+// 已阉割：搜索框（组件保留，仅 UI 用 {false &&} 隐藏）
+import { GlobalSearch } from "./global-search";
 import { GameModeSwitch } from "./game-mode-switch";
 import { CloseConfirmDialog } from "../CloseConfirmDialog";
 import { store } from "@/lib/store";
@@ -234,8 +234,17 @@ export function TitleBar() {
             transition="margin 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {/* 已阉割：搜索框（{false && searchBarVisible && (<Box ...><GlobalSearch /></Box>)}） */}
             {/* 沉浸页面全屏：搜索框淡出，左上角显示"缩小"（退出全屏）按钮 */}
+            {false && searchBarVisible && (
+              <Box
+                opacity={pageFs ? 0 : 1}
+                visibility={pageFs ? "hidden" : "visible"}
+                transition="opacity 0.3s ease"
+                pointerEvents={pageFs ? "none" : "auto"}
+              >
+                <GlobalSearch />
+              </Box>
+            )}
           </Flex>
           <HStack id="window-controls" spacing={1} h="40px" align="center">
             {/* 沉浸页面全屏时游戏模式切换淡出，保留最小化/最大化/关闭 */}

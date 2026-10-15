@@ -71,9 +71,9 @@ import { SplashScreen } from "./components/SplashScreen";
 import { useAppStartup } from "./contexts/app-startup-context";
 import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
-// 已阉割：公告系统（营销/官方通知）
-// import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
-// 已阉割：Star 引导弹窗（营销向）
+// 已阉割：公告系统（组件保留，仅 UI 用 {false &&} 隐藏）
+import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
+// 已阉割：Star 引导弹窗（已删除）
 // import { StarPromptModal } from "./components/StarPromptModal";
 import { DynamicIslandHost } from "./components/ui/dynamic-island";
 // 已阉割：灵动岛加速桥接（灵动岛 UI 已阉割；dynamic-island 的 useDynamicIsland hook 保留）
@@ -467,10 +467,10 @@ function App() {
         </MainLayout>
 
         <UpdateModal />
-        {/* 已阉割：<ImportantAnnouncementModal />（公告）*/}
-        {/* 已阉割：<StarPromptModal />（Star 引导）*/}
+        {false && <ImportantAnnouncementModal />}
+        {/* 已阉割：<StarPromptModal />（组件已删除）*/}
         {false && <DynamicIslandHost />}
-        {/* 已阉割：<AccelIslandBridge />（灵动岛加速桥接）*/}
+        {/* 已阉割：<AccelIslandBridge />（组件已删除）*/}
         <IslandRemoteBridge />
       </>
     </MusicProvider>

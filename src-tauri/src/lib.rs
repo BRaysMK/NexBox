@@ -1,6 +1,6 @@
 mod advanced;
-// 已阉割：公告系统（营销/官方通知，对应前端 ImportantAnnouncementModal）
-// mod announcement;
+// 公告模块保留（与主树一致）：仅前端 UI 用 {false &&} 隐藏，后端命令保持可用
+mod announcement;
 mod app_manager;
 mod audio_engine;
 mod audio_eq;
@@ -544,7 +544,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-        // 已阉割：announcement::get_announcements, announcement::get_important_announcements,
+        // 公告模块保留（前端 UI 已隐藏，命令保持注册以兼容 AnnouncementCard）
+        announcement::get_announcements,
+        announcement::get_important_announcements,
         auto_start::set_nexbox_auto_start,
         auto_start::check_nexbox_auto_start,
         hardware::get_hardware,

@@ -7,7 +7,8 @@ import { AnnouncementCard, useAnnouncementEnabled } from "@/components/Announcem
 import { RandomQuote, useRandomQuoteEnabled } from "@/components/RandomQuote";
 import { useState, useEffect, useRef } from "react";
 import HardwareModelCard from "@/components/HardwareModelCard";
-import GameWinKeyCard from "@/components/GameWinKeyCard";
+// 已阉割：游戏模式锁定 Win 键卡片
+// import GameWinKeyCard from "@/components/GameWinKeyCard";
 import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
 // 已阉割：心境卡片
 // import MoodCard from "@/components/MoodCard";
@@ -253,7 +254,7 @@ export default function HomePage() {
           <VStack spacing={2} align="stretch">
             {false && randomImageReady && randomImageEnabled && <RandomImageCard />}
             {/* 已阉割：心境卡片 {false && moodCardEnabled && <MoodCard />} */}
-            {false && gameWinKeyCardEnabled && <GameWinKeyCard />}
+            {/* 已阉割：锁定 Win 键卡片 {false && gameWinKeyCardEnabled && <GameWinKeyCard />} */}
             {homeHardwareModelEnabled && <HardwareModelCard />}
           </VStack>
         </Box>
