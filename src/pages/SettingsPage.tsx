@@ -998,6 +998,7 @@ function GeneralSettings() {
                   </HStack>
                 </HStack>
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1010,7 +1011,9 @@ function GeneralSettings() {
                     onChange={handleTodayPopularityToggle}
                   />
                 </HStack>
+                )}
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1023,7 +1026,9 @@ function GeneralSettings() {
                     onChange={handleAnnouncementToggle}
                   />
                 </HStack>
+                )}
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1036,7 +1041,9 @@ function GeneralSettings() {
                     onChange={handleRandomQuoteToggle}
                   />
                 </HStack>
+                )}
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1049,6 +1056,7 @@ function GeneralSettings() {
                     onChange={handleSearchBarToggle}
                   />
                 </HStack>
+                )}
               </VStack>
             </Box>
             {/* 左下角：底部左侧快捷卡片 */}
@@ -1057,6 +1065,7 @@ function GeneralSettings() {
                 {t("settings.generalSettings.cornerBottomLeft")}
               </Text>
               <VStack spacing={0} align="stretch">
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1069,6 +1078,7 @@ function GeneralSettings() {
                     onChange={handleRandomImageToggle}
                   />
                 </HStack>
+                )}
                 <Divider />
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
@@ -1129,6 +1139,7 @@ function GeneralSettings() {
                   />
                 </HStack>
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1141,7 +1152,9 @@ function GeneralSettings() {
                     onChange={handleFeedbackToggle}
                   />
                 </HStack>
+                )}
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1154,6 +1167,7 @@ function GeneralSettings() {
                     onChange={handleQqGroupCardToggle}
                   />
                 </HStack>
+                )}
                 <Divider />
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
@@ -3435,6 +3449,7 @@ function AboutSettings() {
         </LiquidGlassCard>
 
         {/* 官方QQ群：点击打开完整群列表弹窗（与主页一致） */}
+        {false && (
         <LiquidGlassCard
           className="no-bounce"
           role="group"
@@ -3478,6 +3493,7 @@ function AboutSettings() {
             </Box>
           </HStack>
         </LiquidGlassCard>
+        )}
       </HStack>
 
       <QqGroupModal isOpen={isQqModalOpen} onClose={onQqModalClose} />
