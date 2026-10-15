@@ -24,7 +24,8 @@ mod gun_e2e {
     }
 
     /// 用纯函数复现三段式解析（不依赖 AppHandle）
-    fn parse_tsv(rules: &GunRules, text: &str) -> Vec<(String, Option<String>, String)> {
+    fn parse_tsv(rules: &GunRules, text: &str) -> (Vec<(String, Option<String>, String)>, usize) {
+        let mut skipped_foreign = 0usize;
         // 构建别名索引
         let mut alias_idx: HashMap<String, String> = HashMap::new();
         for (canon, meta) in &rules.guns {
@@ -41,6 +42,7 @@ mod gun_e2e {
 
         let mut out = Vec::new();
         let mut carry: Option<String> = None;
+        let mut current_mode: Option<String> = None;
         let mut seen: HashSet<String> = HashSet::new();
 
         for raw in text.lines() {
@@ -81,10 +83,25 @@ mod gun_e2e {
             match classify_row(&cells, rules, !code_positions.is_empty()) {
                 RowKind::Header => {
                     carry = None;
+                    // 粘性分区模式：表头声明后后续行沿用
+                    if let Some(m) = foreign_mode_of_row(&cells, rules) {
+                        current_mode = Some(m);
+                    } else if cells.iter().any(|c| c.contains("烽火")) {
+                        current_mode = None;
+                    }
                     continue;
                 }
                 RowKind::Noise => continue,
                 RowKind::Data => {}
+            }
+
+            // ⚠️ 模式过滤（粘性）：仅烽火地带
+            let row_mode = foreign_mode_of_row(&cells, rules).or_else(|| current_mode.clone());
+            if let Some(m) = row_mode {
+                carry = None;
+                current_mode = Some(m);
+                skipped_foreign += code_positions.len();
+                continue;
             }
 
             // ② 同行匹配
@@ -141,7 +158,7 @@ mod gun_e2e {
                 out.push((code, gun, cfg));
             }
         }
-        out
+        (out, skipped_foreign)
     }
 
     #[test]
@@ -162,6 +179,7 @@ mod gun_e2e {
 
         let mut total = 0usize;
         let mut recognized = 0usize;
+        let mut skipped_foreign_total = 0usize;
         let mut unrecognized_samples: Vec<String> = Vec::new();
 
         let mut files: Vec<_> = std::fs::read_dir(&dir)
@@ -174,16 +192,18 @@ mod gun_e2e {
 
         for f in &files {
             let text = std::fs::read_to_string(f).expect("TSV 读取失败");
-            let parsed = parse_tsv(&rules, &text);
+            let (parsed, skipped) = parse_tsv(&rules, &text);
             let rec = parsed.iter().filter(|(_, g, _)| g.is_some()).count();
             println!(
-                "  {} → 解析 {} 条，识别 {} 条",
+                "  {} → 烽火条目 {}，识别 {}，跳过其他模式 {}",
                 f.file_name().unwrap().to_string_lossy(),
                 parsed.len(),
-                rec
+                rec,
+                skipped
             );
             total += parsed.len();
             recognized += rec;
+            skipped_foreign_total += skipped;
             for (code, gun, _) in parsed.iter().filter(|(_, g, _)| g.is_none()) {
                 if unrecognized_samples.len() < 10 {
                     unrecognized_samples.push(code.clone());
@@ -191,30 +211,38 @@ mod gun_e2e {
             }
         }
 
-        println!("\n=== 端到端结果 ===");
+        println!("\n=== 端到端结果（仅烽火地带口径）===");
+        println!("规则库模式: {}", rules.mode);
         println!("文档数: {}", files.len());
-        println!("解析码数: {total}");
+        println!("烽火地带条目: {total}");
         println!("已识别: {recognized}");
         println!(
             "识别率: {:.1}%",
             recognized as f64 * 100.0 / total.max(1) as f64
         );
+        println!("跳过其他模式(战场/黑潮)码数: {skipped_foreign_total}");
         if !unrecognized_samples.is_empty() {
             println!("未识别样例: {unrecognized_samples:?}");
         }
 
-        assert!(total > 500, "解析到的码数过少({total})，解析器可能失效");
+        assert_eq!(rules.mode, "烽火地带", "规则库应为烽火地带模式");
+        assert!(total > 300, "解析到的烽火条目过少({total})，解析器可能失效");
         let rate = recognized as f64 / total.max(1) as f64;
         assert!(
             rate >= 0.95,
             "识别率 {:.1}% 低于 95% 门槛",
             rate * 100.0
         );
+        // 模式过滤必须真的生效（文档里确实有战场/黑潮 sheet）
+        assert!(
+            skipped_foreign_total > 0,
+            "未跳过任何其他模式内容，模式过滤可能失效"
+        );
 
         // 反向校验：纯十六进制图片 ID 不得进入结果
         for f in &files {
             let text = std::fs::read_to_string(f).unwrap();
-            let parsed = parse_tsv(&rules, &text);
+            let (parsed, _) = parse_tsv(&rules, &text);
             for (code, _, _) in &parsed {
                 assert!(
                     !code.chars().all(|c| c.is_ascii_digit()
@@ -224,7 +252,6 @@ mod gun_e2e {
             }
         }
 
-        // 张冠李戴校验：同一把枪的配置数不应超过该枪在规则库里的指纹数（粗校验）
-        println!("反向校验通过：无图片 ID 混入");
+        println!("反向校验通过：无图片 ID 混入、模式过滤生效");
     }
 }

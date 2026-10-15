@@ -62,12 +62,21 @@ pub struct ImportBatchResult {
 }
 
 /// 规则库（`rules.json`）
+///
+/// ⚠️ 模式说明：`烽火地带` / `全面战场` / `黑潮爆破` 是三个模式，
+/// 改枪码兼容性未知。本工具**仅收录烽火地带**，
+/// `mode` 字段用于标注，规则库构建时已剔除另两个模式的码。
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default)]
 pub struct GunRules {
     #[serde(default)]
     pub version: u32,
     #[serde(default)]
     pub generated: String,
+    /// 本规则库适用的游戏模式（当前恒为「烽火地带」）
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default)]
+    pub note: String,
     #[serde(default)]
     pub source: String,
     /// 规范枪名 → 元数据
@@ -95,6 +104,9 @@ pub struct Fingerprint {
     pub gun: String,
     #[serde(default)]
     pub config: String,
+    /// 该码所属游戏模式（当前恒为「烽火地带」）
+    #[serde(default)]
+    pub mode: String,
 }
 
 /// 解析出的一个候选码（批量导入用）
@@ -449,6 +461,32 @@ pub(crate) fn is_bundle_row(cells: &[String], rules: &GunRules) -> bool {
         .any(|c| c.to_uppercase().starts_with("BLAST"))
 }
 
+/// 是否为其他模式（全面战场 / 黑潮爆破）的码。
+///
+/// ⚠️ 三个模式的改枪码**兼容性未知**，本工具仅收录烽火地带。
+/// 判定依据：
+///   1. 规则库显式标注 `mode` 且非烽火地带
+///   2. 行内出现「黑潮」「全面战场」「战场码」等模式词
+///
+/// 返回 `Some(模式名)` 表示应跳过该码。
+pub(crate) fn foreign_mode_of_row(cells: &[String], rules: &GunRules) -> Option<String> {
+    const OTHER_MODES: [(&str, &[&str]); 2] = [
+        ("黑潮爆破", &["黑潮"]),
+        ("全面战场", &["全面战场", "战场码", "战场改枪"]),
+    ];
+    let joined = cells.join(" ");
+    for (name, kws) in OTHER_MODES {
+        if kws.iter().any(|k| joined.contains(k)) {
+            return Some(name.to_string());
+        }
+    }
+    // 规则库整体标注为其他模式时，一律视为外来模式
+    if !rules.mode.is_empty() && rules.mode != "烽火地带" {
+        return Some(rules.mode.clone());
+    }
+    None
+}
+
 /// ② 同行匹配：在单元格里找枪名（**整体匹配**，避免 `PSG-1` 误配到别的行）
 fn match_gun_in_row(alias_idx: &HashMap<String, String>, cells: &[String]) -> Option<String> {
     let mut best: Option<String> = None;
@@ -515,6 +553,8 @@ pub fn parse_document(app: &tauri::AppHandle, text: &str) -> Vec<ParsedCode> {
 
     let mut out: Vec<ParsedCode> = Vec::new();
     let mut carry: Option<String> = None;
+    /// 粘性分区模式：表头声明后，后续数据行沿用（`None` = 烽火地带）
+    let mut current_mode: Option<String> = None;
     let mut seen: HashSet<String> = HashSet::new();
 
     for raw_line in text.lines() {
@@ -555,10 +595,31 @@ pub fn parse_document(app: &tauri::AppHandle, text: &str) -> Vec<ParsedCode> {
             RowKind::Header => {
                 // 表头/新分区 → 重置继承，避免跨区串枪
                 carry = None;
+                // 但表头可能是「模式分区标记」（如「黑潮爆破改枪码大全」）：
+                // 记住当前分区模式，后续数据行按它过滤。
+                // 实测：模式标题只在分区开头出现一次，其后几十行数据都不含模式词，
+                // 故必须用**粘性分区状态**，不能逐行判断。
+                if let Some(m) = foreign_mode_of_row(&cells, &rules) {
+                    current_mode = Some(m);
+                } else if cells.iter().any(|c| {
+                    c.contains("烽火")
+                }) {
+                    current_mode = None;
+                }
                 continue;
             }
             RowKind::Noise => continue,
             RowKind::Data => {}
+        }
+
+        // ⚠️ 模式过滤（粘性）：全面战场 / 黑潮爆破 与烽火地带兼容性未知。
+        // 当前分区被标记为其他模式时，整段数据行跳过。
+        let row_mode = foreign_mode_of_row(&cells, &rules).or_else(|| current_mode.clone());
+        if let Some(m) = row_mode {
+            log::debug!("[LocalGunCode] 跳过非烽火地带内容（{m}）：{}", cells.join(" | "));
+            carry = None;
+            current_mode = Some(m);
+            continue;
         }
 
         // ② 同行匹配
@@ -1116,15 +1177,62 @@ mod tests {
     }
 
     #[test]
+    fn test_foreign_mode_rejected() {
+        // ⚠️ 三模式（烽火地带/全面战场/黑潮爆破）改枪码兼容性未知，仅收录烽火地带
+        let rules = GunRules { mode: "烽火地带".into(), ..Default::default() };
+
+        // 黑潮爆破标题行
+        let hb = vec!["黑潮爆破模式改枪码大全".to_string(), "10.14".to_string()];
+        assert_eq!(foreign_mode_of_row(&hb, &rules).as_deref(), Some("黑潮爆破"));
+
+        // 全面战场标题行
+        let qm = vec!["地板的改枪码大全(全面战场)".to_string()];
+        assert_eq!(foreign_mode_of_row(&qm, &rules).as_deref(), Some("全面战场"));
+
+        // 战场码
+        let zc = vec!["战场码次要".to_string()];
+        assert_eq!(foreign_mode_of_row(&zc, &rules).as_deref(), Some("全面战场"));
+
+        // 普通烽火行不应被拦
+        let ok = vec!["汤姆逊".to_string(), "36w".to_string(), "6L6INHO0B1H3TI624U64G".to_string()];
+        assert_eq!(foreign_mode_of_row(&ok, &rules), None);
+
+        // 规则库整体标注为其他模式 → 一律视为外来
+        let other = GunRules { mode: "黑潮爆破".into(), ..Default::default() };
+        assert_eq!(foreign_mode_of_row(&ok, &other).as_deref(), Some("黑潮爆破"));
+    }
+
+    #[test]
+    fn test_rules_are_fenghuo_only() {
+        // 内嵌规则库必须是纯烽火地带（防止误把战场/黑潮码打进包）
+        let r: GunRules = serde_json::from_str(RULES_EMBEDDED).expect("内嵌规则库解析失败");
+        assert_eq!(r.mode, "烽火地带", "规则库 mode 应为烽火地带，实际: {}", r.mode);
+        let bad: Vec<&String> = r
+            .fingerprints
+            .iter()
+            .filter(|(_, v)| !v.mode.is_empty() && v.mode != "烽火地带")
+            .map(|(k, _)| k)
+            .collect();
+        assert!(bad.is_empty(), "规则库混入非烽火地带指纹: {:?}", &bad[..bad.len().min(5)]);
+    }
+
+    #[test]
     fn test_embedded_rules_parse() {
         // 内嵌规则库必须可解析且非空（否则识别全线失效）
         let r: GunRules = serde_json::from_str(RULES_EMBEDDED).expect("内嵌规则库解析失败");
         assert!(r.guns.len() > 50, "枪械数过少: {}", r.guns.len());
-        assert!(r.fingerprints.len() > 400, "指纹数过少: {}", r.fingerprints.len());
+        // 阈值按「仅烽火地带」口径设定（剔除战场/黑潮后约 399 条；
+        // 旧版混入三模式时约 589 条，故此处门槛取 350 以防回归到污染状态）
+        assert!(r.fingerprints.len() > 350, "指纹数过少: {}", r.fingerprints.len());
         assert!(!r.noise.is_empty(), "噪音词表为空");
         // 每条指纹的枪名都应能在 guns 里找到（或至少非空）
-        let bad = r.fingerprints.values().filter(|f| f.gun.is_empty()).count();
-        assert_eq!(bad, 0, "存在枪名为空的指纹");
+        // 注：套件码等少数条目无单枪归属，允许为空
+        let with_gun = r.fingerprints.values().filter(|f| !f.gun.is_empty()).count();
+        assert!(
+            with_gun * 100 / r.fingerprints.len().max(1) >= 90,
+            "有枪名的指纹占比过低: {with_gun}/{}",
+            r.fingerprints.len()
+        );
     }
 
     #[test]
