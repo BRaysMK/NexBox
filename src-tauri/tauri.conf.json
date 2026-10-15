@@ -50,8 +50,8 @@
     }
   },
   "bundle": {
-    "active": false,
-    "targets": "all",
+    "active": true,
+    "targets": ["msi", "nsis"],
     "resources": [
       "../nvidiaProfileInspector.exe",
       "../nvidiaProfileInspector.exe.config",
