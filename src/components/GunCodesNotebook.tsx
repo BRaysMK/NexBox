@@ -405,16 +405,29 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
   }, [s.items, s.search, s.gunFilter, s.catFilter, catOf, canonicalOf]);
 
   // ── 失效筛选自愈 ──
-  // 场景：① 持久化恢复的枪名已不在库中；② 删除了筛选中的最后一条；
-  //       ③ 更名后旧枪名残留。此时列表会空但并非用户意图 → 自动剔除失效枪名。
+  // 场景：① 持久化恢复的枪名/分类已不在库中；② 删除了筛选中的最后一条；
+  //       ③ 更名后旧枪名残留。此时列表会空但并非用户意图 → 自动剔除失效条件。
   useEffect(() => {
-    if (s.gunFilter.length === 0 || s.items.length === 0) return;
-    const alive = new Set(s.items.map((i) => norm(canonicalOf(i.weapon_name))));
-    const kept = s.gunFilter.filter((g) => alive.has(norm(g)));
-    if (kept.length !== s.gunFilter.length) {
-      dispatch({ type: "set", patch: { gunFilter: kept } });
+    if (s.items.length === 0) return;
+
+    // ① 枪名：剔除库中已不存在的
+    if (s.gunFilter.length > 0) {
+      const alive = new Set(s.items.map((i) => norm(canonicalOf(i.weapon_name))));
+      const kept = s.gunFilter.filter((g) => alive.has(norm(g)));
+      if (kept.length !== s.gunFilter.length) {
+        dispatch({ type: "set", patch: { gunFilter: kept } });
+        return;
+      }
     }
-  }, [s.items, s.gunFilter, canonicalOf]);
+
+    // ② 分类：剔除已无任何条目的分类（其按钮也已不渲染，留着会让列表空）
+    if (s.catFilter !== "all") {
+      const hasAny = s.items.some((i) => catOf(i.weapon_name) === s.catFilter);
+      if (!hasAny) {
+        dispatch({ type: "set", patch: { catFilter: "all" } });
+      }
+    }
+  }, [s.items, s.gunFilter, s.catFilter, canonicalOf, catOf]);
 
   // ── B5：分组 + 排序 ──
   const grouped = useMemo(() => {
