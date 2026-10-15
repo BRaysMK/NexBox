@@ -40,6 +40,8 @@ mod jedec;
 
 mod feature_flags;
 mod hotkey;
+// 本地改枪码记事本（本分支原创功能，上游无此模块）
+mod local_gun_codes;
 mod main_window;
 mod media_keys;
 mod music;
@@ -1052,6 +1054,15 @@ pub fn run() {
         df_stats::df_stats_battle_detail,
         df_stats::df_stats_battle_report_season,
         df_stats::df_stats_map_stats,
+        // === 本地改枪码记事本（本分支原创功能）===
+        local_gun_codes::get_local_gun_codes,
+        local_gun_codes::add_local_gun_code,
+        local_gun_codes::delete_local_gun_code,
+        local_gun_codes::update_local_gun_code,
+        local_gun_codes::recognize_gun_name,
+        local_gun_codes::import_gun_codes_batch,
+        local_gun_codes::export_gun_codes,
+        local_gun_codes::import_gun_codes,
         // 已阉割：open_mood_window,
         // === 桌面灵动岛窗口（把内嵌岛搬到桌面上，状态真源仍在主窗口）===
         island_window::set_dynamic_island_enabled,

@@ -47,11 +47,13 @@ import {
   Dices,
   BarChart3,
   Users,
+  NotebookPen,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { CustomSelect } from "@/components/special/custom-select";
+import GunCodesNotebook from "@/components/GunCodesNotebook";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
@@ -256,6 +258,57 @@ function PasswordCard() {
       p={5}
       border="1px solid"
       borderColor={useColorModeValue("gray.200", "#333333")}
+    >
+      {content}
+    </Box>
+  );
+}
+
+// ── LocalNotebookCard（本地改枪码记事本入口，本分支原创功能） ──
+function LocalNotebookCard({ onOpen }: { onOpen: () => void }) {
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
+  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardHoverBg = useColorModeValue("gray.100", "#222222");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const { liquidGlassEnabled } = useBackground();
+  const textColor = useColorModeValue("#000000", "#ffffff");
+
+  const content = (
+    <VStack align="center" spacing={3} py={2} justify="center" h="100%">
+      <NotebookPen size={28} color={primaryColor} />
+      <Text fontWeight="semibold" fontSize="sm" color={textColor} textAlign="center">
+        本地改枪码记事本
+      </Text>
+      <Text color={subTextColor} fontSize="xs" textAlign="center">
+        粘贴自动识别 · 批量导入 · JSON备份
+      </Text>
+    </VStack>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <Box flex={1} onClick={onOpen} cursor="pointer">
+        <LiquidGlassCard p={4} h="100%" cursor="pointer">
+          {content}
+        </LiquidGlassCard>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      flex={1}
+      bg={cardBg}
+      borderRadius="xl"
+      p={4}
+      border="1px solid"
+      borderColor={borderColor}
+      cursor="pointer"
+      _hover={{ bg: cardHoverBg }}
+      transition="background-color 0.2s"
+      onClick={onOpen}
     >
       {content}
     </Box>
@@ -1362,6 +1415,19 @@ export default function DeltaForcePage() {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const adaptiveTitle = useAdaptiveTextColor();
+  const [showNotebook, setShowNotebook] = useState(false);
+
+  // 本地改枪码记事本（返回键回到三角洲主页）
+  if (showNotebook) {
+    return (
+      <Box pt={8} pb={8}>
+        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} mb={6}>
+          {t("deltaForce.title")}
+        </Heading>
+        <GunCodesNotebook onBack={() => setShowNotebook(false)} />
+      </Box>
+    );
+  }
 
   return (
     <Box pt={8} pb={8}>
@@ -1379,6 +1445,8 @@ export default function DeltaForcePage() {
         <StreamerSettingsCard />
         <RouletteCard />
         <StatsAnalysisCard />
+        {/* 本地改枪码记事本（本分支原创功能） */}
+        <LocalNotebookCard onOpen={() => setShowNotebook(true)} />
         <MoreGunCodesCard />
         <OfficialMapCard />
         <OfficialWallpaperCard />
