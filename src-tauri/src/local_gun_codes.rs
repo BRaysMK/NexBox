@@ -553,7 +553,7 @@ pub fn parse_document(app: &tauri::AppHandle, text: &str) -> Vec<ParsedCode> {
 
     let mut out: Vec<ParsedCode> = Vec::new();
     let mut carry: Option<String> = None;
-    /// 粘性分区模式：表头声明后，后续数据行沿用（`None` = 烽火地带）
+    // 粘性分区模式：表头声明后，后续数据行沿用（`None` = 烽火地带）
     let mut current_mode: Option<String> = None;
     let mut seen: HashSet<String> = HashSet::new();
 
