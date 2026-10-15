@@ -32,7 +32,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, ArrowLeft, Trash2, Plus, Move, RotateCcw, Settings } from "lucide-react";
-import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
+// 已阉割：手机远程监控弹窗（远程访问模块已移除）
+// import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
@@ -707,7 +708,7 @@ export default function OverlayPanelPage() {
           </Heading>
         </HStack>
         <HStack gap={2}>
-          <RemoteMonitorDialog />
+          {/* 已阉割：<RemoteMonitorDialog />（手机远程监控） */}
         </HStack>
       </HStack>
 

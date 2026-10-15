@@ -43,7 +43,8 @@ import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { BrandLogo } from "@/components/hardware-brand-logo";
-import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
+// 已阉割：手机远程监控弹窗（远程访问模块已移除）
+// import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
 
 interface DisplayInfo {
   name: string;
@@ -814,7 +815,7 @@ export default function HardwarePage() {
           {t("hardware.title")}
         </Heading>
         <HStack gap={2}>
-          <RemoteMonitorDialog />
+          {/* 已阉割：<RemoteMonitorDialog />（手机远程监控） */}
           <Button
             size="sm"
             variant="outline"

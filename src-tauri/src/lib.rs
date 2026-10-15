@@ -54,8 +54,9 @@ mod nvidia_recording;
 mod runtime_repair;
 mod optimization;
 mod overlay_panel;
-mod remote_monitor;
-mod remote_access;
+// 已阉割：手机远程监控 / 远程访问（PC↔安卓 剪贴板同步、音乐远程控制、文件互传）
+// mod remote_monitor;
+// mod remote_access;
 mod power_settings;
 mod vertical_overlay;
 mod vac_repair;
@@ -329,14 +330,12 @@ pub fn run() {
                 }
             });
 
-            // 手机远程监控：若上次开启则自动重开局域网 HTTP 服务
-            remote_monitor::restore_on_startup(app.handle());
+            // 已阉割：手机远程监控（remote_monitor::restore_on_startup）
 
             // NVIDIA 驱动列表缓存预热：启动后台静默刷新，进入驱动下载页秒开
             nvidia_driver_download::warm_cache_on_startup(app.handle());
 
-            // 远程接入网关（安卓控制）：注入 AppHandle 并载入历史配对设备；上次开启过则自动重开服务
-            remote_access::init(app.handle());
+            // 已阉割：远程接入网关（remote_access::init）
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -676,29 +675,8 @@ pub fn run() {
         music_api::music_switch_provider,
         music_api::music_get_playback_source,
         music_api::audio_proxy::cmd_get_proxy_port,
-        // === 手机远程监控（局域网） ===
-        remote_monitor::cmd_get_remote_monitor,
-        remote_monitor::cmd_enable_remote_monitor,
-        remote_monitor::cmd_disable_remote_monitor,
-        remote_monitor::cmd_set_remote_style,
-        // === 远程接入网关（安卓控制 · 局域网） ===
-        remote_access::cmd_get_remote_access,
-        remote_access::cmd_enable_remote_access,
-        remote_access::cmd_rotate_pairing_code,
-        remote_access::cmd_list_paired_devices,
-        remote_access::cmd_revoke_device,
-        remote_access::cmd_list_pair_requests,
-        remote_access::cmd_resolve_pair_request,
-        // === 文件互传（PC ↔ 已配对手机 · 文件篮） ===
-        remote_access::transfer::cmd_transfer_add_files,
-        remote_access::transfer::cmd_transfer_list,
-        remote_access::transfer::cmd_transfer_remove,
-        remote_access::transfer::cmd_transfer_save_file,
-        remote_access::transfer::cmd_transfer_reveal,
-        remote_access::transfer::cmd_transfer_unsaved_count,
-        // === 剪贴板同步（PC ↔ 已配对手机 · 纯文本） ===
-        remote_access::clipboard_sync::cmd_get_clipboard_sync,
-        remote_access::clipboard_sync::cmd_set_clipboard_sync,
+        // 已阉割：手机远程监控 / 远程接入网关 / 文件互传 / 剪贴板同步
+        // （remote_monitor::* 4 个、remote_access::* 7 个、transfer::* 6 个、clipboard_sync::* 2 个命令）
         downloader::download_file,
         downloader::open_system_browser,
         downloader::open_installer,
@@ -1273,8 +1251,7 @@ pub fn run() {
                 hotkey::cleanup(app_handle);
                 nvapi::cleanup();
                 hardware_report::stop_recording();
-                remote_monitor::shutdown(); // 关掉局域网 HTTP 服务并释放端口，下次启动只能手动开启
-                remote_access::shutdown(); // 关掉远程控制服务与发现应答器
+                // 已阉割：remote_monitor::shutdown() / remote_access::shutdown()
             }
             _ => {}
         }

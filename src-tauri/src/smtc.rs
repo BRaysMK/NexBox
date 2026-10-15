@@ -567,13 +567,8 @@ pub fn smtc_update_state(state: SmtcState) {
         );
     }
 
-    // 歌词顺路写入远程接入缓存：软件内播放的歌词走前端精确数据（按歌曲 id 拉取），
-    // 比远程侧按元数据搜网易云可靠得多；远程侧 lyric_lyrics 查询优先消费它。
-    crate::remote_access::music::cache_app_lyrics(
-        &state.title,
-        &state.artist,
-        state.lyric_lrc.clone(),
-    );
+    // 已阉割：歌词写入远程接入缓存（远程访问模块已移除）
+    // crate::remote_access::music::cache_app_lyrics(&state.title, &state.artist, state.lyric_lrc.clone());
 
     // 「设置 → 高级 → 键盘媒体键控制」关闭时：不向系统推送/启用本应用媒体会话。
     // 启用中的 SMTC 会话会让系统把物理媒体键路由给新境盒（前端又因开关不响应），
