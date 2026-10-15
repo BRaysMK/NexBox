@@ -1,5 +1,6 @@
 mod advanced;
-mod announcement;
+// 已阉割：公告系统（营销/官方通知，对应前端 ImportantAnnouncementModal）
+// mod announcement;
 mod app_manager;
 mod audio_engine;
 mod audio_eq;
@@ -28,7 +29,8 @@ mod game_filter;
 mod game_launcher;
 mod game_mode;
 mod game_process_optimize;
-mod game_win_key;
+// 已阉割：游戏内锁定 Win 键（本分支明确删除的功能）
+// mod game_win_key;
 mod game_ping;
 mod gpu_rename;
 mod hardware;
@@ -69,7 +71,8 @@ mod time_sync;
 mod thanks;
 mod contributor;
 mod qq_group;
-mod ads;
+// 已阉割：广告系统（主页/开屏广告，本分支明确阉割营销功能）
+// mod ads;
 mod startup_manager;
 mod service_manager;
 mod system_fonts;
@@ -135,48 +138,8 @@ pub fn ensure_vertical_overlay<R: tauri::Runtime>(
     }
 }
 
-/// 按需创建心境窗口（不常驻，点击主页「心境」卡片时创建并显示）。
-/// 加载应用内 /mood 路由（WebviewUrl::App 对 SPA 回退到 index.html）。
-pub fn ensure_mood_window<R: tauri::Runtime>(
-    app: &tauri::AppHandle<R>,
-) -> Option<tauri::WebviewWindow<R>> {
-    use tauri::{WebviewUrl, WebviewWindowBuilder};
-
-    let label = "mood";
-    if let Some(win) = app.get_webview_window(label) {
-        return Some(win);
-    }
-
-    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(label.into()))
-        .title("心境")
-        // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
-        // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
-        .inner_size(1000.0, 700.0)
-        .resizable(true)
-        .center()
-        .visible(false);
-
-    match builder.build() {
-        Ok(win) => Some(win),
-        Err(e) => {
-            log::error!("[Window] 创建 mood 窗口失败: {e}");
-            None
-        }
-    }
-}
-
-/// 打开心境窗口：不存在则创建，已存在则显示并聚焦。
-/// 使用 async 命令（与其它开窗命令保持一致），避免同步命令在阻塞线程操作窗口导致死锁。
-#[tauri::command]
-async fn open_mood_window(app: tauri::AppHandle) -> Result<(), String> {
-    let Some(win) = ensure_mood_window(&app) else {
-        return Err("创建心境窗口失败".to_string());
-    };
-    win.show().map_err(|e| format!("显示心境窗口失败: {}", e))?;
-    let _ = win.set_focus();
-    Ok(())
-}
+// 已阉割：心境窗口（心境功能已从本分支移除，前端 /mood 路由与入口一并删除）
+// pub fn ensure_mood_window ... / async fn open_mood_window ... 已移除
 
 /// 设置当前进程效能模式（EcoQoS，即任务管理器中的"小绿叶"）。
 /// 开启后 Windows 会主动限制该进程的 CPU/功耗，适合后台/最小化状态。
@@ -411,7 +374,8 @@ pub fn run() {
             // （碰撞体），任何部分都不允许移出屏幕外或压住任务栏。
             let _ = utils::cursor::install_lyrics_move_clamp(app.handle());
 
-            utils::sys_info::check_and_send_statistics(app);
+            // 已阉割：不再向官方服务器上报启动统计（版本/系统信息）
+            // utils::sys_info::check_and_send_statistics(app);
             overlay_panel::start_hardware_poller();
             hardware_report::start_recording();
 
@@ -447,11 +411,11 @@ pub fn run() {
                 let _ = optimization::init_memory_clean_config(app_handle_for_memory_clean).await;
             });
 
-            // 初始化游戏启动时禁用 Win 键（读取持久化配置并启动后台轮询）
-            let app_handle_for_game_win_key = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = game_win_key::init(app_handle_for_game_win_key).await;
-            });
+            // 已阉割：游戏启动时禁用 Win 键（模块已删）
+            // let app_handle_for_game_win_key = app.handle().clone();
+            // tauri::async_runtime::spawn(async move {
+            //     let _ = game_win_key::init(app_handle_for_game_win_key).await;
+            // });
 
             // 初始化游戏进程优化（恢复持久化配置，首次预置三角洲；启动自动优化线程）
             let app_handle_for_game_opt = app.handle().clone();
@@ -542,53 +506,29 @@ pub fn run() {
 
             // 启动时直接从持久化配置读取用户设置的快捷键并注册，
             // 不再依赖前端启动后覆盖，避免用户自定义热键重启后失效
-            let overlay_hotkey = hotkey::load_saved_hotkey(app.handle(), "overlay-hotkey", "Shift+F10");
-            let crosshair_hotkey = hotkey::load_saved_hotkey(app.handle(), "crosshair-hotkey", "Shift+F9");
-            let filter_hotkey = hotkey::load_saved_hotkey(app.handle(), "filter-hotkey", "Shift+F8");
-            let autoclicker_hotkey = hotkey::load_saved_hotkey(app.handle(), "autoclicker-hotkey", "F8");
-            let music_prev_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-prev-hotkey", "Alt+[");
-            let music_next_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-next-hotkey", "Alt+]");
-            let music_playpause_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-playpause-hotkey", "Alt+Space");
-            let lyrics_btn_hotkey = hotkey::load_saved_hotkey(app.handle(), "lyrics-btn-hotkey", "");
-            hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
-
-            // 恢复每个热键的独立开关（在注册热键前设置，使 apply_hotkeys_enabled 能正确判断）
-            // 连点器热键默认关闭，其余热键默认开启
-            hotkey::set_overlay_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "overlay-hotkey-enabled", true));
-            hotkey::set_crosshair_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "crosshair-hotkey-enabled", true));
-            hotkey::set_filter_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "filter-hotkey-enabled", true));
-            hotkey::set_autoclicker_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "autoclicker-hotkey-enabled", false));
-            hotkey::set_music_prev_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-prev-hotkey-enabled", true));
-            hotkey::set_music_next_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-next-hotkey-enabled", true));
-            hotkey::set_music_playpause_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-playpause-hotkey-enabled", true));
-            hotkey::set_lyric_btn_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "lyrics-btn-hotkey-enabled", true));
-
-            // 准星「按住打开」模式：先载入持久化配置（按住模式下 init_crosshair 会跳过切换热键注册）
-            let crosshair_hold_enabled = hotkey::read_settings_value(app.handle(), "crosshair-hold-enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let crosshair_hold_key = hotkey::read_settings_value(app.handle(), "crosshair-hold-key")
-                .and_then(|v| v.as_str().map(|s| s.to_string()))
-                .unwrap_or_else(|| "MouseRight".to_string());
-            let crosshair_hold_delay = hotkey::read_settings_value(app.handle(), "crosshair-hold-delay")
-                .and_then(|v| v.as_u64())
-                .map(|v| v.min(10_000) as u32)
-                .unwrap_or(0);
-            crosshair_hold::init(app.handle(), crosshair_hold_enabled, &crosshair_hold_key, crosshair_hold_delay);
-
-            let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
-            let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
-            let _ = hotkey::init_filter(app.handle(), &filter_hotkey);
-            let _ = hotkey::init_autoclicker(app.handle(), &autoclicker_hotkey);
-            let _ = hotkey::init_music_prev(app.handle(), &music_prev_hotkey);
-            let _ = hotkey::init_music_next(app.handle(), &music_next_hotkey);
-            let _ = hotkey::init_music_playpause(app.handle(), &music_playpause_hotkey);
-            let _ = hotkey::init_lyrics_btn_toggle(app.handle(), &lyrics_btn_hotkey);
-
-            // 若保存的总开关为“关闭”，上面已注册的热键需立即注销以释放按键
-            if !hotkey::is_hotkeys_enabled() {
-                hotkey::apply_hotkeys_enabled(app.handle(), false);
-            }
+            // 已阉割：全部全局热键不再注册（含音乐热键），仅保留 SMTC 系统媒体会话
+            // let overlay_hotkey = hotkey::load_saved_hotkey(app.handle(), "overlay-hotkey", "Shift+F10");
+            // let crosshair_hotkey = hotkey::load_saved_hotkey(app.handle(), "crosshair-hotkey", "Shift+F9");
+            // let filter_hotkey = hotkey::load_saved_hotkey(app.handle(), "filter-hotkey", "Shift+F8");
+            // let autoclicker_hotkey = hotkey::load_saved_hotkey(app.handle(), "autoclicker-hotkey", "F8");
+            // let music_prev_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-prev-hotkey", "Alt+[");
+            // let music_next_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-next-hotkey", "Alt+]");
+            // let music_playpause_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-playpause-hotkey", "Alt+Space");
+            // let lyrics_btn_hotkey = hotkey::load_saved_hotkey(app.handle(), "lyrics-btn-hotkey", "");
+            // hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
+            //
+            // let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
+            // let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
+            // let _ = hotkey::init_filter(app.handle(), &filter_hotkey);
+            // let _ = hotkey::init_autoclicker(app.handle(), &autoclicker_hotkey);
+            // let _ = hotkey::init_music_prev(app.handle(), &music_prev_hotkey);
+            // let _ = hotkey::init_music_next(app.handle(), &music_next_hotkey);
+            // let _ = hotkey::init_music_playpause(app.handle(), &music_playpause_hotkey);
+            // let _ = hotkey::init_lyrics_btn_toggle(app.handle(), &lyrics_btn_hotkey);
+            //
+            // if !hotkey::is_hotkeys_enabled() {
+            //     hotkey::apply_hotkeys_enabled(app.handle(), false);
+            // }
 
             // 启动外部客户端播放的后台系统媒体会话轮询
             external_player::start(app.handle().clone());
@@ -602,8 +542,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-        announcement::get_announcements,
-        announcement::get_important_announcements,
+        // 已阉割：announcement::get_announcements, announcement::get_important_announcements,
         auto_start::set_nexbox_auto_start,
         auto_start::check_nexbox_auto_start,
         hardware::get_hardware,
@@ -949,8 +888,7 @@ pub fn run() {
         game_mode::game_mode_set_auto,
         game_mode::game_mode_set_auto_preset,
         game_mode::game_mode_get_status,
-        game_win_key::get_game_win_key_status,
-        game_win_key::set_game_win_key_enabled,
+        // 已阉割：game_win_key::get_game_win_key_status, game_win_key::set_game_win_key_enabled,
         // === EQ 调音命令 ===
         audio_eq::check_virtual_audio_driver,
         audio_eq::install_virtual_audio_driver,
@@ -1114,7 +1052,7 @@ pub fn run() {
         df_stats::df_stats_battle_detail,
         df_stats::df_stats_battle_report_season,
         df_stats::df_stats_map_stats,
-        open_mood_window,
+        // 已阉割：open_mood_window,
         // === 桌面灵动岛窗口（把内嵌岛搬到桌面上，状态真源仍在主窗口）===
         island_window::set_dynamic_island_enabled,
         island_window::dynamic_island_set_click_through,
@@ -1134,8 +1072,7 @@ pub fn run() {
             contributor::get_contributors,
         qq_group::get_qq_groups,
         qq_group::get_qq_group_icon,
-        ads::get_ads,
-        ads::get_ad_image,
+        // 已阉割：ads::get_ads, ads::get_ad_image,
         shader_cache::scan_shader_caches,
         shader_cache::clean_shader_cache,
         pso_cache::pso_detect,
@@ -1307,7 +1244,7 @@ pub fn run() {
                 sensor::stop_sensor_process(app_handle);
                 hardware::cleanup_hardware_cache();
                 overlay_panel::cleanup(); // 先停后台轮询线程(FPS/传感器)，再恢复 Gamma
-                game_win_key::cleanup();
+                // 已阉割：game_win_key::cleanup();（模块已删）
                 speedtest::cleanup();
                 // 先停游戏滤镜轮询线程（推进控制代次），再执行显示器恢复：
                 // 否则轮询线程可能在清理期间触发新的应用/恢复，与 cleanup 争抢同一操作锁。

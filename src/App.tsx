@@ -19,7 +19,8 @@ import DeltaForceRoulettePage from "./pages/DeltaForceRoulettePage";
 import DeltaStatsPage from "./pages/DeltaStatsPage";
 import StreamerDirectoryPage from "./pages/StreamerDirectoryPage";
 import StreamerProfilePage from "./pages/StreamerProfilePage";
-import MoodPage from "./pages/MoodPage";
+// 已阉割：心境页面
+// import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
 import ResolutionConverterPage from "./pages/ResolutionConverterPage";
@@ -64,22 +65,22 @@ import { IS_STORE_BUILD } from "@/lib/build-flags";
 
 import { UpdateModal } from "./components/UpdateModal";
 import { SplashScreen } from "./components/SplashScreen";
-import { StartupAdModal } from "./components/ads/startup-ad-popup";
-import { useAds } from "./hooks/use-ads";
+// 已阉割：广告系统（开屏/主页广告）
+// import { StartupAdModal } from "./components/ads/startup-ad-popup";
+// import { useAds } from "./hooks/use-ads";
 import { useAppStartup } from "./contexts/app-startup-context";
 import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
-import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
-import { StarPromptModal } from "./components/StarPromptModal";
+// 已阉割：公告系统（营销/官方通知）
+// import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
+// 已阉割：Star 引导弹窗（营销向）
+// import { StarPromptModal } from "./components/StarPromptModal";
 import { DynamicIslandHost } from "./components/ui/dynamic-island";
-import { AccelIslandBridge } from "./components/ui/accel-island-bridge";
+// 已阉割：灵动岛加速桥接（灵动岛 UI 已阉割；dynamic-island 的 useDynamicIsland hook 保留）
+// import { AccelIslandBridge } from "./components/ui/accel-island-bridge";
 import { IslandRemoteBridge } from "./components/ui/island-remote-bridge";
 
-/** 启动完成后展示一次开屏广告弹窗（ads 为空时不显示任何内容） */
-function StartupAdHost() {
-  const { splash } = useAds();
-  return <StartupAdModal ads={splash} />;
-}
+// 已阉割：开屏广告宿主（StartupAdHost 已移除）
 
 function App() {
   const { isStartupComplete } = useAppStartup();
@@ -107,10 +108,7 @@ function App() {
     return <SensorMonitorPage />;
   }
 
-  // Mood window: standalone, no main layout（主页「心境」卡片点击打开独立窗口）
-  if (location.pathname === "/mood") {
-    return <MoodPage />;
-  }
+  // 已阉割：心境独立窗口（/mood 路由已移除）
 
   // 开机自启(--autostart)模式：后端已离屏预热加载本窗口，前端初始化完成后隐藏到托盘，
   // 复用 minimize_to_tray 正确更新后端可见性并触发 EcoQoS。
@@ -129,7 +127,7 @@ function App() {
     <MusicProvider>
       <>
         {!isStartupComplete && <SplashScreen />}
-        {isStartupComplete && <StartupAdHost />}
+        {/* 已阉割：{isStartupComplete && <StartupAdHost />}（开屏广告） */}
         {/* <MiniMusicPlayer /> */}
         <MainLayout>
           {/* 主页常驻挂载：路由切换只隐藏、不卸载，避免每次回到主页重新加载硬件信息与快捷启动 */}
@@ -469,10 +467,10 @@ function App() {
         </MainLayout>
 
         <UpdateModal />
-        <ImportantAnnouncementModal />
-        <StarPromptModal />
-        <DynamicIslandHost />
-        <AccelIslandBridge />
+        {/* 已阉割：<ImportantAnnouncementModal />（公告）*/}
+        {/* 已阉割：<StarPromptModal />（Star 引导）*/}
+        {false && <DynamicIslandHost />}
+        {/* 已阉割：<AccelIslandBridge />（灵动岛加速桥接）*/}
         <IslandRemoteBridge />
       </>
     </MusicProvider>

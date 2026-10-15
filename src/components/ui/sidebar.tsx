@@ -15,7 +15,7 @@ import steamIconLight from "@/assets/tools/Steam-light.webp";
 import steamIconDark from "@/assets/tools/Steam-dark.webp";
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 
-const HIDEABLE_NAV_PATHS = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+const HIDEABLE_NAV_PATHS = ["/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
 const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
 
 // 同步从 localStorage 预填充导航可见性：store 的读取是异步的，若首帧用空对象初始化，
@@ -296,7 +296,7 @@ export function Sidebar() {
       if (orderStr) {
         try {
           const parsed = JSON.parse(orderStr) as string[];
-          const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+          const allPaths = ["/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
           let changed = false;
           for (const p of allPaths) {
             if (!parsed.includes(p)) { parsed.push(p); changed = true; }
@@ -313,7 +313,7 @@ export function Sidebar() {
           const saved = localStorage.getItem(NAV_ORDER_KEY);
           if (saved) {
             const parsed = JSON.parse(saved) as string[];
-            const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+            const allPaths = ["/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
             let changed = false;
             for (const p of allPaths) {
               if (!parsed.includes(p)) { parsed.push(p); changed = true; }
@@ -394,9 +394,10 @@ export function Sidebar() {
 
   const navItems: NavItem[] = [
     { path: "/", icon: Home, ariaLabel: t("sidebar.home") },
-    { path: "/hardware", icon: Cpu, ariaLabel: t("sidebar.hardware") },
-    // 商店版不显示工具箱入口（其全部栏目均为第三方软件获取入口，见 ToolsPage）
-    ...(IS_STORE_BUILD ? [] : [{ path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") }]),
+    // 已阉割：硬件状态 (/hardware)
+    // { path: "/hardware", icon: Cpu, ariaLabel: t("sidebar.hardware") },
+    // 已阉割：工具 (/tools)
+    // ...(IS_STORE_BUILD ? [] : [{ path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") }]),
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
     { path: "/system-optimizer", icon: Settings2, ariaLabel: t("sidebar.systemOptimizer") },

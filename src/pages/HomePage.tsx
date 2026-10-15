@@ -9,10 +9,12 @@ import { useState, useEffect, useRef } from "react";
 import HardwareModelCard from "@/components/HardwareModelCard";
 import GameWinKeyCard from "@/components/GameWinKeyCard";
 import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
-import MoodCard from "@/components/MoodCard";
+// 已阉割：心境卡片
+// import MoodCard from "@/components/MoodCard";
 import { FeedbackCard, DocsCard, QqGroupCard, RemoteAccessCard, useFeedbackEnabled, useDocsCardEnabled, useQqGroupCardEnabled, useRemoteAccessCardEnabled, SHOW_REMOTE_ACCESS_CARD } from "@/components/QqFeedbackCards";
-import { HomeAdCards } from "@/components/ads/home-ad-card";
-import { useAds } from "@/hooks/use-ads";
+// 已阉割：广告系统
+// import { HomeAdCards } from "@/components/ads/home-ad-card";
+// import { useAds } from "@/hooks/use-ads";
 import { store } from "@/lib/store";
 import { getGreeting, rollEasterEgg, EASTER_EGG_TEXT } from "@/lib/greetings";
 import { invoke } from "@tauri-apps/api/core";
@@ -115,7 +117,7 @@ export default function HomePage() {
   const { enabled: announcementEnabled, ready: announcementReady } = useAnnouncementEnabled();
   const { enabled: randomQuoteEnabled, ready: randomQuoteReady } = useRandomQuoteEnabled();
   const { enabled: randomImageEnabled, ready: randomImageReady } = useRandomImageEnabled();
-  const { home: homeAds } = useAds();
+  // 已阉割：const { home: homeAds } = useAds();（广告系统）
   useEffect(() => {
     (async () => {
       const saved = await store.get<boolean>("nexbox_game_launcher_enabled");
@@ -229,40 +231,33 @@ export default function HomePage() {
             </HStack>
           ) : null}
         </Box>
-        {(feedbackReady && feedbackEnabled) || (docsCardReady && docsCardEnabled) || (qqGroupCardReady && qqGroupCardEnabled) || (SHOW_REMOTE_ACCESS_CARD && remoteAccessCardReady && remoteAccessCardEnabled) || homeAds.length > 0 ? (
+        {(feedbackReady && feedbackEnabled) || (docsCardReady && docsCardEnabled) || (qqGroupCardReady && qqGroupCardEnabled) || (SHOW_REMOTE_ACCESS_CARD && remoteAccessCardReady && remoteAccessCardEnabled) ? (
           <Box pt={6}>
             <VStack spacing={2} align="stretch">
-              {/* 反馈/文档/QQ群：80px 方形图标块，一行排列（手机远程与广告卡保持横条样式，排在下方） */}
+              {/* 反馈/文档/QQ群：80px 方形图标块，一行排列（手机远程保持横条样式，排在下方） */}
               <HStack spacing={2} justify="flex-end">
                 {feedbackReady && feedbackEnabled && <FeedbackCard />}
                 {docsCardReady && docsCardEnabled && <DocsCard />}
                 {qqGroupCardReady && qqGroupCardEnabled && <QqGroupCard />}
               </HStack>
               {SHOW_REMOTE_ACCESS_CARD && remoteAccessCardReady && remoteAccessCardEnabled && <RemoteAccessCard />}
-              {homeAds.length > 0 && <HomeAdCards ads={homeAds} />}
+              {/* 已阉割：{homeAds.length > 0 && <HomeAdCards ads={homeAds} />}（广告系统） */}
             </VStack>
           </Box>
         ) : null}
       </Flex>
 
-      {homeCardsReady &&
-        (randomImageEnabled ||
-          moodCardEnabled ||
-          gameWinKeyCardEnabled ||
-          homeHardwareModelEnabled) && (
+      {/* 已阉割：主页左下角卡片组（随机图片/心境/锁定Win键）整体禁用 */}
+      {false && homeCardsReady && (
         <Box position="absolute" bottom={4} left={4} w="360px">
           <VStack spacing={2} align="stretch">
-            {(randomImageReady && randomImageEnabled) || moodCardEnabled ? (
-              <HStack spacing={2} align="stretch" w="full" justify="space-between">
-                {randomImageReady && randomImageEnabled && <RandomImageCard />}
-                {moodCardEnabled && <MoodCard />}
-              </HStack>
-            ) : null}
-            {gameWinKeyCardEnabled && <GameWinKeyCard />}
+            {false && randomImageReady && randomImageEnabled && <RandomImageCard />}
+            {/* 已阉割：心境卡片 {false && moodCardEnabled && <MoodCard />} */}
+            {false && gameWinKeyCardEnabled && <GameWinKeyCard />}
             {homeHardwareModelEnabled && <HardwareModelCard />}
           </VStack>
         </Box>
-      )}
+        )}
 
       {homeCardsReady && gameLauncherEnabled && (
         <Box
