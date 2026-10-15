@@ -19,8 +19,8 @@ import DeltaForceRoulettePage from "./pages/DeltaForceRoulettePage";
 import DeltaStatsPage from "./pages/DeltaStatsPage";
 import StreamerDirectoryPage from "./pages/StreamerDirectoryPage";
 import StreamerProfilePage from "./pages/StreamerProfilePage";
-// 已阉割：心境页面
-// import MoodPage from "./pages/MoodPage";
+// 心境页面保留（与主树一致：/mood 路由保留，仅侧边栏入口与独立窗口创建移除）
+import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
 import ResolutionConverterPage from "./pages/ResolutionConverterPage";
@@ -234,6 +234,13 @@ function App() {
                     path="/delta-force/other-platforms"
                     element={
                       <OtherGunCodePlatformsPage />
+                    }
+                  />
+                  {/* 心境页面：路由保留（与主树一致），仅侧边栏入口移除 */}
+                  <Route
+                    path="/mood"
+                    element={
+                      <MoodPage />
                     }
                   />
                   <Route
