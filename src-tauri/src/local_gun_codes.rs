@@ -340,9 +340,156 @@ fn build_alias_index(app: &tauri::AppHandle, rules: &GunRules) -> HashMap<String
     idx
 }
 
-/// 把任意写法归一到规范枪名
+/// 武器型号后缀 / 修饰词（迭代剥离用）
+///
+/// 属**结构性知识**（游戏内武器分类词的构词法），非枪名数据，
+/// 因此硬编码在内核；枪名本身一律来自规则库。
+///
+/// 用于处理「枪名 + 型号后缀紧贴」的文档格式，例如：
+/// - `AR57突击步枪`          → 剥「突击步枪」→ `AR57`
+/// - `SR-3M紧凑突击步枪`     → 剥「紧凑」+「突击步枪」→ `SR-3M`
+/// - `M250通用机枪`          → 剥「通用机枪」→ `M250`
+const WEAPON_SUFFIXES: &[&str] = &[
+    "突击步枪",
+    "战斗步枪",
+    "狙击步枪",
+    "精确射手步枪",
+    "射手步枪",
+    "冲锋枪",
+    "轻机枪",
+    "通用机枪",
+    "机枪",
+    "霰弹枪",
+    "手枪",
+    "步枪",
+    // 修饰词（可与型号后缀叠加）
+    "紧凑",
+    "精确",
+    "战术",
+];
+
+/// ③ 前缀 / ④ 子串匹配的最小长度门槛
+///
+/// 低于此长度的枪名（如「弓」只有 1 字）**只走整体等于与别名匹配**，
+/// 不参与前缀/子串匹配 —— 否则 `弓弩`（分类词）会因以「弓」开头而被误判。
+/// 短枪名的变体（如「复合弓」）一律通过**规则库别名**补全，而非放宽匹配。
+const SUBSTR_MIN_LEN: usize = 3;
+
+/// 把任意写法归一到规范枪名（**四段式匹配**）
+///
+/// 按优先级依次尝试，命中即返回：
+///   ① 整体等于           `AR57`          → `AR57`
+///   ② 迭代剥离型号后缀    `AR57突击步枪`  → `AR57`
+///   ③ 前缀匹配（最长优先）`QJB201轻机枪`  → `QJB`
+///   ④ 子串匹配（最长优先）`Marlin杠杆步枪`→ `杠杆步枪`
+///
+/// ⚠️ ③④ 一律**按归一化长度降序**遍历，保证最长匹配优先，
+/// 否则 `M700` 会命中 `M7`、`M1014` 会命中 `M10`（张冠李戴）。
 fn canonical_gun(alias_idx: &HashMap<String, String>, raw: &str) -> Option<String> {
-    alias_idx.get(&normalize(raw)).cloned()
+    let n = normalize(raw);
+    if n.is_empty() {
+        return None;
+    }
+
+    // ① 整体等于
+    if let Some(g) = alias_idx.get(&n) {
+        return Some(g.clone());
+    }
+
+    // ② 迭代剥离型号后缀 / 修饰词（最多 4 轮，覆盖「紧凑突击步枪」这类叠加）
+    //
+    // ⚠️ 必须用**字符数**而非字节数：中文一字 3 字节，若用 `str::len()`（字节）
+    //    判断，`"弓弩"(6B)` 会被误判为以 `"弓"(3B)` 结尾，错误剥离出 `"弓"`，
+    //    导致 `弓弩`（分类词）被误配成枪名 `弓`。
+    let mut stripped = n.clone();
+    for _ in 0..4 {
+        let before = stripped.clone();
+        // 按字符长度降序尝试，保证「精确射手步枪」优先于「步枪」
+        for suf in sorted_suffixes() {
+            let sl = suf.chars().count();
+            let cl = stripped.chars().count();
+            if cl > sl && stripped.ends_with(suf.as_str()) {
+                // 按字符数换算成字节边界再截断（`truncate` 是字节语义）
+                let keep_bytes = stripped
+                    .char_indices()
+                    .nth(cl - sl)
+                    .map(|(i, _)| i)
+                    .unwrap_or_else(|| stripped.len());
+                stripped.truncate(keep_bytes);
+                break;
+            }
+        }
+        if stripped == before {
+            break; // 无可剥离，退出
+        }
+        if let Some(g) = alias_idx.get(&stripped) {
+            return Some(g.clone());
+        }
+    }
+
+    // ③ 前缀匹配（token 以枪名开头），最长优先
+    // ④ 子串匹配（枪名出现在 token 中），最长优先
+    // 两者共用一次「长度降序」遍历，且**都受最小长度门槛约束**：
+    // 短名（如「弓」）只能靠整体等于或别名命中，避免「弓弩」被误判。
+    let mut best_substr: Option<&String> = None;
+    let mut best_substr_len = 0usize;
+    for (cand, canon) in sorted_alias_entries(alias_idx) {
+        let cand_len = cand.chars().count(); // 字符数，非字节
+        if cand_len < SUBSTR_MIN_LEN {
+            continue;
+        }
+        if n.starts_with(cand.as_str()) {
+            return Some(canon.clone());
+        }
+        if cand_len > best_substr_len && n.contains(cand.as_str()) {
+            best_substr = Some(canon);
+            best_substr_len = cand_len;
+        }
+    }
+    best_substr.cloned()
+}
+
+/// 后缀词表：按归一化后**字符数**降序（避免「步枪」抢先匹配「突击步枪」）
+fn sorted_suffixes() -> Vec<String> {
+    let mut v: Vec<String> = WEAPON_SUFFIXES.iter().map(|s| normalize(s)).collect();
+    v.sort_by(|a, b| b.chars().count().cmp(&a.chars().count()));
+    v
+}
+
+// ═══════════════ 测试用公开包装（供 tests/ 集成测试调用）═══════════════
+//
+// 集成测试（`tests/*.rs`）属于独立 crate，无法访问 `pub(crate)` 项。
+// 这些包装仅转发到内部实现，不含额外逻辑。
+
+/// 测试用：四段式枪名匹配（见 [`canonical_gun`]）
+pub fn canonical_gun_for_test(
+    alias_idx: &HashMap<String, String>,
+    raw: &str,
+) -> Option<String> {
+    canonical_gun(alias_idx, raw)
+}
+
+/// 测试用：从流式文本片段提取枪名（见 [`match_gun_in_text`]）
+pub fn match_gun_in_text_for_test(
+    alias_idx: &HashMap<String, String>,
+    text: &str,
+) -> Option<String> {
+    match_gun_in_text(alias_idx, text)
+}
+
+/// 测试用：按 `烽火地带-<码>` 锚点分段（见 [`split_by_code_anchor`]）
+pub fn split_by_code_anchor_for_test(line: &str) -> Vec<(String, String)> {
+    split_by_code_anchor(line)
+}
+
+/// 别名索引条目：按 key **字符数**降序（保证最长匹配优先，防张冠李戴）
+///
+/// 用字符数而非字节数：中文字符 3 字节，按字节排序会让中文名排在英文名之前，
+/// 破坏「最长优先」的语义（`杠杆步枪` 应优先于 `弓`）。
+fn sorted_alias_entries(alias_idx: &HashMap<String, String>) -> Vec<(&String, &String)> {
+    let mut v: Vec<(&String, &String)> = alias_idx.iter().collect();
+    v.sort_by(|a, b| b.0.chars().count().cmp(&a.0.chars().count()));
+    v
 }
 
 // ═══════════════════════ 码与指纹 ═══════════════════════
@@ -487,15 +634,26 @@ pub(crate) fn foreign_mode_of_row(cells: &[String], rules: &GunRules) -> Option<
     None
 }
 
-/// ② 同行匹配：在单元格里找枪名（**整体匹配**，避免 `PSG-1` 误配到别的行）
+/// ② 同行匹配：在单元格里找枪名
+///
+/// 用 [`canonical_gun`] 做四段式匹配，因此同时支持两种文档形态：
+/// - **xlsx/TSV**：枪名是独立单元格（`"AR57"`）
+/// - **PDF/流式**：枪名带型号后缀紧贴码（`"AR57突击步枪-烽火地带-xxx"`）
+///
+/// 取**归一化长度最长**的命中，避免短名抢先（`M7` 抢 `M700`）。
 fn match_gun_in_row(alias_idx: &HashMap<String, String>, cells: &[String]) -> Option<String> {
     let mut best: Option<String> = None;
     let mut best_len = 0usize;
     for c in cells {
-        if c.is_empty() || c.chars().count() > 16 {
+        if c.is_empty() {
             continue;
         }
         if is_code_token(c) {
+            continue;
+        }
+        // 长度上限放宽到 32：覆盖 `SR-3M紧凑突击步枪`（16 字）这类带后缀的写法；
+        // 更长的串（说明文本）由后续的子串匹配自然筛掉。
+        if c.chars().count() > 32 {
             continue;
         }
         if let Some(g) = canonical_gun(alias_idx, c) {
@@ -507,6 +665,75 @@ fn match_gun_in_row(alias_idx: &HashMap<String, String>, cells: &[String]) -> Op
         }
     }
     best
+}
+
+/// 从一段文本（无制表符的流式行）中提取枪名
+///
+/// 按空格分片后，除单片外**额外尝试相邻两片拼接**——
+/// 解决 `AS Val`、`SR-3M` 这类含空格/连字符的枪名被空格拆散的问题。
+/// 从右往左优先（离码越近的片越可能是本段枪名）。
+pub(crate) fn match_gun_in_text(alias_idx: &HashMap<String, String>, text: &str) -> Option<String> {
+    let parts: Vec<&str> = text.split_whitespace().filter(|s| !s.is_empty()).collect();
+    if parts.is_empty() {
+        return None;
+    }
+
+    // 候选：单片 + 相邻两片拼接
+    let mut cands: Vec<String> = Vec::new();
+    for (i, p) in parts.iter().enumerate() {
+        cands.push((*p).to_string());
+        if i + 1 < parts.len() {
+            cands.push(format!("{}{}", p, parts[i + 1]));
+        }
+    }
+
+    let mut best: Option<String> = None;
+    let mut best_len = 0usize;
+    // 从右往左（离码更近者优先）
+    for c in cands.iter().rev() {
+        let trimmed = c.trim_end_matches('-');
+        if trimmed.is_empty() || is_code_token(trimmed) {
+            continue;
+        }
+        if let Some(g) = canonical_gun(alias_idx, trimmed) {
+            let l = normalize(&g).chars().count();
+            if l > best_len {
+                best_len = l;
+                best = Some(g);
+            }
+        }
+    }
+    best
+}
+
+/// 按 `烽火地带-<码>` 为锚，把流式行切成 `[(码, 该段左侧文本)]`
+///
+/// 用途：PDF / 贴吧文本这类**无制表符**的格式里，一行可能含多个码
+/// （如双栏排版被拉平）。若整行一起匹配枪名，第二段会错误继承第一段的枪名。
+/// 按码锚点分段后，每段只用自己的左侧文本匹配，杜绝跨段串枪。
+pub(crate) fn split_by_code_anchor(line: &str) -> Vec<(String, String)> {
+    const ANCHOR: &str = "烽火地带-";
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut last_end = 0usize;
+
+    while let Some(rel) = line[last_end..].find(ANCHOR) {
+        let anchor_at = last_end + rel;
+        let after = anchor_at + ANCHOR.len();
+        // 锚点之后取连续的字母数字作为码
+        let code: String = line[after..]
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .collect();
+        if is_code_token(&code) {
+            // 段左侧文本 = 上一码结束 ~ 本锚点之前
+            let left = line[last_end..anchor_at].trim().to_string();
+            out.push((code.clone(), left));
+            last_end = after + code.len();
+        } else {
+            last_end = after;
+        }
+    }
+    out
 }
 
 /// 提取配置名：优先取「紧邻首个码左侧」的短单元格，其次取右侧
@@ -635,19 +862,35 @@ pub fn parse_document(app: &tauri::AppHandle, text: &str) -> Vec<ParsedCode> {
             row_gun.clone().or_else(|| carry.clone())
         };
 
+        // 锚点分段：把无制表符的流式行按 `烽火地带-<码>` 切成多段，
+        // 每段独立解析枪名 —— 防止「双码同行」时第二段错继承第一段的枪名。
+        // 有制表符（xlsx 粘贴）时 cells 已是列，无需分段。
+        let segments = if line.contains('\t') {
+            Vec::new()
+        } else {
+            split_by_code_anchor(line)
+        };
+
         let first_idx = *code_positions.first().unwrap();
         let row_config = extract_config(&alias_idx, &cells, first_idx);
 
         for &ci in &code_positions {
             let code = cells[ci].clone();
             let fp = extract_fingerprint(&code);
+
+            // 段内枪名（仅流式行）：比整行匹配更精确
+            let seg_gun = segments
+                .iter()
+                .find(|(c, _)| c == &code)
+                .and_then(|(_, left)| match_gun_in_text(&alias_idx, left));
+
             if !seen.insert(fp.clone()) {
                 // 同一指纹在同一份文档里重复出现 → 后者跳过（去重）
                 continue;
             }
 
-            // 识别优先级：学习表(10位) > 规则库(10位) > 学习表(6位,旧) > 规则库枪名
-            let mut gun = use_gun.clone();
+            // 识别优先级：学习表(10位) > 规则库(10位) > 学习表(6位,旧) > 枪名
+            let mut gun = seg_gun.clone().or_else(|| use_gun.clone());
             let mut config = row_config.clone();
             let mut confidence = if is_bundle {
                 0.0
@@ -658,6 +901,8 @@ pub fn parse_document(app: &tauri::AppHandle, text: &str) -> Vec<ParsedCode> {
             };
             let mut reason = if is_bundle {
                 "整套套件码（不属于单把枪）".to_string()
+            } else if seg_gun.is_some() {
+                "段内匹配到枪名".to_string()
             } else if row_gun.is_some() {
                 "同行单元格匹配到枪名".to_string()
             } else if carry.is_some() {
@@ -1051,6 +1296,224 @@ pub fn import_gun_codes(app: tauri::AppHandle, path: String) -> Result<usize, St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 构造一个轻量别名索引（不依赖 AppHandle），模拟规则库加载结果
+    fn idx_from(pairs: &[(&str, &[&str])]) -> HashMap<String, String> {
+        let mut m = HashMap::new();
+        for (canon, aliases) in pairs {
+            m.insert(normalize(canon), canon.to_string());
+            for a in *aliases {
+                m.insert(normalize(a), canon.to_string());
+            }
+        }
+        m
+    }
+
+    /// 典型测试索引（覆盖长短名冲突、变体、中文名、别名）
+    fn test_idx() -> HashMap<String, String> {
+        idx_from(&[
+            ("AR57", &[]),
+            ("MK47", &[]),
+            ("M7", &[]),
+            ("M700", &[]),
+            ("M1014", &[]),
+            ("M1911", &[]),
+            ("M249", &[]),
+            ("M250", &[]),
+            ("M16A4", &[]),
+            ("M4A1", &[]),
+            ("SR-3M", &["SR3M"]),
+            ("AS Val", &["ASVAL"]),
+            ("QJB", &["QJB201"]),
+            ("QBZ-95", &["QBZ95-1"]),
+            ("杠杆步枪", &[]),
+            ("弓", &["复合弓"]),
+            ("野牛", &[]),
+            ("P90", &[]),
+            ("PKM", &[]),
+            ("KC17", &[]),
+        ])
+    }
+
+    // ═══════ 新增：四段式枪名匹配（PDF / 流式格式支持）═══════
+
+    #[test]
+    fn test_four_stage_match_pdf_style() {
+        // 覆盖 PDF 文档里「枪名 + 型号后缀紧贴」的全部形态
+        let idx = test_idx();
+        let cases: &[(&str, &str)] = &[
+            ("AR57突击步枪", "AR57"),           // ② 剥「突击步枪」
+            ("MK47突击步枪", "MK47"),
+            ("SR-3M紧凑突击步枪", "SR-3M"),      // ② 剥「紧凑」+「突击步枪」两段
+            ("AS Val突击步枪", "AS Val"),        // ② 含空格枪名
+            ("QJB201轻机枪", "QJB"),             // ③ 前缀匹配
+            ("QBZ95-1突击步枪", "QBZ-95"),       // ③ 前缀（归一化后）
+            ("M250通用机枪", "M250"),
+            ("Marlin杠杆步枪", "杠杆步枪"),       // ④ 子串匹配
+            ("野牛冲锋枪", "野牛"),
+            ("P90冲锋枪", "P90"),
+            ("PKM通用机枪", "PKM"),
+            ("KC17突击步枪", "KC17"),
+            ("复合弓", "弓"),                    // 别名（数据补全，非放宽门槛）
+            ("AR57", "AR57"),                    // ① 整体等于
+        ];
+        for (input, expect) in cases {
+            let got = canonical_gun(&idx, input);
+            assert_eq!(
+                got.as_deref(),
+                Some(*expect),
+                "canonical_gun({input:?}) 期望 {expect:?}，实得 {got:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_match_longest_first_no_confusion() {
+        // 关键防张冠李戴：短名不得抢先命中长名
+        let idx = test_idx();
+        let cases: &[(&str, &str)] = &[
+            ("M700", "M700"),
+            ("M1014", "M1014"),
+            ("M1911", "M1911"),
+            ("M249", "M249"),
+            ("M250", "M250"),
+            ("M16A4", "M16A4"),
+            ("M4A1", "M4A1"),
+            ("M7", "M7"),
+            // 带后缀时同样要选最长的
+            ("M700狙击步枪", "M700"),
+            ("M1014霰弹枪", "M1014"),
+            ("M4A1突击步枪", "M4A1"),
+        ];
+        for (input, expect) in cases {
+            let got = canonical_gun(&idx, input);
+            assert_eq!(
+                got.as_deref(),
+                Some(*expect),
+                "canonical_gun({input:?}) 期望 {expect:?}，实得 {got:?}（疑似短名抢先）"
+            );
+        }
+    }
+
+    #[test]
+    fn test_no_false_positive_on_noise() {
+        // 噪音词必须一律返回 None，否则会污染识别结果
+        let idx = test_idx();
+        let noise = &[
+            "T1", "65W", "满改", "丐版", "腰射", "烽火地带", "修脚流", "倍镜",
+            "性价比", "半改", "红点", "消音", "10w", "满腰射", "狙击", "连狙",
+        ];
+        for n in noise {
+            let got = canonical_gun(&idx, n);
+            assert_eq!(got, None, "噪音词 {n:?} 被误配为 {got:?}");
+        }
+    }
+
+    #[test]
+    fn test_short_name_not_matched_by_substr() {
+        // 「弓」只有 1 字，低于子串门槛 → `弓弩` / `弓兵` 不得误配为「弓」
+        let idx = test_idx();
+        assert_eq!(canonical_gun(&idx, "弓弩"), None, "「弓弩」是分类词，不该匹配为「弓」");
+        assert_eq!(canonical_gun(&idx, "复合弓"), Some("弓".into()), "复合弓 有别名，应命中");
+        assert_eq!(canonical_gun(&idx, "弓"), Some("弓".into()), "整体等于应命中");
+    }
+
+    #[test]
+    fn test_match_gun_in_text_joins_adjacent_parts() {
+        // 含空格/连字符的枪名被空格拆散时，靠「相邻拼接」救回
+        let idx = test_idx();
+        assert_eq!(
+            match_gun_in_text(&idx, "T0 50W 半改 AS Val突击步枪-"),
+            Some("AS Val".into()),
+            "AS + Val 需拼接匹配"
+        );
+        assert_eq!(
+            match_gun_in_text(&idx, "T1 19W 丐版 SR-3M紧凑突击步枪-"),
+            Some("SR-3M".into()),
+            "SR + 3M... 需拼接匹配"
+        );
+        assert_eq!(
+            match_gun_in_text(&idx, "T1 65W 满改 AR57突击步枪-"),
+            Some("AR57".into()),
+            "单片即可匹配"
+        );
+        assert_eq!(match_gun_in_text(&idx, ""), None, "空串应返回 None");
+    }
+
+    #[test]
+    fn test_split_by_code_anchor() {
+        // 双码同行 → 切成两段，各自带自己的左侧文本
+        let line = "T1 50W 满腰射 AR57突击步枪-烽火地带-6JNVKVK03EINQ63AGU05N \
+                    T0 50W 三连发满改 MK4冲锋枪-烽火地带-6IUK40806N3JUGK4SSBSR";
+        let segs = split_by_code_anchor(line);
+        assert_eq!(segs.len(), 2, "应切成 2 段，实得 {segs:?}");
+        assert_eq!(segs[0].0, "6JNVKVK03EINQ63AGU05N");
+        assert_eq!(segs[1].0, "6IUK40806N3JUGK4SSBSR");
+        // 第 1 段左侧不得包含第 2 段的枪名（防跨段串枪）
+        assert!(!segs[0].1.contains("MK4"), "第 1 段混入了第 2 段枪名: {:?}", segs[0].1);
+        assert!(segs[0].1.contains("AR57"));
+        assert!(segs[1].1.contains("MK4"));
+        assert!(!segs[1].1.contains("AR57"), "第 2 段混入第 1 段枪名: {:?}", segs[1].1);
+    }
+
+    #[test]
+    fn test_anchor_segmentation_prevents_cross_segment() {
+        // 端到端语义：双码同行时，每段应解析出自己的枪名（而非都取第一段的）
+        let idx = test_idx();
+        let line = "T1 50W 满腰射 AR57突击步枪-烽火地带-6JNVKVK03EINQ63AGU05N \
+                    T0 50W 三连发满改 MK47突击步枪-烽火地带-6IUK40806N3JUGK4SSBSR";
+        let segs = split_by_code_anchor(line);
+        let guns: Vec<Option<String>> = segs
+            .iter()
+            .map(|(_, left)| match_gun_in_text(&idx, left))
+            .collect();
+        assert_eq!(guns[0], Some("AR57".into()), "第 1 段应为 AR57，实得 {:?}", guns[0]);
+        assert_eq!(guns[1], Some("MK47".into()), "第 2 段应为 MK47，实得 {:?}", guns[1]);
+    }
+
+    #[test]
+    fn test_split_by_code_anchor_edge_cases() {
+        // 无锚点
+        assert!(split_by_code_anchor("ABC 普通文本").is_empty());
+        // 锚点后码不合法（纯数字）
+        assert!(split_by_code_anchor("烽火地带-123456789012345678901").is_empty());
+        // 单码
+        let one = split_by_code_anchor("M4A1突击步枪-烽火地带-6L6FVH000B5F1EC0CC9I8");
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].0, "6L6FVH000B5F1EC0CC9I8");
+    }
+
+    #[test]
+    fn test_xlsx_path_still_works() {
+        // 回归：有制表符时仍按列切分，枪名是独立单元格
+        let cells = split_cells("汤姆逊\t36w\t6L6INHO0B1H3TI624U64G\t丐版腰射");
+        assert_eq!(cells.len(), 4);
+        assert!(is_code_token(&cells[2]));
+        // 独立单元格枪名（xlsx 形态）仍能被四段式的「整体等于」命中
+        let idx = test_idx();
+        assert_eq!(canonical_gun(&idx, "野牛"), Some("野牛".into()));
+        assert_eq!(canonical_gun(&idx, "P90"), Some("P90".into()));
+    }
+
+    #[test]
+    fn test_rules_have_pdf_support_data() {
+        // 规则库必须含支撑 PDF 格式的数据（否则上面那些匹配会退化为 None）
+        let r: GunRules = serde_json::from_str(RULES_EMBEDDED).expect("内嵌规则库解析失败");
+        assert_eq!(r.version, 4, "规则库版本应为 v4（补别名/噪音/SR9）");
+
+        // 复合弓 别名
+        let bow = r.guns.get("弓").expect("规则库缺「弓」");
+        assert!(
+            bow.aliases.iter().any(|a| a == "复合弓"),
+            "「弓」缺别名「复合弓」，PDF 里会识别失败"
+        );
+        // SR9 新增
+        assert!(r.guns.contains_key("SR9"), "规则库缺 SR9（PDF 里出现过）");
+        // PDF 表头噪音词
+        for w in ["弓弩", "连狙", "栓狙"] {
+            assert!(r.noise.iter().any(|n| n == w), "噪音词缺 {w:?}（PDF 表头词）");
+        }
+    }
 
     #[test]
     fn test_is_code_token() {
