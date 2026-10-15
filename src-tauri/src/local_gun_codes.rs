@@ -272,7 +272,36 @@ pub fn reload_rules(app: &tauri::AppHandle) -> GunRules {
     load_rules(app)
 }
 
-/// 规则库元信息（供前端展示「词库版本」）
+/// 序列化规则库的枪械表（枪名 → 分类 + 别名）
+///
+/// **为什么需要**：前端曾把「枪名 → 分类」写成手写常量，与规则库脱节
+/// （实测漏了 14 把枪，导致 17% 的码被归到「其他」分类）。
+/// 改为由后端下发，前端不再重复维护，规则库加枪即刻生效。
+///
+/// 体积很小（约 3.7 KB），且 `rules.json` 本就随包分发，无额外开销。
+fn guns_table(r: &GunRules) -> Vec<serde_json::Value> {
+    let mut v: Vec<serde_json::Value> = r
+        .guns
+        .iter()
+        .map(|(name, meta)| {
+            serde_json::json!({
+                "name": name,
+                "category": meta.category,
+                "aliases": meta.aliases,
+            })
+        })
+        .collect();
+    // 稳定排序，便于测试与前端 diff
+    v.sort_by(|a, b| {
+        a["name"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["name"].as_str().unwrap_or(""))
+    });
+    v
+}
+
+/// 规则库元信息（供前端展示「词库版本」+ 获取枪械分类表）
 #[tauri::command]
 pub fn get_gun_rules_meta(app: tauri::AppHandle) -> serde_json::Value {
     let r = load_rules(&app);
@@ -290,6 +319,8 @@ pub fn get_gun_rules_meta(app: tauri::AppHandle) -> serde_json::Value {
         "fingerprintCount": r.fingerprints.len(),
         "learnedCount": learned.len(),
         "categories": cats,
+        // 枪械分类表（前端据此分类，替代手写常量）
+        "guns": guns_table(&r),
     })
 }
 
@@ -301,6 +332,9 @@ pub fn refresh_gun_rules(app: tauri::AppHandle) -> serde_json::Value {
         "ok": true,
         "gunCount": r.guns.len(),
         "fingerprintCount": r.fingerprints.len(),
+        "version": r.version,
+        // 一并返回枪械表，保证「刷新词库」后前端分类同步更新
+        "guns": guns_table(&r),
     })
 }
 
@@ -1512,6 +1546,35 @@ mod tests {
         // PDF 表头噪音词
         for w in ["弓弩", "连狙", "栓狙"] {
             assert!(r.noise.iter().any(|n| n == w), "噪音词缺 {w:?}（PDF 表头词）");
+        }
+    }
+
+    #[test]
+    fn test_guns_table_covers_all_rules() {
+        // 枪械表必须覆盖规则库全部枪名，且分类非空
+        let r: GunRules = serde_json::from_str(RULES_EMBEDDED).expect("内嵌规则库解析失败");
+        let table = guns_table(&r);
+        assert_eq!(
+            table.len(),
+            r.guns.len(),
+            "枪械表条数({}) 应等于规则库枪数({})",
+            table.len(),
+            r.guns.len()
+        );
+        for row in &table {
+            let name = row["name"].as_str().unwrap_or("");
+            let cat = row["category"].as_str().unwrap_or("");
+            assert!(!name.is_empty(), "枪械表存在空枪名");
+            assert!(!cat.is_empty(), "枪 {name} 分类为空");
+            assert!(r.guns.contains_key(name), "枪械表含规则库没有的枪: {name}");
+        }
+        // 必须含此前前端手写表漏掉的 14 把（防回归）
+        let names: Vec<&str> = table.iter().filter_map(|r| r["name"].as_str()).collect();
+        for g in [
+            "SR-3M", "SCAR-H", "ASH-12", "AK-12", "AS Val", "AKS-74U", "FS-12", "QBZ-95",
+            "93R", "CAR-15", "PTR-32", "PSG-1", "SR9", "SV-98",
+        ] {
+            assert!(names.contains(&g), "枪械表缺 {g}（前端分类会归到「其他」）");
         }
     }
 

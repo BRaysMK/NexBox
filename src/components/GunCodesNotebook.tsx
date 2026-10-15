@@ -43,57 +43,34 @@ import { useBackground } from "@/contexts/background-context";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { store } from "@/lib/store";
+import {
+  ALIAS_TO_CANON,
+  buildCatOrder,
+  buildGunCandidates,
+  canonicalOf,
+  catOf,
+  CATEGORY_FALLBACK,
+  CATEGORY_ORDER,
+  computePreviewStats,
+  countByCategory,
+  fmtTime,
+  healCatFilter,
+  healGunFilter,
+  matchesQuery,
+  norm,
+  setGunTable,
+  type GunCode,
+  type PreviewResult,
+  type PreviewRow,
+  type RecognizeResult,
+  type RulesMeta,
+  type SortKey,
+  type ViewMode,
+} from "@/lib/gunCodes";
 
 // ═══════════════════════ 类型 ═══════════════════════
-
-interface GunCode {
-  id: string;
-  weapon_name: string;
-  code: string;
-  note: string;
-  created_at: number;
-}
-
-/** 后端 recognize_gun_name 的返回 */
-interface RecognizeResult {
-  weapon_name: string;
-  note: string;
-  recognized: boolean;
-  confidence: number;
-  reason: string;
-  source: string;
-}
-
-/** 后端 preview_import_gun_codes 的单行 */
-interface PreviewRow {
-  code: string;
-  gun: string;
-  config: string;
-  recognized: boolean;
-  confidence: number;
-  reason: string;
-  source: string;
-  duplicate: boolean;
-}
-
-interface PreviewResult {
-  total: number;
-  recognized: number;
-  unrecognized: number;
-  rows: PreviewRow[];
-}
-
-interface RulesMeta {
-  version: number;
-  generated: string;
-  source: string;
-  gunCount: number;
-  fingerprintCount: number;
-  learnedCount: number;
-  categories: Record<string, number>;
-}
-
-type SortKey = "count" | "name" | "recent";
+// 注：类型与纯逻辑已迁至 `@/lib/gunCodes.ts`（单一来源），
+// 此处仅从该模块导入，避免与 GCA 侧各维护一份、彼此漂移。
 
 interface State {
   items: GunCode[];
@@ -217,18 +194,7 @@ function reducer(s: State, a: Action): State {
 }
 
 // ═══════════════════════ 工具 ═══════════════════════
-
-/** 与后端 `normalize()` 保持一致的归一化（去空格/连字符/下划线，转大写） */
-function norm(s: string): string {
-  return s.replace(/[\s\-_]/g, "").toUpperCase();
-}
-
-function fmtTime(sec: number): string {
-  if (!sec) return "";
-  const d = new Date(sec * 1000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
+// norm / fmtTime / canonicalOf / catOf 等已迁至 `@/lib/gunCodes.ts`
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -328,6 +294,9 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
       const m = await invoke<RulesMeta>("get_gun_rules_meta");
       rulesMeta.current = m;
       setMeta(m);
+      // 把后端下发的枪械分类表注入纯逻辑层
+      // （否则 catOf() 只能用静态兜底表，规则库新增枪会归到「其他」）
+      if (m.guns && m.guns.length > 0) setGunTable(m.guns);
     } catch {
       /* 忽略 */
     }
@@ -380,11 +349,15 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
   }, []);
 
   // ── B1/B2：分类索引（未收录 → 「其他」，且「其他」可见） ──
-  const catOf = useCallback((gun: string): string => {
-    const c = meta?.categories ? Object.keys(meta.categories) : [];
-    // 用后端返回的分类统计无法反查单枪分类；改为从规则库常识表兜底
-    return CATEGORY_FALLBACK[canonicalOf(gun)] ?? "其他";
-  }, [canonicalOf, meta]);
+  //
+  // 分类表来源优先为后端下发的 `guns[]`（经 setGunTable 注入到 lib 层），
+  // 未加载时退回 `FALLBACK_CATEGORY_MAP`。此处只是把 lib 的 `catOf` 包一层，
+  // 以便在 meta 变化时重新计算依赖。
+  const catOfGun = useCallback(
+    (gun: string): string => catOf(gun),
+    // meta 参与依赖：注入新表后需要重算分类
+    [meta],
+  );
 
   // ── 过滤 + 排序 ──
   const filtered = useMemo(() => {
@@ -392,7 +365,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
     const gunSet = new Set(s.gunFilter.map(norm));
     return s.items.filter((i) => {
       // B1：分类与枪名都按归一化比较
-      if (s.catFilter !== "all" && catOf(i.weapon_name) !== s.catFilter) return false;
+      if (s.catFilter !== "all" && catOfGun(i.weapon_name) !== s.catFilter) return false;
       if (gunSet.size > 0 && !gunSet.has(norm(canonicalOf(i.weapon_name)))) return false;
       if (!q) return true;
       // B4：归一化匹配（搜 ak12 命中 AK-12）
@@ -402,7 +375,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
         norm(i.note).includes(q)
       );
     });
-  }, [s.items, s.search, s.gunFilter, s.catFilter, catOf, canonicalOf]);
+  }, [s.items, s.search, s.gunFilter, s.catFilter, catOfGun, canonicalOf]);
 
   // ── 失效筛选自愈 ──
   // 场景：① 持久化恢复的枪名/分类已不在库中；② 删除了筛选中的最后一条；
@@ -422,12 +395,12 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
 
     // ② 分类：剔除已无任何条目的分类（其按钮也已不渲染，留着会让列表空）
     if (s.catFilter !== "all") {
-      const hasAny = s.items.some((i) => catOf(i.weapon_name) === s.catFilter);
+      const hasAny = s.items.some((i) => catOfGun(i.weapon_name) === s.catFilter);
       if (!hasAny) {
         dispatch({ type: "set", patch: { catFilter: "all" } });
       }
     }
-  }, [s.items, s.gunFilter, s.catFilter, canonicalOf, catOf]);
+  }, [s.items, s.gunFilter, s.catFilter, canonicalOf, catOfGun]);
 
   // ── B5：分组 + 排序 ──
   const grouped = useMemo(() => {
@@ -452,28 +425,28 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
         entries.sort((a, b) => b[1].length - a[1].length);
     }
     return entries;
-  }, [filtered, s.sortKey, canonicalOf]);
+  }, [filtered, s.sortKey, canonicalOf, catOfGun]);
 
   // ── B3：枪名候选（受分类筛选影响，可搜索） ──
   const gunCandidates = useMemo(() => {
     const counts = new Map<string, number>();
     for (const i of s.items) {
       const gun = canonicalOf(i.weapon_name);
-      if (s.catFilter !== "all" && catOf(i.weapon_name) !== s.catFilter) continue;
+      if (s.catFilter !== "all" && catOfGun(i.weapon_name) !== s.catFilter) continue;
       counts.set(gun, (counts.get(gun) ?? 0) + 1);
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [s.items, s.catFilter, catOf, canonicalOf]);
+  }, [s.items, s.catFilter, catOfGun, canonicalOf]);
 
   // ── B2：分类列表（动态生成，含可见的「其他」） ──
   const catCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const i of s.items) {
-      const c = catOf(i.weapon_name);
+      const c = catOfGun(i.weapon_name);
       m.set(c, (m.get(c) ?? 0) + 1);
     }
     return m;
-  }, [s.items, catOf]);
+  }, [s.items, catOfGun]);
 
   const catOrder = useMemo(() => {
     // 固定顺序在前，其余（含「其他」）按数量降序追加 —— 保证「其他」可见
@@ -930,7 +903,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
             <VStack spacing={3} align="stretch">
               {grouped.map(([gun, gunItems]) => {
                 const isCollapsed = s.collapsed.has(gun);
-                const cat = catOf(gun);
+                const cat = catOfGun(gun);
                 return (
                   <Box key={gun} bg={panelBg} borderRadius="lg" border="1px solid" borderColor={cardBorder} overflow="hidden">
                     <HStack
@@ -1441,23 +1414,11 @@ function ImportPreviewDialog({
 
 // ═══════════════════════ 分类兜底表（B1/B2） ═══════════════════════
 //
-// 与后端 `rules.json` 的 `guns[].category` 对齐。
-// 放在前端是为了「未加载规则库时也能分类」；「其他」为兜底且**在界面上可见**。
-const CATEGORY_FALLBACK: Record<string, string> = {
-  RM277: "步枪", AR57: "步枪", MCX: "步枪", MK47: "步枪", KC17: "步枪", K437: "步枪",
-  腾龙: "步枪", "AS Val": "步枪", "CAR-15": "步枪", "PTR-32": "步枪", G3: "步枪",
-  "SCAR-H": "步枪", "AK-12": "步枪", SG552: "步枪", M7: "步枪", AUG: "步枪",
-  M16A4: "步枪", K416: "步枪", "ASH-12": "步枪", "AKS-74U": "步枪", "QBZ-95": "步枪",
-  AKM: "步枪", M4A1: "步枪", MDR: "步枪",
-  QCQ171: "冲锋枪", MP7: "冲锋枪", 勇士: "冲锋枪", "SR-3M": "冲锋枪", SMG45: "冲锋枪",
-  野牛: "冲锋枪", UZI: "冲锋枪", Vector: "冲锋枪", P90: "冲锋枪", MP5: "冲锋枪",
-  MK4: "冲锋枪", 汤姆逊: "冲锋枪", MP9: "冲锋枪",
-  SVCH: "射手步枪", M14: "射手步枪", M700: "射手步枪", "PSG-1": "射手步枪", SVD: "射手步枪",
-  MINI14: "射手步枪", VSS: "射手步枪", SR25: "射手步枪", R93: "射手步枪", "SV-98": "射手步枪",
-  AWM: "射手步枪", SKS: "射手步枪", 杠杆步枪: "射手步枪", 巴雷特: "射手步枪", M82: "射手步枪",
-  M250: "机枪", PKM: "机枪", QJB: "机枪", M249: "机枪",
-  S12K: "霰弹枪", M1014: "霰弹枪", 725: "霰弹枪", M870: "霰弹枪", "FS-12": "霰弹枪",
-  DP12: "霰弹枪", KSG: "霰弹枪",
-  "93R": "手枪", G18: "手枪", 沙鹰: "手枪", 左轮: "手枪", M1911: "手枪", P226: "手枪", M9: "手枪",
-  弓: "弓",
-};
+// 已迁至 `@/lib/gunCodes.ts` 的 FALLBACK_CATEGORY_MAP。
+//
+// 历史教训：此处原为手写常量，与 rules.json 漂移后漏了 14 把枪
+// （SR-3M / SCAR-H / ASH-12 / AK-12 / AS Val / AKS-74U / FS-12 / QBZ-95 /
+//  93R / CAR-15 / PTR-32 / PSG-1 / SR9 / SV-98），
+// 导致 69/399（17%）的码被归入「其他」分类。
+// 现改为「后端下发 guns[] + 静态兜底」，并由
+// `.dsh/scripts/check-category-sync.js` 强制校验一致性。
