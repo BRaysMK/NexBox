@@ -404,6 +404,18 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
     });
   }, [s.items, s.search, s.gunFilter, s.catFilter, catOf, canonicalOf]);
 
+  // ── 失效筛选自愈 ──
+  // 场景：① 持久化恢复的枪名已不在库中；② 删除了筛选中的最后一条；
+  //       ③ 更名后旧枪名残留。此时列表会空但并非用户意图 → 自动剔除失效枪名。
+  useEffect(() => {
+    if (s.gunFilter.length === 0 || s.items.length === 0) return;
+    const alive = new Set(s.items.map((i) => norm(canonicalOf(i.weapon_name))));
+    const kept = s.gunFilter.filter((g) => alive.has(norm(g)));
+    if (kept.length !== s.gunFilter.length) {
+      dispatch({ type: "set", patch: { gunFilter: kept } });
+    }
+  }, [s.items, s.gunFilter, canonicalOf]);
+
   // ── B5：分组 + 排序 ──
   const grouped = useMemo(() => {
     const g = new Map<string, GunCode[]>();
@@ -839,7 +851,14 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
                 size="xs"
                 variant={s.catFilter === cat ? "solid" : "ghost"}
                 colorScheme={cat === "其他" ? "gray" : "blue"}
-                onClick={() => dispatch({ type: "set", patch: { catFilter: cat, collapsed: new Set() } })}
+                onClick={() =>
+                  // 切换分类时必须清空枪名筛选：否则若原选中的枪不属于新分类，
+                  // filtered 会为空并显示「没有匹配的结果」。
+                  dispatch({
+                    type: "set",
+                    patch: { catFilter: cat, gunFilter: [], collapsed: new Set() },
+                  })
+                }
               >
                 {cat}（{catCounts.get(cat) ?? 0}）
               </Button>
