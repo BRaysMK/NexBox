@@ -1,0 +1,2700 @@
+{
+ "version": 2,
+ "generated": "2026-10-15",
+ "source": "内置映射 353 条 + 抖音情天老师/武器大师地板 两个文档抽取",
+ "guns": {
+  "RM277": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "AR57": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "MCX": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "MK47": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "KC17": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "K437": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "腾龙": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "AS Val": {
+   "category": "步枪",
+   "aliases": [
+    "AS VAL",
+    "ASVal",
+    "AS-VAL"
+   ]
+  },
+  "CAR-15": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "PTR-32": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "G3": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "SCAR-H": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "AK-12": {
+   "category": "步枪",
+   "aliases": [
+    "AK12",
+    "AK 12"
+   ]
+  },
+  "SG552": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "M7": {
+   "category": "步枪",
+   "aliases": [
+    "M7A1"
+   ]
+  },
+  "AUG": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "M16A4": {
+   "category": "步枪",
+   "aliases": [
+    "M16"
+   ]
+  },
+  "K416": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "ASH-12": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "AKS-74U": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "QBZ-95": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "AKM": {
+   "category": "步枪",
+   "aliases": [
+    "AKM-74"
+   ]
+  },
+  "M4A1": {
+   "category": "步枪",
+   "aliases": [
+    "M4"
+   ]
+  },
+  "MDR": {
+   "category": "步枪",
+   "aliases": []
+  },
+  "QCQ171": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "MP7": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "勇士": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "SR-3M": {
+   "category": "冲锋枪",
+   "aliases": [
+    "SR3M",
+    "SR 3M"
+   ]
+  },
+  "SMG45": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "野牛": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "UZI": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "Vector": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "P90": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "MP5": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "MK4": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "汤姆逊": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "MP9": {
+   "category": "冲锋枪",
+   "aliases": []
+  },
+  "SVCH": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "M14": {
+   "category": "射手步枪",
+   "aliases": [
+    "M14A"
+   ]
+  },
+  "M700": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "PSG-1": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "SVD": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "MINI14": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "VSS": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "SR25": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "R93": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "SV-98": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "AWM": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "SKS": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "杠杆步枪": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "巴雷特": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "M82": {
+   "category": "射手步枪",
+   "aliases": []
+  },
+  "M250": {
+   "category": "机枪",
+   "aliases": [
+    "M250A"
+   ]
+  },
+  "PKM": {
+   "category": "机枪",
+   "aliases": [
+    "PKMA"
+   ]
+  },
+  "QJB": {
+   "category": "机枪",
+   "aliases": [
+    "QJB201"
+   ]
+  },
+  "M249": {
+   "category": "机枪",
+   "aliases": []
+  },
+  "S12K": {
+   "category": "霰弹枪",
+   "aliases": []
+  },
+  "M1014": {
+   "category": "霰弹枪",
+   "aliases": []
+  },
+  "725": {
+   "category": "霰弹枪",
+   "aliases": []
+  },
+  "M870": {
+   "category": "霰弹枪",
+   "aliases": []
+  },
+  "FS-12": {
+   "category": "霰弹枪",
+   "aliases": []
+  },
+  "DP12": {
+   "category": "霰弹枪",
+   "aliases": []
+  },
+  "KSG": {
+   "category": "霰弹枪",
+   "aliases": []
+  },
+  "93R": {
+   "category": "手枪",
+   "aliases": []
+  },
+  "G18": {
+   "category": "手枪",
+   "aliases": []
+  },
+  "沙鹰": {
+   "category": "手枪",
+   "aliases": []
+  },
+  "左轮": {
+   "category": "手枪",
+   "aliases": []
+  },
+  "M1911": {
+   "category": "手枪",
+   "aliases": []
+  },
+  "P226": {
+   "category": "手枪",
+   "aliases": []
+  },
+  "M9": {
+   "category": "手枪",
+   "aliases": []
+  },
+  "弓": {
+   "category": "弓",
+   "aliases": []
+  }
+ },
+ "fingerprints": {
+  "6L6INHO0B1": {
+   "gun": "汤姆逊",
+   "config": "36w"
+  },
+  "6KMPJV80B1": {
+   "gun": "汤姆逊",
+   "config": "36w"
+  },
+  "6JCBMMO01O": {
+   "gun": "汤姆逊",
+   "config": "36w"
+  },
+  "6L6IO8G0B1": {
+   "gun": "M250",
+   "config": "22w"
+  },
+  "6KR3KB40B1": {
+   "gun": "M250",
+   "config": "22w"
+  },
+  "6JF8EHG08Q": {
+   "gun": "SR25",
+   "config": "性价比连狙，但非常好用"
+  },
+  "6JDBP7G0B1": {
+   "gun": "MK4",
+   "config": "红点38w"
+  },
+  "6KR3KCC0B1": {
+   "gun": "MK4",
+   "config": "红点38w"
+  },
+  "6JCLML001O": {
+   "gun": "MK4",
+   "config": "红点38w"
+  },
+  "6JKA32C0B1": {
+   "gun": "SVCH",
+   "config": "红点47w"
+  },
+  "6K8SNBC0B1": {
+   "gun": "SVCH",
+   "config": "红点47w"
+  },
+  "6KFHSKC0B1": {
+   "gun": "SVCH",
+   "config": "红点47w"
+  },
+  "6LFPQ0C0B1": {
+   "gun": "SVCH",
+   "config": "16W"
+  },
+  "6K1ABMS0B1": {
+   "gun": "SVCH",
+   "config": "16W"
+  },
+  "6LIDRU40B1": {
+   "gun": "SVCH",
+   "config": "16W"
+  },
+  "6L6II2S0B1": {
+   "gun": "MDR",
+   "config": "61w"
+  },
+  "6LBTIHO08Q": {
+   "gun": "MDR",
+   "config": "61w"
+  },
+  "6L6IJAO0B1": {
+   "gun": "QCQ171",
+   "config": "35w"
+  },
+  "6JG8D34000": {
+   "gun": "QCQ171",
+   "config": "35w"
+  },
+  "6JCBN3C01O": {
+   "gun": "QCQ171",
+   "config": "35w"
+  },
+  "6KGHNR00E9": {
+   "gun": "RM277",
+   "config": "丐版29w"
+  },
+  "6JDBP9K0B1": {
+   "gun": "RM277",
+   "config": "丐版29w"
+  },
+  "6JCBN1K01O": {
+   "gun": "RM277",
+   "config": "丐版29w"
+  },
+  "6KFHOH00B1": {
+   "gun": "M249",
+   "config": "红点54w"
+  },
+  "6KVF8JO0B1": {
+   "gun": "M249",
+   "config": "红点54w"
+  },
+  "6JDAPT80B1": {
+   "gun": "M249",
+   "config": "红点54w"
+  },
+  "6JO6SI40B1": {
+   "gun": "AR57",
+   "config": "2倍38w"
+  },
+  "6JDBPB80B1": {
+   "gun": "AR57",
+   "config": "2倍38w"
+  },
+  "6KR3KGS0B1": {
+   "gun": "AR57",
+   "config": "2倍38w"
+  },
+  "6JO6U5O0B1": {
+   "gun": "AR57",
+   "config": "19w丐版"
+  },
+  "6ID9VEK013": {
+   "gun": "AR57",
+   "config": "19w丐版"
+  },
+  "6JCKL3O01O": {
+   "gun": "AR57",
+   "config": "19w丐版"
+  },
+  "6JDGAPG0B1": {
+   "gun": "K437",
+   "config": "红点17w"
+  },
+  "6JKA3640B1": {
+   "gun": "K437",
+   "config": "红点17w"
+  },
+  "6KR3KIO0B1": {
+   "gun": "K437",
+   "config": "红点17w"
+  },
+  "6JCB1FO0CV": {
+   "gun": "MK4",
+   "config": "M14可加消音"
+  },
+  "6JDGAQK0B1": {
+   "gun": "PKM",
+   "config": "红点29w"
+  },
+  "6JCKKV801O": {
+   "gun": "PKM",
+   "config": "红点29w"
+  },
+  "6KTGH700ES": {
+   "gun": "PKM",
+   "config": "红点29w"
+  },
+  "6JDGARK0B1": {
+   "gun": "SR-3M",
+   "config": "红点43W"
+  },
+  "6K1ATM80B1": {
+   "gun": "SR-3M",
+   "config": "红点43W"
+  },
+  "6JDBP680B1": {
+   "gun": "SR-3M",
+   "config": "红点43W"
+  },
+  "6JSLAQS0B1": {
+   "gun": "SR-3M",
+   "config": "红点43W"
+  },
+  "6LI4D6O08Q": {
+   "gun": "SR-3M",
+   "config": "倍镜73W"
+  },
+  "6JCKMSO01O": {
+   "gun": "SR-3M",
+   "config": "倍镜73W"
+  },
+  "6JJG0B008Q": {
+   "gun": "SR-3M",
+   "config": "倍镜73W"
+  },
+  "6JCBNIG01O": {
+   "gun": "SR-3M",
+   "config": "倍镜73W"
+  },
+  "6JDGAU00B1": {
+   "gun": "MCX",
+   "config": "腰射21w"
+  },
+  "6IE8GH0013": {
+   "gun": "MCX",
+   "config": "腰射21w"
+  },
+  "6JJG0SC08Q": {
+   "gun": "MCX",
+   "config": "腰射21w"
+  },
+  "6K1AQ380B1": {
+   "gun": "MCX",
+   "config": "腰射21w"
+  },
+  "6JI40HC0AR": {
+   "gun": "SVD",
+   "config": "红点33W"
+  },
+  "6JCBNLS01O": {
+   "gun": "SVD",
+   "config": "红点33W"
+  },
+  "6JDAO8G0B1": {
+   "gun": "腾龙",
+   "config": "导气任意换27w"
+  },
+  "6HLS290053": {
+   "gun": "腾龙",
+   "config": "导气任意换27w"
+  },
+  "6K40NRG07O": {
+   "gun": "SMG45",
+   "config": "54W短管满改"
+  },
+  "6JD8IUS0CV": {
+   "gun": "腾龙",
+   "config": "红点47w"
+  },
+  "6K6LJVG0B1": {
+   "gun": "腾龙",
+   "config": "红点47w"
+  },
+  "6JCBNRO01O": {
+   "gun": "腾龙",
+   "config": "红点47w"
+  },
+  "6JDJ8VK04U": {
+   "gun": "野牛",
+   "config": "倍镜41w"
+  },
+  "6JDBPCK0B1": {
+   "gun": "野牛",
+   "config": "倍镜41w"
+  },
+  "6JCBNV401O": {
+   "gun": "野牛",
+   "config": "倍镜41w"
+  },
+  "6JDHM8O0B1": {
+   "gun": "AS Val",
+   "config": "26w"
+  },
+  "6K6LK2O0B1": {
+   "gun": "AS Val",
+   "config": "26w"
+  },
+  "6JCBODO01O": {
+   "gun": "AS Val",
+   "config": "26w"
+  },
+  "6JDHM9K0B1": {
+   "gun": "Vector",
+   "config": "红点51w"
+  },
+  "6JDADU00B1": {
+   "gun": "Vector",
+   "config": "红点51w"
+  },
+  "6L2UR480B1": {
+   "gun": "Vector",
+   "config": "红点51w"
+  },
+  "6JDHMB00B1": {
+   "gun": "Vector",
+   "config": "红点53w"
+  },
+  "6JKA3B40B1": {
+   "gun": "Vector",
+   "config": "红点53w"
+  },
+  "6L2UR5K0B1": {
+   "gun": "Vector",
+   "config": "红点53w"
+  },
+  "6KVLAQK0B1": {
+   "gun": "P90",
+   "config": "倍镜5W"
+  },
+  "6KR3K8G0B1": {
+   "gun": "P90",
+   "config": "倍镜5W"
+  },
+  "6L31VT00B1": {
+   "gun": "P90",
+   "config": "倍镜5W"
+  },
+  "6JNVVM407O": {
+   "gun": "SVCH",
+   "config": "13W腰射版"
+  },
+  "6JS0QBK0B1": {
+   "gun": "MP5",
+   "config": "打不了实战"
+  },
+  "6JFFGCS04U": {
+   "gun": "MP5",
+   "config": "打不了实战"
+  },
+  "6JDJ9N804U": {
+   "gun": "KC17",
+   "config": "22w丐版"
+  },
+  "6JDJAIO04U": {
+   "gun": "M700",
+   "config": "红点35w"
+  },
+  "6LFPPR00B1": {
+   "gun": "M700",
+   "config": "红点35w"
+  },
+  "6JDJB1404U": {
+   "gun": "M700",
+   "config": "倍镜43w"
+  },
+  "6JCBP3001O": {
+   "gun": "M700",
+   "config": "倍镜43w"
+  },
+  "6JDJBLG04U": {
+   "gun": "MK47",
+   "config": "镜子任意换22w"
+  },
+  "6L6IH5C0B1": {
+   "gun": "MK47",
+   "config": "镜子任意换22w"
+  },
+  "6JVB7NG08Q": {
+   "gun": "MK47",
+   "config": "红点59w"
+  },
+  "6L6IKP80B1": {
+   "gun": "MK47",
+   "config": "红点59w"
+  },
+  "6K1AACS0B1": {
+   "gun": "R93",
+   "config": "红点67W"
+  },
+  "6LFQK5K0B1": {
+   "gun": "G18",
+   "config": "可腰 可压65w"
+  },
+  "6JCBP8G01O": {
+   "gun": "G18",
+   "config": "可腰 可压65w"
+  },
+  "6JDJC7G04U": {
+   "gun": "93R",
+   "config": "倍镜52w"
+  },
+  "6JCBPB401O": {
+   "gun": "93R",
+   "config": "倍镜52w"
+  },
+  "6JDJCQC04U": {
+   "gun": "G3",
+   "config": "镜子任意换15w"
+  },
+  "6JDJD5804U": {
+   "gun": "G3",
+   "config": "倍镜30w"
+  },
+  "6JCBPEG01O": {
+   "gun": "G3",
+   "config": "倍镜30w"
+  },
+  "6JDJEUK04U": {
+   "gun": "SCAR-H",
+   "config": "17w"
+  },
+  "6JDANNK0B1": {
+   "gun": "SCAR-H",
+   "config": "17w"
+  },
+  "6JDJF6G04U": {
+   "gun": "SCAR-H",
+   "config": "红点29w"
+  },
+  "6JDANPO0B1": {
+   "gun": "SCAR-H",
+   "config": "红点29w"
+  },
+  "6JFFEDS04U": {
+   "gun": "SCAR-H",
+   "config": "高倍36w"
+  },
+  "6JCBPL801O": {
+   "gun": "SCAR-H",
+   "config": "高倍36w"
+  },
+  "6JF88V408Q": {
+   "gun": "SCAR-H",
+   "config": "2倍31w"
+  },
+  "6JCBPOC01O": {
+   "gun": "SCAR-H",
+   "config": "2倍31w"
+  },
+  "6JDHF840B1": {
+   "gun": "AK-12",
+   "config": "15w"
+  },
+  "6KFHUUG0B1": {
+   "gun": "AK-12",
+   "config": "15w"
+  },
+  "6JEQHH80B1": {
+   "gun": "FS-12",
+   "config": "35W2/4倍"
+  },
+  "6JFFIU804U": {
+   "gun": "FS-12",
+   "config": "35W2/4倍"
+  },
+  "6JFFETS04U": {
+   "gun": "SG552",
+   "config": "8W"
+  },
+  "6JMF8G408Q": {
+   "gun": "SG552",
+   "config": "8W"
+  },
+  "6JFFF8004U": {
+   "gun": "SG552",
+   "config": "红点26w"
+  },
+  "6JEU7L00B1": {
+   "gun": "M7",
+   "config": "堤风枪管46w"
+  },
+  "6J8NL4O08Q": {
+   "gun": "M7",
+   "config": "红点67W"
+  },
+  "6JCB21G0CV": {
+   "gun": "M7",
+   "config": ""
+  },
+  "6K3VAHS0B1": {
+   "gun": "M7",
+   "config": "棱镜2倍62w"
+  },
+  "6K3VBM00B1": {
+   "gun": "M7",
+   "config": "3.5倍镜65w"
+  },
+  "6JFGP0O0B1": {
+   "gun": "M7",
+   "config": "可腰 可压50w"
+  },
+  "6JFFG4G04U": {
+   "gun": "M7",
+   "config": "红点44w"
+  },
+  "6JFRU2404U": {
+   "gun": "AUG",
+   "config": "16W"
+  },
+  "6JDBPNC0B1": {
+   "gun": "AUG",
+   "config": "红点46w"
+  },
+  "6JFRV4404U": {
+   "gun": "AUG",
+   "config": "红点49w"
+  },
+  "6JFRUM804U": {
+   "gun": "AUG",
+   "config": "倍镜46w"
+  },
+  "6JGRFE00B1": {
+   "gun": "K416",
+   "config": "18W"
+  },
+  "6JG5EOG0B1": {
+   "gun": "K416",
+   "config": "30w红点"
+  },
+  "6JDAPF40B1": {
+   "gun": "K416",
+   "config": "红点45w"
+  },
+  "6HJCJDC02B": {
+   "gun": "K416",
+   "config": "3倍镜42w"
+  },
+  "6HK95BG02B": {
+   "gun": "K416",
+   "config": ""
+  },
+  "6JNVJPO08M": {
+   "gun": "K416",
+   "config": "66W满改火控"
+  },
+  "6JO73L80B1": {
+   "gun": "ASH-12",
+   "config": "激光25w"
+  },
+  "6JE5ED80B1": {
+   "gun": "ASH-12",
+   "config": "激光37w"
+  },
+  "6JDBPP00B1": {
+   "gun": "ASH-12",
+   "config": "倍镜36w"
+  },
+  "6KFHQMK0B1": {
+   "gun": "ASH-12",
+   "config": "40w双发套件"
+  },
+  "6JS0NJ00B1": {
+   "gun": "AKS-74U",
+   "config": "10w"
+  },
+  "6JS0NQ00B1": {
+   "gun": "AKS-74U",
+   "config": "16W"
+  },
+  "6J4ME0K08Q": {
+   "gun": "AKS-74U",
+   "config": "红点28w"
+  },
+  "6J4ME3S08Q": {
+   "gun": "AKS-74U",
+   "config": "倍镜25w"
+  },
+  "6JS0Q6G0B1": {
+   "gun": "AKM",
+   "config": "19w"
+  },
+  "6JG4BN40B1": {
+   "gun": "AKM",
+   "config": "倍镜24w"
+  },
+  "6KFHVM40B1": {
+   "gun": "AKM",
+   "config": "红点37w"
+  },
+  "6JUB0A40B1": {
+   "gun": "AKM",
+   "config": "纯腰射 15w"
+  },
+  "6JUB0BK0B1": {
+   "gun": "M4A1",
+   "config": "21w"
+  },
+  "6JUB0D80B1": {
+   "gun": "M4A1",
+   "config": "红点31w"
+  },
+  "6JUB0FK0B1": {
+   "gun": "M4A1",
+   "config": "红点38w"
+  },
+  "6JUB0J40B1": {
+   "gun": "M4A1",
+   "config": "可腰 可压34w"
+  },
+  "6K1AB4O0B1": {
+   "gun": "M4A1",
+   "config": "倍镜34w"
+  },
+  "6JDBPQG0B1": {
+   "gun": "CAR-15",
+   "config": "9w"
+  },
+  "6K1AB800B1": {
+   "gun": "PTR-32",
+   "config": "21W"
+  },
+  "6LFQO400B1": {
+   "gun": "左轮",
+   "config": "800 3.5倍"
+  },
+  "6LHOJ4G0B1": {
+   "gun": "左轮",
+   "config": "800 3.5倍"
+  },
+  "6LHOINS0B1": {
+   "gun": "左轮",
+   "config": "800 3.5倍"
+  },
+  "6LHOISK0B1": {
+   "gun": "左轮",
+   "config": "800 3.5倍"
+  },
+  "6LHOIUS0B1": {
+   "gun": "M14",
+   "config": "4120 红点"
+  },
+  "6LHOJ280B1": {
+   "gun": "SG552",
+   "config": "1600 红点"
+  },
+  "6LHOIPS0B1": {
+   "gun": "SG552",
+   "config": "1600 红点"
+  },
+  "6LHOJ0K0B1": {
+   "gun": "MP7",
+   "config": "3600 双修"
+  },
+  "6IENQK0097": {
+   "gun": "M4A1",
+   "config": ""
+  },
+  "6I5FS2804L": {
+   "gun": "M4A1",
+   "config": ""
+  },
+  "6I5P9J406G": {
+   "gun": "M4A1",
+   "config": ""
+  },
+  "6I5PCFS06G": {
+   "gun": "M4A1",
+   "config": ""
+  },
+  "6IENRBC097": {
+   "gun": "AK-12",
+   "config": ""
+  },
+  "6I5FSA404L": {
+   "gun": "AK-12",
+   "config": ""
+  },
+  "6I5PA3G06G": {
+   "gun": "AK-12",
+   "config": ""
+  },
+  "6I5PCO806G": {
+   "gun": "AK-12",
+   "config": ""
+  },
+  "6IENS04097": {
+   "gun": "AUG",
+   "config": ""
+  },
+  "6I5P2QG06G": {
+   "gun": "AUG",
+   "config": ""
+  },
+  "6I5PAPO06G": {
+   "gun": "AUG",
+   "config": ""
+  },
+  "6I5PD3O06G": {
+   "gun": "AUG",
+   "config": ""
+  },
+  "6I5P31006G": {
+   "gun": "K416",
+   "config": ""
+  },
+  "6I5PBB006G": {
+   "gun": "K416",
+   "config": ""
+  },
+  "6I5PD9406G": {
+   "gun": "K416",
+   "config": ""
+  },
+  "6I5OSK806G": {
+   "gun": "SCAR-H",
+   "config": "烽火跟战场的码是通用的"
+  },
+  "6J1GFSS07O": {
+   "gun": "SCAR-H",
+   "config": "烽火跟战场的码是通用的"
+  },
+  "6I5PDC406G": {
+   "gun": "SCAR-H",
+   "config": "烽火跟战场的码是通用的"
+  },
+  "6I5OT4S06G": {
+   "gun": "AS Val",
+   "config": "缺少的去烽火自己去补"
+  },
+  "6I5P6IC06G": {
+   "gun": "AS Val",
+   "config": "缺少的去烽火自己去补"
+  },
+  "6I5PDFG06G": {
+   "gun": "AS Val",
+   "config": "缺少的去烽火自己去补"
+  },
+  "6I5OTM006G": {
+   "gun": "腾龙",
+   "config": "上面改抢码自己换热成像然后卸掉弹夹即可"
+  },
+  "6I5P6UC06G": {
+   "gun": "腾龙",
+   "config": "上面改抢码自己换热成像然后卸掉弹夹即可"
+  },
+  "6I5PDR406G": {
+   "gun": "腾龙",
+   "config": "上面改抢码自己换热成像然后卸掉弹夹即可"
+  },
+  "6I5OU0806G": {
+   "gun": "K437",
+   "config": "杠杆"
+  },
+  "6I5P75406G": {
+   "gun": "K437",
+   "config": "杠杆"
+  },
+  "6I5PC8K06G": {
+   "gun": "K437",
+   "config": "杠杆"
+  },
+  "6I5OUL006G": {
+   "gun": "M7",
+   "config": ""
+  },
+  "6I5P7KO06G": {
+   "gun": "M7",
+   "config": ""
+  },
+  "6I5OV2006G": {
+   "gun": "QBZ-95",
+   "config": ""
+  },
+  "6I5P7VO06G": {
+   "gun": "QBZ-95",
+   "config": ""
+  },
+  "6I5P00S06G": {
+   "gun": "AKM",
+   "config": ""
+  },
+  "6I5P8DG06G": {
+   "gun": "AKM",
+   "config": ""
+  },
+  "6J1GG0G07O": {
+   "gun": "MK4",
+   "config": ""
+  },
+  "6J1GG9807O": {
+   "gun": "MK4",
+   "config": ""
+  },
+  "6JCB1MC0CV": {
+   "gun": "MK4",
+   "config": "M14 3.5倍"
+  },
+  "6JCB1T40CV": {
+   "gun": "MK47",
+   "config": "T0武器 此枪要么玩就玩到底，要么就别玩，干扰手感影响深远"
+  },
+  "6JCB2IK0CV": {
+   "gun": "M7",
+   "config": "巨浪 2/4倍"
+  },
+  "6JCB2MO0CV": {
+   "gun": "M7",
+   "config": "巨浪偏稳定"
+  },
+  "6JCB2V00CV": {
+   "gun": "M7",
+   "config": "巨浪扫射转移"
+  },
+  "6JCB3D40CV": {
+   "gun": "KC17",
+   "config": ""
+  },
+  "6L6EHVO07O": {
+   "gun": "MDR",
+   "config": "24W青春版"
+  },
+  "6L6EE1C07O": {
+   "gun": "MDR",
+   "config": "24W青春版"
+  },
+  "6KFCGHO08Q": {
+   "gun": "MDR",
+   "config": "24W青春版"
+  },
+  "6JO0GI004L": {
+   "gun": "MDR",
+   "config": "24W青春版"
+  },
+  "6L6EI9007O": {
+   "gun": "MDR",
+   "config": "39W半改"
+  },
+  "6L6EE3C07O": {
+   "gun": "MDR",
+   "config": "39W半改"
+  },
+  "6KFCH1408Q": {
+   "gun": "MDR",
+   "config": "39W半改"
+  },
+  "6JO0GKO04L": {
+   "gun": "MDR",
+   "config": "39W半改"
+  },
+  "6L6EHHK07O": {
+   "gun": "M14",
+   "config": "38W满改腰射"
+  },
+  "6L6FQE40F5": {
+   "gun": "M14",
+   "config": "38W满改腰射"
+  },
+  "6JO03M404L": {
+   "gun": "M14",
+   "config": "38W满改腰射"
+  },
+  "6JO0GMO04L": {
+   "gun": "M14",
+   "config": "38W满改腰射"
+  },
+  "6L6EFTC07O": {
+   "gun": "QCQ171",
+   "config": "57W满改两倍"
+  },
+  "6JNVMKC08M": {
+   "gun": "QCQ171",
+   "config": "57W满改两倍"
+  },
+  "6JO03N804L": {
+   "gun": "QCQ171",
+   "config": "57W满改两倍"
+  },
+  "6JO0GP404L": {
+   "gun": "QCQ171",
+   "config": "57W满改两倍"
+  },
+  "6L6EGUS07O": {
+   "gun": "PKM",
+   "config": "62W满改红点"
+  },
+  "6JNVMOG08M": {
+   "gun": "PKM",
+   "config": "62W满改红点"
+  },
+  "6JO03RS04L": {
+   "gun": "PKM",
+   "config": "62W满改红点"
+  },
+  "6JO0GSG04L": {
+   "gun": "PKM",
+   "config": "62W满改红点"
+  },
+  "6KFCC1K08Q": {
+   "gun": "RM277",
+   "config": "20W青春版"
+  },
+  "6JNVNHK08M": {
+   "gun": "RM277",
+   "config": "20W青春版"
+  },
+  "6L6F2JS0F5": {
+   "gun": "RM277",
+   "config": "20W青春版"
+  },
+  "6JO0H1G04L": {
+   "gun": "RM277",
+   "config": "20W青春版"
+  },
+  "6KFCCL408Q": {
+   "gun": "RM277",
+   "config": "38W半改"
+  },
+  "6L6F5RK0F5": {
+   "gun": "RM277",
+   "config": "38W半改"
+  },
+  "6JO04JK04L": {
+   "gun": "RM277",
+   "config": "38W半改"
+  },
+  "6JO0H8C04L": {
+   "gun": "RM277",
+   "config": "38W半改"
+  },
+  "6KFCDT008Q": {
+   "gun": "RM277",
+   "config": "55W满改红点"
+  },
+  "6JNVNSS08M": {
+   "gun": "RM277",
+   "config": "55W满改红点"
+  },
+  "6JO04PC04L": {
+   "gun": "RM277",
+   "config": "55W满改红点"
+  },
+  "6JO0HCK04L": {
+   "gun": "RM277",
+   "config": "55W满改红点"
+  },
+  "6KFCDOK08Q": {
+   "gun": "RM277",
+   "config": "52W满改3.5倍"
+  },
+  "6JNVO8O08M": {
+   "gun": "RM277",
+   "config": "52W满改3.5倍"
+  },
+  "6JO0HG804L": {
+   "gun": "RM277",
+   "config": "52W满改3.5倍"
+  },
+  "6JOFC1S07O": {
+   "gun": "AR57",
+   "config": "20W腰射100"
+  },
+  "6JNVOBS08M": {
+   "gun": "AR57",
+   "config": "20W腰射100"
+  },
+  "6JO04UG04L": {
+   "gun": "AR57",
+   "config": "20W腰射100"
+  },
+  "6JO0HKO04L": {
+   "gun": "AR57",
+   "config": "20W腰射100"
+  },
+  "6JNV7PC08M": {
+   "gun": "AR57",
+   "config": "24W青春版"
+  },
+  "6JNVOE408M": {
+   "gun": "AR57",
+   "config": "24W青春版"
+  },
+  "6JO05B804L": {
+   "gun": "AR57",
+   "config": "24W青春版"
+  },
+  "6JO0HMO04L": {
+   "gun": "AR57",
+   "config": "24W青春版"
+  },
+  "6JNV8GO08M": {
+   "gun": "AR57",
+   "config": "39W半改"
+  },
+  "6JNVOPK08M": {
+   "gun": "AR57",
+   "config": "39W半改"
+  },
+  "6JO05ES04L": {
+   "gun": "AR57",
+   "config": "39W半改"
+  },
+  "6JO0J6404L": {
+   "gun": "AR57",
+   "config": "39W半改"
+  },
+  "6JNV94008M": {
+   "gun": "SR-3M",
+   "config": "56W双修"
+  },
+  "6JNVOU808M": {
+   "gun": "SR-3M",
+   "config": "56W双修"
+  },
+  "6L6EQ800F5": {
+   "gun": "SR-3M",
+   "config": "56W双修"
+  },
+  "6JO0J8O04L": {
+   "gun": "SR-3M",
+   "config": "56W双修"
+  },
+  "6JNVA9008M": {
+   "gun": "SR-3M",
+   "config": "63W满改两倍"
+  },
+  "6JNVOVS08M": {
+   "gun": "SR-3M",
+   "config": "63W满改两倍"
+  },
+  "6L6EOAG0F5": {
+   "gun": "SR-3M",
+   "config": "63W满改两倍"
+  },
+  "6JO0JB004L": {
+   "gun": "SR-3M",
+   "config": "63W满改两倍"
+  },
+  "6JNVAH008M": {
+   "gun": "SR-3M",
+   "config": "66W满改红点"
+  },
+  "6JNVP5G08M": {
+   "gun": "SR-3M",
+   "config": "66W满改红点"
+  },
+  "6L6EP9C0F5": {
+   "gun": "SR-3M",
+   "config": "66W满改红点"
+  },
+  "6L6EUQ40F5": {
+   "gun": "SR-3M",
+   "config": "66W满改红点"
+  },
+  "6JNVAS008M": {
+   "gun": "PSG-1",
+   "config": "25W长管青春版"
+  },
+  "6JNVP7O08M": {
+   "gun": "PSG-1",
+   "config": "25W长管青春版"
+  },
+  "6JO062G04L": {
+   "gun": "PSG-1",
+   "config": "25W长管青春版"
+  },
+  "6L6F1B00F5": {
+   "gun": "PSG-1",
+   "config": "25W长管青春版"
+  },
+  "6JNVAU808M": {
+   "gun": "M249",
+   "config": "29W短管青春版"
+  },
+  "6JNVPHC08M": {
+   "gun": "M249",
+   "config": "29W短管青春版"
+  },
+  "6JO06C804L": {
+   "gun": "M249",
+   "config": "29W短管青春版"
+  },
+  "6JO0JI404L": {
+   "gun": "M249",
+   "config": "29W短管青春版"
+  },
+  "6KS5RFS07O": {
+   "gun": "SVD",
+   "config": "39W短管半改"
+  },
+  "6JNVPK808M": {
+   "gun": "SVD",
+   "config": "39W短管半改"
+  },
+  "6JO06LK04L": {
+   "gun": "SVD",
+   "config": "39W短管半改"
+  },
+  "6JO0JP004L": {
+   "gun": "SVD",
+   "config": "39W短管半改"
+  },
+  "6JNVB9K08M": {
+   "gun": "SMG45",
+   "config": "50W无枪管腰射"
+  },
+  "6JO1F6007O": {
+   "gun": "SMG45",
+   "config": "50W无枪管腰射"
+  },
+  "6JO06Q004L": {
+   "gun": "SMG45",
+   "config": "50W无枪管腰射"
+  },
+  "6JNVBHO08M": {
+   "gun": "SMG45",
+   "config": "54W短管满改"
+  },
+  "6JNV51S08M": {
+   "gun": "SMG45",
+   "config": "54W短管满改"
+  },
+  "6JNVBRO08M": {
+   "gun": "MINI14",
+   "config": "55W长管火控"
+  },
+  "6JNV5F408M": {
+   "gun": "MINI14",
+   "config": "55W长管火控"
+  },
+  "6JO06VS04L": {
+   "gun": "MINI14",
+   "config": "55W长管火控"
+  },
+  "6JNVC5808M": {
+   "gun": "MK47",
+   "config": "31W青春版"
+  },
+  "6JNV5PG08M": {
+   "gun": "MK47",
+   "config": "31W青春版"
+  },
+  "6JO074S04L": {
+   "gun": "MK47",
+   "config": "31W青春版"
+  },
+  "6JO0LMK04L": {
+   "gun": "MK47",
+   "config": "31W青春版"
+  },
+  "6JNVC7808M": {
+   "gun": "VSS",
+   "config": "54W半改"
+  },
+  "6JNV69S08M": {
+   "gun": "VSS",
+   "config": "54W半改"
+  },
+  "6JO07BC04L": {
+   "gun": "VSS",
+   "config": "54W半改"
+  },
+  "6JNVCAO08M": {
+   "gun": "SR25",
+   "config": "77W纯腰射"
+  },
+  "6JNV6KO08M": {
+   "gun": "SR25",
+   "config": "77W纯腰射"
+  },
+  "6JO07QC04L": {
+   "gun": "SR25",
+   "config": "77W纯腰射"
+  },
+  "6JO0LQ004L": {
+   "gun": "SR25",
+   "config": "77W纯腰射"
+  },
+  "6JNVCCK08M": {
+   "gun": "野牛",
+   "config": "77W全能版"
+  },
+  "6JNVQCG08M": {
+   "gun": "野牛",
+   "config": "77W全能版"
+  },
+  "6JO080C04L": {
+   "gun": "野牛",
+   "config": "77W全能版"
+  },
+  "6JO0LTO04L": {
+   "gun": "野牛",
+   "config": "77W全能版"
+  },
+  "6JNVCE408M": {
+   "gun": "R93",
+   "config": "89W满改二倍"
+  },
+  "6JNVQSS08M": {
+   "gun": "R93",
+   "config": "89W满改二倍"
+  },
+  "6JO086G04L": {
+   "gun": "R93",
+   "config": "89W满改二倍"
+  },
+  "6JO0LV404L": {
+   "gun": "R93",
+   "config": "89W满改二倍"
+  },
+  "6JNVCGG08M": {
+   "gun": "UZI",
+   "config": "75W满改红点"
+  },
+  "6JNVR3C08M": {
+   "gun": "UZI",
+   "config": "75W满改红点"
+  },
+  "6JO08A004L": {
+   "gun": "UZI",
+   "config": "75W满改红点"
+  },
+  "6JO0M2C04L": {
+   "gun": "UZI",
+   "config": "75W满改红点"
+  },
+  "6JNVCRG08M": {
+   "gun": "KC17",
+   "config": "25W青春版"
+  },
+  "6JNVRDC08M": {
+   "gun": "KC17",
+   "config": "25W青春版"
+  },
+  "6JO08HO04L": {
+   "gun": "KC17",
+   "config": "25W青春版"
+  },
+  "6L6ESCK0F5": {
+   "gun": "KC17",
+   "config": "25W青春版"
+  },
+  "6JNVD0008M": {
+   "gun": "G18",
+   "config": "40W半改"
+  },
+  "6JNVRIG08M": {
+   "gun": "G18",
+   "config": "40W半改"
+  },
+  "6JO0F8K07O": {
+   "gun": "G18",
+   "config": "40W半改"
+  },
+  "6JO0M4O04L": {
+   "gun": "G18",
+   "config": "40W半改"
+  },
+  "6JNVD1O08M": {
+   "gun": "P90",
+   "config": "76W满改火控"
+  },
+  "6JNVRMO08M": {
+   "gun": "P90",
+   "config": "76W满改火控"
+  },
+  "6JO0FKS04L": {
+   "gun": "P90",
+   "config": "76W满改火控"
+  },
+  "6JO0M7404L": {
+   "gun": "P90",
+   "config": "76W满改火控"
+  },
+  "6JOPRU808M": {
+   "gun": "SKS",
+   "config": "72W红点"
+  },
+  "6JNVRPK08M": {
+   "gun": "SKS",
+   "config": "72W红点"
+  },
+  "6JO0FS404L": {
+   "gun": "SKS",
+   "config": "72W红点"
+  },
+  "6JO0MFO04L": {
+   "gun": "SKS",
+   "config": "72W红点"
+  },
+  "6JNVD8008M": {
+   "gun": "K437",
+   "config": "23W青春版"
+  },
+  "6JNVRVC08M": {
+   "gun": "K437",
+   "config": "23W青春版"
+  },
+  "6JO0G2404L": {
+   "gun": "K437",
+   "config": "23W青春版"
+  },
+  "6JO0N0C04L": {
+   "gun": "K437",
+   "config": "23W青春版"
+  },
+  "6JNVDB408M": {
+   "gun": "MP5",
+   "config": "36W半改"
+  },
+  "6JNVS1C08M": {
+   "gun": "MP5",
+   "config": "36W半改"
+  },
+  "6JO0G6K04L": {
+   "gun": "MP5",
+   "config": "36W半改"
+  },
+  "6JO0MOO04L": {
+   "gun": "MP5",
+   "config": "36W半改"
+  },
+  "6JNVDEK08M": {
+   "gun": "左轮",
+   "config": "75W满改红点"
+  },
+  "6JNVS4008M": {
+   "gun": "左轮",
+   "config": "75W满改红点"
+  },
+  "6JO0G7S04L": {
+   "gun": "左轮",
+   "config": "75W满改红点"
+  },
+  "6JO0NGK04L": {
+   "gun": "左轮",
+   "config": "75W满改红点"
+  },
+  "6LG99GS07O": {
+   "gun": "MK4",
+   "config": "65W满改3/7"
+  },
+  "6JNVS7408M": {
+   "gun": "MK4",
+   "config": "65W满改3/7"
+  },
+  "6JO0GAC04L": {
+   "gun": "MK4",
+   "config": "65W满改3/7"
+  },
+  "6KFCNRG08Q": {
+   "gun": "MK4",
+   "config": "65W满改3/7"
+  },
+  "6JNVDPK08M": {
+   "gun": "腾龙",
+   "config": "57W腰射版"
+  },
+  "6JNVSU408M": {
+   "gun": "腾龙",
+   "config": "57W腰射版"
+  },
+  "6KGA7FO04L": {
+   "gun": "腾龙",
+   "config": "57W腰射版"
+  },
+  "6KFCO6008Q": {
+   "gun": "腾龙",
+   "config": "57W腰射版"
+  },
+  "6JNVDRK08M": {
+   "gun": "腾龙",
+   "config": "26W青春版"
+  },
+  "6JNVS9C08M": {
+   "gun": "腾龙",
+   "config": "26W青春版"
+  },
+  "6L6EN180F5": {
+   "gun": "腾龙",
+   "config": "26W青春版"
+  },
+  "6KFCODC08Q": {
+   "gun": "腾龙",
+   "config": "26W青春版"
+  },
+  "6KFCKF408Q": {
+   "gun": "腾龙",
+   "config": "33W半改高速"
+  },
+  "6JNVSBO08M": {
+   "gun": "腾龙",
+   "config": "33W半改高速"
+  },
+  "6KFCOKK08Q": {
+   "gun": "腾龙",
+   "config": "33W半改高速"
+  },
+  "6KFCJMO08Q": {
+   "gun": "FS-12",
+   "config": "50W高速两倍"
+  },
+  "6JNVSHO08M": {
+   "gun": "FS-12",
+   "config": "50W高速两倍"
+  },
+  "6JO0NSG04L": {
+   "gun": "FS-12",
+   "config": "50W高速两倍"
+  },
+  "6JNVE2C08M": {
+   "gun": "M870",
+   "config": "50W稳固三倍"
+  },
+  "6L6F7IK0F5": {
+   "gun": "M870",
+   "config": "50W稳固三倍"
+  },
+  "6JO1N1007O": {
+   "gun": "M870",
+   "config": "50W稳固三倍"
+  },
+  "6JNVE6O08M": {
+   "gun": "M14",
+   "config": "39W半改"
+  },
+  "6JO1LUK07O": {
+   "gun": "M14",
+   "config": "39W半改"
+  },
+  "6JNVEA408M": {
+   "gun": "M7",
+   "config": "78W双修"
+  },
+  "6JNVEG008M": {
+   "gun": "AS Val",
+   "config": "78W刺客四连发"
+  },
+  "6JNVEJO08M": {
+   "gun": "MK47",
+   "config": "75W满改红点"
+  },
+  "6JNVENC08M": {
+   "gun": "CAR-15",
+   "config": "10W青春版"
+  },
+  "6JNVEOO08M": {
+   "gun": "SVCH",
+   "config": "13W腰射版"
+  },
+  "6JNVEQG08M": {
+   "gun": "PTR-32",
+   "config": "12W青春版"
+  },
+  "6JNVEVK08M": {
+   "gun": "KC17",
+   "config": "27W半改"
+  },
+  "6JNV6T008M": {
+   "gun": "G3",
+   "config": "10W青春版"
+  },
+  "6JNV6V808M": {
+   "gun": "RM277",
+   "config": "28W半改"
+  },
+  "6JNV72808M": {
+   "gun": "M250",
+   "config": "43W满改三倍"
+  },
+  "6JO02LC04L": {
+   "gun": "M250",
+   "config": "43W满改三倍"
+  },
+  "6JNVF7008M": {
+   "gun": "SCAR-H",
+   "config": "19W青春版"
+  },
+  "6JNVF8G08M": {
+   "gun": "QJB",
+   "config": "34W半改"
+  },
+  "6L6FKOO0F5": {
+   "gun": "QJB",
+   "config": "34W半改"
+  },
+  "6JNVFF008M": {
+   "gun": "MDR",
+   "config": "61W满改三倍"
+  },
+  "6L6FLDK0F5": {
+   "gun": "MDR",
+   "config": "61W满改三倍"
+  },
+  "6JNVFOG08M": {
+   "gun": "AK-12",
+   "config": "17W青春版"
+  },
+  "6L6FMB40F5": {
+   "gun": "AK-12",
+   "config": "17W青春版"
+  },
+  "6KFCL8C08Q": {
+   "gun": "M249",
+   "config": "35W半改"
+  },
+  "6JNVFQO08M": {
+   "gun": "M4A1",
+   "config": "55W满改腰射"
+  },
+  "6JNVG7O08M": {
+   "gun": "SCAR-H",
+   "config": "51W满改火控"
+  },
+  "6JNVGBC08M": {
+   "gun": "SG552",
+   "config": "13W青春版"
+  },
+  "6JNVGI808M": {
+   "gun": "QBZ-95",
+   "config": "26W半改"
+  },
+  "6JNVGLG08M": {
+   "gun": "AK-12",
+   "config": "62W满改2/4"
+  },
+  "6JO02P804L": {
+   "gun": "AK-12",
+   "config": "62W满改2/4"
+  },
+  "6JNVGNG08M": {
+   "gun": "AK-12",
+   "config": "64W满改红点"
+  },
+  "6JNVGS408M": {
+   "gun": "M7",
+   "config": "39W青春版"
+  },
+  "6JNVH3G08M": {
+   "gun": "M7",
+   "config": "59W半改"
+  },
+  "6JNVH7S08M": {
+   "gun": "M7",
+   "config": "85W满改红点"
+  },
+  "6KFHP6807O": {
+   "gun": "M7",
+   "config": "85W满改3.5倍"
+  },
+  "6JO02SG04L": {
+   "gun": "M7",
+   "config": "85W满改3.5倍"
+  },
+  "6JNVHG008M": {
+   "gun": "AUG",
+   "config": "19W丐版三倍"
+  },
+  "6JO02UK04L": {
+   "gun": "AUG",
+   "config": "19W丐版三倍"
+  },
+  "6JNVHR808M": {
+   "gun": "AUG",
+   "config": "23W青春版"
+  },
+  "6JO033004L": {
+   "gun": "AUG",
+   "config": "23W青春版"
+  },
+  "6JNVI2G08M": {
+   "gun": "AUG",
+   "config": "31W半改"
+  },
+  "6JO03A404L": {
+   "gun": "AUG",
+   "config": "31W半改"
+  },
+  "6JNVI7G08M": {
+   "gun": "AUG",
+   "config": "53W满改三倍"
+  },
+  "6JNVII808M": {
+   "gun": "M16A4",
+   "config": "48W三倍"
+  },
+  "6JNVILS08M": {
+   "gun": "M16A4",
+   "config": "27W腰射三连发"
+  },
+  "6JNVIQC08M": {
+   "gun": "K416",
+   "config": "22W青春版"
+  },
+  "6JNVITK08M": {
+   "gun": "K416",
+   "config": "53W腰射"
+  },
+  "6JO03I404L": {
+   "gun": "K416",
+   "config": "53W腰射"
+  },
+  "6K2GRVG0B9": {
+   "gun": "K416",
+   "config": "35W半改"
+  },
+  "6JUDCBS07O": {
+   "gun": "K416",
+   "config": "消音版"
+  },
+  "6JNVJTO08M": {
+   "gun": "ASH-12",
+   "config": "30W青春版"
+  },
+  "6JNVK0008M": {
+   "gun": "ASH-12",
+   "config": "60W满改腰射"
+  },
+  "6JNVK6408M": {
+   "gun": "ASH-12",
+   "config": "50W战斧二倍"
+  },
+  "6JNVK8C08M": {
+   "gun": "ASH-12",
+   "config": "50W长枪管二倍"
+  },
+  "6KFSC9O07O": {
+   "gun": "ASH-12",
+   "config": "46W新枪管2/4"
+  },
+  "6JNVKBK08M": {
+   "gun": "AKS-74U",
+   "config": "10W青春版"
+  },
+  "6JNVKDK08M": {
+   "gun": "QBZ-95",
+   "config": "17W青春版"
+  },
+  "6JNVKF008M": {
+   "gun": "QBZ-95",
+   "config": "36W满改"
+  },
+  "6JNVLK808M": {
+   "gun": "AKM",
+   "config": "20W青春版"
+  },
+  "6JNVLM008M": {
+   "gun": "AKM",
+   "config": "25W腰射CS"
+  },
+  "6JNVLN408M": {
+   "gun": "AKM",
+   "config": "38W半改"
+  },
+  "6KFCMES08Q": {
+   "gun": "AKM",
+   "config": "53W满改二倍"
+  },
+  "6JNVLR808M": {
+   "gun": "M4A1",
+   "config": "19W青春版"
+  },
+  "6JNVLSG08M": {
+   "gun": "M4A1",
+   "config": "25W半改腰射"
+  },
+  "6JNVLTS08M": {
+   "gun": "M4A1",
+   "config": "36W半改"
+  },
+  "6JNVLVC08M": {
+   "gun": "M4A1",
+   "config": "59W最强腰射"
+  },
+  "6JNVM7K08M": {
+   "gun": "M4A1",
+   "config": "59W满改三倍"
+  },
+  "6JNVMB808M": {
+   "gun": "M4A1",
+   "config": "65W红点"
+  },
+  "6L6FG180F5": {
+   "gun": "MDR",
+   "config": "20"
+  },
+  "6L6FGS40F5": {
+   "gun": "MDR",
+   "config": "20"
+  },
+  "6JO1A1O0B9": {
+   "gun": "MDR",
+   "config": "20"
+  },
+  "6JO1BCK0B9": {
+   "gun": "MDR",
+   "config": "20"
+  },
+  "6KFCVES08Q": {
+   "gun": "RM277",
+   "config": "30红点"
+  },
+  "6L6FH840F5": {
+   "gun": "RM277",
+   "config": "30红点"
+  },
+  "6JO1A3G0B9": {
+   "gun": "RM277",
+   "config": "30红点"
+  },
+  "6JO1BGS0B9": {
+   "gun": "RM277",
+   "config": "30红点"
+  },
+  "6KFCVNS08Q": {
+   "gun": "SR-3M",
+   "config": "30两倍"
+  },
+  "6JO12300B9": {
+   "gun": "SR-3M",
+   "config": "30两倍"
+  },
+  "6JO1A4S0B9": {
+   "gun": "SR-3M",
+   "config": "30两倍"
+  },
+  "6JO1BJS0B9": {
+   "gun": "SR-3M",
+   "config": "30两倍"
+  },
+  "6JO0T2S0B9": {
+   "gun": "M4A1",
+   "config": "30"
+  },
+  "6JO12400B9": {
+   "gun": "M4A1",
+   "config": "30"
+  },
+  "6JO1A5O0B9": {
+   "gun": "M4A1",
+   "config": "30"
+  },
+  "6JO1BM80B9": {
+   "gun": "M4A1",
+   "config": "30"
+  },
+  "6JO0T6K0B9": {
+   "gun": "M700",
+   "config": "60腰射"
+  },
+  "6JO124O0B9": {
+   "gun": "M700",
+   "config": "60腰射"
+  },
+  "6L6FI540F5": {
+   "gun": "M700",
+   "config": "60腰射"
+  },
+  "6JO1BQG0B9": {
+   "gun": "M700",
+   "config": "60腰射"
+  },
+  "6JO0TA00B9": {
+   "gun": "AK-12",
+   "config": "30"
+  },
+  "6JO126C0B9": {
+   "gun": "AK-12",
+   "config": "30"
+  },
+  "6JO1AO80B9": {
+   "gun": "AK-12",
+   "config": "30"
+  },
+  "6L6FING0F5": {
+   "gun": "AK-12",
+   "config": "30"
+  },
+  "6JO0TDK0B9": {
+   "gun": "R93",
+   "config": "75腰射"
+  },
+  "6JO12780B9": {
+   "gun": "R93",
+   "config": "75腰射"
+  },
+  "6JO1BSC0B9": {
+   "gun": "R93",
+   "config": "75腰射"
+  },
+  "6JO0TJ00B9": {
+   "gun": "AUG",
+   "config": "30"
+  },
+  "6JO12GK0B9": {
+   "gun": "AUG",
+   "config": "30"
+  },
+  "6JO1C4G0B9": {
+   "gun": "AUG",
+   "config": "30"
+  },
+  "6JO0TK00B9": {
+   "gun": "AUG",
+   "config": "30三倍"
+  },
+  "6JO12IG0B9": {
+   "gun": "AUG",
+   "config": "30三倍"
+  },
+  "6JO1C7O0B9": {
+   "gun": "AUG",
+   "config": "30三倍"
+  },
+  "6JO0TMS0B9": {
+   "gun": "K416",
+   "config": "45"
+  },
+  "6JO12V80B9": {
+   "gun": "K416",
+   "config": "45"
+  },
+  "6KJVFN407O": {
+   "gun": "K416",
+   "config": "45"
+  },
+  "6JO0TO00B9": {
+   "gun": "SVCH",
+   "config": "30"
+  },
+  "6JO13000B9": {
+   "gun": "SVCH",
+   "config": "30"
+  },
+  "6KO8HU407O": {
+   "gun": "SVCH",
+   "config": "30"
+  },
+  "6JO0TU00B9": {
+   "gun": "SCAR-H",
+   "config": "30"
+  },
+  "6JO13200B9": {
+   "gun": "SCAR-H",
+   "config": "30"
+  },
+  "6JO0U6C0B9": {
+   "gun": "AS Val",
+   "config": "30"
+  },
+  "6JO136O0B9": {
+   "gun": "AS Val",
+   "config": "30"
+  },
+  "6JO0U8O0B9": {
+   "gun": "腾龙",
+   "config": "30"
+  },
+  "6JO13E40B9": {
+   "gun": "腾龙",
+   "config": "30"
+  },
+  "6JO0UB80B9": {
+   "gun": "K437",
+   "config": "45"
+  },
+  "6JO13NK0B9": {
+   "gun": "K437",
+   "config": "45"
+  },
+  "6JO0UCC0B9": {
+   "gun": "K437",
+   "config": "30"
+  },
+  "6JO14400B9": {
+   "gun": "K437",
+   "config": "30"
+  },
+  "6JO0UG40B9": {
+   "gun": "M7",
+   "config": "20"
+  },
+  "6JO14BC0B9": {
+   "gun": "M7",
+   "config": "20"
+  },
+  "6JO0UH00B9": {
+   "gun": "M7",
+   "config": "30"
+  },
+  "6JO0UIC0B9": {
+   "gun": "QBZ-95",
+   "config": "30"
+  },
+  "6JO0UO80B9": {
+   "gun": "QBZ-95",
+   "config": "30三倍"
+  },
+  "6JO0V1C0B9": {
+   "gun": "AKM",
+   "config": "70腰射"
+  },
+  "6JO0V380B9": {
+   "gun": "AKM",
+   "config": "30"
+  },
+  "6JO0V680B9": {
+   "gun": "KC17",
+   "config": "30"
+  },
+  "6JO0VGC0B9": {
+   "gun": "ASH-12",
+   "config": "30"
+  },
+  "6JO0VPS0B9": {
+   "gun": "ASH-12",
+   "config": "30三倍"
+  },
+  "6JO0VTC0B9": {
+   "gun": "G3",
+   "config": "20三倍"
+  },
+  "6JO0VUO0B9": {
+   "gun": "MK47",
+   "config": "30"
+  },
+  "6JO109C0B9": {
+   "gun": "PTR-32",
+   "config": "30"
+  },
+  "6JO10CK0B9": {
+   "gun": "PTR-32",
+   "config": "MCX-LT"
+  },
+  "6JO10E40B9": {
+   "gun": "CAR-15",
+   "config": "30"
+  },
+  "6JO10UG0B9": {
+   "gun": "AR57",
+   "config": "50"
+  },
+  "6KO8IL807O": {
+   "gun": "M16A4",
+   "config": "30"
+  },
+  "6JO0OIG04L": {
+   "gun": "M14",
+   "config": "红点"
+  },
+  "6JO0OT004L": {
+   "gun": "M14",
+   "config": "轻语63开镜纯嘉豪"
+  },
+  "6JO0P2804L": {
+   "gun": "M14",
+   "config": "短枪管大弹鼓"
+  },
+  "6LB7D1G07O": {
+   "gun": "M14",
+   "config": "59操速"
+  },
+  "6L6EH3807O": {
+   "gun": "MDR",
+   "config": "62操速"
+  },
+  "6L6F1040F5": {
+   "gun": "QJB",
+   "config": "60操速新套件"
+  },
+  "6KS5RAK07O": {
+   "gun": "RM277",
+   "config": "50操速"
+  },
+  "6JO0RN804L": {
+   "gun": "AR57",
+   "config": "55操速"
+  },
+  "6KS5S9O07O": {
+   "gun": "KC17",
+   "config": "甲伤高削铁如泥"
+  },
+  "6JO0P6S04L": {
+   "gun": "KC17",
+   "config": "61操速"
+  },
+  "6JO0PDC04L": {
+   "gun": "K437",
+   "config": "59操速"
+  },
+  "6JO0PIG04L": {
+   "gun": "腾龙",
+   "config": "爆头优先"
+  },
+  "6JO0PK004L": {
+   "gun": "腾龙",
+   "config": "63操速消音"
+  },
+  "6JOFJI007O": {
+   "gun": "AS Val",
+   "config": "63操速爆发高"
+  },
+  "6JO0PR804L": {
+   "gun": "AS Val",
+   "config": "2/4倍镜"
+  },
+  "6JO0PT804L": {
+   "gun": "M7",
+   "config": "60操速"
+  },
+  "6JO0PU804L": {
+   "gun": "M7",
+   "config": "消音高手版"
+  },
+  "6JO0Q1C04L": {
+   "gun": "AUG",
+   "config": "轮椅枪"
+  },
+  "6JO0Q2C04L": {
+   "gun": "AUG",
+   "config": "59操速"
+  },
+  "6JO0Q4G04L": {
+   "gun": "K416",
+   "config": "全能版"
+  },
+  "6JO0Q6C04L": {
+   "gun": "K416",
+   "config": "60操速"
+  },
+  "6JO0QHO04L": {
+   "gun": "ASH-12",
+   "config": "射速硬伤"
+  },
+  "6JO0QO804L": {
+   "gun": "SR-3M",
+   "config": "中规中矩"
+  },
+  "6JO0QK804L": {
+   "gun": "SR-3M",
+   "config": "62操速"
+  },
+  "6JO0QQO04L": {
+   "gun": "M250",
+   "config": "57操速"
+  },
+  "6JO0QSO04L": {
+   "gun": "PKM",
+   "config": "伤害高"
+  },
+  "6JO0QUG04L": {
+   "gun": "MP7",
+   "config": "65操速"
+  },
+  "6JO0R4O04L": {
+   "gun": "MK47",
+   "config": "弹道表现一般"
+  },
+  "6K1MRP807O": {
+   "gun": "MK47",
+   "config": "带消音，开镜稍微慢一点点"
+  },
+  "6JO0R6O04L": {
+   "gun": "SCAR-H",
+   "config": "62操速"
+  },
+  "6JO0R9G04L": {
+   "gun": "AK-12",
+   "config": "一般"
+  },
+  "6JO0RBO04L": {
+   "gun": "MK4",
+   "config": "一般"
+  },
+  "BLAST6LHIP": {
+   "gun": "MK4",
+   "config": "高手版→"
+  },
+  "6LE7K4807O": {
+   "gun": "沙鹰",
+   "config": "800"
+  },
+  "6LE6RQO07O": {
+   "gun": "沙鹰",
+   "config": "800"
+  },
+  "6LE6T1407O": {
+   "gun": "沙鹰",
+   "config": "800"
+  },
+  "6LE6MJ807O": {
+   "gun": "沙鹰",
+   "config": "800"
+  },
+  "6LE7KC807O": {
+   "gun": "左轮",
+   "config": "800"
+  },
+  "6LE75JC07O": {
+   "gun": "左轮",
+   "config": "800"
+  },
+  "6LE6U1007O": {
+   "gun": "左轮",
+   "config": "800"
+  },
+  "6LE6MIG07O": {
+   "gun": "左轮",
+   "config": "800"
+  },
+  "6LE7KHS07O": {
+   "gun": "93R",
+   "config": "600"
+  },
+  "6LE7JGO07O": {
+   "gun": "93R",
+   "config": "600"
+  },
+  "6LE712807O": {
+   "gun": "93R",
+   "config": "600"
+  },
+  "6LE6MJK07O": {
+   "gun": "93R",
+   "config": "600"
+  },
+  "6LE7L1C07O": {
+   "gun": "M1911",
+   "config": "500"
+  },
+  "6LF0FG004L": {
+   "gun": "M1911",
+   "config": "500"
+  },
+  "6LF9H1K07O": {
+   "gun": "M1911",
+   "config": "500"
+  },
+  "6LE6O4K07O": {
+   "gun": "M1911",
+   "config": "500"
+  },
+  "6LE7T7C07O": {
+   "gun": "CAR-15",
+   "config": "1500"
+  },
+  "6LF9HQK07O": {
+   "gun": "CAR-15",
+   "config": "1500"
+  },
+  "6LE6O3S07O": {
+   "gun": "CAR-15",
+   "config": "1500"
+  },
+  "6LF0EG004L": {
+   "gun": "MP7",
+   "config": "1500"
+  },
+  "6LE73GO07O": {
+   "gun": "MP7",
+   "config": "1500"
+  },
+  "6LE6Q4407O": {
+   "gun": "MP7",
+   "config": "1500"
+  },
+  "6LE7TQ807O": {
+   "gun": "PTR-32",
+   "config": "1600"
+  },
+  "6LE73J407O": {
+   "gun": "PTR-32",
+   "config": "1600"
+  },
+  "6LE6Q4G07O": {
+   "gun": "PTR-32",
+   "config": "1600"
+  },
+  "6LE7U7K07O": {
+   "gun": "G3",
+   "config": "1600"
+  },
+  "6LE7IBG07O": {
+   "gun": "G3",
+   "config": "1600"
+  },
+  "6LE6Q3G07O": {
+   "gun": "G3",
+   "config": "1600"
+  },
+  "6LE7VJS07O": {
+   "gun": "SMG45",
+   "config": "1480"
+  },
+  "6LE7J1007O": {
+   "gun": "SMG45",
+   "config": "1480"
+  },
+  "6LE70AK07O": {
+   "gun": "SMG45",
+   "config": "1480"
+  },
+  "6LE80HS07O": {
+   "gun": "RM277",
+   "config": "1500"
+  },
+  "6LE7NKC07O": {
+   "gun": "RM277",
+   "config": "1500"
+  },
+  "6LE70H807O": {
+   "gun": "RM277",
+   "config": "1500"
+  },
+  "6LF0DNG04L": {
+   "gun": "KC17",
+   "config": "1500"
+  },
+  "6LE7R2K07O": {
+   "gun": "KC17",
+   "config": "1500"
+  },
+  "6LE71FG07O": {
+   "gun": "KC17",
+   "config": "1500"
+  },
+  "6LE82DC07O": {
+   "gun": "SKS",
+   "config": "1600"
+  },
+  "6LE7UGS07O": {
+   "gun": "SKS",
+   "config": "1600"
+  },
+  "6LE71OC07O": {
+   "gun": "SKS",
+   "config": "1600"
+  },
+  "6LEA5TS07O": {
+   "gun": "SCAR-H",
+   "config": "1600"
+  },
+  "6LE7UOC07O": {
+   "gun": "SCAR-H",
+   "config": "1600"
+  },
+  "6LE725007O": {
+   "gun": "SCAR-H",
+   "config": "1600"
+  },
+  "6LF0F1404L": {
+   "gun": "MP5",
+   "config": "1500"
+  },
+  "6LE81IC07O": {
+   "gun": "MP5",
+   "config": "1500"
+  },
+  "6LE72HG07O": {
+   "gun": "MP5",
+   "config": "1500"
+  },
+  "6LE81JG07O": {
+   "gun": "SVCH",
+   "config": "2400"
+  },
+  "6LE777K07O": {
+   "gun": "SVCH",
+   "config": "2400"
+  },
+  "6LE81LS07O": {
+   "gun": "SVCH",
+   "config": "2380"
+  },
+  "6LE779407O": {
+   "gun": "SVCH",
+   "config": "2380"
+  },
+  "6LE84P007O": {
+   "gun": "SR-3M",
+   "config": "2360"
+  },
+  "6LE78H807O": {
+   "gun": "SR-3M",
+   "config": "2360"
+  },
+  "6LE85LC07O": {
+   "gun": "MK4",
+   "config": "2580"
+  },
+  "6LE78J007O": {
+   "gun": "MK4",
+   "config": "2580"
+  },
+  "6LE86JK07O": {
+   "gun": "M14",
+   "config": "2600"
+  },
+  "6LE79D007O": {
+   "gun": "M14",
+   "config": "2600"
+  },
+  "6LEA6QK07O": {
+   "gun": "P90",
+   "config": "2600"
+  },
+  "6LE79LK07O": {
+   "gun": "P90",
+   "config": "2600"
+  },
+  "6LE79V407O": {
+   "gun": "P90",
+   "config": "4020"
+  },
+  "6LEA9CK07O": {
+   "gun": "汤姆逊",
+   "config": "3960"
+  },
+  "6LEA8VK07O": {
+   "gun": "汤姆逊",
+   "config": "4040"
+  },
+  "6LE7G8S07O": {
+   "gun": "QJB",
+   "config": "3660"
+  },
+  "6LE7GL807O": {
+   "gun": "QJB",
+   "config": "3680"
+  },
+  "6LE7GS407O": {
+   "gun": "QJB",
+   "config": "3680"
+  },
+  "6LE7HA007O": {
+   "gun": "M250",
+   "config": "4120"
+  },
+  "6LE7HP807O": {
+   "gun": "PKM",
+   "config": "3400"
+  },
+  "6LE7N1K07O": {
+   "gun": "MCX",
+   "config": "3580"
+  },
+  "6LE7MQ407O": {
+   "gun": "MCX",
+   "config": "3500"
+  },
+  "6LE7O3G07O": {
+   "gun": "AR57",
+   "config": "3500"
+  },
+  "6LE7OPO07O": {
+   "gun": "AR57",
+   "config": "3500"
+  },
+  "6LE7P0007O": {
+   "gun": "AR57",
+   "config": "3460"
+  },
+  "6LE7Q4007O": {
+   "gun": "MK47",
+   "config": "4040"
+  },
+  "6LE7QHC07O": {
+   "gun": "MK47",
+   "config": "4060"
+  },
+  "6LE7RI407O": {
+   "gun": "K437",
+   "config": "3700"
+  },
+  "6LE7RPK07O": {
+   "gun": "K437",
+   "config": "3680"
+  },
+  "6LE7SDG07O": {
+   "gun": "腾龙",
+   "config": "3600"
+  },
+  "6LE7SPG07O": {
+   "gun": "腾龙",
+   "config": "7300"
+  },
+  "6LE831807O": {
+   "gun": "K416",
+   "config": "3560"
+  },
+  "6LE837S07O": {
+   "gun": "K416",
+   "config": "3580"
+  },
+  "6LE83PC07O": {
+   "gun": "ASH-12",
+   "config": "3500"
+  }
+ },
+ "noise": [
+  "哈夫币",
+  "改枪码",
+  "烽火地带",
+  "黑潮爆破",
+  "准星码",
+  "一键导入",
+  "文档",
+  "抖音",
+  "直播",
+  "微信",
+  "客服",
+  "抄袭",
+  "更新",
+  "预约",
+  "代肝",
+  "区",
+  "标准",
+  "精锐",
+  "特种",
+  "DISPIMG",
+  "ID_DDF",
+  "ID_111"
+ ],
+ "note": "v2: 追加 DISPIMG 噪声词；整套套件码标记"
+}

@@ -42,6 +42,9 @@ mod feature_flags;
 mod hotkey;
 // 本地改枪码记事本（本分支原创功能，上游无此模块）
 mod local_gun_codes;
+// 端到端验证（仅测试构建；需 GUN_TSV_DIR 指向真实文档导出的 TSV）
+#[cfg(test)]
+mod gun_e2e_test;
 mod main_window;
 mod media_keys;
 mod music;
@@ -1043,6 +1046,10 @@ pub fn run() {
         local_gun_codes::import_gun_codes_batch,
         local_gun_codes::export_gun_codes,
         local_gun_codes::import_gun_codes,
+        // 新增：导入预览流 + 规则库元信息（词库可热更）
+        local_gun_codes::preview_import_gun_codes,
+        local_gun_codes::get_gun_rules_meta,
+        local_gun_codes::refresh_gun_rules,
         // 已阉割：open_mood_window,
         // === 桌面灵动岛窗口（把内嵌岛搬到桌面上，状态真源仍在主窗口）===
         island_window::set_dynamic_island_enabled,

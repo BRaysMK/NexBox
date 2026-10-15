@@ -67,7 +67,8 @@
       "resources/crosshair-presets/*",
       "resources/icc-presets/*",
       "resources/vive/*",
-      "resources/qishui-auth/*"
+      "resources/qishui-auth/*",
+      "resources/gun-codes/*"
     ],
     "icon": [
       "icons/32x32.png",
