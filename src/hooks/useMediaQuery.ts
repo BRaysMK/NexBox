@@ -6,6 +6,10 @@ import { useEffect, useState } from "react";
  * NexBox 是 Tauri 桌面应用，断点按**窗口宽度**设定（非移动端）。
  * 与项目既有做法一致（`ResolutionConverterPage.tsx` 用 `useBreakpointValue`），
  * 但这里需要布尔判断（切换布局结构），故自建轻量 hook。
+ *
+ * 除 `change` 外还监听 `resize`：Tauri 桌面窗口在拖动缩放、或从最大化还原时，
+ * WebView2 并不总会在跨过断点的那一刻派发 `change`，只靠它会让布局卡在旧状态。
+ * （此修复先落在 GunCodesAssistant，现回移到这里。）
  */
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => {
@@ -15,11 +19,15 @@ export function useMediaQuery(query: string): boolean {
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
-    const mql = window.matchMedia(query);
-    const onChange = () => setMatches(mql.matches);
-    onChange();
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
+    const mq = window.matchMedia(query);
+    const update = () => setMatches(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    window.addEventListener("resize", update);
+    return () => {
+      mq.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
   }, [query]);
 
   return matches;

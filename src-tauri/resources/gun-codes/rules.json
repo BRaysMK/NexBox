@@ -1,10 +1,14 @@
 {
- "version": 4,
- "generated": "2026-10-15",
+ "version": 5,
+ "generated": "2026-10-16",
  "mode": "烽火地带",
- "note": "仅收录烽火地带模式改枪码。全面战场/黑潮爆破与烽火兼容性未知，已剔除。 | v4: 补别名(复合弓/QJB201/QBZ95-1/MCX LT) + 噪音词(弓弩/连狙等表头词) + 新增 SR9",
+ "note": "仅收录烽火地带模式改枪码。全面战场/黑潮爆破与烽火兼容性未知，已剔除。 | v4: 补别名(复合弓/QJB201/QBZ95-1/MCX LT) + 噪音词(弓弩/连狙等表头词) + 新增 SR9 | v5: 拆出「狙击枪」分类 —— 栓动(AWM/M700/R93/SV-98)+反器材(M82) 共 5 把；SVD 按半自动归「射手步枪」；巴雷特并入 M82（改为别名）",
  "source": "内置映射 + 抖音情天老师/武器大师地板 两个文档的烽火地带部分",
  "guns": {
+  "725": {
+   "category": "霰弹枪",
+   "aliases": []
+  },
   "RM277": {
    "category": "步枪",
    "aliases": []
@@ -192,7 +196,7 @@
    ]
   },
   "M700": {
-   "category": "射手步枪",
+   "category": "狙击枪",
    "aliases": []
   },
   "PSG-1": {
@@ -216,15 +220,15 @@
    "aliases": []
   },
   "R93": {
-   "category": "射手步枪",
+   "category": "狙击枪",
    "aliases": []
   },
   "SV-98": {
-   "category": "射手步枪",
+   "category": "狙击枪",
    "aliases": []
   },
   "AWM": {
-   "category": "射手步枪",
+   "category": "狙击枪",
    "aliases": []
   },
   "SKS": {
@@ -235,13 +239,11 @@
    "category": "射手步枪",
    "aliases": []
   },
-  "巴雷特": {
-   "category": "射手步枪",
-   "aliases": []
-  },
   "M82": {
-   "category": "射手步枪",
-   "aliases": []
+   "category": "狙击枪",
+   "aliases": [
+    "巴雷特"
+   ]
   },
   "M250": {
    "category": "机枪",
@@ -270,10 +272,6 @@
    "aliases": []
   },
   "M1014": {
-   "category": "霰弹枪",
-   "aliases": []
-  },
-  "725": {
    "category": "霰弹枪",
    "aliases": []
   },

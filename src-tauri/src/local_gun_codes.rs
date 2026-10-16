@@ -1533,7 +1533,7 @@ mod tests {
     fn test_rules_have_pdf_support_data() {
         // 规则库必须含支撑 PDF 格式的数据（否则上面那些匹配会退化为 None）
         let r: GunRules = serde_json::from_str(RULES_EMBEDDED).expect("内嵌规则库解析失败");
-        assert_eq!(r.version, 4, "规则库版本应为 v4（补别名/噪音/SR9）");
+        assert_eq!(r.version, 5, "规则库版本应为 v5（拆出狙击枪分类 + 巴雷特并入 M82）");
 
         // 复合弓 别名
         let bow = r.guns.get("弓").expect("规则库缺「弓」");
@@ -1547,6 +1547,42 @@ mod tests {
         for w in ["弓弩", "连狙", "栓狙"] {
             assert!(r.noise.iter().any(|n| n == w), "噪音词缺 {w:?}（PDF 表头词）");
         }
+
+        // v5：巴雷特并入 M82 —— PDF fixture 里同一行同时出现「巴雷特」与
+        // 「M82狙击步枪」，若两者是独立条目会分裂成两把枪
+        assert!(
+            !r.guns.contains_key("巴雷特"),
+            "巴雷特 应为 M82 的别名，不应是独立枪条目"
+        );
+        let m82 = r.guns.get("M82").expect("规则库缺 M82");
+        assert!(
+            m82.aliases.iter().any(|a| a == "巴雷特"),
+            "M82 缺别名「巴雷特」（PDF fixture 里出现过）"
+        );
+
+        // v5：狙击枪分类必须存在且为栓动 + 反器材
+        let snipers: Vec<&str> = r
+            .guns
+            .iter()
+            .filter(|(_, m)| m.category == "狙击枪")
+            .map(|(n, _)| n.as_str())
+            .collect();
+        assert_eq!(
+            snipers.len(),
+            5,
+            "狙击枪 应为 5 把（AWM/M700/R93/SV-98/M82），实际 {snipers:?}"
+        );
+        for g in ["AWM", "M700", "R93", "SV-98", "M82"] {
+            assert!(
+                r.guns.get(g).is_some_and(|m| m.category == "狙击枪"),
+                "{g} 应归「狙击枪」"
+            );
+        }
+        // SVD 是半自动，按精确射手步枪归类，应留在「射手步枪」
+        assert!(
+            r.guns.get("SVD").is_some_and(|m| m.category == "射手步枪"),
+            "SVD 应留在「射手步枪」（半自动，非栓动狙击）"
+        );
     }
 
     #[test]

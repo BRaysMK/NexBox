@@ -3594,8 +3594,7 @@
   },
   "filterDisabledDegraded": "滤镜已关闭（降级清除：未能恢复原有校色）",
   "gunCodes": {
-    "title": "三角洲本地改枪码记事本",
-    "subtitle": "本地改枪码库 · 粘贴自动识别",
+    "title": "三角洲本地改枪码",
     "back": "返回",
     "records": "条记录",
     "guns": "把枪",

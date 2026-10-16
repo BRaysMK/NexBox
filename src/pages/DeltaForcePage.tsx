@@ -264,7 +264,7 @@ function PasswordCard() {
   );
 }
 
-// ── LocalNotebookCard（本地改枪码记事本入口，本分支原创功能） ──
+// ── LocalNotebookCard（本地改枪码入口，本分支原创功能） ──
 function LocalNotebookCard({ onOpen }: { onOpen: () => void }) {
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
@@ -279,10 +279,10 @@ function LocalNotebookCard({ onOpen }: { onOpen: () => void }) {
     <VStack align="center" spacing={3} py={2} justify="center" h="100%">
       <NotebookPen size={28} color={primaryColor} />
       <Text fontWeight="semibold" fontSize="sm" color={textColor} textAlign="center">
-        本地改枪码记事本
+        本地改枪码
       </Text>
       <Text color={subTextColor} fontSize="xs" textAlign="center">
-        粘贴自动识别 · 批量导入 · JSON备份
+        管理常用改枪码
       </Text>
     </VStack>
   );
@@ -1417,7 +1417,7 @@ export default function DeltaForcePage() {
   const adaptiveTitle = useAdaptiveTextColor();
   const [showNotebook, setShowNotebook] = useState(false);
 
-  // 本地改枪码记事本（返回键回到三角洲主页）
+  // 本地改枪码（返回键回到三角洲主页）
   if (showNotebook) {
     return (
       <Box pt={8} pb={8}>
@@ -1445,7 +1445,7 @@ export default function DeltaForcePage() {
         <StreamerSettingsCard />
         <RouletteCard />
         <StatsAnalysisCard />
-        {/* 本地改枪码记事本（本分支原创功能） */}
+        {/* 本地改枪码（本分支原创功能） */}
         <LocalNotebookCard onOpen={() => setShowNotebook(true)} />
         <MoreGunCodesCard />
         <OfficialMapCard />

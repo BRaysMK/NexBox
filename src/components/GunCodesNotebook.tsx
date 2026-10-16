@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { store } from "@/lib/store";
 import { computePreviewStats, type GunCode } from "@/lib/gunCodes";
 import { copyText } from "@/lib/clipboard";
@@ -40,7 +41,7 @@ import { StatusBar } from "./gun-codes/StatusBar";
 const FILTER_KEY = "nexbox_gun_codes_filter";
 
 /**
- * 改枪码记事本（容器）
+ * 改枪码（容器）
  *
  * 原本是 1463 行单文件；现拆为 hooks（数据/筛选/响应式）+ 组件（视图/对话框）。
  * 本文件只负责编排状态与组合布局。
@@ -59,7 +60,16 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const panelBg = useColorModeValue("gray.50", "#202020");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const wrapperBg = liquidGlassEnabled ? undefined : cardBg;
+
+  // ── 液态玻璃联动 ──
+  // 玻璃开启时整块插件区域包在 LiquidGlassCard 里；内部面板/分隔线改用半透明，
+  // 否则玻璃表面里会嵌着实色块（原来的做法只是把背景置空，等于没有玻璃）。
+  const glassPanelBg = useColorModeValue("rgba(255,255,255,0.35)", "rgba(0,0,0,0.28)");
+  const glassDivider = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.12)");
+
+  const cardBgOut = liquidGlassEnabled ? glassPanelBg : cardBg;
+  const panelBgOut = liquidGlassEnabled ? glassPanelBg : panelBg;
+  const borderOut = liquidGlassEnabled ? glassDivider : cardBorder;
 
   const showToast = useCallback(
     (msg: string, type?: "error" | "info") => {
@@ -287,7 +297,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
     onRefreshRules: handleRefreshRules,
     textColor,
     subTextColor,
-    cardBorder,
+    cardBorder: borderOut,
   };
 
   const viewProps = {
@@ -301,30 +311,21 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
     onDelete: (item: GunCode) => setPendingDelete(item),
     textColor,
     subTextColor,
-    cardBorder,
-    cardBg,
+    cardBorder: borderOut,
+    cardBg: cardBgOut,
   };
 
   const ready = !data.loading && filters.hydrated;
 
-  return (
-    <Box
-      bg={wrapperBg}
-      borderRadius={liquidGlassEnabled ? undefined : "xl"}
-      border={liquidGlassEnabled ? undefined : "1px solid"}
-      borderColor={cardBorder}
-      overflow="hidden"
-      display="flex"
-      flexDirection="column"
-      h="100%"
-      minH={isCompact ? "auto" : "70vh"}
-    >
+  // 全部内容（外壳只负责玻璃/实色两种外包装，避免重复一遍 JSX）
+  const shell = (
+    <>
       {/* 顶部：返回 + 标题 */}
       <HStack
         px={4}
         py={3}
         borderBottom={isNarrow ? "1px solid" : undefined}
-        borderColor={cardBorder}
+        borderColor={borderOut}
         spacing={3}
         flexShrink={0}
       >
@@ -357,7 +358,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
             px={3}
             py={4}
             borderRight="1px solid"
-            borderColor={cardBorder}
+            borderColor={borderOut}
             overflowY="auto"
           >
             <NavTilePane {...navPaneProps} />
@@ -366,7 +367,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
 
         <VStack align="stretch" spacing={0} flex={1} minW={0}>
           {/* 工具栏（含枪名筛选浮层，浮层由工具栏按钮控制） */}
-          <Box px={4} py={3} borderBottom="1px solid" borderColor={cardBorder} flexShrink={0}>
+          <Box px={4} py={3} borderBottom="1px solid" borderColor={borderOut} flexShrink={0}>
             <NotebookToolbar
               search={filters.search}
               onSearch={filters.setSearch}
@@ -394,8 +395,8 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
                   }}
                   textColor={textColor}
                   subTextColor={subTextColor}
-                  bg={cardBg}
-                  border={cardBorder}
+                  bg={cardBgOut}
+                  border={borderOut}
                 />
               }
               hasActiveFilter={filters.hasActiveFilter}
@@ -474,7 +475,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
                 grouped={filters.grouped}
                 collapsed={filters.collapsed}
                 onToggleCollapse={filters.toggleCollapse}
-                panelBg={panelBg}
+                panelBg={panelBgOut}
                 {...viewProps}
               />
             )}
@@ -542,9 +543,9 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
         stats={previewStats}
         textColor={textColor}
         subTextColor={subTextColor}
-        bg={panelBg}
-        border={cardBorder}
-        cardBg={cardBg}
+        bg={panelBgOut}
+        border={borderOut}
+        cardBg={cardBgOut}
       />
 
       {/* 删除确认 */}
@@ -557,9 +558,38 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
         onConfirmBulk={doBulkDelete}
         textColor={textColor}
         subTextColor={subTextColor}
-        panelBg={panelBg}
-        cardBg={cardBg}
+        panelBg={panelBgOut}
+        cardBg={cardBgOut}
       />
+    </>
+  );
+
+  const shellLayout = {
+    overflow: "hidden" as const,
+    display: "flex",
+    flexDirection: "column" as const,
+    h: "100%",
+    minH: isCompact ? "auto" : "70vh",
+  };
+
+  // 玻璃开启：整块插件区域做成液态玻璃表面，与软件其余部分一致
+  if (liquidGlassEnabled) {
+    return (
+      <LiquidGlassCard p={0} {...shellLayout}>
+        {shell}
+      </LiquidGlassCard>
+    );
+  }
+
+  return (
+    <Box
+      bg={cardBg}
+      borderRadius="xl"
+      border="1px solid"
+      borderColor={cardBorder}
+      {...shellLayout}
+    >
+      {shell}
     </Box>
   );
 }
