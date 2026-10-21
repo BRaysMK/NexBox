@@ -2336,6 +2336,19 @@
     "ruleUpdated": "已把 {{fp}} 改为 {{gun}}",
     "ruleUpdateFailed": "修改失败",
     "ruleEditTitle": "修改规则枪名",
-    "ruleEditHint": "改后该指纹的码都会识别成这个枪名"
+    "ruleEditHint": "改后该指纹的码都会识别成这个枪名",
+    "moreActions": "更多操作",
+    "deleteFiltered": "删除当前筛选结果（{{n}} 条）…",
+    "deleteFilteredNoFilter": "删除当前筛选结果（无筛选）",
+    "clearAllCodes": "清空全部改枪码…",
+    "deleteFilteredTitle": "删除当前筛选结果的 {{n}} 条改枪码？",
+    "deleteFilteredBody": "只删除当前筛选出的条目，其它记录不受影响。此操作不可撤销。",
+    "deleteN": "删除 {{n}} 条",
+    "clearAllTitle": "清空全部 {{n}} 条改枪码？",
+    "clearAllBody": "这会删除所有改枪码记录，且不可撤销。学习表与词库不受影响，但记录本身无法找回 —— 建议先导出 JSON 备份。",
+    "clearAllN": "清空全部 {{n}} 条",
+    "deletedFiltered": "已删除 {{n}} 条（当前筛选结果）",
+    "clearedAll": "已清空全部 {{n}} 条改枪码",
+    "nothingToClear": "没有可删除的记录"
   }
 }

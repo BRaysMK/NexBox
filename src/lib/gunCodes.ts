@@ -410,3 +410,17 @@ export function rulesTooltip(
   if (rm > 0 || pt > 0) lines.push(`your edits: -${rm} / ~${pt}`);
   return lines.join("\n");
 }
+
+// ═══════════════ 批量删除 / 清空全部（v10.5.0） ═══════════════
+
+export interface DeleteBulkResult {
+  ok: boolean;
+  deleted: number;
+  remaining: number;
+}
+
+export interface ClearAllResult {
+  ok: boolean;
+  deleted: number;
+  remaining: number;
+}

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { setGunTable, type GunCode, type PreviewResult, type RecognizeResult, type RulesMeta } from "@/lib/gunCodes";
 import type {
+  ClearAllResult,
+  DeleteBulkResult,
   LearnedList,
   RuleFingerprintList,
   RulesResetResult,
@@ -101,22 +103,29 @@ export function useGunCodes(onError: (msg: string) => void) {
   );
 
   /** 批量删除（逐条调用后端，失败不中断，返回成功数） */
+  /**
+   * 批量删除
+   *
+   * v10.5.0 起改为**一次 IPC** 调用后端批量命令。
+   * 旧实现是前端 for 循环逐条 invoke —— 几百条就是几百次 IPC 加全量读写盘。
+   */
   const removeMany = useCallback(
     async (ids: string[]) => {
-      let okCount = 0;
-      for (const id of ids) {
-        try {
-          await invoke("delete_local_gun_code", { id });
-          okCount++;
-        } catch {
-          /* 单条失败不中断整批 */
-        }
-      }
+      if (ids.length === 0) return 0;
+      const r = await invoke<DeleteBulkResult>("delete_local_gun_codes_by_ids", { ids });
       await refresh();
-      return okCount;
+      if (!r.ok) throw new Error("批量删除失败");
+      return r.deleted;
     },
     [refresh],
   );
+
+  /** 清空全部改枪码（不可恢复，调用前必须二次确认） */
+  const clearAll = useCallback(async () => {
+    const r = await invoke<ClearAllResult>("clear_all_local_gun_codes");
+    await refresh();
+    return r;
+  }, [refresh]);
 
   // ── 导入 ──
   /** 解析预览（**不写库**） */
@@ -258,7 +267,7 @@ export function useGunCodes(onError: (msg: string) => void) {
     items, loading, meta,
     refresh, loadMeta,
     recognize,
-    add, update, remove, removeMany,
+    add, update, remove, removeMany, clearAll,
     preview, importRows,
     exportJson, importJson,
     refreshRules,

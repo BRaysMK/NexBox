@@ -1,4 +1,10 @@
 import {
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
   Box,
   Button,
   Drawer,
@@ -114,6 +120,10 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
   const [editing, setEditing] = useState<GunCode | null>(null);
   const [pendingDelete, setPendingDelete] = useState<GunCode | null>(null);
   const [bulkDeleteCount, setBulkDeleteCount] = useState(0);
+  // v10.5.0：一键删除（筛选结果 / 全部）
+  const cancelBulkRef = useRef<HTMLButtonElement>(null);
+  const [deleteFilteredOpen, setDeleteFilteredOpen] = useState(false);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // 导入预览流
@@ -202,6 +212,36 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
       showToast(t("gunCodes.deleteFailed", { err: String(e) }), "error");
     }
   }, [effectiveSelected, data, showToast, t]);
+
+  /** 删除当前筛选出的全部条目 */
+  const doDeleteFiltered = useCallback(async () => {
+    setDeleteFilteredOpen(false);
+    const ids = filters.filtered.map((i) => i.id);
+    if (ids.length === 0) return;
+    try {
+      const n = await data.removeMany(ids);
+      setSelectedIds(new Set());
+      showToast(t("gunCodes.deletedFiltered", { n }));
+    } catch (e) {
+      showToast(t("gunCodes.deleteFailed", { err: String(e) }), "error");
+    }
+  }, [filters.filtered, data, showToast, t]);
+
+  /** 清空全部改枪码 */
+  const doClearAll = useCallback(async () => {
+    setClearAllOpen(false);
+    try {
+      const r = await data.clearAll();
+      setSelectedIds(new Set());
+      showToast(
+        r.deleted > 0
+          ? t("gunCodes.clearedAll", { n: r.deleted })
+          : t("gunCodes.nothingToClear"),
+      );
+    } catch (e) {
+      showToast(t("gunCodes.deleteFailed", { err: String(e) }), "error");
+    }
+  }, [data, showToast, t]);
 
   // ── 操作：备份 / 词库 ──
   const handleExport = useCallback(async () => {
@@ -380,6 +420,10 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
               viewMode={filters.viewMode}
               onViewMode={filters.setViewMode}
               onOpenRulesManager={rulesDisc.onOpen}
+              onDeleteFiltered={() => setDeleteFilteredOpen(true)}
+              onClearAll={() => setClearAllOpen(true)}
+              filteredCount={filters.filtered.length}
+              hasFilter={filters.filtered.length !== data.items.length}
               gunFilterCount={filters.gunFilter.length}
               gunFilterSlot={
                 <GunFilterPopover
@@ -579,6 +623,64 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
 
       {/* 应用内右键菜单：替代 WebView2 的「刷新/另存为/打印」 */}
       <AppContextMenu />
+
+      {/* v10.5.0：删除当前筛选结果 */}
+      <AlertDialog
+        isOpen={deleteFilteredOpen}
+        leastDestructiveRef={cancelBulkRef}
+        onClose={() => setDeleteFilteredOpen(false)}
+        isCentered
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent bg={panelBgOut}>
+            <AlertDialogHeader fontSize="md" color={textColor}>
+              {t("gunCodes.deleteFilteredTitle", { n: filters.filtered.length })}
+            </AlertDialogHeader>
+            <AlertDialogBody>
+              <Text fontSize="sm" color={textColor}>
+                {t("gunCodes.deleteFilteredBody")}
+              </Text>
+            </AlertDialogBody>
+            <AlertDialogFooter>
+              <Button ref={cancelBulkRef} size="sm" variant="ghost" onClick={() => setDeleteFilteredOpen(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button size="sm" colorScheme="red" ml={3} onClick={doDeleteFiltered}>
+                {t("gunCodes.deleteN", { n: filters.filtered.length })}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
+
+      {/* v10.5.0：清空全部 */}
+      <AlertDialog
+        isOpen={clearAllOpen}
+        leastDestructiveRef={cancelBulkRef}
+        onClose={() => setClearAllOpen(false)}
+        isCentered
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent bg={panelBgOut}>
+            <AlertDialogHeader fontSize="md" color={textColor}>
+              {t("gunCodes.clearAllTitle", { n: data.items.length })}
+            </AlertDialogHeader>
+            <AlertDialogBody>
+              <Text fontSize="sm" color={textColor}>
+                {t("gunCodes.clearAllBody")}
+              </Text>
+            </AlertDialogBody>
+            <AlertDialogFooter>
+              <Button ref={cancelBulkRef} size="sm" variant="ghost" onClick={() => setClearAllOpen(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button size="sm" colorScheme="red" ml={3} onClick={doClearAll}>
+                {t("gunCodes.clearAllN", { n: data.items.length })}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
 
       <ConfirmDialogs
         pendingDelete={pendingDelete}

@@ -1049,6 +1049,9 @@ pub fn run() {
         local_gun_codes::get_local_gun_codes,
         local_gun_codes::add_local_gun_code,
         local_gun_codes::delete_local_gun_code,
+        // v10.5.0 新增：批量删除 / 清空全部改枪码
+        local_gun_codes::delete_local_gun_codes_by_ids,
+        local_gun_codes::clear_all_local_gun_codes,
         local_gun_codes::update_local_gun_code,
         local_gun_codes::recognize_gun_name,
         local_gun_codes::import_gun_codes_batch,

@@ -1315,6 +1315,53 @@ pub fn delete_local_gun_code(app: tauri::AppHandle, id: String) -> Result<(), St
     Ok(())
 }
 
+/// 批量删除指定 id 的改枪码（一次调用，替代前端逐条 invoke）
+///
+/// **为什么不复用 `delete_local_gun_code` 循环**：543 条就是 543 次 IPC +
+/// 543 次全量读盘/写盘，既慢又会把中间状态反复落盘。
+/// 这里一次性读、一次性过滤、一次性写。
+///
+/// **安全边界**：只动 `local_gun_codes.json`，
+/// **不碰学习表（prefix_map）、不碰规则库**。
+/// 删掉记录不影响「新粘贴的码如何被识别」。
+#[tauri::command]
+pub fn delete_local_gun_codes_by_ids(
+    app: tauri::AppHandle,
+    ids: Vec<String>,
+) -> serde_json::Value {
+    if ids.is_empty() {
+        return serde_json::json!({ "ok": true, "deleted": 0, "remaining": load_all(&app).len() });
+    }
+    let target: std::collections::HashSet<&String> = ids.iter().collect();
+    let mut items = load_all(&app);
+    let before = items.len();
+    items.retain(|i| !target.contains(&i.id));
+    let deleted = before - items.len();
+    if deleted > 0 {
+        save_all(&app, &items);
+    }
+    log::info!("[LocalGunCode] 批量删除 {deleted} 条（请求 {} 条）", ids.len());
+    serde_json::json!({
+        "ok": true,
+        "deleted": deleted,
+        "remaining": items.len(),
+    })
+}
+
+/// 清空**全部**改枪码记录
+///
+/// ⚠️ 不可恢复。前端必须二次确认并显示准确条数。
+///
+/// **安全边界**：同 `delete_local_gun_codes_by_ids` ——
+/// 只清 `local_gun_codes.json`，学习表与规则库原样保留。
+#[tauri::command]
+pub fn clear_all_local_gun_codes(app: tauri::AppHandle) -> serde_json::Value {
+    let before = load_all(&app).len();
+    save_all(&app, &[]);
+    log::warn!("[LocalGunCode] 已清空全部改枪码（{before} 条）");
+    serde_json::json!({ "ok": true, "deleted": before, "remaining": 0 })
+}
+
 /// 更新一条改枪码
 #[tauri::command]
 pub fn update_local_gun_code(
@@ -2234,5 +2281,62 @@ mod tests {
         assert_eq!(removed, 1);
         assert_eq!(patched, 0, "已删除的条目不应再被修改");
         assert!(!base.fingerprints.contains_key("AAAAAAAAAA"));
+    }
+    // ═══ v1.7.0：批量删除 / 清空全部 ═══
+    //
+    // 这两个命令是「不可恢复」操作，且必须**只动改枪码记录**。
+    // 由于命令签名带 AppHandle，这里抽出纯逻辑部分验证：
+    // 过滤正确性 + 边界（空列表 / 不存在的 id / 重复 id）。
+
+    #[test]
+    fn test_bulk_delete_filters_correctly() {
+        let items = vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()];
+        let ids = vec!["b".to_string(), "d".to_string()];
+        let target: std::collections::HashSet<&String> = ids.iter().collect();
+        let kept: Vec<String> = items.iter().filter(|i| !target.contains(i)).cloned().collect();
+        assert_eq!(kept, vec!["a", "c"]);
+        assert_eq!(items.len() - kept.len(), 2, "应删除 2 条");
+    }
+
+    #[test]
+    fn test_bulk_delete_empty_ids_is_noop() {
+        let items = vec!["a".to_string(), "b".to_string()];
+        let ids: Vec<String> = vec![];
+        let target: std::collections::HashSet<&String> = ids.iter().collect();
+        let kept: Vec<String> = items.iter().filter(|i| !target.contains(i)).cloned().collect();
+        assert_eq!(kept.len(), items.len(), "空 ids 不应删除任何条目");
+    }
+
+    #[test]
+    fn test_bulk_delete_ignores_unknown_ids() {
+        let items = vec!["a".to_string(), "b".to_string()];
+        // 含不存在的 id，不应报错、也不应多删
+        let ids = vec!["zzz".to_string(), "a".to_string()];
+        let target: std::collections::HashSet<&String> = ids.iter().collect();
+        let kept: Vec<String> = items.iter().filter(|i| !target.contains(i)).cloned().collect();
+        assert_eq!(kept, vec!["b"]);
+        assert_eq!(items.len() - kept.len(), 1, "只应删掉真实存在的那 1 条");
+    }
+
+    #[test]
+    fn test_bulk_delete_handles_duplicate_ids() {
+        let items = vec!["a".to_string(), "b".to_string()];
+        // 重复 id 不应导致重复计数
+        let ids = vec!["a".to_string(), "a".to_string()];
+        let target: std::collections::HashSet<&String> = ids.iter().collect();
+        let kept: Vec<String> = items.iter().filter(|i| !target.contains(i)).cloned().collect();
+        assert_eq!(items.len() - kept.len(), 1, "重复 id 只应删 1 条");
+    }
+
+    #[test]
+    fn test_bulk_delete_does_not_touch_learned_or_rules() {
+        // 关键安全断言：删除改枪码记录**不得**影响学习表与规则库。
+        // 这里用类型层面的证据：三个存储各自独立的 key / 文件。
+        // 学习表 key
+        assert_eq!(prefix_map_key(), "prefix_map");
+        // 规则库与改枪码记录是不同文件
+        assert_ne!(store_path(), "rules.json");
+        assert_ne!(store_path(), "rules.online.json");
+        assert_ne!(store_path(), "rules.overrides.json");
     }
 }

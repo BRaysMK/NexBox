@@ -3766,6 +3766,19 @@
     "ruleUpdated": "{{fp}} changed to {{gun}}",
     "ruleUpdateFailed": "Update failed",
     "ruleEditTitle": "Edit rule gun name",
-    "ruleEditHint": "Codes with this fingerprint will resolve to this gun name"
+    "ruleEditHint": "Codes with this fingerprint will resolve to this gun name",
+    "moreActions": "More actions",
+    "deleteFiltered": "Delete filtered results ({{n}})…",
+    "deleteFilteredNoFilter": "Delete filtered results (no filter)",
+    "clearAllCodes": "Clear all gun codes…",
+    "deleteFilteredTitle": "Delete {{n}} filtered gun codes?",
+    "deleteFilteredBody": "Only the currently filtered entries are removed; other records are unaffected. This cannot be undone.",
+    "deleteN": "Delete {{n}}",
+    "clearAllTitle": "Clear all {{n}} gun codes?",
+    "clearAllBody": "This deletes every gun code record and cannot be undone. The learned table and rule library are unaffected, but the records themselves are gone — export a JSON backup first.",
+    "clearAllN": "Clear all {{n}}",
+    "deletedFiltered": "Deleted {{n}} filtered entries",
+    "clearedAll": "Cleared all {{n}} gun codes",
+    "nothingToClear": "Nothing to delete"
   }
 }

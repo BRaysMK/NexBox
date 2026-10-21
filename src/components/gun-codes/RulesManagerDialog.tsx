@@ -260,14 +260,16 @@ export function RulesManagerDialog({
                 </Text>
                 {meta ? (
                   <>
-                    <Badge colorScheme="blue">v{meta.version}</Badge>
-                    <Text fontSize="xs" color={subTextColor}>
-                      {t("gunCodes.rulesMetaInline", {
+                    <Tooltip
+                      label={t("gunCodes.rulesMetaInline", {
                         guns: meta.gunCount,
                         fps: meta.fingerprintCount,
                         learned: meta.learnedCount,
                       })}
-                    </Text>
+                      hasArrow
+                    >
+                      <Badge colorScheme="blue">v{meta.version}</Badge>
+                    </Tooltip>
                   </>
                 ) : (
                   <Spinner size="xs" />

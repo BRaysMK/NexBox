@@ -19,10 +19,12 @@ import {
   LayoutGrid,
   List,
   ListFilter,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Rows3,
   Search,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -59,6 +61,10 @@ export function NotebookToolbar({
   onExport,
   onImportJson,
   onOpenRulesManager,
+  onDeleteFiltered,
+  onClearAll,
+  filteredCount,
+  hasFilter,
   onOpenNav,
   isNarrow,
 }: {
@@ -79,6 +85,14 @@ export function NotebookToolbar({
   onImportJson: () => void;
   /** 打开词库管理面板（常驻入口，不得因宽度隐藏） */
   onOpenRulesManager: () => void;
+  /** 删除当前筛选结果（无筛选时禁用） */
+  onDeleteFiltered: () => void;
+  /** 清空全部改枪码 */
+  onClearAll: () => void;
+  /** 当前筛选出的条数 */
+  filteredCount: number;
+  /** 是否处于筛选态 */
+  hasFilter: boolean;
   onOpenNav: () => void;
   isNarrow: boolean;
 }) {
@@ -185,6 +199,30 @@ export function NotebookToolbar({
             onClick={onOpenRulesManager}
           />
         </Tooltip>
+        {/* 危险操作收进菜单，避免误触常驻按钮 */}
+        <Menu placement="bottom-end">
+          <MenuButton
+            as={IconButton}
+            aria-label={t("gunCodes.moreActions")}
+            icon={<MoreHorizontal size={14} />}
+            size="sm"
+            variant="outline"
+          />
+          <MenuList>
+            <MenuItem
+              icon={<Trash2 size={13} />}
+              isDisabled={!hasFilter || filteredCount === 0}
+              onClick={onDeleteFiltered}
+            >
+              {hasFilter
+                ? t("gunCodes.deleteFiltered", { n: filteredCount })
+                : t("gunCodes.deleteFilteredNoFilter")}
+            </MenuItem>
+            <MenuItem icon={<Trash2 size={13} />} color="red.500" onClick={onClearAll}>
+              {t("gunCodes.clearAllCodes")}
+            </MenuItem>
+          </MenuList>
+        </Menu>
         <Button size="sm" colorScheme="blue" leftIcon={<Plus size={15} />} onClick={onAdd}>
           {t("gunCodes.add")}
         </Button>
