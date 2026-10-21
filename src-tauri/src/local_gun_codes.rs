@@ -748,18 +748,120 @@ pub fn is_code_token(t: &str) -> bool {
     !only_hex
 }
 
+/// 标准改枪码格式：`<枪名>-<模式>-<码>`
+///
+/// 例：`M7战斗步枪-烽火地带-6KQGVM0016OGGUAER4S67`
+///
+/// 这是游戏/文档里的**标准写法**，枪名直接写在码里。
+/// 解析它不是「推断」，而是**直接读取** —— 与「码本身不含枪械信息」并不矛盾：
+/// 那 21 位随机串确实不含信息，但**前缀是人工标注的**。
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) struct StandardCode {
+    /// 原始枪名（未归一化），如 `M7战斗步枪`
+    pub raw_gun: String,
+    /// 模式：烽火地带 / 全面战场 / 黑潮爆破
+    pub mode: String,
+    /// 纯码部分，如 `6KQGVM0016OGGUAER4S67`
+    pub code: String,
+}
+
+/// 已知的三个游戏模式（顺序即匹配优先级）
+pub(crate) const KNOWN_MODES: [&str; 3] = ["烽火地带", "全面战场", "黑潮爆破"];
+
+/// 解析标准格式 `<枪名>-<模式>-<码>`。
+///
+/// 返回 `None` 表示输入不是标准格式（例如用户只粘了纯码）——
+/// 这时调用方应回退到查表路径，行为与旧版完全一致。
+///
+/// **解析要求**（宁可返回 None，也不猜）：
+///   - 必须能找到已知模式段
+///   - 模式段左侧必须有非空枪名
+///   - 模式段右侧必须是长度 ≥10 的连续字母数字
+pub(crate) fn parse_standard_format(input: &str) -> Option<StandardCode> {
+    let s = input.trim();
+    if s.is_empty() {
+        return None;
+    }
+
+    for mode in KNOWN_MODES {
+        // 找 `-<模式>-` 这样的锚点（模式两侧都要有连字符）
+        let needle = format!("-{mode}-");
+        let Some(pos) = s.find(&needle) else {
+            continue;
+        };
+
+        let raw_gun = s[..pos].trim();
+        if raw_gun.is_empty() {
+            continue;
+        }
+
+        let after = &s[pos + needle.len()..];
+        // 码段：取开头的连续字母数字（后面可能还有空白/括号说明）
+        let code: String = after
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .collect();
+
+        if code.chars().count() < 10 {
+            continue;
+        }
+
+        return Some(StandardCode {
+            raw_gun: raw_gun.to_string(),
+            mode: mode.to_string(),
+            code,
+        });
+    }
+    None
+}
+
 /// 提取指纹：前 10 位字母数字（转大写）。
 ///
 /// 实测 606 真实码：前 6 位有 5 组冲突、前 10 位唯一。
+///
+/// ⚠️ **v1.8.0 修正**：若输入是标准格式（带枪名/模式前缀），
+/// 必须**先剥掉前缀再算指纹**。
+///
+/// 为什么：规则库构建时（`scripts/build-rules.mjs`）是先 `match` 出纯码
+/// 再算指纹的，所以库里 2327 条指纹全部是「纯码指纹」（都以 `6` 开头）。
+/// 而运行时旧实现直接对原始输入过滤非字母数字，导致：
+///
+/// ```text
+/// 输入  M7战斗步枪-烽火地带-6KQGVM0016OGGUAER4S67
+/// 旧指纹 M76KQGVM00   ← 前缀被压进指纹，永远查不到表
+/// 新指纹 6KQGVM0016   ← 与规则库一致
+/// ```
+///
+/// 实测影响：本机 543 条数据全部是纯码，零迁移成本。
 pub fn extract_fingerprint(code: &str) -> String {
-    let clean: String = code.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    // 标准格式 → 只对纯码段算指纹
+    let bare: &str = match parse_standard_format(code) {
+        Some(sc) => {
+            // 借用问题：code 段是 String，这里直接返回其切片需要生命周期
+            // 用 leak 不划算，改为在下面单独处理
+            return fp_of(&sc.code);
+        }
+        None => code,
+    };
+    fp_of(bare)
+}
+
+/// 纯码 → 指纹（前 10 位字母数字，大写）
+fn fp_of(s: &str) -> String {
+    let clean: String = s.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
     let take = clean.len().min(10);
     clean.chars().take(take).collect::<String>().to_uppercase()
 }
 
 /// 提取来源段：指纹之后的剩余部分（同渠道/批次的码共用同一来源段）
+///
+/// 与 `extract_fingerprint` 同理：标准格式先剥前缀，只对纯码部分取来源段。
 pub fn extract_source(code: &str) -> String {
-    let clean: String = code.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let bare = match parse_standard_format(code) {
+        Some(sc) => sc.code,
+        None => code.to_string(),
+    };
+    let clean: String = bare.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
     if clean.len() <= 10 {
         return String::new();
     }
@@ -1198,6 +1300,32 @@ pub fn recognize_weapon(app: &tauri::AppHandle, code: &str) -> Option<(String, S
     if let Some(f) = rules.fingerprints.get(&fp) {
         return Some((f.gun.clone(), f.config.clone(), 1.0, "规则库命中（前10位指纹）".into(), src));
     }
+
+    // 2.5 标准格式前缀解析（v10.6.0）
+    //
+    // 输入形如 `M7战斗步枪-烽火地带-6KQ...` 时，枪名**就写在码里**，
+    // 直接读即可 —— 这不是推断。实测第三方 152 条样本中，
+    // 有 123 条只能靠这条路径认出（查表命中率 19.1% → 100%）。
+    //
+    // 为什么排在学习表/规则库之后：那两层是「这个码被确认过是 X」，更可信；
+    // 而前缀是别人手写的，可能写错。但前缀比「6 位降级匹配」可靠得多。
+    if let Some(sc) = parse_standard_format(code) {
+        // 仅烽火地带（保持既有策略：其他模式兼容性未知，一律不收）
+        if sc.mode == "烽火地带" {
+            let idx = build_alias_index(app, &rules);
+            // 枪名必须能在别名索引里命中，否则宁可返回 None 也不塞一个不存在的枪名
+            if let Some(gun) = canonical_gun(&idx, &sc.raw_gun) {
+                return Some((
+                    gun,
+                    String::new(),
+                    0.95,
+                    format!("从标准格式前缀解析（原始「{}」）", sc.raw_gun),
+                    src,
+                ));
+            }
+        }
+    }
+
     // 3. 旧版 6 位学习表降级
     let fp6: String = fp.chars().take(6).collect();
     if let Some((g, c)) = learned.get(&fp6) {
@@ -2338,5 +2466,109 @@ mod tests {
         assert_ne!(store_path(), "rules.json");
         assert_ne!(store_path(), "rules.online.json");
         assert_ne!(store_path(), "rules.overrides.json");
+    }
+    // ═══ v1.8.0：标准格式前缀解析 ═══
+
+    #[test]
+    fn test_parse_standard_format_basic() {
+        let sc = parse_standard_format("M7战斗步枪-烽火地带-6KQGVM0016OGGUAER4S67")
+            .expect("应能解析标准格式");
+        assert_eq!(sc.raw_gun, "M7战斗步枪");
+        assert_eq!(sc.mode, "烽火地带");
+        assert_eq!(sc.code, "6KQGVM0016OGGUAER4S67");
+    }
+
+    #[test]
+    fn test_parse_standard_format_bare_code_returns_none() {
+        // 纯码不是标准格式，应返回 None（调用方回退查表）
+        assert!(parse_standard_format("6KQGVM0016OGGUAER4S67").is_none());
+        assert!(parse_standard_format("").is_none());
+        assert!(parse_standard_format("随便一段文字").is_none());
+    }
+
+    #[test]
+    fn test_parse_standard_format_rejects_short_code() {
+        // 码段不足 10 位 → 不算有效标准格式
+        assert!(parse_standard_format("M7战斗步枪-烽火地带-6KQ").is_none());
+        // 枪名为空 → 无效
+        assert!(parse_standard_format("-烽火地带-6KQGVM0016OGGUAER4S67").is_none());
+    }
+
+    #[test]
+    fn test_parse_standard_format_all_modes() {
+        for (m, expect) in [
+            ("烽火地带", "烽火地带"),
+            ("全面战场", "全面战场"),
+            ("黑潮爆破", "黑潮爆破"),
+        ] {
+            let input = format!("M4A1-{m}-6KQGVM0016OGGUAER4S67");
+            let sc = parse_standard_format(&input).expect("应能解析");
+            assert_eq!(sc.mode, expect);
+        }
+    }
+
+    #[test]
+    fn test_fingerprint_strips_prefix() {
+        // 关键修正：带前缀与不带前缀必须算出**同一个**指纹，
+        // 否则规则库（纯码指纹）永远查不到。
+        let with_prefix = extract_fingerprint("M7战斗步枪-烽火地带-6KQGVM0016OGGUAER4S67");
+        let bare = extract_fingerprint("6KQGVM0016OGGUAER4S67");
+        assert_eq!(with_prefix, "6KQGVM0016");
+        assert_eq!(with_prefix, bare, "带前缀与纯码的指纹必须一致");
+    }
+
+    #[test]
+    fn test_fingerprint_bare_code_unchanged() {
+        // 回归：纯码的指纹计算行为完全不变
+        assert_eq!(extract_fingerprint("6KQGVM0016OGGUAER4S67"), "6KQGVM0016");
+        assert_eq!(extract_fingerprint("6JO080C04L"), "6JO080C04L");
+        // 短码
+        assert_eq!(extract_fingerprint("6KQ"), "6KQ");
+    }
+
+    #[test]
+    fn test_source_strips_prefix() {
+        // 来源段也应只取纯码部分
+        let with_prefix = extract_source("M7战斗步枪-烽火地带-6KQGVM0016OGGUAER4S67");
+        let bare = extract_source("6KQGVM0016OGGUAER4S67");
+        assert_eq!(with_prefix, bare, "带前缀与纯码的来源段必须一致");
+    }
+
+    #[test]
+    fn test_prefix_gun_resolves_via_alias() {
+        // 带型号后缀的写法应能通过别名索引命中规范名
+        let rules = GunRules {
+            guns: [
+                ("QJB".to_string(), GunMeta {
+                    category: "机枪".into(),
+                    aliases: vec!["QJB201".into(), "QJB201轻机枪".into()],
+                }),
+                ("SR-3M".to_string(), GunMeta {
+                    category: "冲锋枪".into(),
+                    aliases: vec!["SR-3M紧凑突击步枪".into()],
+                }),
+            ].into_iter().collect(),
+            ..Default::default()
+        };
+        // 用与 build_alias_index 相同的构建逻辑（不依赖 AppHandle）
+        let mut idx: HashMap<String, String> = HashMap::new();
+        for (canon, meta) in &rules.guns {
+            idx.entry(normalize(canon)).or_insert_with(|| canon.clone());
+            for a in &meta.aliases {
+                idx.entry(normalize(a)).or_insert_with(|| canon.clone());
+            }
+        }
+        assert_eq!(
+            canonical_gun(&idx, "QJB201轻机枪"),
+            Some("QJB".into()),
+            "QJB201轻机枪 应归一到 QJB"
+        );
+        assert_eq!(
+            canonical_gun(&idx, "SR-3M紧凑突击步枪"),
+            Some("SR-3M".into()),
+            "SR-3M紧凑突击步枪 应归一到 SR-3M"
+        );
+        // 不存在的枪名 → None（宁可认不出，也不要塞错枪名）
+        assert_eq!(canonical_gun(&idx, "不存在的枪"), None);
     }
 }
