@@ -217,7 +217,18 @@ const RULES_EMBEDDED: &str = include_str!("../resources/gun-codes/rules.json");
 /// 规则库缓存（进程内只读一次；`reload_rules` 可刷新）
 static RULES_CACHE: Mutex<Option<GunRules>> = Mutex::new(None);
 
-/// 读取规则库：优先 `resource_dir`（可热更），失败则用编译期内嵌
+/// 读取规则库：三层叠加，**本地 → 线上 → 用户改动**。
+///
+/// 分层理由（这是 v1.6.0 的核心改动）：
+///   - **本地库**（随包 `rules.json`）：只读、权威。同一个指纹本地有就用本地的。
+///   - **线上库**（appDataDir `rules.online.json`）：只补本地没有的指纹，绝不覆盖。
+///   - **用户改动**（appDataDir `rules.overrides.json`）：删黑名单 + 改枪名，**最后叠加**，
+///     优先级最高 —— 用户手动改的必须生效。
+///
+/// 旧版把三者合并成一个 `rules.merged.json` 再加载，导致：
+///   ① 版本号是 `max(本地, 线上)`，看不出两边各自的进度；
+///   ② 想「只清空线上部分」做不到，只能整体重置。
+/// 现在三个文件互不干扰，各清各的。
 pub fn load_rules(app: &tauri::AppHandle) -> GunRules {
     {
         let cache = RULES_CACHE.lock().unwrap();
@@ -226,9 +237,44 @@ pub fn load_rules(app: &tauri::AppHandle) -> GunRules {
         }
     }
 
-    let mut loaded: Option<GunRules> = None;
+    // ── 第 1 层：本地库（随包） ──
+    let mut base = load_local_rules(app);
 
-    // 1) 运行时资源目录（随包分发 → 可热更）
+    // ── 第 2 层：线上库（只补空缺） ──
+    if let Some(online) = crate::rule_overrides::load_online_rules(app) {
+        let added = crate::rule_overrides::overlay_online(&mut base, &online);
+        if added > 0 {
+            log::info!(
+                "[LocalGunCode] 线上库已叠加: v{} 补入 {added} 条指纹",
+                online.version
+            );
+        }
+    }
+
+    // ── 第 3 层：用户改动（删 / 改） ──
+    if let Some(ov) = crate::rule_overrides::load_overrides(app) {
+        let (removed, patched) = crate::rule_overrides::apply_overrides(&mut base, &ov);
+        if removed > 0 || patched > 0 {
+            log::info!("[LocalGunCode] 用户改动已应用: 删除 {removed} 条 / 修改 {patched} 条");
+        }
+    }
+
+    log::info!(
+        "[LocalGunCode] 规则库就绪: v{} / {} 枪 / {} 指纹",
+        base.version,
+        base.guns.len(),
+        base.fingerprints.len()
+    );
+
+    *RULES_CACHE.lock().unwrap() = Some(base.clone());
+    base
+}
+
+/// 读取**本地随包库**（不含线上与用户改动）。
+///
+/// 单独抽出来是因为 `RulesMeta` 需要分别汇报本地版本与线上版本。
+pub fn load_local_rules(app: &tauri::AppHandle) -> GunRules {
+    // 1) 运行时资源目录（随包分发）
     if let Ok(resource_dir) = app.path().resource_dir() {
         for p in [
             resource_dir.join("gun-codes").join("rules.json"),
@@ -239,37 +285,173 @@ pub fn load_rules(app: &tauri::AppHandle) -> GunRules {
                     Ok(text) => match serde_json::from_str::<GunRules>(&text) {
                         Ok(r) => {
                             log::info!(
-                                "[LocalGunCode] 规则库已加载: {} (v{}, {} 枪, {} 指纹)",
+                                "[LocalGunCode] 本地库已加载: {} (v{}, {} 枪, {} 指纹)",
                                 p.display(),
                                 r.version,
                                 r.guns.len(),
                                 r.fingerprints.len()
                             );
-                            loaded = Some(r);
-                            break;
+                            return r;
                         }
-                        Err(e) => log::warn!("[LocalGunCode] 规则库解析失败 {}: {e}", p.display()),
+                        Err(e) => {
+                            log::warn!("[LocalGunCode] 本地库解析失败 {}: {e}", p.display())
+                        }
                     },
-                    Err(e) => log::warn!("[LocalGunCode] 规则库读取失败 {}: {e}", p.display()),
+                    Err(e) => log::warn!("[LocalGunCode] 本地库读取失败 {}: {e}", p.display()),
                 }
             }
         }
     }
 
     // 2) 编译期内嵌兜底
-    let rules = loaded.unwrap_or_else(|| {
-        log::info!("[LocalGunCode] 使用内嵌规则库");
-        serde_json::from_str::<GunRules>(RULES_EMBEDDED).unwrap_or_default()
-    });
-
-    *RULES_CACHE.lock().unwrap() = Some(rules.clone());
-    rules
+    log::info!("[LocalGunCode] 使用内嵌规则库");
+    serde_json::from_str::<GunRules>(RULES_EMBEDDED).unwrap_or_default()
 }
 
-/// 强制刷新规则库缓存（热更后调用）
+/// 强制刷新规则库缓存（热更 / 改动后调用）
+///
+/// 三层叠加的结果是缓存住的，任何一层变动都要清缓存重算。
 pub fn reload_rules(app: &tauri::AppHandle) -> GunRules {
     *RULES_CACHE.lock().unwrap() = None;
     load_rules(app)
+}
+
+// ═══════════════ 学习表管理（用户可查看/删除/清空） ═══════════════
+
+/// 列出已学习的指纹（按指纹排序，带枪名与配置）
+///
+/// **为什么需要**：学习表优先级高于规则库，一旦输错枪名就会一直认错，
+/// 而早期版本只增不减，用户没有任何手段纠正 —— 这是实际反馈过的痛点。
+///
+/// 额外给出 `inLibrary` / `conflictWith` 两个字段，让用户能一眼看出
+/// 「这条学习记录和规则库不一致」，从而定位到该删哪一条。
+#[tauri::command]
+pub fn list_learned_fingerprints(app: tauri::AppHandle) -> serde_json::Value {
+    let map = load_prefix_map(&app);
+    let rules = load_rules(&app);
+    let mut items: Vec<serde_json::Value> = map
+        .iter()
+        .map(|(fp, (gun, cfg))| {
+            let from_rules = rules.fingerprints.get(fp).map(|f| f.gun.clone());
+            let conflict = match &from_rules {
+                Some(r) => normalize(r) != normalize(gun),
+                None => false,
+            };
+            serde_json::json!({
+                "fingerprint": fp,
+                "gun": gun,
+                "config": cfg,
+                "fromRules": from_rules,
+                "inLibrary": rules.fingerprints.contains_key(fp),
+                "conflictWith": if conflict { from_rules } else { None },
+            })
+        })
+        .collect();
+    items.sort_by(|a, b| {
+        a["fingerprint"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(b["fingerprint"].as_str().unwrap_or(""))
+    });
+    let conflicts = items.iter().filter(|v| v["conflictWith"].is_string()).count();
+    serde_json::json!({
+        "ok": true,
+        "count": items.len(),
+        "conflicts": conflicts,
+        "items": items,
+    })
+}
+
+/// 删除单条已学习指纹
+#[tauri::command]
+pub fn delete_learned_fingerprint(app: tauri::AppHandle, fingerprint: String) -> serde_json::Value {
+    let key = fingerprint.trim().to_uppercase();
+    if key.is_empty() {
+        return serde_json::json!({ "ok": false, "error": "指纹不能为空" });
+    }
+    let mut map = load_prefix_map(&app);
+    if map.remove(&key).is_none() {
+        return serde_json::json!({ "ok": false, "error": format!("未找到指纹 {key}") });
+    }
+    save_prefix_map(&app, &map);
+    log::info!("[LocalGunCode] 已删除学习指纹 {key}");
+    serde_json::json!({ "ok": true, "removed": 1, "remaining": map.len() })
+}
+
+/// 清空全部已学习指纹
+///
+/// 注意：**只清学习表，不动用户保存的改枪码记录**。
+/// 两者是不同概念 —— 学习表只影响「新粘贴的码如何被识别」。
+#[tauri::command]
+pub fn clear_learned_fingerprints(app: tauri::AppHandle) -> serde_json::Value {
+    let map = load_prefix_map(&app);
+    let n = map.len();
+    save_prefix_map(&app, &HashMap::new());
+    log::info!("[LocalGunCode] 已清空学习表（{n} 条）");
+    serde_json::json!({ "ok": true, "cleared": n })
+}
+
+/// 清除学习表里遗留的备注（**只清备注，保留枪名**）
+///
+/// 早期版本把 note 一起存进学习表，导致记录带着 `-`、`SMG-45-`
+/// 这类脏尾巴，且会在识别时被自动填进新记录的备注里。
+/// 本命令把这些备注一次性抹掉，**不动枪名**，用户不用重新学习。
+#[tauri::command]
+pub fn clear_learned_notes(app: tauri::AppHandle) -> serde_json::Value {
+    let map = load_prefix_map(&app);
+    let mut cleaned = 0usize;
+    let next: HashMap<String, (String, String)> = map
+        .into_iter()
+        .map(|(fp, (gun, cfg))| {
+            if !cfg.trim().is_empty() {
+                cleaned += 1;
+                (fp, (gun, String::new()))
+            } else {
+                (fp, (gun, cfg))
+            }
+        })
+        .collect();
+    save_prefix_map(&app, &next);
+    log::info!("[LocalGunCode] 已清除 {cleaned} 条学习记录中的备注");
+    serde_json::json!({ "ok": true, "cleaned": cleaned, "total": next.len() })
+}
+
+// ═══════════════ 旧合并文件清理（v1.6.0 迁移用） ═══════════════
+
+/// 旧版把「本地+线上」合并成一个文件再加载，导致版本号被混成一个数、
+/// 且无法单独清空线上部分。v1.6.0 改为三层叠加后不再需要它。
+///
+/// 这里只负责**清理残留**，避免旧文件继续干扰（虽然新加载逻辑已不再读它）。
+const LEGACY_MERGED_FILE: &str = "rules.merged.json";
+
+fn legacy_merged_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join(LEGACY_MERGED_FILE))
+}
+
+/// 启动时调用：删掉 v1.6.0 之前的合并文件
+pub fn cleanup_legacy_merged(app: &tauri::AppHandle) {
+    if let Some(p) = legacy_merged_path(app) {
+        if p.exists() {
+            match std::fs::remove_file(&p) {
+                Ok(()) => log::info!(
+                    "[LocalGunCode] 已清理旧版合并文件（v1.6.0 起改用三层叠加）: {}",
+                    p.display()
+                ),
+                Err(e) => log::warn!(
+                    "[LocalGunCode] 清理旧合并文件失败 {}: {e}",
+                    p.display()
+                ),
+            }
+        }
+    }
+}
+
+/// 供远程模块复用的枪械表序列化
+pub fn guns_table_public(r: &GunRules) -> Vec<serde_json::Value> {
+    guns_table(r)
 }
 
 /// 序列化规则库的枪械表（枪名 → 分类 + 别名）
@@ -311,6 +493,11 @@ pub fn get_gun_rules_meta(app: tauri::AppHandle) -> serde_json::Value {
     for g in r.guns.values() {
         *cats.entry(g.category.clone()).or_insert(0) += 1;
     }
+    // v1.6.0：本地库与线上库**分开汇报版本**
+    let local = load_local_rules(&app);
+    let online = crate::rule_overrides::load_online_rules(&app);
+    let ov = crate::rule_overrides::load_overrides(&app).unwrap_or_default();
+
     serde_json::json!({
         "version": r.version,
         "generated": r.generated,
@@ -319,6 +506,14 @@ pub fn get_gun_rules_meta(app: tauri::AppHandle) -> serde_json::Value {
         "fingerprintCount": r.fingerprints.len(),
         "learnedCount": learned.len(),
         "categories": cats,
+        "localVersion": local.version,
+        "localFingerprintCount": local.fingerprints.len(),
+        "onlineVersion": online.as_ref().map(|o| o.version),
+        "onlineFingerprintCount": online.as_ref().map(|o| o.fingerprints.len()),
+        "onlineFetchedAt": online.as_ref().map(|o| o.fetched_at.clone()),
+        "onlineFetchedFrom": online.as_ref().map(|o| o.fetched_from.clone()),
+        "overridesRemoved": ov.removed.len(),
+        "overridesPatched": ov.patched.len(),
         // 枪械分类表（前端据此分类，替代手写常量）
         "guns": guns_table(&r),
     })
@@ -1022,7 +1217,16 @@ pub fn recognize_weapon(app: &tauri::AppHandle, code: &str) -> Option<(String, S
     None
 }
 
-/// 学习：记住指纹对应的 (枪名, 配置名)，写入 10 位指纹
+/// 学习指纹 → 枪名。
+///
+/// **只记枪名，不记备注。**
+///
+/// 为什么：备注是「这一套改法叫什么」，属于用户对具体记录的描述，
+/// 不该被指纹级别的记忆携带。早期版本把 note 一起存进学习表，
+/// 导致粘贴一个已学过的码时，备注被自动填成另一条记录的备注
+/// （甚至带着 `-`、`SMG-45-` 这类脏尾巴），既不对又难清理。
+///
+/// 参数 `note` 保留但**不再写入学习表**，仅为兼容既有调用点。
 fn learn_fingerprint(app: &tauri::AppHandle, code: &str, weapon_name: &str, note: &str) {
     if weapon_name.trim().is_empty() || weapon_name.trim() == "未知枪械" {
         return;
@@ -1032,9 +1236,11 @@ fn learn_fingerprint(app: &tauri::AppHandle, code: &str, weapon_name: &str, note
         return;
     }
     let mut map = load_prefix_map(app);
-    map.insert(fp.clone(), (weapon_name.trim().to_string(), note.trim().to_string()));
+    // config 恒为空：学习表只回答「这是哪把枪」
+    map.insert(fp.clone(), (weapon_name.trim().to_string(), String::new()));
     save_prefix_map(app, &map);
-    log::info!("[LocalGunCode] 已学习指纹 {fp} → {weapon_name} / {note}");
+    let _ = note; // 备注不参与学习（见上方说明）
+    log::info!("[LocalGunCode] 已学习指纹 {fp} → {}", weapon_name.trim());
 }
 
 // ═══════════════════════ 命令（8 个，签名不变） ═══════════════════════
@@ -1533,13 +1739,19 @@ mod tests {
     fn test_rules_have_pdf_support_data() {
         // 规则库必须含支撑 PDF 格式的数据（否则上面那些匹配会退化为 None）
         let r: GunRules = serde_json::from_str(RULES_EMBEDDED).expect("内嵌规则库解析失败");
-        assert_eq!(r.version, 5, "规则库版本应为 v5（拆出狙击枪分类 + 巴雷特并入 M82）");
+        // v6：三源合并（本机真实数据 + 线上样本 + 旧库未冲突项），
+        // 因此不再断言具体版本号，只要求「不低于 v6」以防回退到旧库。
+        assert!(r.version >= 6, "规则库版本应 ≥ v6，实际 v{}", r.version);
 
-        // 复合弓 别名
-        let bow = r.guns.get("弓").expect("规则库缺「弓」");
+        // 复合弓：v6 起规范名是「复合弓」，「弓」作为别名
+        let bow = r
+            .guns
+            .get("复合弓")
+            .expect("规则库缺「复合弓」（v6 起的规范名）");
+        assert_eq!(bow.category, "弓", "复合弓的分类应为「弓」");
         assert!(
-            bow.aliases.iter().any(|a| a == "复合弓"),
-            "「弓」缺别名「复合弓」，PDF 里会识别失败"
+            bow.aliases.iter().any(|a| a == "弓"),
+            "「复合弓」缺别名「弓」，用户数据里写作「弓」会识别失败"
         );
         // SR9 新增
         assert!(r.guns.contains_key("SR9"), "规则库缺 SR9（PDF 里出现过）");
@@ -1548,30 +1760,26 @@ mod tests {
             assert!(r.noise.iter().any(|n| n == w), "噪音词缺 {w:?}（PDF 表头词）");
         }
 
-        // v5：巴雷特并入 M82 —— PDF fixture 里同一行同时出现「巴雷特」与
-        // 「M82狙击步枪」，若两者是独立条目会分裂成两把枪
+        // 巴雷特 = M82：巴雷特是厂商名（Barrett），M82 是型号，**同一把枪**。
         assert!(
             !r.guns.contains_key("巴雷特"),
             "巴雷特 应为 M82 的别名，不应是独立枪条目"
         );
         let m82 = r.guns.get("M82").expect("规则库缺 M82");
+        assert_eq!(m82.category, "狙击枪", "M82 应归狙击枪");
         assert!(
             m82.aliases.iter().any(|a| a == "巴雷特"),
-            "M82 缺别名「巴雷特」（PDF fixture 里出现过）"
+            "M82 缺别名「巴雷特」（用户数据里写作巴雷特）"
         );
 
-        // v5：狙击枪分类必须存在且为栓动 + 反器材
+        // 狙击枪分类必须存在
         let snipers: Vec<&str> = r
             .guns
             .iter()
             .filter(|(_, m)| m.category == "狙击枪")
             .map(|(n, _)| n.as_str())
             .collect();
-        assert_eq!(
-            snipers.len(),
-            5,
-            "狙击枪 应为 5 把（AWM/M700/R93/SV-98/M82），实际 {snipers:?}"
-        );
+        assert!(snipers.len() >= 5, "狙击枪分类条目过少: {:?}", snipers);
         for g in ["AWM", "M700", "R93", "SV-98", "M82"] {
             assert!(
                 r.guns.get(g).is_some_and(|m| m.category == "狙击枪"),
@@ -1582,6 +1790,62 @@ mod tests {
         assert!(
             r.guns.get("SVD").is_some_and(|m| m.category == "射手步枪"),
             "SVD 应留在「射手步枪」（半自动，非栓动狙击）"
+        );
+    }
+
+    #[test]
+    fn test_no_duplicate_gun_variants() {
+        // 同一把枪的不同写法必须归一到同一个条目，不能分裂成两个。
+        //
+        // 实测教训：MCX 与 MCX LT 是同一把枪（规范名为「MCX LT」），
+        // 曾因误判为两个型号，导致码分裂在两个条目下。
+        let r: GunRules = serde_json::from_str(RULES_EMBEDDED).expect("内嵌规则库解析失败");
+        let must_not_exist = [
+            "MCX",     // 应归入 MCX LT
+            "MCXLT",   // 应归入 MCX LT
+            "巴雷特",   // 应归入 M82
+            "弓",       // 应归入 复合弓
+            "SMG-45",  // 应归入 SMG45
+            "SR-25",   // 应归入 SR25
+            "QJB201",  // 应归入 QJB
+        ];
+        for g in must_not_exist {
+            assert!(
+                !r.guns.contains_key(g),
+                "「{g}」不应是独立枪条目（应作为别名归入规范名）"
+            );
+        }
+
+        let cases = [
+            ("MCX LT", "MCX"),
+            ("M82", "巴雷特"),
+            ("复合弓", "弓"),
+        ];
+        for (canon, alias) in cases {
+            let m = r
+                .guns
+                .get(canon)
+                .unwrap_or_else(|| panic!("规则库缺规范名「{canon}」"));
+            assert!(
+                m.aliases.iter().any(|a| a == alias),
+                "「{canon}」缺别名「{alias}」，实际别名: {:?}",
+                m.aliases
+            );
+        }
+
+        // SMG45 与 MCX LT 是两把不同的枪（冲锋枪 vs 步枪）
+        for g in ["SMG45", "MCX LT"] {
+            assert!(r.guns.contains_key(g), "「{g}」应独立存在");
+        }
+        assert_eq!(
+            r.guns.get("SMG45").map(|m| m.category.as_str()),
+            Some("冲锋枪"),
+            "SMG45 应归冲锋枪"
+        );
+        assert_eq!(
+            r.guns.get("MCX LT").map(|m| m.category.as_str()),
+            Some("步枪"),
+            "MCX LT 应归步枪"
         );
     }
 
@@ -1811,5 +2075,164 @@ mod tests {
         assert_eq!(idx.get(&normalize("AK12")), Some(&"AK-12".to_string()));
         assert_eq!(idx.get(&normalize("SR3M")), Some(&"SR-3M".to_string()));
         assert_eq!(idx.get(&normalize("QJB201")), Some(&"QJB".to_string()));
+    }
+    // ═══ v1.6.0：三层叠加逻辑（纯函数，不依赖 AppHandle）═══
+
+    fn tiny_rules() -> GunRules {
+        let mut r = GunRules::default();
+        r.version = 6;
+        r.mode = "烽火地带".into();
+        r.guns.insert(
+            "M4A1".into(),
+            GunMeta { category: "步枪".into(), aliases: vec![] },
+        );
+        r.guns.insert(
+            "AK-12".into(),
+            GunMeta { category: "步枪".into(), aliases: vec![] },
+        );
+        r.fingerprints.insert(
+            "AAAAAAAAAA".into(),
+            Fingerprint { gun: "M4A1".into(), config: String::new(), mode: "烽火地带".into() },
+        );
+        r
+    }
+
+    #[test]
+    fn test_overlay_online_never_overwrites_local() {
+        use crate::rule_overrides::{overlay_online, OnlineRules};
+        let mut base = tiny_rules();
+        let mut online = OnlineRules::default();
+        online.version = 5;
+        online.guns.insert(
+            "M4A1".into(),
+            GunMeta { category: "步枪".into(), aliases: vec![] },
+        );
+        online.guns.insert(
+            "AK-12".into(),
+            GunMeta { category: "步枪".into(), aliases: vec![] },
+        );
+        // ① 与本地同名指纹，但枪名不同 → 必须保留本地
+        online.fingerprints.insert(
+            "AAAAAAAAAA".into(),
+            Fingerprint { gun: "AK-12".into(), config: String::new(), mode: "烽火地带".into() },
+        );
+        // ② 本地没有 → 应补入
+        online.fingerprints.insert(
+            "BBBBBBBBBB".into(),
+            Fingerprint { gun: "AK-12".into(), config: String::new(), mode: "烽火地带".into() },
+        );
+
+        let added = overlay_online(&mut base, &online);
+        assert_eq!(added, 1, "只应补入 1 条");
+        assert_eq!(
+            base.fingerprints.get("AAAAAAAAAA").map(|f| f.gun.as_str()),
+            Some("M4A1"),
+            "本地已有条目绝不能被线上覆盖"
+        );
+        assert_eq!(
+            base.fingerprints.get("BBBBBBBBBB").map(|f| f.gun.as_str()),
+            Some("AK-12"),
+            "本地缺失的条目应被补入"
+        );
+    }
+
+    #[test]
+    fn test_overlay_online_rejects_dirty_entries() {
+        use crate::rule_overrides::{overlay_online, OnlineRules};
+        let mut base = tiny_rules();
+        let mut online = OnlineRules::default();
+        // 空枪名
+        online.fingerprints.insert(
+            "CCCCCCCCCC".into(),
+            Fingerprint { gun: "".into(), config: String::new(), mode: "烽火地带".into() },
+        );
+        // 非烽火地带
+        online.fingerprints.insert(
+            "DDDDDDDDDD".into(),
+            Fingerprint { gun: "M4A1".into(), config: String::new(), mode: "全面战场".into() },
+        );
+        // 枪名不在枪表里（孤立条目）
+        online.fingerprints.insert(
+            "EEEEEEEEEE".into(),
+            Fingerprint { gun: "不存在的枪".into(), config: String::new(), mode: "烽火地带".into() },
+        );
+
+        let added = overlay_online(&mut base, &online);
+        assert_eq!(added, 0, "脏数据一条都不该进来");
+        assert!(!base.fingerprints.contains_key("CCCCCCCCCC"));
+        assert!(!base.fingerprints.contains_key("DDDDDDDDDD"));
+        assert!(!base.fingerprints.contains_key("EEEEEEEEEE"));
+    }
+
+    #[test]
+    fn test_overlay_online_forces_empty_config() {
+        use crate::rule_overrides::{overlay_online, OnlineRules};
+        let mut base = tiny_rules();
+        let mut online = OnlineRules::default();
+        online.guns.insert(
+            "AK-12".into(),
+            GunMeta { category: "步枪".into(), aliases: vec![] },
+        );
+        // 线上库带备注，叠加时必须清空
+        online.fingerprints.insert(
+            "FFFFFFFF".into(),
+            Fingerprint {
+                gun: "AK-12".into(),
+                config: "28w机密得吃巨浪！".into(),
+                mode: "烽火地带".into(),
+            },
+        );
+
+        overlay_online(&mut base, &online);
+        let got = base.fingerprints.get("FFFFFFFF").expect("应被补入");
+        assert_eq!(got.config, "", "线上库的备注必须被清空（规则库不带备注）");
+    }
+
+    #[test]
+    fn test_apply_overrides_delete_and_patch() {
+        use crate::rule_overrides::{apply_overrides, PatchedFingerprint, RuleOverrides};
+        let mut base = tiny_rules();
+        base.fingerprints.insert(
+            "BBBBBBBBBB".into(),
+            Fingerprint { gun: "AK-12".into(), config: String::new(), mode: "烽火地带".into() },
+        );
+
+        let mut ov = RuleOverrides::default();
+        ov.removed.push("AAAAAAAAAA".into());
+        ov.patched.insert(
+            "BBBBBBBBBB".into(),
+            PatchedFingerprint { gun: "M4A1".into(), config: String::new() },
+        );
+
+        let (removed, patched) = apply_overrides(&mut base, &ov);
+        assert_eq!(removed, 1);
+        assert_eq!(patched, 1);
+        assert!(
+            !base.fingerprints.contains_key("AAAAAAAAAA"),
+            "黑名单里的指纹必须被删除"
+        );
+        assert_eq!(
+            base.fingerprints.get("BBBBBBBBBB").map(|f| f.gun.as_str()),
+            Some("M4A1"),
+            "被修改的枪名必须生效"
+        );
+    }
+
+    #[test]
+    fn test_apply_overrides_delete_wins_over_patch() {
+        use crate::rule_overrides::{apply_overrides, PatchedFingerprint, RuleOverrides};
+        let mut base = tiny_rules();
+        // 同一指纹既在删除黑名单又被修改 → 删除优先
+        let mut ov = RuleOverrides::default();
+        ov.removed.push("AAAAAAAAAA".into());
+        ov.patched.insert(
+            "AAAAAAAAAA".into(),
+            PatchedFingerprint { gun: "AK-12".into(), config: String::new() },
+        );
+
+        let (removed, patched) = apply_overrides(&mut base, &ov);
+        assert_eq!(removed, 1);
+        assert_eq!(patched, 0, "已删除的条目不应再被修改");
+        assert!(!base.fingerprints.contains_key("AAAAAAAAAA"));
     }
 }

@@ -20,6 +20,7 @@ import {
   List,
   ListFilter,
   Plus,
+  RefreshCw,
   Rows3,
   Search,
   Upload,
@@ -57,6 +58,7 @@ export function NotebookToolbar({
   onImportDoc,
   onExport,
   onImportJson,
+  onOpenRulesManager,
   onOpenNav,
   isNarrow,
 }: {
@@ -75,6 +77,8 @@ export function NotebookToolbar({
   onImportDoc: () => void;
   onExport: () => void;
   onImportJson: () => void;
+  /** 打开词库管理面板（常驻入口，不得因宽度隐藏） */
+  onOpenRulesManager: () => void;
   onOpenNav: () => void;
   isNarrow: boolean;
 }) {
@@ -170,6 +174,15 @@ export function NotebookToolbar({
             size="sm"
             variant="outline"
             onClick={onImportJson}
+          />
+        </Tooltip>
+        <Tooltip label={t("gunCodes.rulesManagerHint")} hasArrow>
+          <IconButton
+            aria-label={t("gunCodes.rulesManager")}
+            icon={<RefreshCw size={14} />}
+            size="sm"
+            variant="outline"
+            onClick={onOpenRulesManager}
           />
         </Tooltip>
         <Button size="sm" colorScheme="blue" leftIcon={<Plus size={15} />} onClick={onAdd}>

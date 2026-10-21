@@ -1,7 +1,7 @@
 import { Box, Button, HStack, IconButton, Stack, Text, Tooltip, VStack } from "@chakra-ui/react";
-import { Crosshair, LayoutGrid, Layers, RefreshCw } from "lucide-react";
+import { Crosshair, LayoutGrid, Layers, RefreshCw, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { CATEGORY_FALLBACK, type RulesMeta } from "@/lib/gunCodes";
+import { CATEGORY_FALLBACK, rulesTooltip, type RulesMeta } from "@/lib/gunCodes";
 
 /**
  * 侧边导航：分类导航 + 统计 + 词库信息
@@ -16,6 +16,7 @@ export function NavTilePane({
   catFilter,
   onSelectCat,
   onRefreshRules,
+  onOpenRulesManager,
   textColor,
   subTextColor,
   cardBorder,
@@ -28,6 +29,8 @@ export function NavTilePane({
   catFilter: string;
   onSelectCat: (cat: string) => void;
   onRefreshRules: () => void;
+  /** 打开词库管理面板（主入口，不受顶栏宽度影响） */
+  onOpenRulesManager?: () => void;
   textColor: string;
   subTextColor: string;
   cardBorder: string;
@@ -145,26 +148,36 @@ export function NavTilePane({
           <Text fontSize="xs" color={subTextColor}>
             {t("gunCodes.rulesLabel")}
           </Text>
-          <Tooltip label={t("gunCodes.refreshRulesHint")} hasArrow>
-            <IconButton
-              aria-label={t("gunCodes.refreshRules")}
-              icon={<RefreshCw size={12} />}
-              size="xs"
-              variant="ghost"
-              onClick={onRefreshRules}
-            />
-          </Tooltip>
+          <HStack spacing={1}>
+            <Tooltip label={t("gunCodes.refreshRulesHint")} hasArrow>
+              <IconButton
+                aria-label={t("gunCodes.refreshRules")}
+                icon={<RefreshCw size={12} />}
+                size="xs"
+                variant="ghost"
+                onClick={onRefreshRules}
+              />
+            </Tooltip>
+            {onOpenRulesManager && (
+              <Tooltip label={t("gunCodes.rulesManagerHint")} hasArrow>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  leftIcon={<Settings size={12} />}
+                  onClick={onOpenRulesManager}
+                >
+                  {t("gunCodes.rulesManagerEntry")}
+                </Button>
+              </Tooltip>
+            )}
+          </HStack>
         </HStack>
-        <Text fontSize="xs" color={subTextColor} px={1} lineHeight={1.6}>
-          {meta
-            ? t("gunCodes.rulesMeta", {
-                version: meta.version,
-                guns: meta.gunCount,
-                fps: meta.fingerprintCount,
-                learned: meta.learnedCount,
-              })
-            : t("gunCodes.rulesLoading")}
-        </Text>
+        {/* 常驻位置只显示版本号；枪数/指纹数/分层信息一律进 Tooltip */}
+        <Tooltip label={rulesTooltip(meta)} hasArrow placement="top">
+          <Text fontSize="xs" color={subTextColor} px={1} lineHeight={1.6} cursor="default">
+            {meta ? `v${meta.version}` : t("gunCodes.rulesLoading")}
+          </Text>
+        </Tooltip>
       </Box>
     </VStack>
   );

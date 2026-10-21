@@ -205,6 +205,17 @@ export interface RulesMeta {
   fingerprintCount: number;
   learnedCount: number;
   categories: Record<string, number>;
+  /** v10.4.0：本地随包库版本（与线上分开） */
+  localVersion?: number;
+  localFingerprintCount?: number;
+  /** v10.4.0：线上下载库版本（未下载则为 null） */
+  onlineVersion?: number | null;
+  onlineFingerprintCount?: number | null;
+  onlineFetchedAt?: string | null;
+  onlineFetchedFrom?: string | null;
+  /** v10.4.0：用户手动删除/修改的条数 */
+  overridesRemoved?: number;
+  overridesPatched?: number;
   /** 枪械分类表（后端下发） */
   guns?: GunTableRow[];
 }
@@ -282,4 +293,120 @@ export function buildGunCandidates(
     counts.set(gun, (counts.get(gun) ?? 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+// ═══════════════ 词库热更新 / 学习表管理（v10.3.0） ═══════════════
+
+/** `check_gun_rules_update` 的返回 */
+export interface RulesUpdateCheck {
+  ok: boolean;
+  error?: string;
+  /** 命中的远程源（github-raw / jsdelivr） */
+  source?: string;
+  localVersion?: number;
+  remoteVersion?: number;
+  remoteGenerated?: string;
+  remoteFingerprints?: number;
+  /** 若合并，能新增多少条指纹 */
+  wouldAdd?: number;
+  hasUpdate?: boolean;
+}
+
+/** `update_gun_rules` 的返回 */
+export interface RulesUpdateResult {
+  ok: boolean;
+  error?: string;
+  source?: string;
+  remoteVersion?: number;
+  remoteGenerated?: string;
+  /** 本次新增的指纹数（本地已有的不覆盖） */
+  added?: number;
+  before?: number;
+  after?: number;
+  version?: number;
+  gunCount?: number;
+  guns?: GunTableRow[];
+}
+
+/** `reset_gun_rules` 的返回 */
+export interface RulesResetResult {
+  ok: boolean;
+  error?: string;
+  removed?: boolean;
+  version?: number;
+  fingerprintCount?: number;
+  gunCount?: number;
+  guns?: GunTableRow[];
+}
+
+/** 已学习指纹的一条记录 */
+export interface LearnedFingerprint {
+  fingerprint: string;
+  gun: string;
+  config: string;
+  /** 规则库里同一指纹的枪名（若有） */
+  fromRules: string | null;
+  inLibrary: boolean;
+  /** 与规则库不一致时，这里放规则库的枪名 */
+  conflictWith: string | null;
+}
+
+export interface LearnedList {
+  ok: boolean;
+  count: number;
+  /** 与规则库冲突的条数 */
+  conflicts: number;
+  items: LearnedFingerprint[];
+}
+
+// ═══════════════ 规则库条目管理（v10.4.0） ═══════════════
+
+/** `list_rule_fingerprints` 的单条 */
+export interface RuleFingerprintRow {
+  fingerprint: string;
+  gun: string;
+  config: string;
+  patched: boolean;
+  removed: boolean;
+}
+
+export interface RuleFingerprintList {
+  ok: boolean;
+  total: number;
+  page: number;
+  pageSize: number;
+  items: RuleFingerprintRow[];
+  removedCount: number;
+  patchedCount: number;
+}
+
+/**
+ * 词库版本 Tooltip 文案（v10.4.0）
+ *
+ * 界面常驻位置只显示 `v{version}`，详细信息统一收进 Tooltip。
+ */
+export function rulesTooltip(
+  meta:
+    | (Pick<RulesMeta, "version" | "gunCount" | "fingerprintCount" | "learnedCount"> &
+        Partial<RulesMeta>)
+    | null
+    | undefined,
+): string {
+  if (!meta) return "…";
+  const lines = [
+    `v${meta.version}`,
+    `${meta.gunCount} guns · ${meta.fingerprintCount} fingerprints · ${meta.learnedCount} learned`,
+  ];
+  if (meta.localVersion != null) {
+    lines.push(`local v${meta.localVersion} (${meta.localFingerprintCount ?? 0})`);
+  }
+  if (meta.onlineVersion != null) {
+    lines.push(`online v${meta.onlineVersion} (${meta.onlineFingerprintCount ?? 0})`);
+  } else if (meta.localVersion != null) {
+    lines.push("online: not downloaded");
+  }
+  const rm = meta.overridesRemoved ?? 0;
+  const pt = meta.overridesPatched ?? 0;
+  if (rm > 0 || pt > 0) lines.push(`your edits: -${rm} / ~${pt}`);
+  return lines.join("\n");
 }

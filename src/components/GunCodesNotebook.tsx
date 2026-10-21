@@ -34,6 +34,8 @@ import { GunTileGrid } from "./gun-codes/GunTileGrid";
 import { GunTreeView } from "./gun-codes/GunTreeView";
 import { ImportDialog } from "./gun-codes/ImportDialog";
 import { NavTilePane } from "./gun-codes/NavTilePane";
+import { RulesManagerDialog } from "./gun-codes/RulesManagerDialog";
+import { AppContextMenu } from "./gun-codes/AppContextMenu";
 import { NotebookToolbar } from "./gun-codes/NotebookToolbar";
 import { SelectionBar } from "./gun-codes/SelectionBar";
 import { StatusBar } from "./gun-codes/StatusBar";
@@ -123,6 +125,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
   const navDisc = useDisclosure();
   const gunFilterDisc = useDisclosure();
   const importDisc = useDisclosure();
+  const rulesDisc = useDisclosure();
 
   // ── 选中项与当前可见集合求交（筛选变化后自动丢弃不可见的选中项）──
   const visibleIds = useMemo(() => new Set(filters.filtered.map((i) => i.id)), [filters.filtered]);
@@ -295,6 +298,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
     catFilter: filters.catFilter,
     onSelectCat: filters.selectCat,
     onRefreshRules: handleRefreshRules,
+    onOpenRulesManager: rulesDisc.onOpen,
     textColor,
     subTextColor,
     cardBorder: borderOut,
@@ -375,6 +379,7 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
               onSort={filters.setSortKey}
               viewMode={filters.viewMode}
               onViewMode={filters.setViewMode}
+              onOpenRulesManager={rulesDisc.onOpen}
               gunFilterCount={filters.gunFilter.length}
               gunFilterSlot={
                 <GunFilterPopover
@@ -549,6 +554,32 @@ export default function GunCodesNotebook({ onBack }: { onBack?: () => void }) {
       />
 
       {/* 删除确认 */}
+      {/* 词库管理面板：在线更新 + 学习表纠错 */}
+      <RulesManagerDialog
+        isOpen={rulesDisc.isOpen}
+        onClose={rulesDisc.onClose}
+        meta={data.meta}
+        onCheckUpdate={data.checkRulesUpdate}
+        onApplyUpdate={data.updateRules}
+        onResetRules={data.resetRules}
+        onListLearned={data.listLearned}
+        onDeleteLearned={data.deleteLearned}
+        onClearLearned={data.clearLearned}
+        onClearNotes={data.clearLearnedNotes}
+        onListRules={data.listRuleFingerprints}
+        onDeleteRule={data.deleteRuleFingerprint}
+        onUpdateRule={data.updateRuleFingerprint}
+        onClearOnlineRules={data.clearOnlineRules}
+        onClearRuleOverrides={data.clearRuleOverrides}
+        textColor={textColor}
+        subTextColor={subTextColor}
+        panelBg={panelBg}
+        cardBorder={borderOut}
+      />
+
+      {/* 应用内右键菜单：替代 WebView2 的「刷新/另存为/打印」 */}
+      <AppContextMenu />
+
       <ConfirmDialogs
         pendingDelete={pendingDelete}
         onCancelDelete={() => setPendingDelete(null)}

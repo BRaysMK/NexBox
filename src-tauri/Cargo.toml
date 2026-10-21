@@ -46,7 +46,7 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
 wmi = "0.14"
 thiserror = "2"
-reqwest = { version = "0.11", features = ["stream", "json", "blocking", "cookies"] }
+reqwest = { version = "0.11", features = ["stream", "json", "blocking", "cookies", "socks"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.24"
 tokio-stream = { version = "0.1", features = ["sync"] }

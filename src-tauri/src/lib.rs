@@ -42,6 +42,8 @@ mod feature_flags;
 mod hotkey;
 // 本地改枪码记事本（本分支原创功能，上游无此模块）
 mod local_gun_codes;
+mod remote_rules;
+mod rule_overrides;
 // 端到端验证（仅测试构建；需 GUN_TSV_DIR 指向真实文档导出的 TSV）
 #[cfg(test)]
 mod gun_e2e_test;
@@ -317,6 +319,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_http::init())
+        .setup(|app| {
+            // v10.4.0 迁移：清理旧版「合并文件」（改用三层叠加后不再需要）
+            local_gun_codes::cleanup_legacy_merged(app.handle());
+            Ok(())
+        })
         .setup(|app| {
             // 初始化显示滤镜的会话监控窗口（捕获系统关机/注销广播，避免退出时 xcalib 报错）
             display_filter::init_session_watch();
@@ -1050,6 +1058,21 @@ pub fn run() {
         local_gun_codes::preview_import_gun_codes,
         local_gun_codes::get_gun_rules_meta,
         local_gun_codes::refresh_gun_rules,
+        // v10.3.0 新增：规则库在线热更新（多源回退 + 本地优先合并）
+        remote_rules::check_gun_rules_update,
+        remote_rules::update_gun_rules,
+        remote_rules::reset_gun_rules,
+        // v10.4.0 新增：规则库条目增删改（本地/线上分离存储）
+        rule_overrides::list_rule_fingerprints,
+        rule_overrides::delete_rule_fingerprint,
+        rule_overrides::update_rule_fingerprint,
+        rule_overrides::clear_online_rules_cmd,
+        rule_overrides::clear_rule_overrides,
+        // v10.3.0 新增：学习表管理（输错枪名后可纠正）
+        local_gun_codes::list_learned_fingerprints,
+        local_gun_codes::delete_learned_fingerprint,
+        local_gun_codes::clear_learned_fingerprints,
+        local_gun_codes::clear_learned_notes,
         // 已阉割：open_mood_window,
         // === 桌面灵动岛窗口（把内嵌岛搬到桌面上，状态真源仍在主窗口）===
         island_window::set_dynamic_island_enabled,

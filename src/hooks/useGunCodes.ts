@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { setGunTable, type GunCode, type PreviewResult, type RecognizeResult, type RulesMeta } from "@/lib/gunCodes";
+import type {
+  LearnedList,
+  RuleFingerprintList,
+  RulesResetResult,
+  RulesUpdateCheck,
+  RulesUpdateResult,
+} from "@/lib/gunCodes";
 
 export interface ImportSummary {
   imported: number;
@@ -160,6 +167,93 @@ export function useGunCodes(onError: (msg: string) => void) {
     await loadMeta();
   }, [loadMeta]);
 
+  // ── 词库在线热更新（v10.3.0）──
+
+  /** 检查是否有更新（只比对，不落盘） */
+  const checkRulesUpdate = useCallback(
+    () => invoke<RulesUpdateCheck>("check_gun_rules_update"),
+    [],
+  );
+
+  /** 下载并应用远程词库（本地优先合并） */
+  const updateRules = useCallback(async () => {
+    const res = await invoke<RulesUpdateResult>("update_gun_rules");
+    await loadMeta();
+    return res;
+  }, [loadMeta]);
+
+  /** 清除合并结果，回到随包分发的词库 */
+  const resetRules = useCallback(async () => {
+    const res = await invoke<RulesResetResult>("reset_gun_rules");
+    await loadMeta();
+    return res;
+  }, [loadMeta]);
+
+  // ── 学习表管理（v10.3.0）──
+
+  const listLearned = useCallback(
+    () => invoke<LearnedList>("list_learned_fingerprints"),
+    [],
+  );
+
+  const deleteLearned = useCallback(
+    (fingerprint: string) =>
+      invoke<{ ok: boolean; removed?: number; remaining?: number; error?: string }>(
+        "delete_learned_fingerprint",
+        { fingerprint },
+      ),
+    [],
+  );
+
+  const clearLearned = useCallback(
+    () => invoke<{ ok: boolean; cleared: number }>("clear_learned_fingerprints"),
+    [],
+  );
+
+  /** 只清除学习表里遗留的备注，保留枪名 */
+  const clearLearnedNotes = useCallback(
+    () => invoke<{ ok: boolean; cleaned: number; total?: number }>("clear_learned_notes"),
+    [],
+  );
+
+  // ── 规则库条目管理（v10.4.0）──
+
+  const listRuleFingerprints = useCallback(
+    (query = "", page = 1, pageSize = 50) =>
+      invoke<RuleFingerprintList>("list_rule_fingerprints", { query, page, pageSize }),
+    [],
+  );
+
+  const deleteRuleFingerprint = useCallback(
+    async (fingerprint: string) => {
+      const r = await invoke<{ ok: boolean; error?: string }>("delete_rule_fingerprint", { fingerprint });
+      await loadMeta();
+      return r;
+    },
+    [loadMeta],
+  );
+
+  const updateRuleFingerprint = useCallback(
+    async (fingerprint: string, gun: string) => {
+      const r = await invoke<{ ok: boolean; error?: string }>("update_rule_fingerprint", { fingerprint, gun });
+      await loadMeta();
+      return r;
+    },
+    [loadMeta],
+  );
+
+  const clearOnlineRules = useCallback(async () => {
+    const r = await invoke<{ ok: boolean; error?: string; removed?: boolean }>("clear_online_rules_cmd");
+    await loadMeta();
+    return r;
+  }, [loadMeta]);
+
+  const clearRuleOverrides = useCallback(async () => {
+    const r = await invoke<{ ok: boolean; error?: string; removed?: boolean }>("clear_rule_overrides");
+    await loadMeta();
+    return r;
+  }, [loadMeta]);
+
   return {
     items, loading, meta,
     refresh, loadMeta,
@@ -168,5 +262,9 @@ export function useGunCodes(onError: (msg: string) => void) {
     preview, importRows,
     exportJson, importJson,
     refreshRules,
+    checkRulesUpdate, updateRules, resetRules,
+    listLearned, deleteLearned, clearLearned, clearLearnedNotes,
+    listRuleFingerprints, deleteRuleFingerprint, updateRuleFingerprint,
+    clearOnlineRules, clearRuleOverrides,
   };
 }
