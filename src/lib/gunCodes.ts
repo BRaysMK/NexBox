@@ -397,11 +397,13 @@ export function rulesTooltip(
     `v${meta.version}`,
     `${meta.gunCount} guns · ${meta.fingerprintCount} fingerprints · ${meta.learnedCount} learned`,
   ];
+  // 术语（v1.9.0）：bundled = 随包分发的 rules.json，是兜底默认值，
+  // 优先级低于线上库 —— 不要和用户数据混淆。
   if (meta.localVersion != null) {
-    lines.push(`local v${meta.localVersion} (${meta.localFingerprintCount ?? 0})`);
+    lines.push(`bundled v${meta.localVersion} (${meta.localFingerprintCount ?? 0}, fallback)`);
   }
   if (meta.onlineVersion != null) {
-    lines.push(`online v${meta.onlineVersion} (${meta.onlineFingerprintCount ?? 0})`);
+    lines.push(`online v${meta.onlineVersion} (${meta.onlineFingerprintCount ?? 0}, overrides bundled)`);
   } else if (meta.localVersion != null) {
     lines.push("online: not downloaded");
   }

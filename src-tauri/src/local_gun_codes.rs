@@ -217,18 +217,33 @@ const RULES_EMBEDDED: &str = include_str!("../resources/gun-codes/rules.json");
 /// 规则库缓存（进程内只读一次；`reload_rules` 可刷新）
 static RULES_CACHE: Mutex<Option<GunRules>> = Mutex::new(None);
 
-/// 读取规则库：三层叠加，**本地 → 线上 → 用户改动**。
+/// 读取规则库：三层叠加。
 ///
-/// 分层理由（这是 v1.6.0 的核心改动）：
-///   - **本地库**（随包 `rules.json`）：只读、权威。同一个指纹本地有就用本地的。
-///   - **线上库**（appDataDir `rules.online.json`）：只补本地没有的指纹，绝不覆盖。
-///   - **用户改动**（appDataDir `rules.overrides.json`）：删黑名单 + 改枪名，**最后叠加**，
-///     优先级最高 —— 用户手动改的必须生效。
+/// # 优先级（v1.9.0 修正，从低到高）
 ///
-/// 旧版把三者合并成一个 `rules.merged.json` 再加载，导致：
-///   ① 版本号是 `max(本地, 线上)`，看不出两边各自的进度；
-///   ② 想「只清空线上部分」做不到，只能整体重置。
-/// 现在三个文件互不干扰，各清各的。
+/// ```text
+/// 1. 随包库 rules.json          ← 兜底默认值（最低）
+/// 2. 线上库 rules.online.json   ← 可覆盖随包库（修正错误）
+/// 3. 用户改动 overrides.json    ← 覆盖前两层（用户意图最高）
+/// ```
+///
+/// 另有**学习表**在 `recognize_weapon` 的第一层生效，优先级高于以上全部。
+///
+/// # 为什么随包库是最低优先级
+///
+/// 旧版把随包库当作最高优先级（「本地永远优先」），导致：
+/// 随包库某条错了、线上库修正了，用户点了「更新词库」也修不掉 ——
+/// 表现为「虽然同步了线上的，但错的还是错」。
+///
+/// 「本地优先」这条原则本意是保护**用户手动确认的数据**（学习表 / overrides），
+/// 却被错误地套用到了会随版本更新的**随包默认值**上。
+///
+/// # 存储分离
+///
+/// 三个文件互不干扰，各清各的：
+///   - 清空线上库 = 删 `rules.online.json`
+///   - 清空用户改动 = 删 `rules.overrides.json`
+///   - 随包库只读，随安装包更新
 pub fn load_rules(app: &tauri::AppHandle) -> GunRules {
     {
         let cache = RULES_CACHE.lock().unwrap();
@@ -237,15 +252,15 @@ pub fn load_rules(app: &tauri::AppHandle) -> GunRules {
         }
     }
 
-    // ── 第 1 层：本地库（随包） ──
+    // ── 第 1 层：随包库（兜底默认值）──
     let mut base = load_local_rules(app);
 
-    // ── 第 2 层：线上库（只补空缺） ──
+    // ── 第 2 层：线上库（可覆盖随包库的同名指纹）──
     if let Some(online) = crate::rule_overrides::load_online_rules(app) {
-        let added = crate::rule_overrides::overlay_online(&mut base, &online);
-        if added > 0 {
+        let (added, updated) = crate::rule_overrides::overlay_online(&mut base, &online);
+        if added > 0 || updated > 0 {
             log::info!(
-                "[LocalGunCode] 线上库已叠加: v{} 补入 {added} 条指纹",
+                "[LocalGunCode] 线上库已叠加: v{} 补入 {added} 条 / 修正 {updated} 条",
                 online.version
             );
         }
@@ -2273,11 +2288,15 @@ mod tests {
     }
 
     #[test]
-    fn test_overlay_online_never_overwrites_local() {
+    fn test_overlay_online_overrides_local() {
+        // v1.9.0 语义变更：线上库**可以覆盖**随包库的同名指纹。
+        //
+        // 理由：随包库只是内置默认值，会随版本更新，不该压过线上修正。
+        // 「本地优先」只适用于用户手动确认的数据（学习表 / overrides）。
         use crate::rule_overrides::{overlay_online, OnlineRules};
         let mut base = tiny_rules();
         let mut online = OnlineRules::default();
-        online.version = 5;
+        online.version = 8;
         online.guns.insert(
             "M4A1".into(),
             GunMeta { category: "步枪".into(), aliases: vec![] },
@@ -2286,28 +2305,79 @@ mod tests {
             "AK-12".into(),
             GunMeta { category: "步枪".into(), aliases: vec![] },
         );
-        // ① 与本地同名指纹，但枪名不同 → 必须保留本地
+        // ① 与随包库同名指纹、枪名不同 → 线上覆盖
         online.fingerprints.insert(
             "AAAAAAAAAA".into(),
             Fingerprint { gun: "AK-12".into(), config: String::new(), mode: "烽火地带".into() },
         );
-        // ② 本地没有 → 应补入
+        // ② 随包库没有 → 补入
         online.fingerprints.insert(
             "BBBBBBBBBB".into(),
             Fingerprint { gun: "AK-12".into(), config: String::new(), mode: "烽火地带".into() },
         );
 
-        let added = overlay_online(&mut base, &online);
-        assert_eq!(added, 1, "只应补入 1 条");
+        let (added, updated) = overlay_online(&mut base, &online);
+        assert_eq!(added, 1, "应补入 1 条");
+        assert_eq!(updated, 1, "应修正 1 条");
         assert_eq!(
             base.fingerprints.get("AAAAAAAAAA").map(|f| f.gun.as_str()),
-            Some("M4A1"),
-            "本地已有条目绝不能被线上覆盖"
+            Some("AK-12"),
+            "线上库必须能覆盖随包库（这正是修错的关键）"
         );
         assert_eq!(
             base.fingerprints.get("BBBBBBBBBB").map(|f| f.gun.as_str()),
             Some("AK-12"),
-            "本地缺失的条目应被补入"
+            "随包库缺失的条目应被补入"
+        );
+        assert_eq!(base.version, 8, "版本号应取较大者");
+    }
+
+    #[test]
+    fn test_overlay_online_keeps_higher_local_version() {
+        // 随包库版本更高时（如随包已 v9、线上还 v8），版本号不应回退
+        use crate::rule_overrides::{overlay_online, OnlineRules};
+        let mut base = tiny_rules();
+        base.version = 9;
+        let mut online = OnlineRules::default();
+        online.version = 8;
+        let (_, _) = overlay_online(&mut base, &online);
+        assert_eq!(base.version, 9, "版本号只增不减");
+    }
+
+    #[test]
+    fn test_overrides_still_beat_online() {
+        // 关键优先级验证：用户改动 > 线上库 > 随包库
+        use crate::rule_overrides::{
+            apply_overrides, overlay_online, OnlineRules, PatchedFingerprint, RuleOverrides,
+        };
+        let mut base = tiny_rules(); // AAAAAAAAAA → M4A1
+        let mut online = OnlineRules::default();
+        online.guns.insert(
+            "AK-12".into(),
+            GunMeta { category: "步枪".into(), aliases: vec![] },
+        );
+        online.fingerprints.insert(
+            "AAAAAAAAAA".into(),
+            Fingerprint { gun: "AK-12".into(), config: String::new(), mode: "烽火地带".into() },
+        );
+        // 线上覆盖随包库
+        overlay_online(&mut base, &online);
+        assert_eq!(
+            base.fingerprints.get("AAAAAAAAAA").map(|f| f.gun.as_str()),
+            Some("AK-12")
+        );
+
+        // 用户手动改成 M4A1 → 必须压过线上
+        let mut ov = RuleOverrides::default();
+        ov.patched.insert(
+            "AAAAAAAAAA".into(),
+            PatchedFingerprint { gun: "M4A1".into(), config: String::new() },
+        );
+        apply_overrides(&mut base, &ov);
+        assert_eq!(
+            base.fingerprints.get("AAAAAAAAAA").map(|f| f.gun.as_str()),
+            Some("M4A1"),
+            "用户改动必须压过线上库"
         );
     }
 
@@ -2332,8 +2402,9 @@ mod tests {
             Fingerprint { gun: "不存在的枪".into(), config: String::new(), mode: "烽火地带".into() },
         );
 
-        let added = overlay_online(&mut base, &online);
+        let (added, updated) = overlay_online(&mut base, &online);
         assert_eq!(added, 0, "脏数据一条都不该进来");
+        assert_eq!(updated, 0, "脏数据也不该触发覆盖");
         assert!(!base.fingerprints.contains_key("CCCCCCCCCC"));
         assert!(!base.fingerprints.contains_key("DDDDDDDDDD"));
         assert!(!base.fingerprints.contains_key("EEEEEEEEEE"));
@@ -2358,7 +2429,7 @@ mod tests {
             },
         );
 
-        overlay_online(&mut base, &online);
+        let _ = overlay_online(&mut base, &online);
         let got = base.fingerprints.get("FFFFFFFF").expect("应被补入");
         assert_eq!(got.config, "", "线上库的备注必须被清空（规则库不带备注）");
     }

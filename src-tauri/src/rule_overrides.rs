@@ -100,14 +100,38 @@ pub fn clear_online_rules(app: &tauri::AppHandle) -> Result<bool, String> {
     Ok(true)
 }
 
-/// 把线上库叠加到本地库上：**只补本地没有的指纹**。
+/// 把线上库叠加到随包库上：**线上优先，可覆盖随包库的同名指纹**。
 ///
-/// 返回新增条数。
+/// 返回 `(added, updated)`：
+///   - `added`   随包库没有、线上补入的条数
+///   - `updated` 两边都有但枪名不同、被线上覆盖的条数
 ///
-/// 额外校验：线上条目的枪名必须能在「本地枪表 ∪ 线上枪表」里找到，
-/// 否则跳过 —— 防止旧版线上库（v5 曾有 56.8% 枪名错认）的脏数据混进来。
-pub fn overlay_online(base: &mut GunRules, online: &OnlineRules) -> usize {
+/// # 为什么线上可以覆盖随包库（v1.9.0 起的语义变更）
+///
+/// 旧实现是「只补空缺，绝不覆盖」，理由是「本地永远优先」。
+/// 但那条原则本意是保护**用户手动确认的数据**（学习表 / overrides），
+/// 却被错误地套用到了**随包分发的 rules.json** 上 ——
+/// 随包库只是内置默认值，它会随版本更新，不该压过线上修正。
+///
+/// 实测后果：随包库某条错了、线上库修正了，用户点了「更新词库」也修不掉，
+/// 表现为「虽然同步了线上的，但错的还是错」。
+///
+/// # 真正的优先级
+///
+/// ```text
+/// 学习表（用户手动填的）      ← 最高，在 recognize_weapon 第一层生效
+/// 用户改动 overrides         ← 最高，在本函数之后应用
+/// 线上库                     ← 中，可覆盖随包库
+/// 随包库 rules.json          ← 最低，兜底默认值
+/// ```
+///
+/// # 保留的安全校验
+///
+/// 线上条目的枪名必须能在枪表里找到，否则跳过 ——
+/// 防止旧版线上库（v5 曾有 56.8% 枪名错认）的脏数据混进来。
+pub fn overlay_online(base: &mut GunRules, online: &OnlineRules) -> (usize, usize) {
     let mut added = 0usize;
+    let mut updated = 0usize;
 
     // 先把线上枪表补进 base（仅当 base 没有该枪）
     for (name, meta) in &online.guns {
@@ -115,9 +139,7 @@ pub fn overlay_online(base: &mut GunRules, online: &OnlineRules) -> usize {
     }
 
     for (fp, f) in &online.fingerprints {
-        if base.fingerprints.contains_key(fp) {
-            continue; // 本地优先，绝不覆盖
-        }
+        // ── 安全校验：不干净的条目一律跳过（新增和覆盖都要过这一关）──
         if f.gun.trim().is_empty() {
             continue; // 空枪名会污染界面
         }
@@ -128,19 +150,34 @@ pub fn overlay_online(base: &mut GunRules, online: &OnlineRules) -> usize {
         if !base.guns.contains_key(&f.gun) {
             continue;
         }
+
         // config 强制清空：线上库不带备注进来
-        base.fingerprints.insert(
-            fp.clone(),
-            Fingerprint {
-                gun: f.gun.clone(),
-                config: String::new(),
-                mode: "烽火地带".to_string(),
-            },
-        );
-        added += 1;
+        let clean = Fingerprint {
+            gun: f.gun.clone(),
+            config: String::new(),
+            mode: "烽火地带".to_string(),
+        };
+
+        match base.fingerprints.get(fp) {
+            None => {
+                // 随包库没有 → 补入
+                base.fingerprints.insert(fp.clone(), clean);
+                added += 1;
+            }
+            Some(existing) => {
+                // 两边都有 → 枪名不同则线上覆盖（这就是本版的核心修正）
+                if existing.gun != clean.gun {
+                    base.fingerprints.insert(fp.clone(), clean);
+                    updated += 1;
+                }
+            }
+        }
     }
 
-    added
+    // 版本号取较大者：让界面能反映「已包含到哪一版」
+    base.version = base.version.max(online.version);
+
+    (added, updated)
 }
 
 // ═══════════════════════ 用户改动 ═══════════════════════
