@@ -1065,58 +1065,8 @@
     "recommended": "Recommandé",
     "currentSelection": "Sélection actuelle",
     "applyPreset": "Appliquer le préréglage",
-    "dlssNote": "Nécessite NVIDIA Profile Inspector, redémarrez le jeu pour que les modifications prennent effet",
+    "dlssNote": "Écrit directement dans le profil du pilote NVIDIA et vérifie par relecture. Seuls les réglages DLSS sont modifiés, les autres options graphiques restent intactes. Redémarrez le jeu pour appliquer.",
     "back": "Retour",
-    "dlssModels": {
-      "default": {
-        "name": "Défaut (programme 3D)",
-        "description": "Géré par le programme 3D; aucun remplacement"
-      },
-      "A": {
-        "name": "Modèle A",
-        "description": "Modèle précoce"
-      },
-      "B": {
-        "name": "Modèle B",
-        "description": "Modèle précoce"
-      },
-      "C": {
-        "name": "Modèle C",
-        "description": "Modèle précoce"
-      },
-      "D": {
-        "name": "Modèle D",
-        "description": "Modèle stable"
-      },
-      "E": {
-        "name": "Modèle E",
-        "description": "Modèle expérimental"
-      },
-      "F": {
-        "name": "Modèle F",
-        "description": "Modèle amélioré"
-      },
-      "G": {
-        "name": "Modèle G",
-        "description": "Modèle amélioré"
-      },
-      "J": {
-        "name": "Modèle J",
-        "description": "Modèle plus récent, priorité qualité"
-      },
-      "K": {
-        "name": "Modèle K",
-        "description": "Modèle recommandé, pour la plupart des modes DLSS"
-      },
-      "L": {
-        "name": "Modèle L",
-        "description": "Optimisé pour le mode Ultra Performance"
-      },
-      "M": {
-        "name": "Modèle M",
-        "description": "Optimisé pour le mode Performance"
-      }
-    },
     "weaponCodePlatformNames": {
       "maqt": "Maqt",
       "anchor-codes": "Anchor Codes",
@@ -1236,7 +1186,8 @@
     "description": "Changer les préréglages de modèle de réseau neuronal DLSS pour optimiser les graphismes du jeu",
     "presetLabel": "Préréglage DLSS",
     "driverVersion": "Version du pilote",
-    "noGpuFound": "Aucun GPU détecté"
+    "noGpuFound": "Aucun GPU détecté",
+    "applyTimeout": "Délai d'attente du pilote dépassé, veuillez réessayer"
   },
   "dlssIndicator": {
     "title": "Indicateur DLSS",
@@ -1246,13 +1197,6 @@
     "enabling": "Activation en cours...",
     "disabling": "Désactivation en cours...",
     "note": "Nécessite des privilèges administrateur, redémarrer le jeu pour appliquer"
-  },
-  "dlssLock": {
-    "title": "Verrouillage DLSS",
-    "description": "Verrouiller la configuration du pilote nvidiaProfileInspector",
-    "enabled": "Configuration DLSS verrouillée",
-    "disabled": "Configuration DLSS déverrouillée",
-    "note": "Empêche les mises à jour de pilote d'écraser les paramètres"
   },
   "dlssPresetTable": {
     "title": "Tableau de référence des préréglages",

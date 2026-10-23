@@ -1457,58 +1457,8 @@
     "recommended": "Recommended",
     "currentSelection": "Current Selection",
     "applyPreset": "Apply Preset",
-    "dlssNote": "Requires NVIDIA Profile Inspector, restart game to take effect",
+    "dlssNote": "Writes straight to the NVIDIA driver profile and verifies by reading back. Only DLSS settings are touched; other graphics settings are left alone. Restart the game to apply.",
     "back": "Back",
-    "dlssModels": {
-      "default": {
-        "name": "Default (set by 3D app)",
-        "description": "Managed by the 3D application; no override applied"
-      },
-      "A": {
-        "name": "Model A",
-        "description": "Early model"
-      },
-      "B": {
-        "name": "Model B",
-        "description": "Early model"
-      },
-      "C": {
-        "name": "Model C",
-        "description": "Early model"
-      },
-      "D": {
-        "name": "Model D",
-        "description": "Stable model"
-      },
-      "E": {
-        "name": "Model E",
-        "description": "Experimental model"
-      },
-      "F": {
-        "name": "Model F",
-        "description": "Improved model"
-      },
-      "G": {
-        "name": "Model G",
-        "description": "Improved model"
-      },
-      "J": {
-        "name": "Model J",
-        "description": "Newer model, quality priority"
-      },
-      "K": {
-        "name": "Model K",
-        "description": "Recommended model, for most DLSS modes"
-      },
-      "L": {
-        "name": "Model L",
-        "description": "Optimized for Ultra Performance mode"
-      },
-      "M": {
-        "name": "Model M",
-        "description": "Optimized for Performance mode"
-      }
-    },
     "weaponCodePlatformNames": {
       "maqt": "Maqt",
       "anchor-codes": "Anchor Codes",
@@ -1644,7 +1594,8 @@
     "description": "Switch DLSS neural network model presets to optimize game graphics",
     "presetLabel": "DLSS Preset",
     "driverVersion": "Driver Version",
-    "noGpuFound": "No GPU detected"
+    "noGpuFound": "No GPU detected",
+    "applyTimeout": "Driver timed out, please try again"
   },
   "dlssIndicator": {
     "title": "DLSS Indicator",
@@ -1654,13 +1605,6 @@
     "enabling": "Enabling...",
     "disabling": "Disabling...",
     "note": "Requires admin privileges, restart game to take effect"
-  },
-  "dlssLock": {
-    "title": "DLSS Lock",
-    "description": "Lock nvidiaProfileInspector driver configuration",
-    "enabled": "DLSS configuration locked",
-    "disabled": "DLSS configuration unlocked",
-    "note": "Prevents driver updates from overwriting settings"
   },
   "dlssPresetTable": {
     "title": "Preset Reference Table",

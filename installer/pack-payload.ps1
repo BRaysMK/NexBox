@@ -1,13 +1,16 @@
 param()
 
 $ErrorActionPreference = "Stop"
-$MainProject = "D:\NexBox"
-$InstallerProject = "D:\NexBox\installer"
-$UninstallerProject = "D:\NexBox\uninstaller"
-$PayloadZip = "$InstallerProject\src-tauri\payload.zip"
+# 路径由脚本自身位置推导，避免硬编码盘符/仓库位置（原先写死 D:\NexBox，
+# 换个检出目录就会整包静默跳过）。
+$InstallerProject = $PSScriptRoot
+$MainProject = Split-Path $InstallerProject -Parent
+$UninstallerProject = Join-Path $MainProject "uninstaller"
+$PayloadZip = Join-Path $InstallerProject "src-tauri\payload.zip"
 $TempDir = "$env:TEMP\nexbox-payload"
 
 Write-Host "=== Creating payload archive ===" -ForegroundColor Cyan
+Write-Host "  main project: $MainProject"
 
 # Clean temp directory
 if (Test-Path $TempDir) {
@@ -65,10 +68,9 @@ if (Test-Path $aqRegistryRestore) {
 }
 
 # 7. Flat root files
+# NVIDIA Profile Inspector 与 Reference.xml 已不再随包分发：DLSS 预设改为经
+# NVAPI DRS 直接写入驱动档案，不再需要外部工具。
 $rootFiles = @(
-    "nvidiaProfileInspector.exe",
-    "nvidiaProfileInspector.exe.config",
-    "Reference.xml",
     "PawnIO_setup.exe"
 )
 foreach ($file in $rootFiles) {

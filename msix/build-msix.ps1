@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # NexBox MSIX 打包脚本
 # 用途：把 payload.zip（完整应用文件集）打包成可侧载测试的 MSIX
 # 流程：解包 payload -> 生成 AppxManifest + Assets + resources.pri -> makeappx -> 自签
@@ -24,8 +24,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Root = "D:\NexBox"
-$WorkDir = "$Root\msix"
+# 路径由脚本自身位置推导，避免硬编码盘符/仓库位置。
+$WorkDir = $PSScriptRoot
+$Root = Split-Path $WorkDir -Parent
 $Staging = "$WorkDir\staging"
 $PayloadZip = "$Root\installer\src-tauri\payload.zip"
 $IconsDir = "$Root\src-tauri\icons"

@@ -1122,58 +1122,8 @@
     "recommended": "推奨",
     "currentSelection": "現在の選択",
     "applyPreset": "プリセットを適用",
-    "dlssNote": "NVIDIA Profile Inspectorが必要です。変更を有効にするにはゲームを再起動してください",
+    "dlssNote": "NVIDIA ドライバープロファイルへ直接書き込み、読み戻しで検証します。DLSS 関連の項目のみを変更し、他の画質設定には触れません。適用後はゲームを再起動してください。",
     "back": "戻る",
-    "dlssModels": {
-      "default": {
-        "name": "デフォルト（3Dプログラム）",
-        "description": "3Dプログラムが決定（強制オーバーライドなし）"
-      },
-      "A": {
-        "name": "モデルA",
-        "description": "初期モデル"
-      },
-      "B": {
-        "name": "モデルB",
-        "description": "初期モデル"
-      },
-      "C": {
-        "name": "モデルC",
-        "description": "初期モデル"
-      },
-      "D": {
-        "name": "モデルD",
-        "description": "安定モデル"
-      },
-      "E": {
-        "name": "モデルE",
-        "description": "実験モデル"
-      },
-      "F": {
-        "name": "モデルF",
-        "description": "改善モデル"
-      },
-      "G": {
-        "name": "モデルG",
-        "description": "改善モデル"
-      },
-      "J": {
-        "name": "モデルJ",
-        "description": "新しいモデル、品質優先"
-      },
-      "K": {
-        "name": "モデルK",
-        "description": "推奨モデル、ほとんどのDLSSモード向け"
-      },
-      "L": {
-        "name": "モデルL",
-        "description": "Ultra Performanceモード向けに最適化"
-      },
-      "M": {
-        "name": "モデルM",
-        "description": "Performanceモード向けに最適化"
-      }
-    },
     "weaponCodePlatformNames": {
       "maqt": "Maqt",
       "anchor-codes": "Anchor Codes",
@@ -1293,7 +1243,8 @@
     "description": "DLSSニューラルネットワークモデルプリセットを切り替えてゲーム画質を最適化",
     "presetLabel": "DLSS プリセット",
     "driverVersion": "ドライバーバージョン",
-    "noGpuFound": "GPUが検出されませんでした"
+    "noGpuFound": "GPUが検出されませんでした",
+    "applyTimeout": "ドライバの応答がタイムアウトしました。後でもう一度お試しください"
   },
   "dlssIndicator": {
     "title": "DLSS インジケーター",
@@ -1303,13 +1254,6 @@
     "enabling": "有効化中...",
     "disabling": "無効化中...",
     "note": "管理者権限が必要です。変更を有効にするにはゲームを再起動してください"
-  },
-  "dlssLock": {
-    "title": "DLSS ロック",
-    "description": "nvidiaProfileInspector ドライバー設定をロック",
-    "enabled": "DLSS 設定がロックされました",
-    "disabled": "DLSS 設定のロックが解除されました",
-    "note": "ドライバー更新による設定上書きを防ぎます"
   },
   "dlssPresetTable": {
     "title": "プリセット参照表",

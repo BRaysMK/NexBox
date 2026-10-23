@@ -4,7 +4,6 @@ use std::hash::{Hash, Hasher};
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 use std::fs;
-use std::path::PathBuf;
 use std::time::Duration;
 use tauri::Manager;
 
@@ -68,7 +67,6 @@ pub struct MapInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DLSSSettingsStatus {
     pub dlss_indicator_enabled: bool,
-    pub dlss_lock_enabled: bool,
 }
 
 static DELTA_PASSWORD_CACHE: std::sync::Mutex<Option<(Vec<DeltaPasswordItem>, std::time::Instant)>> = std::sync::Mutex::new(None);
@@ -78,13 +76,141 @@ const DLSS_SR_PRESET_ID: u32 = 0x10E41DF3;
 const DLSS_SR_MODE_ID: u32 = 0x10AFB768;
 const TEXTURE_FILTERING_QUALITY_ID: u32 = 0x00CE2691;
 const AA_MODE_REPLAY_ID: u32 = 0x10D48A85;
-const DLSS_STATUS_SETTING_IDS: [u32; 5] = [
+/// "DLSS - Forced Model Preset Profile". NVIDIA's own docs note that on some
+/// games the preset letter only takes effect once this is set to Custom.
+const DLSS_MODEL_PRESET_PROFILE_ID: u32 = 0x00634291;
+const DLSS_MODEL_PRESET_CUSTOM: u32 = 2;
+
+const DLSS_STATUS_SETTING_IDS: [u32; 6] = [
     DLSS_SR_OVERRIDE_ID,
     DLSS_SR_PRESET_ID,
     DLSS_SR_MODE_ID,
     TEXTURE_FILTERING_QUALITY_ID,
     AA_MODE_REPLAY_ID,
+    DLSS_MODEL_PRESET_PROFILE_ID,
 ];
+
+/// A set of DRS edits for the game's driver profile.
+///
+/// `writes` sets an explicit value, `deletes` removes an existing override so
+/// the setting falls back to the driver/game default. "Default" in the UI means
+/// *delete*, never *write zero* — writing zero leaves an explicit override that
+/// pins the feature off.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct DlssSettingPlan {
+    writes: Vec<(u32, u32)>,
+    deletes: Vec<u32>,
+}
+
+impl DlssSettingPlan {
+    fn set(&mut self, setting_id: u32, value: u32) {
+        self.writes.push((setting_id, value));
+    }
+
+    /// Explicit value, or remove the override when `value` is `None`.
+    fn set_or_clear(&mut self, setting_id: u32, value: Option<u32>) {
+        match value {
+            Some(v) => self.set(setting_id, v),
+            None => self.deletes.push(setting_id),
+        }
+    }
+}
+
+/// Preset letter -> NVDRS value for "DLSS - Forced Preset Letter".
+///
+/// L and M are only accepted by drivers that ship Transformer Gen 2 presets;
+/// callers filter them out via `nvapi::enum_available_setting_values` before
+/// offering them, so they are mapped here but never assumed to be writable.
+fn dlss_preset_letter_value(preset: &str) -> Option<u32> {
+    match preset.to_uppercase().as_str() {
+        "A" => Some(1),
+        "B" => Some(2),
+        "C" => Some(3),
+        "D" => Some(4),
+        "E" => Some(5),
+        "F" => Some(6),
+        "G" => Some(7),
+        "J" => Some(10),
+        "K" => Some(11),
+        "L" => Some(12),
+        "M" => Some(13),
+        _ => None,
+    }
+}
+
+/// Quality level -> NVDRS value for "DLSS - Forced Quality Level".
+fn dlss_quality_value(quality: &str) -> Option<u32> {
+    match quality {
+        "performance" => Some(0),
+        "balanced" => Some(1),
+        "quality" => Some(2),
+        "dlaa" => Some(4),
+        "ultra_performance" => Some(5),
+        _ => None,
+    }
+}
+
+/// Texture quality -> NVDRS value for "Texture filtering - Quality".
+fn texture_quality_value(texture_quality: &str) -> Option<u32> {
+    match texture_quality {
+        "high_quality" => Some(0xFFFF_FFF6),
+        "quality" => Some(0x0000_0000),
+        "performance" => Some(0x0000_000A),
+        "high_performance" => Some(0x0000_0014),
+        _ => None,
+    }
+}
+
+/// Antialiasing mode -> NVDRS value for "Antialiasing - Transparency Supersampling".
+fn antialiasing_value(antialiasing: &str) -> Option<u32> {
+    match antialiasing {
+        "off" => Some(0x0000_0000),
+        "2x" => Some(0x0000_0014),
+        "4x" => Some(0x0000_0024),
+        "8x" => Some(0x0000_0034),
+        _ => None,
+    }
+}
+
+/// Build the DRS edits for the requested combination.
+///
+/// Deliberately scoped to DLSS (plus the two opt-in quality knobs). VSync,
+/// DeepDVC, VRR, DLSS-FG and the DLSSG frame-count settings are *not* touched:
+/// they are unrelated to the preset and overwriting them silently destroyed the
+/// user's existing game profile.
+///
+/// "DLSS - Forced Scaling Ratio" is intentionally not written either: NVIDIA's
+/// reference notes it only applies when "Forced Quality Level" is `Custom`, so
+/// writing it alongside a named quality level is at best a no-op and at worst
+/// makes the driver treat the level as custom.
+fn build_dlss_plan(
+    preset: &str,
+    quality: &str,
+    texture_quality: &str,
+    antialiasing: &str,
+) -> DlssSettingPlan {
+    let mut plan = DlssSettingPlan::default();
+
+    let preset_letter = dlss_preset_letter_value(preset);
+
+    // The override switch itself is always written: 1 to force the preset,
+    // 0 to hand the decision back to the game.
+    plan.set(DLSS_SR_OVERRIDE_ID, if preset_letter.is_some() { 1 } else { 0 });
+    plan.set_or_clear(DLSS_SR_PRESET_ID, preset_letter);
+    plan.set_or_clear(
+        DLSS_MODEL_PRESET_PROFILE_ID,
+        preset_letter.map(|_| DLSS_MODEL_PRESET_CUSTOM),
+    );
+
+    plan.set_or_clear(DLSS_SR_MODE_ID, dlss_quality_value(quality));
+    plan.set_or_clear(
+        TEXTURE_FILTERING_QUALITY_ID,
+        texture_quality_value(texture_quality),
+    );
+    plan.set_or_clear(AA_MODE_REPLAY_ID, antialiasing_value(antialiasing));
+
+    plan
+}
 
 const DELTA_EXECUTABLE_NAMES: [&str; 2] = [
     "deltaforceclient-win64-shipping.exe",
@@ -293,220 +419,138 @@ pub async fn get_weapon_codes() -> Result<Vec<WeaponCode>, String> {
 
 #[tauri::command]
 pub async fn get_dlss_model_presets() -> Result<Vec<DLSSModelPreset>, String> {
-    Ok(vec![
-        DLSSModelPreset { id: "A".to_string(), name: "Preset A".to_string(), description: "早期模型".to_string(), recommended: false },
-        DLSSModelPreset { id: "B".to_string(), name: "Preset B".to_string(), description: "早期模型".to_string(), recommended: false },
-        DLSSModelPreset { id: "C".to_string(), name: "Preset C".to_string(), description: "早期模型".to_string(), recommended: false },
-        DLSSModelPreset { id: "D".to_string(), name: "Preset D".to_string(), description: "稳定模型".to_string(), recommended: false },
-        DLSSModelPreset { id: "E".to_string(), name: "Preset E".to_string(), description: "实验性模型".to_string(), recommended: false },
-        DLSSModelPreset { id: "F".to_string(), name: "Preset F".to_string(), description: "改进模型".to_string(), recommended: false },
-        DLSSModelPreset { id: "G".to_string(), name: "Preset G".to_string(), description: "改进模型".to_string(), recommended: false },
-        DLSSModelPreset { id: "J".to_string(), name: "Preset J".to_string(), description: "较新模型，画质优先".to_string(), recommended: false },
-        DLSSModelPreset { id: "K".to_string(), name: "Preset K".to_string(), description: "推荐模型，大多数DLSS模式".to_string(), recommended: true },
-        DLSSModelPreset { id: "L".to_string(), name: "Preset L".to_string(), description: "优化Ultra Performance模式".to_string(), recommended: true },
-        DLSSModelPreset { id: "M".to_string(), name: "Preset M".to_string(), description: "优化Performance模式".to_string(), recommended: true },
-    ])
-}
+    // Only advertise presets the installed driver actually implements. L and M
+    // are Transformer Gen 2 letters that pre-Gen-2 drivers accept into the enum
+    // but never apply, so asking the driver is the only honest source.
+    let available = nvapi::enum_available_setting_values(DLSS_SR_PRESET_ID).unwrap_or_default();
 
-fn get_npi_path() -> Result<PathBuf, String> {
-    let exe_dir = std::env::current_exe()
-        .map_err(|e| format!("获取程序路径失败: {}", e))?;
-    let parent_dir = exe_dir.parent().ok_or("无法获取父目录")?;
-    
-    let candidates = [
-        parent_dir.join("nvidiaProfileInspector.exe"),
-        parent_dir.join("_up_").join("nvidiaProfileInspector.exe"),
-        parent_dir.join("resources").join("nvidiaProfileInspector.exe"),
+    let all = [
+        ("A", "早期模型", false),
+        ("B", "早期模型", false),
+        ("C", "早期模型", false),
+        ("D", "稳定模型", false),
+        ("E", "实验性模型", false),
+        ("F", "改进模型", false),
+        ("G", "改进模型", false),
+        ("J", "较新模型，画质优先", false),
+        ("K", "推荐模型，大多数DLSS模式", true),
+        ("L", "Transformer Gen 2，画质优先", false),
+        ("M", "Transformer Gen 2，性能优先", false),
     ];
-    
-    for path in &candidates {
-        if path.exists() {
-            return Ok(path.clone());
+
+    let mut presets = vec![DLSSModelPreset {
+        id: "default".to_string(),
+        name: "默认（由3D程序设置）".to_string(),
+        description: "由3D程序自行决定，不做强制覆盖".to_string(),
+        recommended: false,
+    }];
+
+    for (id, description, recommended) in all {
+        let value = dlss_preset_letter_value(id);
+        // An empty enum list means the driver query failed; fall back to the
+        // static table rather than hiding everything.
+        if !available.is_empty() && !value.is_some_and(|v| available.contains(&v)) {
+            log::info!("驱动不支持 DLSS 预设 {id}（枚举值缺失），已从列表隐藏");
+            continue;
         }
+        presets.push(DLSSModelPreset {
+            id: id.to_string(),
+            name: format!("Preset {id}"),
+            description: description.to_string(),
+            recommended,
+        });
     }
-    
-    Err("未找到NVIDIA Profile Inspector，请确保已安装或将其放在程序目录下".to_string())
+
+    Ok(presets)
 }
 
-fn make_profile_setting(name: &str, setting_id: u32, value: u32) -> String {
-    format!(
-        r#"      <ProfileSetting>
-        <SettingNameInfo>{name}</SettingNameInfo>
-        <SettingID>{id}</SettingID>
-        <SettingValue>{val}</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>"#,
-        name = name,
-        id = setting_id,
-        val = value,
-    )
-}
-
-fn generate_nip_config(preset: &str, quality_level: &str, texture_quality: &str, antialiasing: &str) -> Vec<u8> {
-    // default: 由3D程序设置，不强制覆盖 DLSS-SR 预设
-    let is_default = preset.eq_ignore_ascii_case("default");
-    let preset_value: u32 = if is_default {
-        0
-    } else {
-        match preset.to_uppercase().as_str() {
-            "A" => 1, "B" => 2, "C" => 3, "D" => 4, "E" => 5, "F" => 6, "G" => 7,
-            "J" => 10, "K" => 11, "L" => 12, "M" => 13,
-            _ => 11,
-        }
+/// Persist the applied combination for diagnostics only.
+///
+/// This file is never read back as the source of truth — status always comes
+/// from the driver. It exists so a bug report can show what was requested.
+fn write_applied_status(status: &DLSSPresetStatus) {
+    let Ok(exe_path) = std::env::current_exe() else {
+        return;
     };
-
-    let mut settings = vec![
-        make_profile_setting("Vertical Sync Tear Control", 5912412, 2525368439),
-        make_profile_setting("DLSS Model Preset Profile", 6505105, 2),
-        make_profile_setting("Enable DeepDVC Feature", 9963648, 0),
-        make_profile_setting("Vertical Sync", 11041231, 1620202130),
-        make_profile_setting("Saturation value for DeepDVC", 11250451, 50),
-        make_profile_setting("Intensity value for DeepDVC", 11250466, 50),
-        make_profile_setting("Flag to control smooth AFR behavior", 270198627, 0),
-        make_profile_setting("Override DLSSG mode", 271614616, 1),
-        make_profile_setting("Override DLSSG multi-frame count", 273507943, 0),
-        make_profile_setting("Override maximum DLSSG dynamic multi frame count", 274083087, 0),
-        make_profile_setting("VRR requested state", 278196727, 0),
-    ];
-
-    // DLSS 质量级别覆盖 (非 default 时添加)
-    if quality_level != "default" {
-        let (forced_quality, forced_scaling) = match quality_level {
-            "ultra_performance" => (5u32, 0x21u32),
-            "performance"       => (0u32, 0x32u32),
-            "balanced"          => (1u32, 0x3Au32),
-            "quality"           => (2u32, 0x42u32),
-            "dlaa"              => (4u32, 0x64u32),
-            _ => (0u32, 0u32),
-        };
-        settings.push(make_profile_setting("DLSS - Forced Quality Level", 279951208, forced_quality));
-        settings.push(make_profile_setting("DLSS - Forced Scaling Ratio", 283385333, forced_scaling));
+    let Some(parent_dir) = exe_path.parent() else {
+        return;
+    };
+    let status_path = parent_dir.join("delta_force_dlss_status.json");
+    if let Ok(json) = serde_json::to_string_pretty(status) {
+        let _ = fs::write(status_path, json);
     }
-
-    // 纹理过滤质量 (SettingID: 0x00CE2751 = 13510289)
-    if texture_quality != "default" {
-        let val = match texture_quality {
-            "high_quality"    => 0xFFFFFFF6u32, // High Quality
-            "quality"         => 0x00000000u32, // Quality
-            "performance"     => 0x0000000Au32, // Performance
-            "high_performance" => 0x00000014u32, // High Performance
-            _ => 0,
-        };
-        if val != 0 || texture_quality == "quality" {
-            settings.push(make_profile_setting("Texture filtering - Quality", 13510289, val));
-        }
-    }
-
-    // 抗锯齿 - 透明度超采样 (SettingID: 0x10D48A85 = 282364549)
-    if antialiasing != "default" {
-        let val = match antialiasing {
-            "off"     => 0x00000000u32, // Off
-            "2x"      => 0x00000014u32, // 2x Supersampling
-            "4x"      => 0x00000024u32, // 4x Supersampling
-            "8x"      => 0x00000034u32, // 8x Supersampling
-            _ => 0,
-        };
-        if val != 0 || antialiasing == "off" {
-            settings.push(make_profile_setting("Antialiasing - Transparency Supersampling", 282364549, val));
-        }
-    }
-
-    // DLSS 相关（始终包含）
-    settings.push(make_profile_setting("Override DLSSG Target Frame Rate", 282018085, 0));
-    settings.push(make_profile_setting("Override DLSS-FG preset", 283385329, 0));
-    settings.push(make_profile_setting("Override DLSS-SR presets", 283385331, preset_value));
-    settings.push(make_profile_setting("Enable DLSS-SR override", 283385345, if is_default { 0 } else { 1 }));
-    settings.push(make_profile_setting("Enable DLSS-FG override", 283385347, 0));
-
-    let settings_xml = settings.join("\n");
-
-    let xml_content = format!(
-        r#"<?xml version="1.0" encoding="utf-16"?>
-<ArrayOfProfile>
-  <Profile>
-    <ProfileName>Delta Force</ProfileName>
-    <Executeables>
-      <string>deltaforceclient-win64-shipping.exe</string>
-    </Executeables>
-    <Settings>
-{}
-    </Settings>
-  </Profile>
-</ArrayOfProfile>"#,
-        settings_xml,
-    );
-
-    // UTF-16LE BOM
-    let mut bytes = vec![0xFF, 0xFE];
-    for c in xml_content.encode_utf16() {
-        bytes.extend_from_slice(&c.to_le_bytes());
-    }
-    bytes
 }
 
 #[tauri::command]
-pub async fn apply_dlss_model_preset(preset: String, quality: String, texture_quality: String, antialiasing: String) -> Result<DLSSApplyResult, String> {
-    let npi_path = get_npi_path()?;
+pub async fn apply_dlss_model_preset(
+    preset: String,
+    quality: String,
+    texture_quality: String,
+    antialiasing: String,
+) -> Result<DLSSApplyResult, String> {
+    let plan = build_dlss_plan(&preset, &quality, &texture_quality, &antialiasing);
 
-    let config_content = generate_nip_config(&preset, &quality, &texture_quality, &antialiasing);
-
-    let temp_dir = std::env::temp_dir();
-    let temp_path = temp_dir.join("delta_force_dlss.nip");
-    fs::write(&temp_path, &config_content)
-        .map_err(|e| format!("写入配置文件失败: {}", e))?;
-    
-    let npi_str = npi_path.to_str().ok_or("路径编码错误")?;
-    let temp_str = temp_path.to_str().ok_or("临时路径编码错误")?;
-    
-    let ps_command = format!(
-        "Start-Process -FilePath '{}' -ArgumentList '-silentImport','\"{}\"' -Verb RunAs -Wait",
-        npi_str.replace('\'', "''"),
-        temp_str.replace('\'', "''")
+    log::info!(
+        "DLSS 应用请求: preset={preset} quality={quality} texture={texture_quality} aa={antialiasing}; \
+         writes={:?} deletes={:?}",
+        plan.writes
+            .iter()
+            .map(|(id, v)| format!("0x{id:08X}=0x{v:08X}"))
+            .collect::<Vec<_>>(),
+        plan.deletes
+            .iter()
+            .map(|id| format!("0x{id:08X}"))
+            .collect::<Vec<_>>()
     );
-    
-    let output = Command::new("powershell")
-        .args(["-WindowStyle", "Hidden", "-NoProfile", "-Command", &ps_command])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行失败: {}", e))?;
-    
-    let _ = fs::remove_file(&temp_path);
-    
-    if output.status.success() {
-        // 保存当前应用的预设状态，供前端查询
-        let status = DLSSPresetStatus {
-            preset: preset.clone(),
-            quality: quality.clone(),
-            texture_quality: texture_quality.clone(),
-            antialiasing: antialiasing.clone(),
-        };
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(parent_dir) = exe_path.parent() {
-                let status_path = parent_dir.join("delta_force_dlss_status.json");
-                let _ = fs::write(&status_path, serde_json::to_string(&status).unwrap_or_default());
-            }
+
+    // Writes go straight to the driver profile that owns the game executable.
+    // No external tool, no profile reset, no unrelated settings touched.
+    let stored = nvapi::apply_application_settings(
+        &DELTA_EXECUTABLE_NAMES,
+        &plan.writes,
+        &plan.deletes,
+    )
+    .map_err(|e| {
+        log::error!("DLSS 应用失败: {e}");
+        e
+    })?;
+
+    log::info!("DLSS 应用已通过驱动回读校验: {stored:?}");
+
+    let status = DLSSPresetStatus {
+        preset: preset.clone(),
+        quality: quality.clone(),
+        texture_quality: texture_quality.clone(),
+        antialiasing: antialiasing.clone(),
+    };
+    write_applied_status(&status);
+
+    let mut parts = vec![format!(
+        "DLSS预设: {}",
+        if preset.eq_ignore_ascii_case("default") {
+            "默认（由3D程序设置）".to_string()
+        } else {
+            preset.clone()
         }
-
-        let mut parts = vec![format!(
-            "DLSS预设: {}",
-            if preset.eq_ignore_ascii_case("default") { "默认（由3D程序设置）" } else { &preset }
-        )];
-        if quality != "default" { parts.push(format!("质量: {}", quality)); }
-        if texture_quality != "default" { parts.push(format!("纹理: {}", texture_quality)); }
-        if antialiasing != "default" { parts.push(format!("抗锯齿: {}", antialiasing)); }
-
-        Ok(DLSSApplyResult {
-            success: true,
-            message: parts.join(" / "),
-            preset,
-            quality,
-            texture_quality,
-            antialiasing,
-        })
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("应用失败: {}", stderr))
+    )];
+    if quality != "default" {
+        parts.push(format!("质量: {quality}"));
     }
+    if texture_quality != "default" {
+        parts.push(format!("纹理: {texture_quality}"));
+    }
+    if antialiasing != "default" {
+        parts.push(format!("抗锯齿: {antialiasing}"));
+    }
+
+    Ok(DLSSApplyResult {
+        success: true,
+        message: format!("{}（已写入驱动并校验）", parts.join(" / ")),
+        preset,
+        quality,
+        texture_quality,
+        antialiasing,
+    })
 }
 
 #[tauri::command]
@@ -586,87 +630,6 @@ pub async fn toggle_dlss_indicator(enable: bool) -> Result<bool, String> {
     }
 
     Ok(enable)
-}
-
-#[tauri::command]
-pub async fn toggle_dlss_lock(enable: bool) -> Result<bool, String> {
-    let npi_path = get_npi_path()?;
-
-    let lock_config = generate_dlss_lock_config(enable);
-
-    let temp_dir = std::env::temp_dir();
-    let temp_path = temp_dir.join("delta_force_dlss_lock.nip");
-    fs::write(&temp_path, &lock_config)
-        .map_err(|e| format!("写入锁定配置文件失败: {}", e))?;
-
-    let npi_str = npi_path.to_str().ok_or("路径编码错误")?;
-    let temp_str = temp_path.to_str().ok_or("临时路径编码错误")?;
-
-    let ps_command = format!(
-        "Start-Process -FilePath '{}' -ArgumentList '-silentImport','\"{}\"' -Verb RunAs -Wait",
-        npi_str.replace('\'', "''"),
-        temp_str.replace('\'', "''")
-    );
-
-    let output = Command::new("powershell")
-        .args(["-WindowStyle", "Hidden", "-NoProfile", "-Command", &ps_command])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map_err(|e| format!("执行失败: {}", e))?;
-
-    let _ = fs::remove_file(&temp_path);
-
-    if output.status.success() {
-        Ok(enable)
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("DLSS锁定操作失败: {}", stderr))
-    }
-}
-
-fn generate_dlss_lock_config(lock_enabled: bool) -> Vec<u8> {
-    let lock_value = if lock_enabled { "1" } else { "0" };
-
-    let xml_content = format!(
-        r#"<?xml version="1.0" encoding="utf-16"?>
-<ArrayOfProfile>
-  <Profile>
-    <ProfileName>Delta Force DLSS Lock</ProfileName>
-    <Executeables>
-      <string>deltaforceclient-win64-shipping.exe</string>
-    </Executeables>
-    <Settings>
-      <ProfileSetting>
-        <SettingNameInfo />
-        <SettingID>275602687</SettingID>
-        <SettingValue>{}</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Override DLSS-SR presets</SettingNameInfo>
-        <SettingID>283385331</SettingID>
-        <SettingValue>11</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-      <ProfileSetting>
-        <SettingNameInfo>Enable DLSS-SR override</SettingNameInfo>
-        <SettingID>283385345</SettingID>
-        <SettingValue>1</SettingValue>
-        <ValueType>Dword</ValueType>
-      </ProfileSetting>
-    </Settings>
-  </Profile>
-</ArrayOfProfile>"#,
-        lock_value
-    );
-
-    let mut bytes: Vec<u8> = vec![0xFF, 0xFE];
-    bytes.extend(
-        xml_content.encode_utf16().collect::<Vec<u16>>()
-            .iter()
-            .flat_map(|&c| c.to_le_bytes())
-    );
-    bytes
 }
 
 fn dlss_preset_name(value: u32) -> String {
@@ -779,33 +742,21 @@ fn read_dlss_preset_status_from_nvapi() -> Result<DLSSPresetStatus, String> {
     })
 }
 
-fn read_dlss_preset_status_from_file() -> Option<DLSSPresetStatus> {
-    let exe_path = std::env::current_exe().ok()?;
-    let parent_dir = exe_path.parent()?;
-    let status_path = parent_dir.join("delta_force_dlss_status.json");
-    let content = fs::read_to_string(status_path).ok()?;
-    serde_json::from_str::<DLSSPresetStatus>(&content).ok()
-}
-
 #[tauri::command]
 pub async fn get_dlss_settings_status() -> Result<DLSSSettingsStatus, String> {
-    let dlss_indicator_enabled = get_dlss_indicator_registry_value();
-
-    let dlss_lock_enabled = false;
-
     Ok(DLSSSettingsStatus {
-        dlss_indicator_enabled,
-        dlss_lock_enabled,
+        dlss_indicator_enabled: get_dlss_indicator_registry_value(),
     })
 }
 
+/// Read the DLSS state straight from the driver profile.
+///
+/// No file fallback: a cached JSON describing what was *requested* is not
+/// evidence that the driver accepted it, and surfacing it as current state is
+/// exactly how a failed apply used to look successful.
 #[tauri::command]
 pub async fn get_dlss_preset_status() -> Result<DLSSPresetStatus, String> {
     read_dlss_preset_status_from_nvapi()
-        .or_else(|error| {
-            log::warn!("读取 NVIDIA DLSS Profile 失败，回退到状态文件: {error}");
-            read_dlss_preset_status_from_file().ok_or(error)
-        })
 }
 
 /// 用系统默认浏览器打开外部链接（不走内嵌窗口）
@@ -903,23 +854,177 @@ pub async fn cache_delta_image(app: tauri::AppHandle, url: String) -> Result<Str
 mod tests {
     use super::*;
 
-    fn decode_utf16_le(bytes: &[u8]) -> String {
-        if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
-            // skip BOM
-            let rest = &bytes[2..];
-            let mut u16s = Vec::with_capacity(rest.len() / 2);
-            for chunk in rest.chunks(2) {
-                if chunk.len() == 2 {
-                    let lo = chunk[0] as u16;
-                    let hi = chunk[1] as u16;
-                    u16s.push(lo | (hi << 8));
-                }
-            }
-            String::from_utf16(&u16s).unwrap_or_default()
-        } else {
-            String::from_utf8(bytes.to_vec()).unwrap_or_default()
+    fn written(plan: &DlssSettingPlan, setting_id: u32) -> Option<u32> {
+        plan.writes
+            .iter()
+            .find(|(id, _)| *id == setting_id)
+            .map(|(_, v)| *v)
+    }
+
+    fn is_deleted(plan: &DlssSettingPlan, setting_id: u32) -> bool {
+        plan.deletes.contains(&setting_id)
+    }
+
+    #[test]
+    fn preset_letters_map_to_driver_values() {
+        let cases = [
+            ("A", 1u32), ("B", 2), ("C", 3), ("D", 4), ("E", 5), ("F", 6), ("G", 7),
+            ("J", 10), ("K", 11), ("L", 12), ("M", 13),
+        ];
+        for (letter, expected) in cases {
+            assert_eq!(
+                dlss_preset_letter_value(letter),
+                Some(expected),
+                "preset {letter}"
+            );
+            // Lower-case input must behave identically (the UI sends upper-case,
+            // but a stale config file might not).
+            assert_eq!(
+                dlss_preset_letter_value(&letter.to_lowercase()),
+                Some(expected)
+            );
+        }
+        assert_eq!(dlss_preset_letter_value("default"), None);
+        assert_eq!(dlss_preset_letter_value(""), None);
+        assert_eq!(dlss_preset_letter_value("Z"), None);
+    }
+
+    #[test]
+    fn quality_levels_map_to_driver_values() {
+        assert_eq!(dlss_quality_value("performance"), Some(0));
+        assert_eq!(dlss_quality_value("balanced"), Some(1));
+        assert_eq!(dlss_quality_value("quality"), Some(2));
+        assert_eq!(dlss_quality_value("dlaa"), Some(4));
+        assert_eq!(dlss_quality_value("ultra_performance"), Some(5));
+        // 3 is the driver's "N/A" slot and must never be written.
+        assert_eq!(dlss_quality_value("default"), None);
+    }
+
+    #[test]
+    fn plan_never_touches_unrelated_settings() {
+        let plan = build_dlss_plan("K", "quality", "high_quality", "4x");
+
+        // VSync / DeepDVC / VRR / DLSS-FG / DLSSG frame counts used to be written
+        // unconditionally, which wiped the user's game profile on every apply.
+        let forbidden = [
+            11041231u32,  // Vertical Sync
+            5912412,      // Vertical Sync Tear Control
+            9963648,      // Enable DeepDVC Feature
+            11250451,     // DeepDVC saturation
+            11250466,     // DeepDVC intensity
+            278196727,    // VRR requested state
+            270198627,    // smooth AFR
+            271614616,    // DLSSG mode
+            273507943,    // DLSSG multi-frame count
+            274083087,    // DLSSG dynamic multi-frame count
+            282018085,    // DLSSG target frame rate
+            283385329,    // DLSS-FG preset
+            283385347,    // Enable DLSS-FG override
+            283385333,    // Forced scaling ratio (only valid with quality = Custom)
+        ];
+        for id in forbidden {
+            assert!(
+                written(&plan, id).is_none() && !is_deleted(&plan, id),
+                "setting 0x{id:08X} must not be part of the DLSS plan"
+            );
         }
     }
 
+    #[test]
+    fn applying_a_preset_writes_override_preset_and_model_profile() {
+        let plan = build_dlss_plan("K", "default", "default", "default");
 
+        assert_eq!(written(&plan, DLSS_SR_OVERRIDE_ID), Some(1));
+        assert_eq!(written(&plan, DLSS_SR_PRESET_ID), Some(11));
+        assert_eq!(
+            written(&plan, DLSS_MODEL_PRESET_PROFILE_ID),
+            Some(DLSS_MODEL_PRESET_CUSTOM),
+            "preset letter only takes effect on some games when the model \
+             preset profile is Custom"
+        );
+
+        // Untouched dimensions must be cleared, not pinned to zero.
+        assert!(is_deleted(&plan, DLSS_SR_MODE_ID));
+        assert!(is_deleted(&plan, TEXTURE_FILTERING_QUALITY_ID));
+        assert!(is_deleted(&plan, AA_MODE_REPLAY_ID));
+    }
+
+    #[test]
+    fn default_preset_clears_overrides_instead_of_writing_zero() {
+        let plan = build_dlss_plan("default", "default", "default", "default");
+
+        // The switch itself is explicitly off so the game decides.
+        assert_eq!(written(&plan, DLSS_SR_OVERRIDE_ID), Some(0));
+        assert!(
+            is_deleted(&plan, DLSS_SR_PRESET_ID),
+            "preset 0 means 'N/A' in the driver; leaving it set would pin the \
+             game to a non-preset instead of restoring the default"
+        );
+        assert!(
+            is_deleted(&plan, DLSS_MODEL_PRESET_PROFILE_ID),
+            "a leftover Custom model profile keeps forcing custom presets"
+        );
+    }
+
+    #[test]
+    fn quality_texture_and_antialiasing_are_independent() {
+        let plan = build_dlss_plan("default", "quality", "high_performance", "8x");
+
+        assert_eq!(written(&plan, DLSS_SR_MODE_ID), Some(2));
+        assert_eq!(written(&plan, TEXTURE_FILTERING_QUALITY_ID), Some(0x14));
+        assert_eq!(written(&plan, AA_MODE_REPLAY_ID), Some(0x34));
+        // No preset selected -> override off, preset cleared.
+        assert_eq!(written(&plan, DLSS_SR_OVERRIDE_ID), Some(0));
+        assert!(is_deleted(&plan, DLSS_SR_PRESET_ID));
+    }
+
+    #[test]
+    fn texture_quality_maps_known_values_only() {
+        assert_eq!(texture_quality_value("high_quality"), Some(0xFFFF_FFF6));
+        assert_eq!(texture_quality_value("quality"), Some(0));
+        assert_eq!(texture_quality_value("performance"), Some(0x0A));
+        assert_eq!(texture_quality_value("high_performance"), Some(0x14));
+        assert_eq!(texture_quality_value("default"), None);
+        assert_eq!(texture_quality_value("bogus"), None);
+    }
+
+    #[test]
+    fn antialiasing_maps_known_values_only() {
+        assert_eq!(antialiasing_value("off"), Some(0));
+        assert_eq!(antialiasing_value("2x"), Some(0x14));
+        assert_eq!(antialiasing_value("4x"), Some(0x24));
+        assert_eq!(antialiasing_value("8x"), Some(0x34));
+        assert_eq!(antialiasing_value("default"), None);
+    }
+
+    #[test]
+    fn plan_has_no_duplicate_setting_ids() {
+        let plan = build_dlss_plan("M", "dlaa", "quality", "2x");
+        let mut ids: Vec<u32> = plan.writes.iter().map(|(id, _)| *id).collect();
+        ids.extend(plan.deletes.iter().copied());
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(ids.len(), sorted.len(), "duplicate setting id in plan: {ids:?}");
+
+        let mut writes: Vec<u32> = plan.writes.iter().map(|(id, _)| *id).collect();
+        for id in &plan.deletes {
+            assert!(
+                !writes.contains(id),
+                "0x{id:08X} is both written and deleted"
+            );
+        }
+        writes.clear();
+    }
+
+    #[test]
+    fn status_round_trips_preset_names() {
+        // The reader maps driver values back to the same ids the UI sends, so a
+        // round-trip through dlss_preset_name must be stable for every letter.
+        for letter in ["A", "B", "C", "D", "E", "F", "G", "J", "K", "L", "M"] {
+            let value = dlss_preset_letter_value(letter).unwrap();
+            assert_eq!(dlss_preset_name(value), letter);
+        }
+        assert_eq!(dlss_preset_name(0), "default");
+    }
 }

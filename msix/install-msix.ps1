@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # NexBox MSIX 侧载安装脚本（自动 UAC 提权版）
 # 直接双击运行：自动请求管理员权限 -> 导入证书 -> 安装 MSIX
 # ============================================================
@@ -11,7 +11,7 @@ if (-not $isAdmin) {
     exit
 }
 
-$WorkDir = "D:\NexBox\msix"
+$WorkDir = $PSScriptRoot
 $PfxPath = "$WorkDir\NexBoxTest.pfx"
 $CertPassword = "NexBoxTest"
 $PublisherCN = "CN=30F199CB-855A-42F4-96A9-F43088B508BF"

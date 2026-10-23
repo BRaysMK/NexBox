@@ -1,10 +1,12 @@
 param()
 
 $ErrorActionPreference = "Stop"
-$InstallerProject = "D:\NexBox\installer"
+# 路径由脚本自身位置推导，避免硬编码盘符/仓库位置。
+$InstallerProject = $PSScriptRoot
+$MainProject = Split-Path $InstallerProject -Parent
 
 # Read version from main project's Cargo.toml
-$mainCargo = "D:\NexBox\src-tauri\Cargo.toml"
+$mainCargo = Join-Path $MainProject "src-tauri\Cargo.toml"
 $version = (Select-String -Path $mainCargo -Pattern '^version\s*=\s*"(.+)"').Matches[0].Groups[1].Value
 Write-Host "Main app version: $version" -ForegroundColor Cyan
 

@@ -27,7 +27,7 @@ import {
   Divider,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { Cpu, ArrowLeft, Zap, Eye, FileText, Settings, ChevronDown, Check, Monitor, Thermometer } from "lucide-react";
@@ -76,20 +76,27 @@ interface PresetReference {
   presetColor: "purple" | "green";
 }
 
-const getDLSSPresets = (t: (key: string) => string): DLSSModelPreset[] => [
-  { id: "default", name: t("deltaForce.dlssModels.default.name"), description: t("deltaForce.dlssModels.default.description"), recommended: false },
-  { id: "A", name: t("deltaForce.dlssModels.A.name"), description: t("deltaForce.dlssModels.A.description"), recommended: false },
-  { id: "B", name: t("deltaForce.dlssModels.B.name"), description: t("deltaForce.dlssModels.B.description"), recommended: false },
-  { id: "C", name: t("deltaForce.dlssModels.C.name"), description: t("deltaForce.dlssModels.C.description"), recommended: false },
-  { id: "D", name: t("deltaForce.dlssModels.D.name"), description: t("deltaForce.dlssModels.D.description"), recommended: false },
-  { id: "E", name: t("deltaForce.dlssModels.E.name"), description: t("deltaForce.dlssModels.E.description"), recommended: false },
-  { id: "F", name: t("deltaForce.dlssModels.F.name"), description: t("deltaForce.dlssModels.F.description"), recommended: false },
-  { id: "G", name: t("deltaForce.dlssModels.G.name"), description: t("deltaForce.dlssModels.G.description"), recommended: false },
-  { id: "J", name: t("deltaForce.dlssModels.J.name"), description: t("deltaForce.dlssModels.J.description"), recommended: false },
-  { id: "K", name: t("deltaForce.dlssModels.K.name"), description: t("deltaForce.dlssModels.K.description"), recommended: true },
-  { id: "L", name: t("deltaForce.dlssModels.L.name"), description: t("deltaForce.dlssModels.L.description"), recommended: true },
-  { id: "M", name: t("deltaForce.dlssModels.M.name"), description: t("deltaForce.dlssModels.M.description"), recommended: true },
+/**
+ * 兜底列表：仅在 `get_dlss_model_presets` 调用失败时使用。
+ * 正常路径由后端按驱动实际支持的值枚举生成（旧驱动不会返回 L/M）。
+ */
+const FALLBACK_PRESETS: DLSSModelPreset[] = [
+  { id: "default", name: "默认", description: "由3D程序自行决定", recommended: false },
+  { id: "A", name: "Preset A", description: "早期模型", recommended: false },
+  { id: "B", name: "Preset B", description: "早期模型", recommended: false },
+  { id: "C", name: "Preset C", description: "早期模型", recommended: false },
+  { id: "D", name: "Preset D", description: "稳定模型", recommended: false },
+  { id: "E", name: "Preset E", description: "实验性模型", recommended: false },
+  { id: "F", name: "Preset F", description: "改进模型", recommended: false },
+  { id: "G", name: "Preset G", description: "改进模型", recommended: false },
+  { id: "J", name: "Preset J", description: "较新模型，画质优先", recommended: false },
+  { id: "K", name: "Preset K", description: "推荐模型，大多数DLSS模式", recommended: true },
+  { id: "L", name: "Preset L", description: "Transformer Gen 2，画质优先", recommended: false },
+  { id: "M", name: "Preset M", description: "Transformer Gen 2，性能优先", recommended: false },
 ];
+
+/** 应用操作的前端兜底超时：驱动无响应时不能让按钮永久转圈。 */
+const APPLY_TIMEOUT_MS = 15_000;
 
 interface DLSSQualityOption {
   id: string;
@@ -193,7 +200,7 @@ function DLSSCard() {
   const [selectedAntialiasing, setSelectedAntialiasing] = useState("default");
   const [isApplying, setIsApplying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const dlssPresets = getDLSSPresets(t);
+  const [presets, setPresets] = useState<DLSSModelPreset[]>(FALLBACK_PRESETS);
   const dlssQualityOptions = getDLSSQualityOptions(t);
   const textureQualityOptions = getTextureQualityOptions(t);
   const antialiasingOptions = getAntialiasingOptions(t);
@@ -206,36 +213,49 @@ function DLSSCard() {
     return () => document.getElementById("chakra-menu-z-fix")?.remove();
   }, []);
 
+  // 预设列表由后端按驱动实际支持的值枚举生成，前端不再硬编码
   useEffect(() => {
     let cancelled = false;
-    const loadStatus = () => {
-      invoke<DLSSPresetStatus>("get_dlss_preset_status")
-        .then((status) => {
-          if (cancelled) return;
-          setSelectedPreset(status.preset || "default");
-          setSelectedQuality(status.quality || "default");
-          setSelectedTextureQuality(status.texture_quality || "default");
-          setSelectedAntialiasing(status.antialiasing || "default");
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!cancelled) setIsLoading(false);
-        });
+    invoke<DLSSModelPreset[]>("get_dlss_model_presets")
+      .then((list) => {
+        if (!cancelled && Array.isArray(list) && list.length > 0) setPresets(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
     };
-    const handleFocus = () => loadStatus();
+  }, []);
+
+  const loadStatus = useCallback(() => {
+    return invoke<DLSSPresetStatus>("get_dlss_preset_status")
+      .then((status) => {
+        setSelectedPreset(status.preset || "default");
+        setSelectedQuality(status.quality || "default");
+        setSelectedTextureQuality(status.texture_quality || "default");
+        setSelectedAntialiasing(status.antialiasing || "default");
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const guardedLoad = () => {
+      if (!cancelled) loadStatus();
+    };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") loadStatus();
+      if (document.visibilityState === "visible") guardedLoad();
     };
 
-    loadStatus();
-    window.addEventListener("focus", handleFocus);
+    guardedLoad();
+    window.addEventListener("focus", guardedLoad);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("focus", guardedLoad);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [loadStatus]);
 
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -246,30 +266,39 @@ function DLSSCard() {
   const handleApply = async () => {
     setIsApplying(true);
     try {
-      const result = await invoke<DLSSApplyResult>("apply_dlss_model_preset", {
-        preset: selectedPreset,
-        quality: selectedQuality,
-        textureQuality: selectedTextureQuality,
-        antialiasing: selectedAntialiasing,
-      });
+      // 后端只有在驱动回读校验通过后才 resolve；失败会带着具体设置 ID 抛错
+      const result = await Promise.race([
+        invoke<DLSSApplyResult>("apply_dlss_model_preset", {
+          preset: selectedPreset,
+          quality: selectedQuality,
+          textureQuality: selectedTextureQuality,
+          antialiasing: selectedAntialiasing,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(t("dlssPreset.applyTimeout"))), APPLY_TIMEOUT_MS)
+        ),
+      ]);
       toast({
         title: result.message,
         status: "success",
         duration: 3000,
         isClosable: true,
       });
+      // 状态以下拉框显示的是驱动里的真实值，而不是刚提交的请求
+      await loadStatus();
     } catch (error) {
       toast({
         title: String(error),
         status: "error",
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       });
+      await loadStatus();
     }
     setIsApplying(false);
   };
 
-  const currentPreset = dlssPresets.find(p => p.id === selectedPreset);
+  const currentPreset = presets.find(p => p.id === selectedPreset) ?? presets[0];
   const currentQuality = dlssQualityOptions.find(q => q.id === selectedQuality);
   const currentTextureQuality = textureQualityOptions.find(q => q.id === selectedTextureQuality);
   const currentAntialiasing = antialiasingOptions.find(a => a.id === selectedAntialiasing);
@@ -295,7 +324,7 @@ function DLSSCard() {
               </LiquidGlassCard>
             </MenuButton>
             <MenuList bg={menuListBg} borderColor={borderColor} maxH="300px" overflowY="auto">
-              {dlssPresets.map(preset => (
+              {presets.map(preset => (
                 <MenuItem key={preset.id} onClick={() => setSelectedPreset(preset.id)} bg={selectedPreset === preset.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
                   <HStack spacing={3} w="full" justify="space-between">
                     <HStack spacing={2}>
@@ -406,6 +435,7 @@ function DLSSCard() {
         <Button
           onClick={handleApply}
           isLoading={isApplying}
+          isDisabled={isLoading}
           bg={themeConfig.primaryColor}
           color={getContrastTextColor()}
           _hover={{ bg: themeConfig.primaryColor, filter: "brightness(0.9)" }}

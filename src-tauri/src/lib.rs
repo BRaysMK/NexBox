@@ -1026,7 +1026,6 @@ pub fn run() {
         delta_force::get_dlss_preset_status,
         delta_force::get_delta_maps,
         delta_force::toggle_dlss_indicator,
-        delta_force::toggle_dlss_lock,
         delta_force::get_dlss_settings_status,
         delta_force::open_url_in_system_browser,
         delta_force::open_platform_window,

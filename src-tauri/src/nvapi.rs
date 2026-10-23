@@ -77,6 +77,44 @@ impl NvdrsSettingV1 {
 // = 4 + 4096 + 4 + 4 + 4 + 4 + 4 + 4100 + 4100 = 12320
 const _: () = assert!(std::mem::size_of::<NvdrsSettingV1>() == 12320);
 
+/// Maximum number of enumerated values per setting (NVAPI_SETTING_MAX_VALUES).
+const NVAPI_SETTING_MAX_VALUES: usize = 100;
+/// Size of NVDRS_SETTING_UNION: max(dword, qword, NVDRS_BINARY_SETTING, NvAPI_UnicodeString).
+const NVDRS_SETTING_UNION_SIZE: usize = 4100;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct NvdrsSettingUnion {
+    raw: [u8; NVDRS_SETTING_UNION_SIZE],
+}
+
+impl NvdrsSettingUnion {
+    fn as_u32(&self) -> NvU32 {
+        unsafe { std::ptr::read_unaligned(self.raw.as_ptr() as *const NvU32) }
+    }
+}
+
+#[repr(C)]
+struct NvdrsSettingValues {
+    version: NvU32,
+    num_setting_values: NvU32,
+    setting_type: NvU32,
+    default_value: NvdrsSettingUnion,
+    setting_values: [NvdrsSettingUnion; NVAPI_SETTING_MAX_VALUES],
+}
+
+impl NvdrsSettingValues {
+    fn version_const() -> NvU32 {
+        (std::mem::size_of::<Self>() as NvU32) | (1u32 << 16)
+    }
+}
+
+// sizeof = 4 + 4 + 4 + 4100 + 100 * 4100 = 414112 (natural align 4)
+const _: () = assert!(
+    std::mem::size_of::<NvdrsSettingValues>() == 414112,
+    "NVDRS_SETTING_VALUES layout mismatch"
+);
+
 #[repr(C)]
 struct NvdrsApplicationV4 {
     version: NvU32,
@@ -232,6 +270,16 @@ extern "C" {
     fn NvAPI_DRS_RestoreProfileDefault(
         session: NvDRSSessionHandle,
         profile: NvDRSProfileHandle,
+    ) -> NvAPI_Status;
+    fn NvAPI_DRS_DeleteProfileSetting(
+        session: NvDRSSessionHandle,
+        profile: NvDRSProfileHandle,
+        setting_id: NvU32,
+    ) -> NvAPI_Status;
+    fn NvAPI_DRS_EnumAvailableSettingValues(
+        setting_id: NvU32,
+        max_num_values: *mut NvU32,
+        setting_values: *mut NvdrsSettingValues,
     ) -> NvAPI_Status;
     fn NvAPI_EnumNvidiaDisplayHandle(index: NvU32, display: *mut NvDisplayHandle) -> NvAPI_Status;
     fn NvAPI_GetDisplayDriverVersion(
@@ -645,6 +693,147 @@ pub fn get_nvidia_profile_settings(
                 })
             })
             .collect())
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Per-application profile writes
+// ---------------------------------------------------------------------------
+
+/// NVAPI status codes used by the per-application patch helpers.
+const NVAPI_SETTING_NOT_FOUND: NvAPI_Status = -160;
+
+/// Resolve the profile that owns `executable_names`, write `writes`, delete
+/// `deletes`, persist once, then read the written ids back from the driver.
+///
+/// Returns `(setting_id, value_actually_stored)` for every id in `writes`.
+/// Errors instead of silently succeeding when the profile is missing, when a
+/// write is rejected, or when a read-back disagrees with the requested value.
+pub fn apply_application_settings(
+    executable_names: &[&str],
+    writes: &[(NvU32, NvU32)],
+    deletes: &[NvU32],
+) -> Result<Vec<(NvU32, NvU32)>, String> {
+    try_init_nvapi()?;
+    with_state(|state| {
+        // NVIDIA App / the game itself can rewrite the DRS database between
+        // calls, so refresh before touching anything.
+        let load_status = unsafe { NvAPI_DRS_LoadSettings(state.session) };
+        if load_status != NVAPI_OK {
+            return Err(format!(
+                "读取驱动配置失败: {} (代码 {load_status})",
+                nvapi_error_string(load_status)
+            ));
+        }
+
+        let profile = find_application_profile(state, executable_names).ok_or_else(|| {
+            format!(
+                "未找到该游戏的 NVIDIA 驱动档案（已尝试 {}）。请先启动一次游戏，让驱动建立档案后重试。",
+                executable_names.join(" / ")
+            )
+        })?;
+
+        for &(setting_id, value) in writes {
+            let mut setting = NvdrsSettingV1::new();
+            setting.setting_id = setting_id;
+            setting.set_current_u32(value);
+
+            let status = unsafe { NvAPI_DRS_SetSetting(state.session, profile, &mut setting) };
+            if status != NVAPI_OK {
+                return Err(format!(
+                    "写入设置 0x{setting_id:08X} 失败: {} (代码 {status})",
+                    nvapi_error_string(status)
+                ));
+            }
+        }
+
+        for &setting_id in deletes {
+            let status =
+                unsafe { NvAPI_DRS_DeleteProfileSetting(state.session, profile, setting_id) };
+            // A setting that was never explicitly set cannot be deleted; that is
+            // exactly the state we want, so treat it as success.
+            if status != NVAPI_OK && status != NVAPI_SETTING_NOT_FOUND {
+                return Err(format!(
+                    "清除设置 0x{setting_id:08X} 失败: {} (代码 {status})",
+                    nvapi_error_string(status)
+                ));
+            }
+        }
+
+        let save_status = unsafe { NvAPI_DRS_SaveSettings(state.session) };
+        if save_status != NVAPI_OK {
+            return Err(format!(
+                "保存驱动配置失败: {} (代码 {save_status})",
+                nvapi_error_string(save_status)
+            ));
+        }
+
+        // Verify against the driver instead of trusting SetSetting's status.
+        let _ = unsafe { NvAPI_DRS_LoadSettings(state.session) };
+        let verify_profile = find_application_profile(state, executable_names).unwrap_or(profile);
+
+        let mut stored = Vec::with_capacity(writes.len());
+        for &(setting_id, expected) in writes {
+            let actual = read_profile_setting(state, verify_profile, setting_id)
+                .map(|v| v.current_value)
+                .ok_or_else(|| {
+                    format!(
+                        "校验失败: 设置 0x{setting_id:08X} 写入后读不回来（驱动未接受该值）"
+                    )
+                })?;
+            if actual != expected {
+                return Err(format!(
+                    "校验失败: 设置 0x{setting_id:08X} 期望 0x{expected:08X}，驱动实际为 0x{actual:08X}"
+                ));
+            }
+            stored.push((setting_id, actual));
+        }
+
+        Ok(stored)
+    })
+}
+
+/// Enumerate the values the driver accepts for `setting_id`.
+///
+/// Used to hide DLSS presets the installed driver does not implement (e.g.
+/// presets L/M on pre-Transformer-Gen-2 drivers) instead of writing values the
+/// driver silently ignores.
+pub fn enum_available_setting_values(setting_id: NvU32) -> Result<Vec<NvU32>, String> {
+    try_init_nvapi()?;
+    with_state(|_state| {
+        // NVDRS_SETTING_VALUES is ~404 KiB; keep it off the stack.
+        let layout = std::alloc::Layout::new::<NvdrsSettingValues>();
+        let ptr = unsafe { std::alloc::alloc_zeroed(layout) } as *mut NvdrsSettingValues;
+        if ptr.is_null() {
+            return Err("内存不足，无法枚举驱动设置".to_string());
+        }
+
+        let result = (|| {
+            let mut count: NvU32 = NVAPI_SETTING_MAX_VALUES as NvU32;
+            unsafe {
+                (*ptr).version = NvdrsSettingValues::version_const();
+                (*ptr).num_setting_values = NVAPI_SETTING_MAX_VALUES as NvU32;
+                (*ptr).setting_type = 0;
+            }
+
+            let status = unsafe { NvAPI_DRS_EnumAvailableSettingValues(setting_id, &mut count, ptr) };
+            if status != NVAPI_OK {
+                return Err(format!(
+                    "枚举设置 0x{setting_id:08X} 的可用值失败: {} (代码 {status})",
+                    nvapi_error_string(status)
+                ));
+            }
+
+            let n = (count as usize).min(NVAPI_SETTING_MAX_VALUES);
+            Ok(unsafe {
+                (0..n)
+                    .map(|i| (*ptr).setting_values[i].as_u32())
+                    .collect()
+            })
+        })();
+
+        unsafe { std::alloc::dealloc(ptr as *mut u8, layout) };
+        result
     })
 }
 

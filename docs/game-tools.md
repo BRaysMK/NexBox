@@ -19,3 +19,48 @@ NexBox 游戏工具箱汇集了一系列为游戏场景打造的实用小工具,
 ## 使用方式
 
 在工具箱主界面选择对应功能入口,即可进入相应模块。
+
+## 三角洲DLSS设置
+
+直接改写 NVIDIA 驱动档案里的 DLSS 条目,用来强制指定 DLSS 模型预设与质量级别。不依赖 NVIDIA Profile Inspector 或任何外部工具。
+
+### 依赖
+
+- NVIDIA 显卡 + 已安装的 NVIDIA 驱动(提供 `nvapi64.dll` 的 DRS 接口)。
+- 游戏至少启动过一次,使驱动建立以 `deltaforceclient-win64-shipping.exe` 为键的档案。
+- 管理员权限(应用启动时已自行提权)。
+
+### 写入的设置
+
+| 设置 | Setting ID | 说明 |
+| --- | --- | --- |
+| Enable DLSS-SR override | `0x10E41E01` | 选预设时置 1,选"默认"时置 0 |
+| Override DLSS-SR presets | `0x10E41DF3` | A=1 … K=11,L=12,M=13;选"默认"时**删除**该覆盖 |
+| DLSS Model Preset Profile | `0x00634291` | 选预设时置 2(Custom);选"默认"时删除 |
+| DLSS - Forced Quality Level | `0x10AFB768` | 性能=0 / 平衡=1 / 质量=2 / DLAA=4 / 超高性能=5 |
+| Texture filtering - Quality | `0x00CE2691` | 高质量 / 质量 / 性能 / 高性能 |
+| AA - Transparency Supersampling | `0x10D48A85` | 关 / 2x / 4x / 8x |
+
+"默认"一律表示**删除该覆盖项**,让设置回落到驱动或游戏的默认值,而不是写 0 —— 写 0 会在档案里留下一条显式的"关闭"覆盖。
+
+以下设置**不会**被触碰,以免破坏用户已有的画质配置:垂直同步、垂直同步撕裂控制、RTX 动态鲜艳度(DeepDVC)、VRR、平滑 AFR、DLSS 帧生成相关项、以及 "DLSS - Forced Scaling Ratio"(`0x10E41DF5`,仅在质量级别为 Custom 时才生效,与应用命名质量级别冲突)。
+
+### 生效与校验
+
+- 每次应用后都会**回读驱动**逐项比对,值不符即报错并指出具体的 Setting ID,不会出现"提示成功但实际没写进去"。
+- 预设列表由驱动枚举(`NvAPI_DRS_EnumAvailableSettingValues`)生成,老驱动不支持的预设(如 L/M)不会出现在下拉框里。
+- 应用后需重启游戏生效;若游戏自身禁止 DLSS 覆盖,驱动层设置可能仍然无效。
+- DLSS 指示器开关写入 `HKLM\SOFTWARE\NVIDIA Corporation\Global\NGXCore\ShowDlssIndicator`,可在游戏画面左下角确认覆盖是否真的生效。
+
+### 与反作弊的关系
+
+本功能通过 NVIDIA 官方 NVAPI DRS 接口修改**驱动配置数据库**,效果在游戏下次启动时由驱动加载:
+
+- **不打开游戏进程、不注入 DLL、不读写游戏内存、不挂钩子、不创建远程线程。**
+- 与 NVIDIA 控制面板、NVIDIA App 修改 3D 设置走的是同一套接口,操作对象是 `nvdrsdb0.bin` 这个纯数据文件。
+- 应用发生在游戏运行之前(或重启之后),游戏进程本身感知不到外部程序的存在。
+
+反作弊系统(ACE / EAC / BattlEye 等)检测的是内存篡改、DLL 注入、驱动级 hook、调试器附加、非法进程句柄访问 —— 修改驱动配置文件不在其列。
+
+> 需要区分的是:NexBox 的「反作弊优化」「游戏进程优化」「准星按住」等功能会**直接操作游戏/反作弊进程句柄**或安装**全局键鼠钩子**,其技术敏感度远高于本功能。排查本功能问题时,建议先关闭上述功能以隔离变量。
+

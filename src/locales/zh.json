@@ -1317,58 +1317,8 @@
     "recommended": "推荐",
     "currentSelection": "当前选择",
     "applyPreset": "应用预设",
-    "dlssNote": "需要NVIDIA Profile Inspector支持，应用后重启游戏生效",
+    "dlssNote": "直接写入 NVIDIA 驱动档案并回读校验；仅修改 DLSS 相关项，不影响其他画质设置。应用后重启游戏生效。",
     "back": "返回",
-    "dlssModels": {
-      "default": {
-        "name": "默认（由3D程序设置）",
-        "description": "由3D程序自行决定，不做强制覆盖"
-      },
-      "A": {
-        "name": "A模型",
-        "description": "早期模型"
-      },
-      "B": {
-        "name": "B模型",
-        "description": "早期模型"
-      },
-      "C": {
-        "name": "C模型",
-        "description": "早期模型"
-      },
-      "D": {
-        "name": "D模型",
-        "description": "稳定模型"
-      },
-      "E": {
-        "name": "E模型",
-        "description": "实验性模型"
-      },
-      "F": {
-        "name": "F模型",
-        "description": "改进模型"
-      },
-      "G": {
-        "name": "G模型",
-        "description": "改进模型"
-      },
-      "J": {
-        "name": "J模型",
-        "description": "较新模型，画质优先"
-      },
-      "K": {
-        "name": "K模型",
-        "description": "推荐模型，大多数DLSS模式"
-      },
-      "L": {
-        "name": "L模型",
-        "description": "优化Ultra Performance模式"
-      },
-      "M": {
-        "name": "M模型",
-        "description": "优化Performance模式"
-      }
-    },
     "weaponCodePlatformNames": {
       "maqt": "码枪堂",
       "anchor-codes": "主播改枪码",
@@ -1504,7 +1454,8 @@
     "description": "切换DLSS神经网络模型预设以优化游戏画质",
     "presetLabel": "DLSS 预设",
     "driverVersion": "驱动版本",
-    "noGpuFound": "未检测到显卡"
+    "noGpuFound": "未检测到显卡",
+    "applyTimeout": "驱动响应超时，请稍后重试"
   },
   "dlssQuality": {
     "label": "DLSS 质量级别",
@@ -1541,13 +1492,6 @@
     "enabling": "正在开启...",
     "disabling": "正在关闭...",
     "note": "需要管理员权限，重启游戏后生效"
-  },
-  "dlssLock": {
-    "title": "DLSS 锁定",
-    "description": "锁定 nvidiaProfileInspector 驱动配置",
-    "enabled": "DLSS 配置已锁定",
-    "disabled": "DLSS 配置已解锁",
-    "note": "锁定后防止驱动更新覆盖设置"
   },
   "dlssPresetTable": {
     "title": "预设参考表",
