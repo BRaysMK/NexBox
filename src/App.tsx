@@ -473,7 +473,8 @@ function App() {
           )}
         </MainLayout>
 
-        <UpdateModal />
+        {/* 已阉割：应用内自动更新（fetchLatestRelease 恒返回 null，弹窗永不触发） */}
+        {false && <UpdateModal />}
         {false && <ImportantAnnouncementModal />}
         {/* 已阉割：<StarPromptModal />（组件已删除）*/}
         {false && <DynamicIslandHost />}

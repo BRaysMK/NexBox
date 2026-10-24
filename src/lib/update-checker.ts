@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * ⛔ 已阉割：应用内自动更新
+ *
+ * 本分支是个人魔改版，不做应用内自动更新：既不检查新版本、也不下载/安装，
+ * 更不会向 GitCode 发任何请求（下面两个 fetch 函数已短路）。
+ * 版本更新改为手动从 GitHub Release 下载安装包。
+ *
+ * 恢复方式：删掉 `fetchLatestRelease` / `fetchAllReleases` 开头的 return 即可，
+ * 其余逻辑（update-context / UpdateModal / 设置项）需一并取消 `{false && ...}` 包裹。
+ */
+
 const GITCODE_OWNER = "MuLiuSaMa";
 const GITCODE_REPO = "nexbox";
 const GITCODE_WEB = "https://gitcode.com";
@@ -37,6 +48,10 @@ const authenticatedHeaders = () => ({
 });
 
 export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
+  // ⛔ 已阉割：不再向 GitCode 请求最新版本
+  return null;
+
+  // eslint-disable-next-line no-unreachable
   try {
     const response = await fetch(releaseBaseUrl("/releases/latest"), {
       headers: authenticatedHeaders(),
@@ -54,6 +69,10 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
 }
 
 export async function fetchAllReleases(): Promise<ReleaseInfo[]> {
+  // ⛔ 已阉割：不再向 GitCode 请求历史版本列表
+  return [];
+
+  // eslint-disable-next-line no-unreachable
   try {
     const response = await fetch(releaseBaseUrl("/releases", "?per_page=100"), {
       headers: authenticatedHeaders(),
@@ -74,6 +93,10 @@ export async function fetchAllReleases(): Promise<ReleaseInfo[]> {
 }
 
 export async function fetchReleaseByTag(tag: string): Promise<ReleaseInfo | null> {
+  // ⛔ 已阉割：不再向 GitCode 请求指定版本的更新日志
+  return null;
+
+  // eslint-disable-next-line no-unreachable
   try {
     const response = await fetch(
       releaseBaseUrl(`/releases/tags/${encodeURIComponent(tag)}`),

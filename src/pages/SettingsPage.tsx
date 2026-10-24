@@ -877,8 +877,9 @@ function GeneralSettings() {
               isDisabled={autoStartLoading || !autoStart}
             />
           </HStack>
-          {/* 商店版不提供应用内更新开关（版本由微软商店更新） */}
-          {!IS_STORE_BUILD && (
+          {/* 已阉割：应用内自动更新开关（更新改为手动从 GitHub Release 下载安装包）。
+              商店版本来也不提供此项（版本由微软商店更新）。 */}
+          {false && !IS_STORE_BUILD && (
             <HStack justify="space-between" py={2}>
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
                 {t("settings.generalSettings.autoUpdate")}
@@ -3092,11 +3093,10 @@ function AboutSettings() {
     }
   };
 
-  // 版本卡片点击：有更新时打开更新弹窗，无更新时重新检查；下载中/待安装交给卡片底部按钮
+  // 版本卡片点击：有更新时打开更新弹窗，无更新时重新检查；下载中/待安装交给卡片底部按钮。
+  // 已阉割：应用内自动更新关闭后，点击不再触发检查（否则只会弹「检查失败」）。
   const handleVersionClick = () => {
-    if (isDownloading || isDownloadComplete) return;
-    if (hasUpdate) openModal();
-    else handleCheckUpdate();
+    // 已阉割：不做任何应用内更新动作
   };
 
   return (
