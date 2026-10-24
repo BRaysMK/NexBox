@@ -149,7 +149,6 @@ function SortableGameItem({
   onRemove,
   titleColor,
   descColor,
-  cardBg,
   hoverBg,
 }: {
   game: GameShortcut;
@@ -159,7 +158,6 @@ function SortableGameItem({
   onRemove: (id: string) => void;
   titleColor: string;
   descColor: string;
-  cardBg: string;
   hoverBg: string;
 }) {
   const {
@@ -179,20 +177,18 @@ function SortableGameItem({
   };
 
   return (
-    <Flex
+    <LiquidGlassCard
       ref={setNodeRef}
       style={style}
-      align="center"
+      display="flex"
+      alignItems="center"
       gap={1}
       p={2}
-      borderRadius="md"
-      bg={isDragging ? cardBg : cardBg}
       cursor={isLaunching ? "wait" : "pointer"}
       onClick={() => onLaunch(game)}
       position="relative"
       role="group"
       _hover={{ bg: hoverBg }}
-      transition="background 0.15s"
     >
       <Box
         cursor={isLaunching ? "default" : "grab"}
@@ -241,7 +237,7 @@ function SortableGameItem({
           }}
         />
       )}
-    </Flex>
+    </LiquidGlassCard>
   );
 }
 
@@ -578,9 +574,9 @@ export default function GameLauncher() {
   const defaultGames = games.filter((g) => g.isDefault);
   const userGameIds = useMemo(() => userGames.map((g) => g.id), [userGames]);
 
-  const cornerColor = useColorModeValue("rgba(0,0,0,0.25)", "rgba(255,255,255,0.25)");
   const handleHoverBg = useColorModeValue("rgba(0,0,0,0.12)", "rgba(255,255,255,0.12)");
-  const userGameHoverBg = useColorModeValue("gray.200", "#2a2a2a");
+  // 悬停底色用半透明：叠加在液态玻璃卡片上才不会盖掉玻璃质感
+  const userGameHoverBg = useColorModeValue("rgba(0,0,0,0.06)", "rgba(255,255,255,0.08)");
 
   return (
     <LiquidGlassCard
@@ -620,29 +616,8 @@ export default function GameLauncher() {
         onMouseDown={onResizeStart("top")}
       />
 
-      {/* 左上角拖拽手柄 */}
-      <Box
-        position="absolute"
-        left={0}
-        top={0}
-        w="14px"
-        h="14px"
-        cursor="nwse-resize"
-        zIndex={21}
-        onMouseDown={onResizeStart("corner")}
-      >
-        <Box
-          position="absolute"
-          left="2px"
-          top="2px"
-          w="8px"
-          h="8px"
-          borderLeft="2px solid"
-          borderTop="2px solid"
-          borderColor={cornerColor}
-          borderRadius="2px 0 0 0"
-        />
-      </Box>
+      {/* 左上角缩放手柄已移除：L 形描边看起来像半个准星，视觉干扰大。
+          左/上边缘手柄保留（平时透明，悬停才显形），仍可拖拽调整卡片尺寸。 */}
 
       <Flex justify="space-between" align="center" mb={3} flexShrink={0}>
         <Flex align="center" gap={2}>
@@ -692,23 +667,20 @@ export default function GameLauncher() {
                     onRemove={handleRemove}
                     titleColor={titleColor}
                     descColor={descColor}
-                    cardBg={cardBg}
                     hoverBg={userGameHoverBg}
                   />
                 ))}
 
                 {defaultGames.map((game) => (
-                  <Flex
+                  <LiquidGlassCard
                     key={game.id}
-                    align="center"
+                    display="flex"
+                    alignItems="center"
                     gap={2}
                     p={2}
-                    borderRadius="md"
-                    bg={cardBg}
                     cursor={isLaunching === game.id ? "wait" : "pointer"}
                     onClick={() => handleLaunch(game)}
                     _hover={{ bg: userGameHoverBg }}
-                    transition="background 0.15s"
                   >
                     {icons[game.id] ? (
                       <Image
@@ -734,7 +706,7 @@ export default function GameLauncher() {
                     {isLaunching === game.id && (
                       <Spinner size="xs" color={descColor} />
                     )}
-                  </Flex>
+                  </LiquidGlassCard>
                 ))}
               </VStack>
             </SortableContext>

@@ -1168,6 +1168,7 @@ function GeneralSettings() {
                 </HStack>
                 )}
                 <Divider />
+                {false && (
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
@@ -1180,6 +1181,7 @@ function GeneralSettings() {
                     onChange={handleDocsCardToggle}
                   />
                 </HStack>
+                )}
                 {SHOW_REMOTE_ACCESS_CARD && (
                   <>
                     <Divider />

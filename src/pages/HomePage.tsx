@@ -2,9 +2,10 @@ import { Box, Text, Flex, HStack, VStack } from "@chakra-ui/react";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useTranslation } from "react-i18next";
 import GameLauncher from "@/components/GameLauncher";
-import { TodayPopularity, useTodayPopularityEnabled } from "@/components/TodayPopularity";
-import { AnnouncementCard, useAnnouncementEnabled } from "@/components/AnnouncementCard";
-import { RandomQuote, useRandomQuoteEnabled } from "@/components/RandomQuote";
+// 已阉割：今日人气 / 今日公告 / 随机一言（组件保留，主页不再渲染，设置页开关亦已隐藏）
+// import { TodayPopularity, useTodayPopularityEnabled } from "@/components/TodayPopularity";
+// import { AnnouncementCard, useAnnouncementEnabled } from "@/components/AnnouncementCard";
+// import { RandomQuote, useRandomQuoteEnabled } from "@/components/RandomQuote";
 import { useState, useEffect, useRef } from "react";
 import HardwareModelCard from "@/components/HardwareModelCard";
 // 已阉割：游戏模式锁定 Win 键卡片
@@ -12,7 +13,8 @@ import HardwareModelCard from "@/components/HardwareModelCard";
 import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
 // 已阉割：心境卡片
 // import MoodCard from "@/components/MoodCard";
-import { FeedbackCard, DocsCard, QqGroupCard, useFeedbackEnabled, useDocsCardEnabled, useQqGroupCardEnabled } from "@/components/QqFeedbackCards";
+// 已阉割：问题反馈 / 文档 / 官方QQ群 卡片（组件保留，主页不再渲染，设置页开关亦已隐藏）
+// import { FeedbackCard, DocsCard, QqGroupCard, useFeedbackEnabled, useDocsCardEnabled, useQqGroupCardEnabled } from "@/components/QqFeedbackCards";
 // 已阉割：广告系统
 // import { HomeAdCards } from "@/components/ads/home-ad-card";
 // import { useAds } from "@/hooks/use-ads";
@@ -107,16 +109,8 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, []);
 
-  const {
-    enabled: todayPopularityEnabled,
-    ready: todayPopularityReady,
-  } = useTodayPopularityEnabled();
-  const { enabled: feedbackEnabled, ready: feedbackReady } = useFeedbackEnabled();
-  const { enabled: qqGroupCardEnabled, ready: qqGroupCardReady } = useQqGroupCardEnabled();
-  // 已阉割：远程访问卡片状态
-  const { enabled: docsCardEnabled, ready: docsCardReady } = useDocsCardEnabled();
-  const { enabled: announcementEnabled, ready: announcementReady } = useAnnouncementEnabled();
-  const { enabled: randomQuoteEnabled, ready: randomQuoteReady } = useRandomQuoteEnabled();
+  // 已阉割：今日人气 / 今日公告 / 随机一言 / 问题反馈 / 文档 / 官方QQ群 卡片状态
+  // （这些卡片的设置页开关已隐藏，主页也不再渲染，故不再订阅其 enabled 状态）
   const { enabled: randomImageEnabled, ready: randomImageReady } = useRandomImageEnabled();
   // 已阉割：const { home: homeAds } = useAds();（广告系统）
   useEffect(() => {
@@ -222,30 +216,25 @@ export default function HomePage() {
               greeting
             )}
           </Text>
-          {(todayPopularityReady && todayPopularityEnabled) ||
-          (announcementReady && announcementEnabled) ||
-          (randomQuoteReady && randomQuoteEnabled) ? (
-            <HStack mt={3} spacing={3}>
-              {todayPopularityReady && todayPopularityEnabled && <TodayPopularity />}
-              {announcementReady && announcementEnabled && <AnnouncementCard />}
-              {randomQuoteReady && randomQuoteEnabled && <RandomQuote />}
-            </HStack>
-          ) : null}
+          {/* 已阉割：今日人气 / 今日公告 / 随机一言（设置页开关已隐藏，主页不再渲染）
+          <HStack mt={3} spacing={3}>
+            <TodayPopularity />
+            <AnnouncementCard />
+            <RandomQuote />
+          </HStack>
+          */}
         </Box>
-        {(feedbackReady && feedbackEnabled) || (docsCardReady && docsCardEnabled) || (qqGroupCardReady && qqGroupCardEnabled) ? (
-          <Box pt={6}>
-            <VStack spacing={2} align="stretch">
-              {/* 反馈/文档/QQ群：80px 方形图标块，一行排列 */}
-              <HStack spacing={2} justify="flex-end">
-                {feedbackReady && feedbackEnabled && <FeedbackCard />}
-                {docsCardReady && docsCardEnabled && <DocsCard />}
-                {qqGroupCardReady && qqGroupCardEnabled && <QqGroupCard />}
-              </HStack>
-              {/* 已阉割：<RemoteAccessCard />（远程访问模块已移除） */}
-              {/* 已阉割：{homeAds.length > 0 && <HomeAdCards ads={homeAds} />}（广告系统） */}
-            </VStack>
-          </Box>
-        ) : null}
+        {/* 已阉割：问题反馈 / 文档 / 官方QQ群 卡片（设置页开关已隐藏，主页不再渲染）
+        <Box pt={6}>
+          <VStack spacing={2} align="stretch">
+            <HStack spacing={2} justify="flex-end">
+              <FeedbackCard />
+              <DocsCard />
+              <QqGroupCard />
+            </HStack>
+          </VStack>
+        </Box>
+        */}
       </Flex>
 
       {/* 已阉割：主页左下角卡片组（随机图片/心境/锁定Win键）整体禁用 */}
