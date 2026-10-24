@@ -22,7 +22,6 @@ mod display_cache;
 mod display_filter;
 mod downloader;
 mod download_accelerator;
-mod smtc;
 mod anticheat;
 mod game_fps;
 mod game_filter;
@@ -48,7 +47,6 @@ mod rule_overrides;
 #[cfg(test)]
 mod gun_e2e_test;
 mod main_window;
-mod media_keys;
 mod music;
 mod network_optimize;
 #[allow(dead_code, unused_imports)]
@@ -126,7 +124,7 @@ pub fn ensure_vertical_overlay<R: tauri::Runtime>(
         .title("NexBox Vertical Overlay")
         // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
         // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
+        .additional_browser_args(crate::utils::webview::BROWSER_ARGS)
         .inner_size(220.0, 400.0)
         .resizable(false)
         .decorations(false)
@@ -545,11 +543,10 @@ pub fn run() {
             // 启动外部客户端播放的后台系统媒体会话轮询
             external_player::start(app.handle().clone());
 
-            // 注册本应用内置播放器的 SMTC 媒体会话（音量浮层/锁屏显示「新境盒」并支持媒体键控制）
-            smtc::start(app.handle().clone());
-
-            // 键盘物理媒体键统一捕获（前台聚焦时 WebView2 会抢键，必须用低层钩子在 WebView2 之前接管）
-            media_keys::start(app.handle().clone());
+            // 内置播放器的系统媒体会话（音量浮层/锁屏）已改为前端 Chromium MediaSession
+            // 直接对接（见 src/lib/media-session.ts），后端不再注册 WinRT 会话、
+            // 也不再注册任何全局媒体热键 —— 未播放时不占用媒体键，媒体键由 Windows
+            // 原生路由给当前在播的会话。
 
             Ok(())
         })
@@ -592,9 +589,6 @@ pub fn run() {
         music_api::music_playlist_subscribe,
         external_player::external_player_state,
         external_player::external_control,
-        smtc::smtc_update_state,
-        smtc::smtc_clear,
-        media_keys::set_media_keys_enabled,
         music_api::music_lyric,
         music_api::music_song_comments,
         music_api::music_send_comment,

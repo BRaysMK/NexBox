@@ -188,20 +188,6 @@ export interface ExternalPlayback {
   durationMs: number;
 }
 
-/// 内部播放器推送给系统 SMTC 的状态（音量浮层/锁屏显示）
-export interface SmtcState {
-  title: string;
-  artist: string;
-  album: string;
-  /** 封面来源：base64 data URI / http(s) URL / file:// 本地路径；空 = 不更新封面 */
-  cover?: string | null;
-  playing: boolean;
-  positionMs: number;
-  durationMs: number;
-  /** 软件内当前歌的 LRC 歌词原文（供手机远程端显示）；无歌词为 null */
-  lyricLrc?: string | null;
-}
-
 /// 平台显示信息
 export interface ProviderInfo {
   id: MusicProvider;

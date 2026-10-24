@@ -8,8 +8,18 @@ fn main() {
     // 因此在运行时检测：未提权则通过 UAC（runas）重启自身。
     // 对普通 exe：效果与原来双击弹 UAC 一致；
     // 对 MSIX：解决"不支持该请求"启动失败，提权进程继承包身份。
+    //
+    // ⚠️ dev 模式（tauri dev）必须跳过自提权：
+    // ShellExecuteW("runas") 拉起的是**独立进程**，原进程随即 exit(0)，
+    // 于是 cargo / tauri-cli 失去对子进程的掌控：
+    //   - 控制台日志全部丢失（debug 日志走 tauri_plugin_log → stdout）
+    //   - 提权实例不继承 dev 环境，按 frontendDist(../dist) 加载静态产物，
+    //     而不是 devUrl(127.0.0.1:3000)，前端表现为白屏/加载不出来
+    //   - 单实例插件还可能把新实例吞掉，只显示已存在的旧窗口
+    // 需要在 dev 下调试提权功能时，直接用管理员终端跑 `npm run tauri:dev`
+    // （那时 ensure_elevation() 检测到已提权会直接 return，链路不受影响）。
     // ═══════════════════════════════════════════════════════════════════
-    #[cfg(windows)]
+    #[cfg(all(windows, not(dev)))]
     ensure_elevation();
 
     // ═══════════════════════════════════════════════════════════════════
@@ -59,6 +69,9 @@ fn main() {
 
 /// 检测当前进程是否已提权；未提权则通过 ShellExecuteW("runas") 以管理员重启自身。
 /// UAC 被拒绝或启动失败时直接退出（NexBox 的核心功能依赖管理员权限）。
+///
+/// 旁路：命令行带 `--no-elevate` 时跳出自提权，直接用当前权限运行。
+/// 用途：调试提权链路本身、或在无法弹 UAC 的环境（CI/远程会话）里启动。
 #[cfg(windows)]
 fn ensure_elevation() {
     use std::os::windows::ffi::OsStrExt;
@@ -69,6 +82,11 @@ fn ensure_elevation() {
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    if std::env::args().any(|a| a == "--no-elevate") {
+        log::warn!("[BOOT] 检测到 --no-elevate：跳出自提权，按当前权限运行");
+        return;
+    }
 
     unsafe {
         let mut token: windows_sys::Win32::Foundation::HANDLE = std::ptr::null_mut();

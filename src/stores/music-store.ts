@@ -18,12 +18,17 @@ import type {
   Mv,
   ArtistDetail,
   ExternalPlayback,
-  SmtcState,
   PlayHistoryEntry,
 } from "@/types/music";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 import { store } from "@/lib/store";
 import { ensureAudioContextActive } from "@/lib/audio-spectrum";
+import {
+  clearMediaSession,
+  installMediaSessionActions,
+  setMediaSessionEnabled,
+  syncMediaSession,
+} from "@/lib/media-session";
 
 /** 汽水签名依赖探测/下载接口（对应 Rust 端 QishuiDepsStatus） */
 interface QishuiDepsStatusPayload {
@@ -283,8 +288,8 @@ interface MusicState {
   setCoverFilmEffect: (enabled: boolean) => Promise<void>;
   // 键盘媒体键控制（仅更新内存态）
   setMediaKeysEnabled: (enabled: boolean) => void;
-  // 立即重推一次 SMTC 播放状态（重新开启媒体键后马上恢复系统媒体会话）
-  refreshSmtc: () => void;
+  // 立即重同步一次系统媒体会话（重新开启媒体键后马上恢复系统浮层）
+  refreshMediaSession: () => void;
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
 
@@ -569,40 +574,37 @@ let timeSyncTimer: ReturnType<typeof setInterval> | null = null;
 let listenersRegistered = false;
 // 页面关闭时仅注册一次 unload 清理，避免重复绑定
 let unloadCleanupBound = false;
-// 当前已绑定 SMTC 事件的 <audio> 元素，用于替换/卸载时解绑，防止监听残留
-let smtcBoundAudio: HTMLAudioElement | null = null;
-// SMTC 事件具名回调：绑定/解绑需引用同一函数
-function onSmtcTimeUpdate() {
-  pushSmtc();
-}
-function onSmtcPlay() {
+// 当前已绑定系统媒体会话事件的 <audio> 元素，用于替换/卸载时解绑，防止监听残留
+let mediaBoundAudio: HTMLAudioElement | null = null;
+// 系统媒体会话事件具名回调：绑定/解绑需引用同一函数。
+// 只同步播放状态与元数据；进度由 Chromium 依据 <audio> 元素自行推导，
+// 因此这里**刻意不监听 timeupdate**（旧实现每秒 IPC 推一次位置，是常驻开销来源之一）。
+function onMediaSessionPlay() {
   useMusicStore.setState({ isPlaying: true });
-  pushSmtc(true);
+  refreshMediaSession();
 }
-function onSmtcPause() {
+function onMediaSessionPause() {
   useMusicStore.setState({ isPlaying: false });
-  pushSmtc(true);
+  refreshMediaSession();
 }
-function onSmtcLoadedMetadata() {
-  pushSmtc(true);
+function onMediaSessionLoadedMetadata() {
+  refreshMediaSession();
 }
-function onSmtcEnded() {
-  pushSmtc(true);
+function onMediaSessionEnded() {
+  refreshMediaSession();
 }
-function bindSmtcHandlers(audio: HTMLAudioElement) {
-  audio.addEventListener("timeupdate", onSmtcTimeUpdate);
-  audio.addEventListener("play", onSmtcPlay);
-  audio.addEventListener("pause", onSmtcPause);
-  audio.addEventListener("loadedmetadata", onSmtcLoadedMetadata);
-  audio.addEventListener("ended", onSmtcEnded);
+function bindMediaSessionHandlers(audio: HTMLAudioElement) {
+  audio.addEventListener("play", onMediaSessionPlay);
+  audio.addEventListener("pause", onMediaSessionPause);
+  audio.addEventListener("loadedmetadata", onMediaSessionLoadedMetadata);
+  audio.addEventListener("ended", onMediaSessionEnded);
 }
-function unbindSmtcHandlers(audio: HTMLAudioElement | null) {
+function unbindMediaSessionHandlers(audio: HTMLAudioElement | null) {
   if (!audio) return;
-  audio.removeEventListener("timeupdate", onSmtcTimeUpdate);
-  audio.removeEventListener("play", onSmtcPlay);
-  audio.removeEventListener("pause", onSmtcPause);
-  audio.removeEventListener("loadedmetadata", onSmtcLoadedMetadata);
-  audio.removeEventListener("ended", onSmtcEnded);
+  audio.removeEventListener("play", onMediaSessionPlay);
+  audio.removeEventListener("pause", onMediaSessionPause);
+  audio.removeEventListener("loadedmetadata", onMediaSessionLoadedMetadata);
+  audio.removeEventListener("ended", onMediaSessionEnded);
 }
 // 存储 Tauri 事件监听器的取消函数，防止内存泄漏
 const unlistenFns: (() => void)[] = [];
@@ -632,8 +634,8 @@ export function cleanupMusicListeners() {
   unlistenFns.forEach((fn) => fn());
   unlistenFns.length = 0;
   listenersRegistered = false;
-  unbindSmtcHandlers(smtcBoundAudio);
-  smtcBoundAudio = null;
+  unbindMediaSessionHandlers(mediaBoundAudio);
+  mediaBoundAudio = null;
   stopTimeSync();
   // 退出前把防抖窗口内的播放历史落盘，避免丢失最近一条
   flushPersistHistory();
@@ -729,76 +731,49 @@ async function repairLocalCovers(
   }
 }
 
-// ── 内部播放器 SMTC（系统媒体传输控制）推送 ──────────────────────────
-// 把当前播放状态推给后端注册的「新境盒」媒体会话，供音量浮层/锁屏显示、
-// 系统媒体键（播放/暂停/上一曲/下一曲）与浮层拖动进度控制内部播放器。
-let lastSmtcPush = 0;
-let smtcCleared = true;
-
-// SMTC 控制事件去重：物理媒体键同时触发「低层键盘钩子」和 SMTC ButtonPressed
-// 两条链路，毫秒级内对同一动作各 emit 一次；窗口期内忽略相同动作的重复事件。
-let lastSmtcAction: string | null = null;
-let lastSmtcActionTime = 0;
-function shouldHandleSmtc(action: string): boolean {
-  if (action === "seek") return true; // seek 来自浮层拖动，不会重复
-  const now = Date.now();
-  if (action === lastSmtcAction && now - lastSmtcActionTime < 150) return false;
-  lastSmtcAction = action;
-  lastSmtcActionTime = now;
-  return true;
-}
+// ── 内部播放器系统媒体控制（SMTC）────────────────────────────────────
+// 走 Chromium MediaSession：只在真的有 <audio> 在播时，系统音量浮层/锁屏才出现
+// 「新境盒」条目；媒体键由 Windows 按「当前在播会话」原生路由，本应用不注册任何
+// 全局热键，因此没在放歌时绝不会抢别的软件的媒体键。
+// 具体封装见 @/lib/media-session（元数据/playbackState/动作回调都在那里）。
 
 /**
- * 计算 SMTC 封面来源，交给后端下载（后端 reqwest 带防盗链 Referer，无 CORS 限制）：
- * - data URI：后端直接解码
- * - 本地歌曲：传封面缓存文件绝对路径（file:// 前缀，后端读文件）
- * - 在线歌曲：传原始封面 URL，后端带 Referer 下载（绕过防盗链）；网易云封面追加
- *   ?param=1024y1024 尺寸参数让 CDN 直接返回缩图（高清原图可达 5MB+，SMTC 只需 ~1024px）
+ * 计算系统媒体会话用的封面绝对 URL。
+ *
+ * 与播放器界面共用同一套本地代理（`http://127.0.0.1:{port}/cover`），原因：
+ * - 系统取图发生在浏览器进程，`asset.localhost` 与页面同源可用，但代理更稳（带防盗链 Referer）；
+ * - `data:` URI 直接交给 Chromium（本来就是内存里的，无需再过一次 IPC/网络）。
+ * - 本地导入歌曲的封面是磁盘文件，走新增的 `/cover?path=` 分支直接读文件。
  */
-function smtcCoverSource(song: Song): string {
-  if (!song.cover) return "";
-  if (song.cover.startsWith("data:")) return song.cover;
-  if (song._localCoverPath) return `file://${song._localCoverPath}`;
-  if (/music\.126\.net\//.test(song.cover) && !song.cover.includes("?")) {
-    return `${song.cover}?param=1024y1024`;
+function mediaSessionArtwork(song: Song): string {
+  const port = useMusicStore.getState().proxyPort;
+  if (song._localCoverPath) {
+    if (!port) return "";
+    return `http://127.0.0.1:${port}/cover?path=${encodeURIComponent(song._localCoverPath)}`;
   }
-  return song.cover;
+  if (!song.cover) return "";
+  if (song.cover.startsWith("data:") || song.cover.startsWith("blob:")) return song.cover;
+  // 网易云封面追加尺寸参数让 CDN 直接返回缩图（高清原图可达 5MB+，浮层显示用不到）
+  const src =
+    /music\.126\.net\//.test(song.cover) && !song.cover.includes("?")
+      ? `${song.cover}?param=512y512`
+      : song.cover;
+  return coverProxyUrl(src, port);
 }
 
 /**
- * 推送一次 SMTC 状态。
- * force=true 忽略 1s 节流（元数据/播放状态变化时使用）；无歌时调 smtc_clear 让会话从浮层消失。
+ * 同步一次系统媒体会话状态（元数据 + 播放状态）。
+ *
+ * 无歌 / 开关关闭时清空会话，条目立即从音量浮层与锁屏消失。
+ * 进度由 Chromium 依据 `<audio>` 元素自行推导，这里不再推位置。
  */
-async function pushSmtc(force = false) {
+function refreshMediaSession() {
   const s = useMusicStore.getState();
-  if (!s.currentSong || !s.audioRef) {
-    if (!smtcCleared) {
-      smtcCleared = true;
-      invoke("smtc_clear").catch(() => {});
-    }
+  if (!s.currentSong) {
+    clearMediaSession();
     return;
   }
-  smtcCleared = false;
-
-  const now = Date.now();
-  if (!force && now - lastSmtcPush < 1000) return; // 进度节流 1s
-  lastSmtcPush = now;
-
-  const posMs = Math.round((s.audioRef.currentTime || 0) * 1000);
-  const durMs = Math.round((s.duration || s.audioRef.duration || s.currentSong.duration || 0) * 1000);
-  const artist = s.currentSong.artist || s.currentSong.artists?.map((a) => a.name).join(" / ") || "";
-  const payload: SmtcState = {
-    title: s.currentSong.name,
-    artist,
-    album: s.currentSong.album || "",
-    cover: smtcCoverSource(s.currentSong),
-    playing: s.isPlaying,
-    positionMs: posMs,
-    durationMs: durMs,
-    // 软件内歌词原文随状态顺路推给 Rust：手机远程端的歌词优先走这份精确数据
-    lyricLrc: s.currentLyrics?.lyric || null,
-  };
-  invoke("smtc_update_state", { state: payload }).catch(() => {});
+  syncMediaSession(s.currentSong, s.isPlaying, mediaSessionArtwork(s.currentSong));
 }
 
 // 播放队列上限：防止内存无限增长
@@ -1202,7 +1177,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // 键盘媒体键控制开关（设置 → 高级 → 媒体键控制，存于 settings.json）
     try {
       const mediaKeys = await store.get<boolean>("nexbox_media_keys_enabled");
-      if (mediaKeys != null) set({ mediaKeysEnabled: mediaKeys });
+      if (mediaKeys != null) {
+        set({ mediaKeysEnabled: mediaKeys });
+        // 同步给 MediaSession 层：关闭状态下不应把本应用暴露到系统媒体会话
+        setMediaSessionEnabled(mediaKeys);
+      }
     } catch {
       // ignore
     }
@@ -1285,45 +1264,32 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       })
     );
 
-    // 系统媒体键 / 音量浮层控制事件（后端 SMTC 转发）→ 控制内部播放器
-    // 注意：物理媒体键会同时触发「低层键盘钩子」与系统的 SMTC ButtonPressed 两条链路，
-    // 毫秒级内会对同一动作各 emit 一次；这里在窗口期内忽略相同动作的重复事件，避免按一次跳两首/切换两次。
-    unlistenFns.push(
-      await listen<{ action: string; positionMs?: number }>("smtc:control", (event) => {
-        const { action, positionMs } = event.payload;
-        if (!shouldHandleSmtc(action)) return;
-        // 设置 → 高级 → 键盘媒体键控制 关闭时不响应任何系统媒体控制事件
-        if (!get().mediaKeysEnabled) return;
-        switch (action) {
-          case "play-pause":
-            get().togglePlay();
-            break;
-          case "prev":
-            get().prevTrack();
-            break;
-          case "next":
-            get().nextTrack();
-            break;
-          case "stop":
-            cancelVolumeFade();
-            get().audioRef?.pause();
-            // 直接暂停不经过缓出，需立即推送桌面歌词暂停态，否则副窗口会持续插值漂移
-            if (get().desktopLyricsVisible) {
-              emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
-            }
-            break;
-          case "seek":
-            if (typeof positionMs === "number") {
-              get().seekTo(positionMs / 1000);
-            }
-            break;
+    // 系统媒体键 / 音量浮层控制 → 控制内部播放器
+    // 走 Chromium MediaSession（后端不再转发任何事件）：系统只在有会话时下发动作，
+    // 因此这里不需要再去重、也不会有「两条链路各触发一次」的问题。
+    installMediaSessionActions({
+      play: () => {
+        // 系统下发的 play 是幂等的：已在播放就别再触发一次渐入/重播
+        if (!get().isPlaying) get().togglePlay();
+      },
+      pause: () => {
+        if (get().isPlaying) get().togglePlay();
+      },
+      prev: () => get().prevTrack(),
+      next: () => get().nextTrack(),
+      stop: () => {
+        cancelVolumeFade();
+        get().audioRef?.pause();
+        // 直接暂停不经过缓出，需立即推送桌面歌词暂停态，否则副窗口会持续插值漂移
+        if (get().desktopLyricsVisible) {
+          emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
         }
-      })
-    );
+      },
+      seek: (seconds) => get().seekTo(seconds),
+    });
 
     // 手机远程控制（远程接入网关下发）→ 控制软件内播放器。
-    // 刻意不复用 smtc:control：那条被 mediaKeysEnabled 门禁 + shouldHandleSmtc 去重挡住，
-    // 手机指令不受「键盘媒体键控制」开关影响，也不该被 150ms 去重窗口吞掉。
+    // 与系统媒体会话互不相干：手机指令不受「键盘媒体键控制」开关影响。
     unlistenFns.push(
       await listen<{ action: string; positionMs?: number }>("remote-music:control", (event) => {
         // 只有真正持有播放器的窗口才响应（其它窗口的 store 只是镜像快照，没有 audioRef）
@@ -1552,17 +1518,18 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   setAudioRef: (audio) => {
-    if (smtcBoundAudio === audio) {
+    if (mediaBoundAudio === audio) {
       set({ audioRef: audio });
       return;
     }
     // 若已有绑定元素且被替换，先解绑旧元素监听，避免监听残留
-    unbindSmtcHandlers(smtcBoundAudio);
-    smtcBoundAudio = audio;
+    unbindMediaSessionHandlers(mediaBoundAudio);
+    mediaBoundAudio = audio;
     if (audio) {
-      // 绑定 SMTC 推送与播放状态同步：无论音频被前端/系统媒体键/外部路径暂停或恢复，
-      // isPlaying 都跟随 <audio> 真实状态，保证灵动岛/播放器按钮图标始终同步。
-      bindSmtcHandlers(audio);
+      // 播放状态同步：无论音频被前端/系统媒体键/外部路径暂停或恢复，
+      // isPlaying 都跟随 <audio> 真实状态，保证灵动岛/播放器按钮图标始终同步，
+      // 并顺带把 playbackState 同步给系统媒体会话。
+      bindMediaSessionHandlers(audio);
     }
     set({ audioRef: audio });
   },
@@ -1849,7 +1816,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           await audio.play();
           if (mySeq !== playSongSeq) return;
           set({ isPlaying: true, currentQuality: "本地", currentBitrate: 0 });
-          pushSmtc(true);
+          refreshMediaSession();
           recordPlayHistory(song, !!opts?.fromHistory);
         } catch (err) {
           if (mySeq !== playSongSeq) return;
@@ -1946,7 +1913,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (mySeq !== playSongSeq) return;
 
       set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort, currentQuality: qualityLabel(result.quality), currentBitrate: result.br });
-      pushSmtc(true);
+      refreshMediaSession();
       recordPlayHistory(song, !!opts?.fromHistory);
       // 推送桌面歌词状态
       // 歌词数据已由 loadLyricsForSong 并行加载完成后自动 emit，此处不再重复 emitDesktopLyricsData
@@ -1994,7 +1961,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       // 队列清空：停止播放，保留 currentSong 供界面显示
       state.audioRef?.pause();
       set({ playQueue: [], currentIndex: 0, isPlaying: false });
-      pushSmtc(true);
+      refreshMediaSession();
       return;
     }
     // 自动续播该位置的新歌（业界惯例）
@@ -2028,7 +1995,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
     state.audioRef?.pause();
     set({ playQueue: [], currentIndex: 0, isPlaying: false });
-    pushSmtc(true);
+    refreshMediaSession();
   },
 
   setQueuePanelOpen: (open) => set({ queuePanelOpen: open }),
@@ -2051,7 +2018,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         }
       });
       set({ isPlaying: false });
-      pushSmtc(true);
+      refreshMediaSession();
       // 桌面歌词状态延迟到真正暂停时才推送 isPlaying:false：
       // 缓出期间副窗口保持插值与逐字填充，歌词跟随渐弱的音乐（时间校正如常）
     } else {
@@ -2064,7 +2031,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         await audioRef.play();
         startVolumeFade(audioRef, get().volume);
         set({ isPlaying: true });
-        pushSmtc(true);
+        refreshMediaSession();
         if (get().desktopLyricsVisible) {
           emit("desktop-lyrics:state", { isPlaying: true, playMode: get().playMode, volume: get().volume });
         }
@@ -2174,7 +2141,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       loadingLyrics: false,
     });
     // 无歌后 SMTC 会话自动清除，灵动岛不再显示音乐卡片
-    pushSmtc(true);
+    refreshMediaSession();
     // 桌面歌词同步清空（若可见）
     if (state.desktopLyricsVisible) {
       get().emitDesktopLyricsData();
@@ -2272,7 +2239,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (audioRef) {
       audioRef.currentTime = time;
       set({ currentTime: time });
-      pushSmtc(true);
+      refreshMediaSession();
       // 在线音频 seek 后需要重新缓冲，浏览器可能自动暂停
       // 如果之前是在播放状态，确保 seek 后继续播放
       if (isPlaying) {
@@ -2468,11 +2435,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   // 键盘媒体键控制（仅更新内存态；持久化由设置页「高级」开关负责）
   setMediaKeysEnabled: (enabled) => {
     set({ mediaKeysEnabled: enabled });
+    // 关闭时立即把会话从音量浮层/锁屏摘掉（媒体键随即回到系统与其他软件）；
+    // 重新开启时由调用方补一次 refreshMediaSession() 恢复，无需等下次播放事件。
+    setMediaSessionEnabled(enabled);
   },
 
-  // 立即重推一次当前播放状态到系统媒体会话（无歌时清除会话）
-  refreshSmtc: () => {
-    pushSmtc(true);
+  // 立即重同步一次系统媒体会话（无歌时清除会话）
+  refreshMediaSession: () => {
+    refreshMediaSession();
   },
 
   // ══ 桌面歌词 Actions ══
@@ -3322,7 +3292,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       set({ currentLyrics: lyrics });
       // 歌词到位后立刻补推一次 SMTC 状态：手机远程端的歌词走这份 LRC，
       // 暂停状态下没有 timeupdate 事件，不补推的话手机永远拿不到歌词
-      pushSmtc(true);
+      refreshMediaSession();
       if (get().desktopLyricsVisible) {
         get().emitDesktopLyricsData();
       }
@@ -3350,7 +3320,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             hasLyric = true;
             set({ currentLyrics: { lyric: lrcText }, currentLyricsSongId: song.id });
             // 歌词到位后立刻补推（同上：暂停状态无 timeupdate，手机端等不到）
-            pushSmtc(true);
+            refreshMediaSession();
             if (get().desktopLyricsVisible) {
               get().emitDesktopLyricsData();
             }
@@ -3416,7 +3386,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         : await invoke<Lyrics>("music_lyric", { id: song.id });
       set({ currentLyrics: lyrics });
       // 歌词到位后立刻补推一次 SMTC 状态（暂停时无 timeupdate 事件，必须主动推）
-      pushSmtc(true);
+      refreshMediaSession();
       if (get().desktopLyricsVisible) {
         get().emitDesktopLyricsData();
       }

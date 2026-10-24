@@ -123,14 +123,12 @@ export default function AdvancedPage() {
     const newValue = !mediaKeysEnabled;
     setMediaKeysEnabled(newValue);
     store.set("nexbox_media_keys_enabled", newValue).then(() => store.save());
-    useMusicStore.getState().setMediaKeysEnabled(newValue);
-    invoke("set_media_keys_enabled", { enabled: newValue })
-      .then(() => {
-        // 关闭时后端已同步停用本应用 SMTC 会话（把媒体键还给其他软件）；
-        // 重新开启时立即恢复推送，无需等待下次播放事件
-        if (newValue) useMusicStore.getState().refreshSmtc();
-      })
-      .catch((e) => console.error("[MediaKeys] 设置失败:", e));
+    // 全部在前端生效：MediaSession 层据此决定是否把本应用暴露给系统音量浮层/锁屏
+    const music = useMusicStore.getState();
+    music.setMediaKeysEnabled(newValue);
+    // 关闭时后端已无会话可停（SMTC 现在完全由 Chromium 提供），
+    // 重新开启时立即恢复推送，无需等待下次播放事件
+    if (newValue) music.refreshMediaSession();
   };
 
   // ── 灵动岛显示在桌面上（独立透明置顶窗口）──
@@ -497,10 +495,10 @@ export default function AdvancedPage() {
           </Flex>
           <VStack align="flex-start" spacing={0.5} flex={1}>
             <Text fontSize="sm" color={labelColor} fontWeight="semibold">
-              {t("settings.advanced.mediaKeysTitle", "键盘媒体键控制音乐（SMTC）")}
+              {t("settings.advanced.mediaKeysTitle", "系统媒体控制（音量浮层 / 锁屏）")}
             </Text>
             <Text fontSize="xs" color={subLabelColor}>
-              {t("settings.advanced.mediaKeysDesc", "关闭后同时停用系统媒体会话（SMTC）：音量浮层/锁屏不再显示新境盒，媒体键交还给其他软件")}
+              {t("settings.advanced.mediaKeysDesc", "开启后新境盒在播放时出现在系统音量浮层与锁屏；未播放时不会占用媒体键，其他软件不受影响")}
             </Text>
           </VStack>
           <ThemeSwitch

@@ -27,7 +27,12 @@ struct ProxyQuery {
 
 #[derive(Deserialize)]
 struct CoverQuery {
-    url: String,
+    /// 远程封面 URL（http/https）
+    url: Option<String>,
+    /// 本地封面文件绝对路径（导入歌曲的封面缓存）。
+    /// 供系统媒体会话（Chromium MediaSession）取图：那里只能给一个 URL，
+    /// 而 asset 协议地址在浏览器进程侧不一定可达，走本地 127.0.0.1 最稳。
+    path: Option<String>,
 }
 
 fn get_client() -> &'static reqwest::Client {
@@ -148,11 +153,21 @@ async fn audio_proxy(Query(query): Query<ProxyQuery>, headers: HeaderMap) -> Res
 }
 
 /// 封面代理 - 添加 CORS 头
+///
+/// 两种来源：
+/// - `url=`  远程封面（http/https），带防盗链 Referer
+/// - `path=` 本地封面文件（导入歌曲的封面缓存），直接读盘
+///
+/// 后者是系统媒体会话（Chromium MediaSession）取图用的：那里只能提供一个 URL。
 async fn cover_proxy(Query(query): Query<CoverQuery>) -> Response {
-    let cover_url = &query.url;
-    if !cover_url.starts_with("http") {
-        return (StatusCode::BAD_REQUEST, "Invalid url").into_response();
+    if let Some(path) = query.path.as_deref().filter(|p| !p.is_empty()) {
+        return local_cover_response(path);
     }
+
+    let cover_url = match query.url.as_deref() {
+        Some(u) if u.starts_with("http") => u,
+        _ => return (StatusCode::BAD_REQUEST, "Invalid url").into_response(),
+    };
 
     let referer = referer_for(cover_url);
     let client = get_client();
@@ -194,6 +209,55 @@ async fn cover_proxy(Query(query): Query<CoverQuery>) -> Response {
     };
 
     (status, out_headers, body).into_response()
+}
+
+/// 按文件头嗅探图片 MIME（导入歌曲的封面缓存可能是 jpeg/png/webp）。
+fn sniff_image_mime(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        "image/jpeg"
+    } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        "image/png"
+    } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        "image/webp"
+    } else if bytes.starts_with(b"GIF8") {
+        "image/gif"
+    } else if bytes.starts_with(b"BM") {
+        "image/bmp"
+    } else {
+        "application/octet-stream"
+    }
+}
+
+/// 本地封面文件响应（`/cover?path=<绝对路径>`）。
+///
+/// 只读、只接受已存在的绝对路径；读不到就 404/500，不回退到任何外部请求。
+fn local_cover_response(path: &str) -> Response {
+    let p = std::path::Path::new(path);
+    if !p.is_absolute() {
+        return (StatusCode::BAD_REQUEST, "path must be absolute").into_response();
+    }
+    let bytes = match std::fs::read(p) {
+        Ok(b) => b,
+        Err(e) => {
+            log::warn!("[CoverProxy] 读取本地封面失败: {e} (path={path})");
+            return (StatusCode::NOT_FOUND, "cover file not readable").into_response();
+        }
+    };
+    if bytes.is_empty() {
+        return (StatusCode::NOT_FOUND, "cover file empty").into_response();
+    }
+
+    let mut out_headers = HeaderMap::new();
+    out_headers.insert(
+        "Content-Type",
+        HeaderValue::from_static(sniff_image_mime(&bytes)),
+    );
+    out_headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    out_headers.insert("Cross-Origin-Resource-Policy", HeaderValue::from_static("cross-origin"));
+    // 封面文件内容按路径稳定，缓存一天即可（与远程封面分支保持一致）
+    out_headers.insert("Cache-Control", HeaderValue::from_static("public, max-age=86400"));
+
+    (StatusCode::OK, out_headers, bytes).into_response()
 }
 
 /// 启动音频代理服务器，返回端口号

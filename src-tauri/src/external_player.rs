@@ -42,8 +42,7 @@ mod imp {
     /// 灵动岛外部接管按此表过滤（依据 SourceAppUserModelId 子串匹配，小写）：
     /// 抖音 App（明文 douyin）、浏览器（chrome/edge/firefox）等非音乐客户端不在列，
     /// 避免把视频/直播内容顶到灵动岛。
-    /// 仅作用于灵动岛显示及其控制按钮；键盘媒体键转发不走白名单（见 pick_any_session），
-    /// 用户显式按键时控制的就是当下在播的任何内容。
+    /// 仅作用于灵动岛显示及其控制按钮。
     const MUSIC_SOURCE_KEYS: &[&str] = &[
         // 网易云音乐
         "cloudmusic", "netease", "orpheus", "music.163", "163music",
@@ -61,8 +60,6 @@ mod imp {
     struct ControlMsg {
         action: String,
         value_ms: i64,
-        /// 媒体键转发：绕过音乐白名单，控制系统当前任意媒体会话
-        any_source: bool,
     }
 
     static CTRL_TX: OnceLock<Sender<ControlMsg>> = OnceLock::new();
@@ -84,24 +81,7 @@ mod imp {
             let _ = tx.send(ControlMsg {
                 action: action.to_string(),
                 value_ms,
-                any_source: false,
             });
-        }
-    }
-
-    /// 媒体键转发入口（键盘媒体键开关关闭时由全局热键调用）：
-    /// 把播放/暂停等命令发给系统当前的任意媒体会话——不限于音乐白名单，
-    /// QQ 音乐、浏览器视频、播客等在播内容都直接响应
-    pub fn forward_media_key(action: &str) {
-        match CTRL_TX.get() {
-            Some(tx) => {
-                let _ = tx.send(ControlMsg {
-                    action: action.to_string(),
-                    value_ms: 0,
-                    any_source: true,
-                });
-            }
-            None => log::warn!("[MediaKeys] 外部会话控制通道未就绪，丢弃媒体键转发: {action}"),
         }
     }
 
@@ -168,34 +148,23 @@ mod imp {
         loop {
             // 处理积压的控制命令
             while let Ok(msg) = rx.try_recv() {
-                // 媒体键转发：每次现场选「系统当前会话」，不读灵动岛缓存
-                //（那条被白名单过滤过，且用户按键时的目标可能已切换）
-                let target = if msg.any_source {
-                    pick_any_session(&manager)
-                } else {
-                    let mut cached = current_session.as_ref().cloned();
-                    if cached.is_none() {
-                        // 兜底：尚未轮询到会话（如刚启动/刚切歌）时现场探测一次
-                        pick_session(&manager, &mut current_session);
-                        cached = current_session.as_ref().cloned();
-                    }
-                    cached
-                };
-                match target.as_ref() {
+                let mut cached = current_session.as_ref().cloned();
+                if cached.is_none() {
+                    // 兜底：尚未轮询到会话（如刚启动/刚切歌）时现场探测一次
+                    pick_session(&manager, &mut current_session);
+                    cached = current_session.as_ref().cloned();
+                }
+                match cached.as_ref() {
                     Some(session) => {
                         let aumid = session
                             .SourceAppUserModelId()
                             .map(|v| v.to_string())
                             .unwrap_or_default();
-                        log::info!("[MediaKeys] 转发 {} → 会话 [{aumid}]", msg.action);
+                        log::info!("[SMTC] 转发 {} → 会话 [{aumid}]", msg.action);
                         handle_control(session, &msg.action, msg.value_ms);
                     }
-                    None if msg.any_source => log::warn!(
-                        "[MediaKeys] 系统当前没有任何媒体会话，丢弃媒体键命令: {}",
-                        msg.action
-                    ),
                     None => log::warn!(
-                        "[MediaKeys] 无命中音乐白名单的媒体会话，丢弃命令: {}（当前会话列表: {:?}）",
+                        "[SMTC] 无命中音乐白名单的媒体会话，丢弃命令: {}（当前会话列表: {:?}）",
                         msg.action,
                         list_session_aumids(&manager)
                     ),
@@ -383,40 +352,6 @@ mod imp {
         None
     }
 
-    /// 媒体键转发专用：不受音乐白名单限制，选「系统当前媒体会话」——
-    /// 用户按媒体键时的意图就是控制当下在播的任何内容（浏览器视频、播客等同样成立）。
-    /// 优先系统当前会话，其次正在播放的会话，再次任意他人会话；始终排除自身。
-    fn pick_any_session(
-        manager: &GlobalSystemMediaTransportControlsSessionManager,
-    ) -> Option<GlobalSystemMediaTransportControlsSession> {
-        if let Ok(s) = manager.GetCurrentSession() {
-            if !is_self_session(&s) {
-                return Some(s);
-            }
-        }
-        if let Ok(sessions) = manager.GetSessions() {
-            let size = sessions.Size().unwrap_or(0);
-            let mut fallback: Option<GlobalSystemMediaTransportControlsSession> = None;
-            for i in 0..size {
-                if let Ok(s) = sessions.GetAt(i) {
-                    if is_self_session(&s) {
-                        continue;
-                    }
-                    if is_playing(&s) {
-                        return Some(s);
-                    }
-                    if fallback.is_none() {
-                        fallback = Some(s);
-                    }
-                }
-            }
-            if let Some(s) = fallback {
-                return Some(s);
-            }
-        }
-        None
-    }
-
     /// 枚举当前所有媒体会话的 AUMID（诊断日志用）
     fn list_session_aumids(
         manager: &GlobalSystemMediaTransportControlsSessionManager,
@@ -442,8 +377,11 @@ mod imp {
         MUSIC_SOURCE_KEYS.iter().any(|k| id.contains(k))
     }
 
-    /// 是否为 NexBox 自身注册的 SMTC 会话（避免内部播放时被外部监控误接管）。
-    /// 未打包桌面应用经 Interop 注册的会话，SourceAppUserModelId 常为 exe 全路径。
+    /// 是否为 NexBox 自身产生的 SMTC 会话（避免内部播放时被外部监控误接管）。
+    ///
+    /// 现在本应用的会话由 Chromium MediaSession 注册，其 AUMID 是 WebView2 运行时
+    /// （`msedgewebview2.exe`）而非本 exe 路径；同时仍保留旧的 exe 路径匹配，
+    /// 兼容打包形态（MSIX 下 AUMID 为包 AUMID，含 exe 名）。
     fn is_self_session(session: &GlobalSystemMediaTransportControlsSession) -> bool {
         let id = session
             .SourceAppUserModelId()
@@ -451,6 +389,10 @@ mod imp {
             .unwrap_or_default();
         if id.is_empty() {
             return false;
+        }
+        // Chromium 会话：媒体会话由内嵌 WebView2 注册
+        if id.contains("msedgewebview2") || id.contains("edgewebview") {
+            return true;
         }
         let exe = std::env::current_exe()
             .map(|p| p.to_string_lossy().to_lowercase())
@@ -543,11 +485,5 @@ pub fn control(action: &str, value_ms: i64) {
     imp::control(action, value_ms);
 }
 
-/// 媒体键转发入口（仅 Windows；由 media_keys 低层钩子调用）
-#[cfg(target_os = "windows")]
-pub fn forward_media_key(action: &str) {
-    imp::forward_media_key(action);
-}
-
-#[cfg(not(target_os = "windows"))]
-pub fn forward_media_key(_action: &str) {}
+// 媒体键转发入口（已移除）：媒体键现在由 Windows 原生路由给当前在播会话，
+// 本应用不再注册任何全局媒体热键，因此不需要「替其他软件转发」这条路径。
